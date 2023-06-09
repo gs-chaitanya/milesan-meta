@@ -19,8 +19,8 @@ from cascade.randomize.pickprivilegedescentop import gen_priv_descent_instr
 from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, EcallEbreakInstruction, SimpleExceptionEncapsulator, CSRRegInstruction
 from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS
 from cascade.finalblock import get_finalblock_max_size,finalblock
-from multiinstr.initialblock import gen_initial_basic_block
-from multiinstr.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setter
+from cascade.initialblock import gen_initial_basic_block
+from cascade.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setter
 from cascade.privilegestate import PrivilegeStateEnum
 
 import random
@@ -261,7 +261,6 @@ def gen_memop_addrs(fuzzerstate):
                 continue
             elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM64] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPU] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPUD]:
                 ret.append(pick_memop_addr(fuzzerstate, is_instrstr_load(bb_instr.instr_str), get_alignment_bits(bb_instr.instr_str)))
-                # print('Picked memop addr:', hex(ret[-1]))
     return ret
 
 # @brief This function generates the producer_id_to_tgtaddr dictionary and the producer_id_to_noreloc_spike dictionaries.

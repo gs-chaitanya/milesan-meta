@@ -8,7 +8,6 @@ from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_R
 from cascade.util import IntRegIndivState
 from common.sim.modelsim import get_next_worker_id
 from params.runparams import DO_ASSERT, PATH_TO_TMP
-from common.enums import instrumentation_string_to_method
 from common.sim.commonsim import setup_sim_env
 from common import designcfgs
 import itertools
@@ -87,7 +86,6 @@ def runsim_verilator(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_P
 # Return a pair (is_stop_successful: bool, reg_vals: int list of length <= MAX_NUM_PICKABLE_REGS-1 or None if is_stop_successful is False)
 def runsim_modelsim(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PICKABLE_REGS-1, num_float_regs: int = MAX_NUM_PICKABLE_FLOATING_REGS, coveragepath = None):
     cascadedir       = designcfgs.get_design_cascade_path(design_name)
-    instrumentation_str = 'vanilla'
 
     my_env = setup_sim_env(elfpath, '/dev/null', '/dev/null', simlen, cascadedir, coveragepath, False)
     # Run the simulation on the same worker id as the core used for this worker. This may not be absolutely optimal.
@@ -97,13 +95,13 @@ def runsim_modelsim(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PI
 
     # Check whether the library exists.
     tracestr = 'notrace'
-    workdir  = designcfgs.get_design_worklib_path(design_name, instrumentation_string_to_method(instrumentation_str), False, curr_coreid)[-1]
+    workdir  = designcfgs.get_design_worklib_path(design_name, False, curr_coreid)[-1]
     if not os.path.exists(workdir):
         print("Error: Need {} to run this experiment. Design is {}.\n"
               "Please run 'make build_{}_{}_modelsim' to build the the modelsim library.\n"
-              "Also be in the cascade dir so the path is right.\n".format(workdir, design_name, instrumentation_str, tracestr, cascadedir))
+              "Also be in the cascade dir so the path is right.\n".format(workdir, design_name, 'vanilla', tracestr, cascadedir))
         sys.exit(1)
-    cmdline=['make', '-C', cascadedir, f"rerun_{instrumentation_str}_{tracestr}_modelsim"]
+    cmdline=['make', '-C', cascadedir, f"rerun_vanilla_{tracestr}_modelsim"]
 
     # We expect the simulation to take at most 4*simlen + 20 seconds.
     exec_out = subprocess.run(cmdline, cwd=workdir, check=True, text=True, capture_output=True, env=my_env, timeout=min(4*simlen + 20, 1800))
@@ -153,7 +151,7 @@ def runsim_modelsim(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PI
 # @param expected_regvals a pair of iterables of expected int regvals, and float regvals.
 # @param override_num_instrs if not None, then use this value instead of the number of instructions in fuzzerstate.instr_objs_seq. Used when pruning to shorten a bit the timeout.
 # @return (is_success: bool, msg: str)
-def runtest_simulator(fuzzerstate, elfpath: str, expected_regvals: tuple, override_num_instrs: int = None, is_modelsim: bool = False):
+def runtest_simulator(fuzzerstate, elfpath: str, expected_regvals: tuple, override_num_instrs: int = None, simulator=SimulatorEnum.VERILATOR):
     expected_intregvals, expected_floatregvals = expected_regvals
     del expected_regvals
 
@@ -162,10 +160,12 @@ def runtest_simulator(fuzzerstate, elfpath: str, expected_regvals: tuple, overri
         if fuzzerstate.design_has_fpu:
             assert len(expected_floatregvals) == fuzzerstate.num_pickable_floating_regs
     num_instrs = override_num_instrs if override_num_instrs is not None else len(list(itertools.chain.from_iterable(fuzzerstate.instr_objs_seq)))
-    if is_modelsim:
+    if simulator == SimulatorEnum.VERILATOR:
+        is_stop_successful, received_regvals = runsim_verilator(fuzzerstate.design_name, num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES, elfpath, fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_floating_regs)
+    elif simulator == SimulatorEnum.MODELSIM:
         is_stop_successful, received_regvals = runsim_modelsim(fuzzerstate.design_name, num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES, elfpath, fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_floating_regs)
     else:
-        is_stop_successful, received_regvals = runsim_verilator(fuzzerstate.design_name, num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES, elfpath, fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_floating_regs)
+        raise NotImplementedError(f"Unknown simulator {simulator}")
 
     # Check successful stop
     if not is_stop_successful:

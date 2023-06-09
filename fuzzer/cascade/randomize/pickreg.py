@@ -126,7 +126,6 @@ class IntRegPickState:
                         assert self.__regs_in_state_onehot[s][reg_id] == int(s == self.__reg_states[reg_id])
                 else:
                     assert self.__regs_in_state_onehot[self.__reg_states[reg_id]][reg_id]
-                    assert not self.__regs_in_state_onehot[new_state][reg_id]
         self.__regs_in_state_onehot[self.__reg_states[reg_id]][reg_id] = 0
         self.__regs_in_state_onehot[new_state][reg_id] = 1
         self.__reg_states[reg_id] = new_state

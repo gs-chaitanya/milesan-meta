@@ -259,7 +259,7 @@ def get_spike_timeout_seconds() -> int:
 def calibrate_spikespeed(numinstrs:int = 10000) -> list:
     global __spike_ns_per_instr
     from common.bytestoelf import gen_elf
-    from pycelligen.rv32i import rv32i_jal
+    from rv.rv32i import rv32i_jal
     from time import time_ns
 
     # First, create the file that contains the commands, if it does not already exist

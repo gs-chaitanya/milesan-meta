@@ -125,11 +125,6 @@ def gen_next_instrstr_from_isaclass(isaclass: ISAInstrClass, fuzzerstate) -> str
 
     keys_and_weights_dict = defaultdict(int, INSTRTYPE_INITIAL_RELATIVE_WEIGHTS[isaclass])
 
-    # AUIPC result must be relocated
-    if fuzzerstate.design_requires_relocation:
-        if isaclass == ISAInstrClass.ALU and fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) <= NUM_MIN_FREE_INTREGS:
-            keys_and_weights_dict["auipc"] = 0
-
     # No floating point sign injection
     if fuzzerstate.design_name == "vexriscv":
         keys_and_weights_dict = forbid_vexriscv_ops(keys_and_weights_dict)

@@ -4,15 +4,15 @@
 
 # This module is responsible for picking specific operations among exceptions.
 
-from params.runparams import DO_ASSERT
-from rv.csrids import CSR_IDS, INTERESTING_CSRS_INACCESSIBLE_FROM_SUPERVISOR, INTERESTING_CSRS_INACCESSIBLE_FROM_USER
-from common.spike import SPIKE_MEDELEG_MASK
+from cascade.cfinstructionclasses import JALInstruction, SimpleIllegalInstruction, SimpleExceptionEncapsulator, MisalignedMemInstruction, EcallEbreakInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, CSRRegInstruction, PrivilegeDescentInstruction, CSRRegInstructions, Float3Instruction, Float3Instructions
+from cascade.privilegestate import PrivilegeStateEnum
+from cascade.randomize.createcfinstr import gen_random_rounding_mode
 from cascade.toleratebugs import TOLERATE_ROCKET_MINSTRET, TOLERATE_KRONOS_READBADCSR, TOLERATE_PICORV32_READNONIMPLCSR, FORBID_VEXRISCV_CSRS
 from cascade.util import ExceptionCauseVal, IntRegIndivState
+from common.spike import SPIKE_MEDELEG_MASK
 from params.fuzzparams import MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, SIMPLE_ILLEGAL_INSTRUCTION_PROBA, PROBA_PICK_WRONG_FPU
-from cascade.privilegestate import PrivilegeStateEnum
-from cascade.cfinstructionclasses import JALInstruction, SimpleIllegalInstruction, SimpleExceptionEncapsulator, MisalignedMemInstruction, EcallEbreakInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, CSRRegInstruction, PrivilegeDescentInstruction, CSRRegInstructions, Float3Instruction, Float3Instructions
-from cascade.randomize.createcfinstr import gen_random_rounding_mode
+from params.runparams import DO_ASSERT
+from rv.csrids import CSR_IDS, INTERESTING_CSRS_INACCESSIBLE_FROM_SUPERVISOR, INTERESTING_CSRS_INACCESSIBLE_FROM_USER
 from copy import copy
 import random
 
@@ -180,19 +180,13 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         return SimpleExceptionEncapsulator(is_mtvec, None, EcallEbreakInstruction("ebreak"))
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:
         if DO_ASSERT:
-            if fuzzerstate.design_requires_relocation:
-                assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.RELOCATED_FRESH)
-            else:
-                assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
+            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
         return MisalignedMemInstruction(is_mtvec, fuzzerstate, True)
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
         raise NotImplementedError("ID_LOAD_ACCESS_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
         if DO_ASSERT:
-            if fuzzerstate.design_requires_relocation:
-                assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.RELOCATED_FRESH)
-            else:
-                assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
+            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
         return MisalignedMemInstruction(is_mtvec, fuzzerstate, False)
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
         raise NotImplementedError("ID_STORE_AMO_ACCESS_FAULT not yet supported")
@@ -257,14 +251,9 @@ def gen_tvecfill_instr(fuzzerstate):
         is_mtvec = False
 
     # Get some consumed register
-    if fuzzerstate.design_requires_relocation:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.RELOCATED_FRESH)
-        producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCATED_USED)
-    else:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
-        producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
+    producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
+    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
 
     # If this is the first write to the reg, then the reset val should be ignored
     if is_mtvec:
@@ -310,14 +299,9 @@ def gen_epcfill_instr(fuzzerstate):
         is_mepc = False
 
     # Get some consumed register
-    if fuzzerstate.design_requires_relocation:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.RELOCATED_FRESH)
-        producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCATED_USED)
-    else:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
-        producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
+    producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
+    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
 
     # If this is the first write to the reg, then the reset val should be ignored
     if is_mepc:
@@ -399,8 +383,8 @@ def gen_ppfill_instrs(fuzzerstate):
 # @brief this function generates an instruction that will fill medeleg with the provided value.
 # @return a CFInstructionType that will fill the tvec with the provided value.
 def gen_medeleg_instr(fuzzerstate):
-    from multiinstr.profiledesign import get_medeleg_mask
-
+    from common.profiledesign import get_medeleg_mask
+    
     if DO_ASSERT:
         assert fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE
 
@@ -425,14 +409,9 @@ def gen_medeleg_instr(fuzzerstate):
             val_to_write_spike |= random_bit << bit_id
 
     # Get some consumed register
-    if fuzzerstate.design_requires_relocation:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.RELOCATED_FRESH)
-        producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCATED_USED)
-    else:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
-        producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
+    producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
+    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
 
     if fuzzerstate.privilegestate.medeleg_val is None:
         rd = 0 # The reset value of medeleg differ between spike and the CPU. # FUTURE we can get any and call it POLLUTED

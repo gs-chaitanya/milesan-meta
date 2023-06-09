@@ -185,7 +185,7 @@ def _feed_regdump_to_instrs(fuzzerstate, regdumps: list):
             if isinstance(bb_instr, PlaceholderProducerInstr0) or isinstance(bb_instr, PlaceholderProducerInstr1):
                 if bb_instr.producer_id in producer_id_to_rdepval:
                     # Rationale: target_addr = rdep ^ rprod, where target_addr is spike_resolution_offset
-                    bb_instr.rtl_offset = producer_id_to_rdepval[bb_instr.producer_id] ^ bb_instr.spike_resolution_offset ^ SPIKE_STARTADDR # WARNING fuzzerstate.design_requires_relocation
+                    bb_instr.rtl_offset = producer_id_to_rdepval[bb_instr.producer_id] ^ bb_instr.spike_resolution_offset ^ SPIKE_STARTADDR
                 else:
                     # If this producer is never used, then we need to ensure that it remains the same as in the Spike resolution
                     bb_instr.rtl_offset = bb_instr.spike_resolution_offset

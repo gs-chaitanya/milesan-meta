@@ -4,7 +4,7 @@
 
 # This module is responsible for choosing the memory operation addresses and address registers.
 
-from params.runparams import DO_ASSERT, DO_ASSERT_CRITICAL
+from params.runparams import DO_ASSERT
 import random
 
 from params.fuzzparams import MemaddrPickPolicy, MEMADDR_PICK_POLICY_WEIGTHS
@@ -47,7 +47,7 @@ def pick_memop_addr(fuzzerstate, is_curr_load: bool, alignment_bits: int):
             fuzzerstate.memstorestate.last_store_addr = ret_addr
         return ret_addr
     elif curr_pick_type == MemaddrPickPolicy.MEM_ANY:
-        if DO_ASSERT_CRITICAL:
+        if DO_ASSERT:
             assert is_curr_load
         # Pick any location
         ret_addr = fuzzerstate.memview_blacklist.gen_random_free_addr(alignment_bits, 1 << alignment_bits, 0, fuzzerstate.memview_blacklist.memsize)

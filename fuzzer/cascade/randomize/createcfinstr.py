@@ -56,10 +56,7 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     if instr_str == "auipc" and rd > 0:
-        if fuzzerstate.design_requires_relocation:
-            fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCATED_USED) # The output is offsetted by the relocation base.
-        else:
-            fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
+        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     return ImmRdInstruction(instr_str, rd, imm, fuzzerstate.is_design_64bit, iscompressed)
 
 def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
@@ -90,28 +87,16 @@ def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompre
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     imm = fuzzerstate.next_bb_addr-curr_addr
     if rd > 0:
-        if fuzzerstate.design_requires_relocation:
-            fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCATED_USED) # The output is offsetted by the relocation base.
-        else:
-            fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
+        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     return JALInstruction(instr_str, rd, imm, iscompressed)
 def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
-    if fuzzerstate.design_requires_relocation:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.RELOCATED_FRESH)
-    else:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
+    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     imm = 0 # FUTURE Put a random immediate and deduce it from the target register
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-    if fuzzerstate.design_requires_relocation:
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCATED_USED)
-    else:
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if rd > 0:
-        if fuzzerstate.design_requires_relocation:
-            fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCATED_USED)
-        else:
-            fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
+        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
     return JALRInstruction(instr_str, rd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
@@ -123,17 +108,11 @@ def _create_SpecialInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
 def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in IntLoadInstructions
-    if fuzzerstate.design_requires_relocation:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.RELOCATED_FRESH)
-    else:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
+    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     imm = 0
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-    if fuzzerstate.design_requires_relocation:
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCATED_USED)
-    else:
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
     return IntLoadInstruction(instr_str, rd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
@@ -141,17 +120,11 @@ def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
 def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in IntStoreInstructions
-    if fuzzerstate.design_requires_relocation:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.RELOCATED_FRESH)
-    else:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
+    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
     rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
     imm = 0
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-    if fuzzerstate.design_requires_relocation:
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCATED_USED)
-    else:
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
     return IntStoreInstruction(instr_str, rs1, rs2, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
@@ -161,34 +134,22 @@ def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool)
 def _create_FloatLoadInstruction  (instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in FloatLoadInstructions
-    if fuzzerstate.design_requires_relocation:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.RELOCATED_FRESH)
-    else:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
+    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
     frd = fuzzerstate.floatregpickstate.pick_float_outputreg()
     imm = 0
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-    if fuzzerstate.design_requires_relocation:
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCATED_USED)
-    else:
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
     return FloatLoadInstruction(instr_str, frd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
 def _create_FloatStoreInstruction (instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in FloatStoreInstructions
-    if fuzzerstate.design_requires_relocation:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.RELOCATED_FRESH)
-    else:
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
+    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
     frs2 = fuzzerstate.floatregpickstate.pick_float_inputreg()
     imm = 0
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-    if fuzzerstate.design_requires_relocation:
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCATED_USED)
-    else:
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
     return FloatStoreInstruction(instr_str, rs1, frs2, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
@@ -258,22 +219,16 @@ def _create_FloatIntRs1Instruction(instr_str: str, fuzzerstate, iscompressed: bo
 
 def create_regfsm_instrobjs(fuzzerstate):
     # Check which reg fsm operations are doable
-    doable_fsm_ops = np.zeros(5, dtype=np.int8)
+    doable_fsm_ops = np.zeros(3, dtype=np.int8)
     doable_fsm_ops[0] = fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) > NUM_MIN_FREE_INTREGS
     doable_fsm_ops[1] = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED0)
     doable_fsm_ops[2] = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED1)
-    if fuzzerstate.design_requires_relocation:
-        doable_fsm_ops[3] = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
-        doable_fsm_ops[4] = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.RELOCATED_USED)
 
     effective_weights = doable_fsm_ops * REG_FSM_WEIGHTS
 
     choice = None
     while choice is None or not doable_fsm_ops[choice]:
-        if fuzzerstate.design_requires_relocation:
-            choice = random.choices(range(5), effective_weights, k=1)[0]
-        else:
-            choice = random.choices(range(3), effective_weights[:-2], k=1)[0]
+        choice = random.choices(range(3), effective_weights, k=1)[0]
 
     if choice == 0: # FREE -> PRODUCED0
         return create_targeted_producer0_instrobj(fuzzerstate)

@@ -4,15 +4,15 @@
 
 # This module defines the initial basic block of the program.
 
-from common.runparams import DO_ASSERT
-from common.csrids import CSR_IDS
+from params.runparams import DO_ASSERT
+from rv.csrids import CSR_IDS
 from cascade.toleratebugs import FORBID_VEXRISCV_CSRS, TOLERATE_PICORV32_WRITEHPM
-from multiinstr.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, R12DInstruction, IntLoadInstruction, FloatLoadInstruction, CSRRegInstruction
-from multiinstr.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID
-from multiinstr.randomize.createcfinstr import create_instr
-from multiinstr.randomize.pickisainstrclass import ISAInstrClass
-from multiinstr.util import get_range_bits_per_instrclass, BASIC_BLOCK_MIN_SPACE
-from pycelligen.luigiutil.asmutil import li_into_reg
+from cascade.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, R12DInstruction, IntLoadInstruction, FloatLoadInstruction, CSRRegInstruction
+from cascade.randomize.createcfinstr import create_instr
+from cascade.randomize.pickisainstrclass import ISAInstrClass
+from cascade.util import get_range_bits_per_instrclass, BASIC_BLOCK_MIN_SPACE
+from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID
+from rv.asmutil import li_into_reg
 
 import random
 

@@ -53,7 +53,7 @@ def gen_fuzzerstate_elf_expectedvals(memsize: int, design_name: str, check_pc_sp
 # Exposed function
 ###
 
-def run_rtl(memsize: int, design_name: str, check_pc_spike_again: bool = False, randseed: int = 0, nmax_bbs: int = None, simulator=SimulatorEnum.Verilator):
+def run_rtl(memsize: int, design_name: str, check_pc_spike_again: bool = False, randseed: int = 0, nmax_bbs: int = None, simulator=SimulatorEnum.VERILATOR):
     fuzzerstate, rtl_elfpath, finalregvals_spikeresol, time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf = gen_fuzzerstate_elf_expectedvals(memsize, design_name, check_pc_spike_again, randseed, nmax_bbs)
 
     start = time.time()
@@ -78,19 +78,19 @@ def run_rtl(memsize: int, design_name: str, check_pc_spike_again: bool = False, 
 # This function runs a single test run from a test descriptor (memsize, design_name, randseed, nmax_bbs) and returns the gathered times (used for the performance evaluation plot).
 @timeout(seconds=60*60*2)
 def fuzz_single_from_descriptor(memsize: int, design_name: str, randseed: int = 0, nmax_bbs: int = None, loggers: list = None, check_pc_spike_again: bool = False, start_time: float = None):
-    try:
+    # try:
         gathered_times = run_rtl(memsize, design_name, check_pc_spike_again, randseed, nmax_bbs)
         if loggers is not None:
             loggers[random.randrange(len(loggers))].log(True, {'memsize': memsize, 'design_name': design_name, 'randseed': randseed, 'nmax_bbs': nmax_bbs}, False, '') # No message for successful runs
         else:
             return gathered_times
-    except Exception as e:
-        if loggers is not None:
-            emsg = str(e)
-            if 'Spike timeout' in emsg:
-                loggers[random.randrange(len(loggers))].log(False, {'memsize': memsize, 'design_name': design_name, 'randseed': randseed, 'nmax_bbs': nmax_bbs}, True, '') # No message for Spike timeouts
-            else:
-                loggers[random.randrange(len(loggers))].log(False, {'memsize': memsize, 'design_name': design_name, 'randseed': randseed, 'nmax_bbs': nmax_bbs}, False, emsg)
-        else:
-            print(f"Failed test_run_rtl_single for params memsize: `{memsize}`, design_name: `{design_name}`, check_pc_spike_again: `{check_pc_spike_again}`, randseed: `{randseed}`, nmax_bbs: `{nmax_bbs}` -- ({memsize}, design_name, {randseed}, {nmax_bbs})")
-        return 0, 0, 0, 0 # Do not take failing runs into account
+    # except Exception as e:
+    #     if loggers is not None:
+    #         emsg = str(e)
+    #         if 'Spike timeout' in emsg:
+    #             loggers[random.randrange(len(loggers))].log(False, {'memsize': memsize, 'design_name': design_name, 'randseed': randseed, 'nmax_bbs': nmax_bbs}, True, '') # No message for Spike timeouts
+    #         else:
+    #             loggers[random.randrange(len(loggers))].log(False, {'memsize': memsize, 'design_name': design_name, 'randseed': randseed, 'nmax_bbs': nmax_bbs}, False, emsg)
+    #     else:
+    #         print(f"Failed test_run_rtl_single for params memsize: `{memsize}`, design_name: `{design_name}`, check_pc_spike_again: `{check_pc_spike_again}`, randseed: `{randseed}`, nmax_bbs: `{nmax_bbs}` -- ({memsize}, design_name, {randseed}, {nmax_bbs})")
+    #     return 0, 0, 0, 0 # Do not take failing runs into account

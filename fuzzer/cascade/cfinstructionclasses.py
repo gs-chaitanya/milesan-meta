@@ -1021,7 +1021,7 @@ class PlaceholderConsumerInstr:
             return rv32i_xor(self.rd, self.rdep, self.rprod) # self.rdep - self.rprod
 
 def is_placeholder(obj):
-    return isinstance(obj, PlaceholderProducerInstr0) or isinstance(obj, PlaceholderProducerInstr1) or isinstance(obj, PlaceholderPreConsumerInstr)
+    return isinstance(obj, PlaceholderProducerInstr0) or isinstance(obj, PlaceholderProducerInstr1) or isinstance(obj, PlaceholderPreConsumerInstr) or isinstance(obj, PlaceholderConsumerInstr)
 
 ###
 # Raw data
@@ -1100,7 +1100,6 @@ class MisalignedMemInstruction(ExceptionInstruction):
         from cascade.randomize.pickreg import IntRegIndivState
         # First, choose a consumed register.
         if DO_ASSERT:
-            assert not fuzzerstate.design_requires_relocation
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
         rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
         # Here, in principle no need for "self." in producer_id because it is already known by the wrapped instance.
