@@ -1,0 +1,8 @@
+{
+    "cva6": "../../cascade-designs/cascade-cva6/cascade",
+    "rocket": "../../cascade-designs/cascade-chipyard/cascade-rocket",
+    "boom": "../../cascade-designs/cascade-chipyard/cascade-boom",
+    "picorv32": "../../cascade-designs/cascade-picorv32/cascade",
+    "kronos": "../../cascade-designs/cascade-kronos/cascade",
+    "vexriscv": "../../cascade-designs/cascade-vexriscv/cascade"
+}
