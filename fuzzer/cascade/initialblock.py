@@ -41,7 +41,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     if DO_ASSERT:
         assert curr_addr == fuzzerstate.curr_bb_start_addr + len(fuzzerstate.instr_objs_seq[-1]) * 4 # NO_COMPRESSED
 
-    if not (fuzzerstate.design_name == "vexriscv" and FORBID_VEXRISCV_CSRS):
+    if not ("vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS):
         # Write 0 to medeleg to uniformize across designs. This must be done in initialblock to facilitate the analysis.
         if fuzzerstate.design_has_supervisor_mode:
             fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MEDELEG))
@@ -56,7 +56,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
             curr_addr += 4
 
     # We authorize all accesses through the PMP registers
-    if not (fuzzerstate.design_name == "vexriscv" and FORBID_VEXRISCV_CSRS):
+    if not ("vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS):
         if fuzzerstate.design_has_pmp:
             # pmpcfg0
             fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", 1, 0, 31, fuzzerstate.is_design_64bit))
@@ -75,7 +75,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
                 curr_addr += 8
 
     # Write random values into the performance monitor CSRs (zeros for now)
-    if not (fuzzerstate.design_name == "vexriscv" and FORBID_VEXRISCV_CSRS):
+    if not ("vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS):
         if fuzzerstate.design_name != 'picorv32':
             fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MCYCLE))
             fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MINSTRET))
@@ -118,7 +118,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrs", 0, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
         curr_addr += 8 # NO_COMPRESSED
 
-    if not (fuzzerstate.design_name == "vexriscv" and FORBID_VEXRISCV_CSRS):
+    if not ("vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS):
         if fuzzerstate.design_has_user_mode:
             fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("srli", SPP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 5, fuzzerstate.is_design_64bit))
             curr_addr += 4 # NO_COMPRESSED

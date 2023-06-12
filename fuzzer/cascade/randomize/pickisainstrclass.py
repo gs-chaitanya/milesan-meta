@@ -15,7 +15,7 @@ from copy import copy
 
 # Must not all be 0. Must be filtered according to the capabilities of the different CPUs.
 ISAINSTRCLASS_INITIAL_BOOSTERS = {
-    ISAInstrClass.REGFSM:      1, #2,
+    ISAInstrClass.REGFSM:      1,
     ISAInstrClass.FPUFSM:      0.1,
     ISAInstrClass.ALU:         0.1,
     ISAInstrClass.ALU64:       0.1,
@@ -41,7 +41,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.EXCEPTION:   0.1,
     ISAInstrClass.RANDOM_CSR:  0.02,
     ISAInstrClass.DESCEND_PRV: .01,
-    ISAInstrClass.SPECIAL:     0.001
+    ISAInstrClass.SPECIAL:     0.0001
 }
 
 ###
@@ -101,36 +101,37 @@ def _get_isainstrclass_filtered_weights(fuzzerstate):
         ret_dict[ISAInstrClass.AMO64] = 0
     if not fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
         ret_dict[ISAInstrClass.FPUFSM] = 0
-    if not (fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and fuzzerstate.design_has_supervisor_mode) \
-        or fuzzerstate.design_name == "vexriscv" and FORBID_VEXRISCV_CSRS:
+    if (not fuzzerstate.authorize_privileges) or not (fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and fuzzerstate.design_has_supervisor_mode) \
+        or "vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS:
         # There is no notion of delegation if supervisor mode is not supported
         ret_dict[ISAInstrClass.MEDELEG] = 0
     # For now, do not populate the mtvec/stvec more than necessary
-    if not (fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not fuzzerstate.privilegestate.is_mtvec_populated) and not ((fuzzerstate.privilegestate.privstate in (PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR)) and not fuzzerstate.privilegestate.is_stvec_populated and fuzzerstate.design_has_supervisor_mode) or \
+    if (not fuzzerstate.authorize_privileges) or not (fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not fuzzerstate.privilegestate.is_mtvec_populated) and not ((fuzzerstate.privilegestate.privstate in (PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR)) and not fuzzerstate.privilegestate.is_stvec_populated and fuzzerstate.design_has_supervisor_mode) or \
         fuzzerstate.design_name == "picorv32" \
-        or fuzzerstate.design_name == "vexriscv" and FORBID_VEXRISCV_CSRS:
+        or "vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS:
         ret_dict[ISAInstrClass.TVECFSM] = 0
     # For now, do not populate the mepc/sepc more than necessary
-    if not ((fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not (fuzzerstate.privilegestate.is_mepc_populated or fuzzerstate.privilegestate.is_sepc_populated)) or \
+    if (not fuzzerstate.authorize_privileges) or not ((fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not (fuzzerstate.privilegestate.is_mepc_populated or fuzzerstate.privilegestate.is_sepc_populated)) or \
         fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR and not fuzzerstate.privilegestate.is_sepc_populated) or \
         fuzzerstate.design_name == "picorv32" \
-        or fuzzerstate.design_name == "vexriscv" and FORBID_VEXRISCV_CSRS:
+        or "vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS:
         ret_dict[ISAInstrClass.EPCFSM] = 0
     # Do not descend privileges as long as medeleg is undefined because we have no way of certainly coming back up
     # However, this ISA class still encompasses setting mpp and spp bits, to we tolerate this ISA class at all times when executing as a non-user.
     if not is_ready_to_descend_privileges(fuzzerstate):
         ret_dict[ISAInstrClass.DESCEND_PRV] = 0
     # Decrease the proba if we know it will be a mpp/spp
-    if fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE or fuzzerstate.design_name == "picorv32": # To support sret from machine mode: `not in (PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR):`
+    if (not fuzzerstate.authorize_privileges) or fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE or fuzzerstate.design_name == "picorv32": # To support sret from machine mode: `not in (PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR):`
         ret_dict[ISAInstrClass.PPFSM] = 0
     # No exception if no exception is possible
-    if not fuzzerstate.privilegestate.is_ready_to_take_exception(fuzzerstate) or fuzzerstate.design_name == "picorv32":
+    if (not fuzzerstate.authorize_privileges) or not fuzzerstate.privilegestate.is_ready_to_take_exception(fuzzerstate) or fuzzerstate.design_name == "picorv32":
         ret_dict[ISAInstrClass.EXCEPTION] = 0
     if not fuzzerstate.privilegestate.privstate in (PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR) \
-        or fuzzerstate.design_name == "vexriscv" and FORBID_VEXRISCV_CSRS:
+        or "vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS:
         ret_dict[ISAInstrClass.RANDOM_CSR] = 0
     if fuzzerstate.design_name == "kronos" and not TOLERATE_KRONOS_FENCE \
-        or fuzzerstate.design_name == "picorv32" and not TOLERATE_PICORV32_FENCE:
+        or fuzzerstate.design_name == "picorv32" and not TOLERATE_PICORV32_FENCE \
+            or fuzzerstate.special_instrs_count:
         ret_dict[ISAInstrClass.SPECIAL] = 0
 
     # Normalize the weights

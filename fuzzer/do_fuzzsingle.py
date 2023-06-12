@@ -20,12 +20,12 @@ if __name__ == '__main__':
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     design_name = 'vexriscv'
-    descriptor = (656785, design_name, 8, 574)
+    descriptor = (652835, design_name, 41, 23, False)
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
 
     fuzz_single_from_descriptor(*descriptor, check_pc_spike_again=True)
-    
+
 else:
     raise Exception("This module must be at the toplevel.")

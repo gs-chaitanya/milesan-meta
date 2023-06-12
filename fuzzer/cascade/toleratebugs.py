@@ -6,6 +6,8 @@
 # This allows, for example, to measure time to bug detection.
 # Some bugs must be reintroduced in hw and cannot simply be reintroduced as a non-workaround in the fuzzer.
 
+NO_INTERACTION_MINSTRET = True
+
 ###
 # BOOM
 ###

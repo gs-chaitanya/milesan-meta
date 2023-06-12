@@ -20,11 +20,12 @@ import random
 
 class FuzzerState:
     # @param randseed for identification purposes only.
-    def __init__(self, design_base_addr: int, design_name: str, memsize: int, randseed: int = 0, nmax_bbs: int = None):
+    def __init__(self, design_base_addr: int, design_name: str, memsize: int, randseed: int, nmax_bbs: int, authorize_privileges: bool):
         # For identification
         self.randseed = randseed
         self.nmax_bbs = nmax_bbs
         self.memsize  = memsize
+        self.authorize_privileges = authorize_privileges
 
         self.design_name = design_name
         self.design_base_addr = design_base_addr
@@ -86,6 +87,8 @@ class FuzzerState:
 
         # Rocket has some inaccuracy in minstret because of ebreak and ecall. Hence, we don't read instret after these 2 instructions.
         self.is_minstret_inaccurate_because_ecall_ebreak = False
+        # To avoid having too many fences
+        self.special_instrs_count = 0
 
     def init_new_bb(self):
         self.instr_objs_seq.append([])

@@ -80,7 +80,7 @@ def _get_exceptionoptype_filtered_weights(fuzzerstate):
 # Warning: the privilege state of fuzzerstate is already updated!!
 # @param old_privilege the privilege state before the exception
 def pick_illegal_instruction(is_mtvec, fuzzerstate, old_privilege):
-    if fuzzerstate.design_name == "vexriscv" and FORBID_VEXRISCV_CSRS:
+    if "vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS:
         corrected_simple_illegal_instruction_proba = 1
     else:
         corrected_simple_illegal_instruction_proba = SIMPLE_ILLEGAL_INSTRUCTION_PROBA
@@ -88,7 +88,7 @@ def pick_illegal_instruction(is_mtvec, fuzzerstate, old_privilege):
         return SimpleIllegalInstruction(is_mtvec)
 
     if not fuzzerstate.design_has_fpu or not fuzzerstate.is_fpu_activated \
-        and not (fuzzerstate.design_name == "vexriscv" and FORBID_VEXRISCV_CSRS):
+        and not ("vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS):
         if random.random() < PROBA_PICK_WRONG_FPU * 0.01**fuzzerstate.design_has_fpu:
             rm = gen_random_rounding_mode()
             frs1, frs2 = tuple(fuzzerstate.floatregpickstate.pick_float_inputregs(2))

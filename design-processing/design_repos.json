@@ -4,5 +4,8 @@
     "boom": "../../cascade-designs/cascade-chipyard/cascade-boom",
     "picorv32": "../../cascade-designs/cascade-picorv32/cascade",
     "kronos": "../../cascade-designs/cascade-kronos/cascade",
-    "vexriscv": "../../cascade-designs/cascade-vexriscv/cascade"
+    "vexriscv": "../../cascade-designs/cascade-vexriscv/cascade",
+    "vexriscv-v1-7": "../../cascade-designs/cascade-vexriscv-v1-7/cascade",
+    "vexriscv-v8-9-v15": "../../cascade-designs/cascade-vexriscv-v8-9-v15/cascade",
+    "vexriscv-v13": "../../cascade-designs/cascade-vexriscv-v13/cascade"
 }

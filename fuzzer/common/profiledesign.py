@@ -39,7 +39,7 @@ def __gen_medeleg_profiling_snippet(design_name: str):
         assert stopsig_addr < 0x80000000, f"For the destination address `{hex(stopsig_addr)}`, we will need to manage sign extension, which is not yet implemented here."
 
     # We use the fuzzerstate for convenience but use very few of its features for this function's purposes. In particular, we do not bother about memviews.
-    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, 1 << 16, 0, 1)
+    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, 1 << 16, 0, 1, True)
 
     fuzzerstate.reset()
     fuzzerstate.init_new_bb() # Update fuzzer state to support a new basic block

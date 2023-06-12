@@ -487,12 +487,17 @@ def gen_basicblocks(fuzzerstate):
     blacklist_final_block(fuzzerstate) # Must be done once the bb is created, else we could also blacklist upper bounds over the basic block size.
     blacklist_context_setter(fuzzerstate)
 
-    # # Generate block tails
-    # gen_block_tails(fuzzerstate)
-
     # Generate addresses for memory operations
     memop_addrs = gen_memop_addrs(fuzzerstate)
 
     fuzzerstate.producer_id_to_tgtaddr, fuzzerstate.producer_id_to_noreloc_spike = gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs)
+
+    # # TODO Remove, debug only
+    # for bb_id, bb in enumerate(fuzzerstate.instr_objs_seq):
+    #     for bb_instr_id, bb_instr in enumerate(bb):
+    #         curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + bb_instr_id * 4 # NO_COMPRESSED
+    #         if curr_addr == 0x34df4:
+    #             print('Instr type:', bb_instr.instr_str)
+    #             print('Plan taken:', bb_instr.plan_taken)
 
     return fuzzerstate

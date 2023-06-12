@@ -122,6 +122,8 @@ def gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider: int, first_ins
     ret_dumpreqs.append((tgt_pc, False, 'sepc'))
     ret_dumpreqs.append((tgt_pc, False, 'mcause'))
     ret_dumpreqs.append((tgt_pc, False, 'scause'))
+    ret_dumpreqs.append((tgt_pc, False, 'mscratch'))
+    ret_dumpreqs.append((tgt_pc, False, 'sscratch'))
     ret_dumpreqs.append((tgt_pc, False, 'mtvec'))
     ret_dumpreqs.append((tgt_pc, False, 'stvec'))
     ret_dumpreqs.append((tgt_pc, False, 'medeleg'))

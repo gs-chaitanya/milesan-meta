@@ -209,7 +209,6 @@ def runtest_modelsim(fuzzerstate, elfpath: str, coveragepath: str):
     if not is_stop_successful:
         raise Exception(f"Timeout during modelsim testing of design `{fuzzerstate.design_name}` for tuple ({fuzzerstate.memsize}, design_name, {fuzzerstate.randseed}, {fuzzerstate.nmax_bbs}).")
 
-
 # Runs the test and checks for a single dumped register.
 # @return the value of the dumped register
 def runtest_verilator_forprofiling(fuzzerstate, elfpath: str, expected_fuzzerstate_len_fordebug: int):

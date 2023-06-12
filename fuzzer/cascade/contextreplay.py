@@ -6,9 +6,10 @@
 
 from dataclasses import dataclass
 from params.runparams import DO_ASSERT
-from rv.csrids import CSR_IDS
-from cascade.privilegestate import PrivilegeStateEnum
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MPP_TOP_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID
+from rv.csrids import CSR_IDS
+from cascade.toleratebugs import NO_INTERACTION_MINSTRET
+from cascade.privilegestate import PrivilegeStateEnum
 from cascade.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, IntLoadInstruction, IntStoreInstruction, FloatLoadInstruction, CSRRegInstruction, JALInstruction, RawDataWord, PrivilegeDescentInstruction
 from cascade.randomize.pickstoreaddr import ALIGNMENT_BITS_MAX
 
@@ -26,6 +27,8 @@ def get_context_setter_max_size(fuzzerstate):
     num_instrs_csrs += 4 # scause
     num_instrs_csrs += 4 # mtvec
     num_instrs_csrs += 4 # stvec
+    num_instrs_csrs += 4 # mscratch
+    num_instrs_csrs += 4 # sscratch
     num_instrs_csrs += 4 # medeleg
     num_instrs_csrs += 8 # mstatus  is a bit special and requires more instructions.
     num_instrs_csrs += 8 # minstret is a bit special and requires more instructions.
@@ -55,6 +58,8 @@ class SavedContext:
     sepc: int
     mcause: int
     scause: int
+    mscratch: int
+    sscratch: int
     mtvec: int
     stvec: int
     medeleg: int
@@ -132,6 +137,20 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         fuzzerstate.ctxsv_bb.append(None)
         fuzzerstate.ctxsv_bb.append(IntLoadInstruction("lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1, fuzzerstate.is_design_64bit))
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction("csrrw", 0, 1, CSR_IDS.SCAUSE))
+        curr_addr += 12 # NO_COMPRESSED
+
+    # mscratch
+    addr_csr_loads[CSR_IDS.MSCRATCH] = curr_addr
+    fuzzerstate.ctxsv_bb.append(None)
+    fuzzerstate.ctxsv_bb.append(IntLoadInstruction("lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1, fuzzerstate.is_design_64bit))
+    fuzzerstate.ctxsv_bb.append(CSRRegInstruction("csrrw", 0, 1, CSR_IDS.MSCRATCH))
+    curr_addr += 12 # NO_COMPRESSED
+
+    if fuzzerstate.design_has_supervisor_mode:
+        addr_csr_loads[CSR_IDS.SSCRATCH] = curr_addr
+        fuzzerstate.ctxsv_bb.append(None)
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction("lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1, fuzzerstate.is_design_64bit))
+        fuzzerstate.ctxsv_bb.append(CSRRegInstruction("csrrw", 0, 1, CSR_IDS.SSCRATCH))
         curr_addr += 12 # NO_COMPRESSED
 
     # mtvec
@@ -326,6 +345,18 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         fuzzerstate.ctxsv_bb.append(RawDataWord(0xdeadbeef))
         curr_addr += 8 # NO_COMPRESSED
 
+    # mscratch
+    fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MSCRATCH])] = RegImmInstruction("addi", 1, MAX_NUM_PICKABLE_REGS-1, curr_addr-fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.is_design_64bit)
+    fuzzerstate.ctxsv_bb.append(RawDataWord(saved_context.mscratch))
+    fuzzerstate.ctxsv_bb.append(RawDataWord(0xdeadbeef))
+    curr_addr += 8 # NO_COMPRESSED
+
+    if fuzzerstate.design_has_supervisor_mode:
+        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SSCRATCH])] = RegImmInstruction("addi", 1, MAX_NUM_PICKABLE_REGS-1, curr_addr-fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.is_design_64bit)
+        fuzzerstate.ctxsv_bb.append(RawDataWord(saved_context.sscratch))
+        fuzzerstate.ctxsv_bb.append(RawDataWord(0xdeadbeef))
+        curr_addr += 8 # NO_COMPRESSED
+
     if fuzzerstate.design_has_supervisor_mode:
         fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MTVEC])] = RegImmInstruction("addi", 1, MAX_NUM_PICKABLE_REGS-1, curr_addr-fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.is_design_64bit)
         fuzzerstate.ctxsv_bb.append(RawDataWord(saved_context.mtvec))
@@ -364,11 +395,12 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
     if not fuzzerstate.is_design_64bit:
         # Prepare register 2 to be written to the msb of minstret
         fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MINSTRET])+1] = RegImmInstruction("addi", 2, MAX_NUM_PICKABLE_REGS-1, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, fuzzerstate.is_design_64bit)
-    fuzzerstate.ctxsv_bb.append(RawDataWord((saved_context.minstret - ((instr_end_addr - (minstret_base_addr - 4 - 4*int(fuzzerstate.is_design_64bit))) // 4)) & 0xffffffff))
-    fuzzerstate.ctxsv_bb.append(RawDataWord((saved_context.minstret - ((instr_end_addr - minstret_base_addr - 4) // 4)) >> 32))
-    curr_addr += 8 # NO_COMPRESSED
+    if not NO_INTERACTION_MINSTRET:
+        fuzzerstate.ctxsv_bb.append(RawDataWord((saved_context.minstret + 4 - ((instr_end_addr - (minstret_base_addr - 4 - 4*int(fuzzerstate.is_design_64bit))) // 4)) & 0xffffffff, signed=True))
+        fuzzerstate.ctxsv_bb.append(RawDataWord((saved_context.minstret + 4 - ((instr_end_addr - minstret_base_addr - 4) // 4)) >> 32, signed=True))
+        curr_addr += 8 # NO_COMPRESSED
 
-    print('Expected instret: ', hex(saved_context.minstret))
+    # print('Expected instret: ', hex(saved_context.minstret))
 
     ###
     # We're now done with CSRs.

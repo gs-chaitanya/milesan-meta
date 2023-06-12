@@ -126,8 +126,11 @@ def gen_next_instrstr_from_isaclass(isaclass: ISAInstrClass, fuzzerstate) -> str
     keys_and_weights_dict = defaultdict(int, INSTRTYPE_INITIAL_RELATIVE_WEIGHTS[isaclass])
 
     # No floating point sign injection
-    if fuzzerstate.design_name == "vexriscv":
+    if "vexriscv" in fuzzerstate.design_name:
         keys_and_weights_dict = forbid_vexriscv_ops(keys_and_weights_dict)
+
+    if isaclass == ISAInstrClass.SPECIAL:
+        fuzzerstate.special_instrs_count += 1
 
     if fuzzerstate.design_name == "cva6":
         # Double precision

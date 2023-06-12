@@ -140,6 +140,9 @@ def is_ready_to_descend_privileges(fuzzerstate):
         assert fuzzerstate.privilegestate.medeleg_val is not None, "We don't expect medeleg to be None because we initialize it in the initial block."
 
     # For the moment, we only support descending privileges on designs that have all of M, S and U modes.
+    if not fuzzerstate.authorize_privileges:
+        return False
+
     if not fuzzerstate.design_has_supervisor_mode or not fuzzerstate.design_has_user_mode:
         return False
 
