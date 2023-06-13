@@ -215,7 +215,6 @@ def gen_random_data_block(fuzzerstate):
     fuzzerstate.memview.alloc_mem_range(fuzzerstate.random_data_block_start_addr, fuzzerstate.random_data_block_end_addr)
     # Generate the random data
     for _ in range(fuzzerstate.random_data_block_start_addr, fuzzerstate.random_data_block_end_addr, 4):
-        print('Randdata generated')
         fuzzerstate.random_block_content4by4bytes.append(random.randrange(0, 2**32))
 
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
@@ -462,11 +461,12 @@ def gen_basicblocks(fuzzerstate):
         gen_initial_basic_block(fuzzerstate, SPIKE_STARTADDR)
         fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
 
+        # Reserve space for the second basic block (whose address is already fixed).
+        fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
+
         # Generate the random data block
         gen_random_data_block(fuzzerstate)
 
-        # Reserve space for the second basic block (whose address is already fixed).
-        fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
         # Reserve space for the final basic block.
         alloc_final_basic_block(fuzzerstate)
         # Reserve space for the context setter basic block, but do not instantiate it because we do not know yet what it will look like until we have a concrete context to restore. Until then, we just know arbitrary bounds.

@@ -74,20 +74,21 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
     rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
     plan_taken = fuzzerstate.curr_branch_taken
     if plan_taken:
-        print('A', flush=True)
+        # print('A', flush=True)
         imm = fuzzerstate.next_bb_addr-curr_addr
     else:
         # Select whether to direct toward the random data basic block
-        is_random_data_block_in_reach = abs(fuzzerstate.random_data_block_start_addr - curr_addr) < 2**12 and abs(fuzzerstate.random_data_block_end_addr-4 - curr_addr) < 2**12
+        is_random_data_block_in_reach = abs(fuzzerstate.random_data_block_start_addr - curr_addr) < (1<<11) and abs(fuzzerstate.random_data_block_end_addr-4 - curr_addr) < (1<<11)
         if is_random_data_block_in_reach and random.random() < NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA:
-            print('B', flush=True)
-            random_offset_in_random_data = random.randrange(0, fuzzerstate.random_data_block_end_addr - fuzzerstate.random_data_block_start_addr - 4)
-            imm = fuzzerstate.random_data_block_start_addr+random_offset_in_random_data-curr_addr
+            lowest_random_data_reachable_addr = max(fuzzerstate.random_data_block_start_addr+4, curr_addr - (1<<11))
+            highest_random_data_reachable_addr = min(fuzzerstate.random_data_block_end_addr-4, curr_addr + (1<<11))
+
+            target_addr_in_random_data_block = random.randrange(lowest_random_data_reachable_addr//2, highest_random_data_reachable_addr//2)*2
+            imm = target_addr_in_random_data_block-curr_addr
         else:
-            print('C', flush=True)
             imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     
-    print('New imm', hex(imm), flush=True)
+    # print('New imm', hex(imm), flush=True)
     return BranchInstruction(instr_str, rs1, rs2, imm, plan_taken, fuzzerstate.is_design_64bit, iscompressed)
 
 def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):

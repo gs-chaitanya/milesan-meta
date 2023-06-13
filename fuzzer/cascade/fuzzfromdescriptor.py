@@ -18,7 +18,7 @@ import time
 
 FUZZ_USE_MODELSIM = False
 
-LOG2_MEMSIZE_UPPERBOUND = 20
+LOG2_MEMSIZE_UPPERBOUND = 18
 NUM_MAX_BBS_UPPERBOUND = 1000
 
 # Creates a new program descriptor.

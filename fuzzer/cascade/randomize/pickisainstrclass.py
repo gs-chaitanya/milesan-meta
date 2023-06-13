@@ -23,7 +23,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.MULDIV64:    0.1,
     ISAInstrClass.AMO:         0,
     ISAInstrClass.AMO64:       0,
-    ISAInstrClass.JAL :        0.4,
+    ISAInstrClass.JAL :        0.1,
     ISAInstrClass.JALR:        0.4,
     ISAInstrClass.BRANCH:      0.2,
     ISAInstrClass.MEM:         0.5,
@@ -39,7 +39,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.EPCFSM:      0.1,
     ISAInstrClass.MEDELEG:     0.1,
     ISAInstrClass.EXCEPTION:   0.1,
-    ISAInstrClass.RANDOM_CSR:  0.02,
+    ISAInstrClass.RANDOM_CSR:  0.01,
     ISAInstrClass.DESCEND_PRV: .01,
     ISAInstrClass.SPECIAL:     0.0001
 }
