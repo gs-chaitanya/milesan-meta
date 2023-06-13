@@ -499,5 +499,6 @@ def gen_basicblocks(fuzzerstate):
     #         if curr_addr == 0x34df4:
     #             print('Instr type:', bb_instr.instr_str)
     #             print('Plan taken:', bb_instr.plan_taken)
+    # print('Start addr:', hex(fuzzerstate.bb_start_addr_seq[147]))
 
     return fuzzerstate

@@ -165,11 +165,11 @@ ImmRdInstructions = ("lui", "auipc")
 class ImmRdInstruction(ImmInstruction):
     authorized_instr_strs = ImmRdInstructions
 
-    def __init__(self, instr_str: str, rd: int, imm: int, is_design_64bit: bool, iscompressed: bool = False):
+    def __init__(self, instr_str: str, rd: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(instr_str, imm, is_design_64bit, iscompressed)
         if DO_ASSERT:
             assert rd >= 0
-            assert rd < MAX_NUM_PICKABLE_REGS or rd in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID)
+            assert is_rd_nonpickable_ok or rd < MAX_NUM_PICKABLE_REGS or rd in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID)
         self.imm = imm
         self.rd =  rd
 
@@ -189,13 +189,13 @@ RegImmInstructions = ("addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "s
 class RegImmInstruction(ImmInstruction):
     authorized_instr_strs = RegImmInstructions
 
-    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, is_design_64bit: bool, iscompressed: bool = False):
+    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(instr_str, imm, is_design_64bit, iscompressed)
         if DO_ASSERT:
             assert rs1 >= 0
-            assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID), f"Got rs1 (select) =`{rs1}`"
+            assert is_rd_nonpickable_ok or rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID), f"Got rs1 (select) =`{rs1}`"
             assert rd >= 0
-            assert rd < MAX_NUM_PICKABLE_REGS or rd in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID), f"Got rd (select) =`{rd}`"
+            assert is_rd_nonpickable_ok or rd < MAX_NUM_PICKABLE_REGS or rd in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID), f"Got rd (select) =`{rd}`"
         self.rs1 = rs1
         self.rd =  rd
         if self.instr_str == "sraiw" and self.imm < 0:
@@ -376,13 +376,13 @@ IntLoadInstructions = ("lb", "lh", "lw", "lbu", "lhu", "lwu", "ld")
 class IntLoadInstruction(ImmInstruction):
     authorized_instr_strs = IntLoadInstructions
 
-    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, is_design_64bit: bool, iscompressed: bool = False):
+    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(instr_str, imm, is_design_64bit, iscompressed)
         if DO_ASSERT:
             assert rd >= 0
             assert rd < MAX_NUM_PICKABLE_REGS
             assert rs1 >= 0
-            assert rs1 < MAX_NUM_PICKABLE_REGS
+            assert is_rd_nonpickable_ok or rs1 < MAX_NUM_PICKABLE_REGS
         self.rd  = rd
         self.rs1 =  rs1
         self.producer_id = producer_id

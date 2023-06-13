@@ -8,7 +8,7 @@
 # sys.argv[2]: num of cores allocated to fuzzing
 # sys.argv[3]: offset for seed (to avoid running the fuzzing on the same instances over again)
 
-from cascade.reduce import reduce_program
+from cascade.debug.debugreduce import debug_top
 from common.profiledesign import profile_get_medeleg_mask
 from common.spike import calibrate_spikespeed
 
@@ -24,7 +24,13 @@ if __name__ == '__main__':
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
 
-    reduce_program(*descriptor, True, check_pc_spike_again=True, hint_left_bound_bb=285, hint_right_bound_bb=286, hint_left_bound_instr=32, hint_right_bound_instr=35, hint_left_bound_pillar_bb=285, hint_left_bound_pillar_instr=32) #, hint_left_bound_instr=229, hint_right_bound_instr=231, hint_left_bound_pillar_bb=18, hint_left_bound_pillar_instr=229)
+    # 0x80064298
+    # 0x80015048 (0x224c8093) addi    ra, s9, 548
+    # 0x8001504c (0x0000a083) lw      ra, 0(ra)  
+    # 0x80015050 (0x00000113) li      sp, 0      
+    # 0x80015054 (0x00208023) sb      sp, 0(ra)  
+    # Value at addr 0x8006c06a: 0x0000000f
+    debug_top(*descriptor, 286, 35, 0x10924)
 
 else:
     raise Exception("This module must be at the toplevel.")

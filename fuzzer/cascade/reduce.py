@@ -27,6 +27,7 @@ FLATTEN_SANDWICH_INSTRUCTIONS = False # Not fully implemented & tested, hence do
 
 # Used for removing the first BBs and instructions.
 def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_consider: int, index_first_instr_to_consider: int):
+    print(f"Saving context and jumping to pillar-specific instruction {index_first_bb_to_consider}:{index_first_instr_to_consider}...")
     spikereduce_elfpath = gen_elf_from_bbs(fuzzerstate, False, "spikereduce_savectx", f"{fuzzerstate.instance_to_str()}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", SPIKE_STARTADDR)
 
     ctx_regdump_reqs, storenumbytes = gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider)
@@ -523,10 +524,6 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
     if pillar_bb_id == failing_bb_id and failing_instr_id == pillar_instr:
         return fuzzerstate
 
-    # TODO Remove
-    # if fault_from_prev_bb:
-    #     raise NotImplementedError('TODO case where fault_from_prev_bb is True')
-
     if DO_ASSERT:
         assert is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr)
         assert not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr+1)
@@ -637,7 +634,6 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 # Second, finds the problematic instruction.
 # Third, reduce some first basic blocks that are not involved in the problem.
 # Fourth, reduce some initial instructions in the first problematic bb.
-# Fifth, reduce some instructions in the middle of the problematic ones. TODO
 # @param target_dir: If not None, the directory where to save the generated files. Else, will be saved in the design's directory
 # @param find_pillars: If false, the front of the test case will not be reduced.
 def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
