@@ -194,10 +194,14 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         fuzzerstate.initial_reg_data_addr += 4
         curr_addr += 4
 
+    fuzzerstate.initial_block_data_start = curr_addr
+
     if DO_ASSERT:
         assert curr_addr == bytes_until_random_vals_base_for_debug + bytes_until_random_vals, f"curr_addr {hex(curr_addr)}, right-hand {hex(bytes_until_random_vals_base_for_debug + bytes_until_random_vals)} ({hex(bytes_until_random_vals_base_for_debug)} + {hex(bytes_until_random_vals)})"
         # Space taken by the random initial register values. We let some be zero.
-        curr_addr += 8 * num_reginit_vals
+    curr_addr += 8 * num_reginit_vals
+    fuzzerstate.initial_block_data_end = curr_addr
+    if DO_ASSERT:
         assert curr_addr == fuzzerstate.curr_bb_start_addr + intended_initial_block_plus_reginit_size, f"{curr_addr}, {fuzzerstate.curr_bb_start_addr + len(fuzzerstate.instr_objs_seq[-1]) * 4 + 4 + len(fuzzerstate.initial_reg_data_content) * 8 + int(has_padding) * 4}" # NO_COMPRESSED
 
     return True

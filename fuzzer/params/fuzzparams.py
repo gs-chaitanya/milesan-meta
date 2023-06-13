@@ -9,13 +9,16 @@ import numpy as np
 # Basic blocks
 ###
 
-BLOCK_TAIL_MAX_INSTRS = 3 # Max number of instructions in a basic block tail (the last instructions of a basic block, strictly after the last (architecturally executed) instruction of the basic block)
+BLOCK_HEADER_RANDOM_DATA_BYTES = 12
+RANDOM_DATA_BLOCK_MIN_SIZE_BYTES = 128
+RANDOM_DATA_BLOCK_MAX_SIZE_BYTES = 2 << 10 # 2 KiB
 
 ###
 # Branches
 ###
 
 BRANCH_TAKEN_PROBA = 0.2 # Proba of a branch to be taken
+NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA = 0.9 # Proba of a branch to target the random data block if it is in range
 
 ###
 # Memory operations

@@ -7,7 +7,7 @@
 from params.runparams import DO_ASSERT
 from common.spike import SPIKE_STARTADDR
 from rv.csrids import CSR_IDS
-from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO
+from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES
 from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 from cascade.randomize.pickisainstrclass import gen_next_isainstrclass, ISAInstrClass
@@ -204,6 +204,19 @@ def gen_basicblock(fuzzerstate):
             fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
             return False
         fuzzerstate.instr_objs_seq[-1].append(create_instr('jalr', fuzzerstate, curr_addr))
+
+# This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
+def gen_random_data_block(fuzzerstate):
+    lenbytes = random.randrange(RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES)
+    fuzzerstate.random_data_block_start_addr = fuzzerstate.memview.gen_random_free_addr(2, lenbytes, 0, fuzzerstate.memsize)
+    fuzzerstate.random_data_block_end_addr = fuzzerstate.random_data_block_start_addr + lenbytes
+    if DO_ASSERT:
+        assert fuzzerstate.random_data_block_start_addr is not None, f"Maybe you should create the random data block earlier in the creation of the test case."
+    fuzzerstate.memview.alloc_mem_range(fuzzerstate.random_data_block_start_addr, fuzzerstate.random_data_block_end_addr)
+    # Generate the random data
+    for _ in range(fuzzerstate.random_data_block_start_addr, fuzzerstate.random_data_block_end_addr, 4):
+        print('Randdata generated')
+        fuzzerstate.random_block_content4by4bytes.append(random.randrange(0, 2**32))
 
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
 def alloc_final_basic_block(fuzzerstate):
@@ -448,6 +461,9 @@ def gen_basicblocks(fuzzerstate):
         fuzzerstate.reset()
         gen_initial_basic_block(fuzzerstate, SPIKE_STARTADDR)
         fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
+
+        # Generate the random data block
+        gen_random_data_block(fuzzerstate)
 
         # Reserve space for the second basic block (whose address is already fixed).
         fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)

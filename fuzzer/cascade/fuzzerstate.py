@@ -46,6 +46,9 @@ class FuzzerState:
 
     # @brief cleans up the fuzzerstate. Used in case of failed input generation.
     def reset(self):
+        self.initial_block_data_start, self.initial_block_data_end = None, None
+        self.random_block_content4by4bytes = []
+
         self.next_bb_addr = 0
         self.memview = MemoryView(self.memsize)
         self.memview_blacklist = MemoryView(self.memsize) # For load blacklist
@@ -166,7 +169,7 @@ class FuzzerState:
             self.num_pickable_floating_regs = 0 # Just for compatibility. This variable is not used if self.design_has_fpu is False.
 
         # Registers' initial values
-        self.proba_reg_starts_with_zero = random.random()
+        self.proba_reg_starts_with_zero = random.random() / 10
         if DO_ASSERT:
             assert self.proba_reg_starts_with_zero >= 0.0
             assert self.proba_reg_starts_with_zero <= 1.0

@@ -61,6 +61,15 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
                 assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {hex(curr_addr)}"
             addr_instrs[curr_addr] = curr_byte
 
+    # Add the random data block
+    for word_id, word_content in enumerate(fuzzerstate.random_block_content4by4bytes):
+        curr_bytecode = word_content.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(4, 'little')
+        for curr_byte_id, curr_byte in enumerate(curr_bytecode):
+            curr_addr = fuzzerstate.random_data_block_start_addr + 4*word_id + curr_byte_id # NO_COMPRESSED
+            if DO_ASSERT:
+                assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {hex(curr_addr)}"
+            addr_instrs[curr_addr] = curr_byte
+
     # Generate a bytes object
     curr_bytearray = bytearray(fuzzerstate.memsize) # Zero-filled
     for curr_addr, curr_byte in addr_instrs.items():

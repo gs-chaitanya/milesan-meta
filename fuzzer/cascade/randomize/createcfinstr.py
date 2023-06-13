@@ -7,7 +7,7 @@ import numpy as np
 
 from params.runparams import DO_ASSERT
 
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, REG_FSM_WEIGHTS
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA
 from cascade.util import IntRegIndivState
 from cascade.cfinstructionclasses import *
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
@@ -74,13 +74,20 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
     rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
     plan_taken = fuzzerstate.curr_branch_taken
     if plan_taken:
+        print('A', flush=True)
         imm = fuzzerstate.next_bb_addr-curr_addr
     else:
-        imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
-    # producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-    # if DO_ASSERT:
-    #     assert producer_id > 0
-    # fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+        # Select whether to direct toward the random data basic block
+        is_random_data_block_in_reach = abs(fuzzerstate.random_data_block_start_addr - curr_addr) < 2**12 and abs(fuzzerstate.random_data_block_end_addr-4 - curr_addr) < 2**12
+        if is_random_data_block_in_reach and random.random() < NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA:
+            print('B', flush=True)
+            random_offset_in_random_data = random.randrange(0, fuzzerstate.random_data_block_end_addr - fuzzerstate.random_data_block_start_addr - 4)
+            imm = fuzzerstate.random_data_block_start_addr+random_offset_in_random_data-curr_addr
+        else:
+            print('C', flush=True)
+            imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
+    
+    print('New imm', hex(imm), flush=True)
     return BranchInstruction(instr_str, rs1, rs2, imm, plan_taken, fuzzerstate.is_design_64bit, iscompressed)
 
 def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
@@ -92,7 +99,7 @@ def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompre
 def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
-    imm = 0 # FUTURE Put a random immediate and deduce it from the target register
+    imm = 0
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if rd > 0:
