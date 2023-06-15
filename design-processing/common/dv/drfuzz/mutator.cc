@@ -4,184 +4,6 @@
 #include <cstring>
 #include <deque>
 
-#ifdef TAINT_EN
-TaintMutator::TaintMutator(Corpus *corpus){
-    this->acc_output.init();
-    this->done = false;
-    this->corpus = corpus;
-    this->candidate_score = 0;
-    this->candidate_weight = 0;
-    this->ini_candidate_weight = 0;
-    this->done = false;
-    this->n_untainted_bits = 0; // keep track of the number of taint bits we flipped to 0
-
-}
-
-void TaintMutator::reduce(Queue *q){
-    size_t n_tainted_bits = 0;
-
-    q->clear_accumulated_output();
-    q->clear_tb_outputs();
-    assert(q->outputs.size() ==0);
-
-    // if(P_UNTAINT == 0) return;  
-    for(auto &inp: q->inputs){
-        for(int i=0; i<N_TAINT_INPUTS_b32; i++){
-            for(int j=0; j<32; j++){
-                if(inp->taints[i] & (1<<j)){ // bit is tainted
-
-                    // if(rand()%P_UNTAINT){ // with p = 1/2
-                    //     inp->taints[i] &= ~((uint32_t )(1<<j)); // untaint that bit by masking it out
-                    // }
-
-                    if(n_tainted_bits+this->n_untainted_bits == this->taint_idx){
-                        this->taint_idx++;
-                        if(this->taint_idx == this->ini_candidate_weight-1) this->done = true;
-                        inp->taints[i] &= ~((uint32_t )(1<<j)); // try untainting this one
-                        this->n_untainted_bits ++;
-                        return;
-                    }
-                    n_tainted_bits ++;
-                    // inp->taints[i] = 0;
-                }
-            }
-        }
-    }
-    // return;
-    assert(false); // if we end up here we messed up
-}
-
-bool TaintMutator::is_done(){
-    return this->done;
-}
-
-void TaintMutator::add_io_taint_vec(Queue *q){
-    for(auto &out: q->outputs){
-        this->acc_output.add_or(out);
-    }
-    this->io_taint_vecs.push_back(q);
-}
-
-void TaintMutator::filter_taint_vecs(){ // filter out all taint input vectors that dont cover any of the currently non-toggled coverage points 
-    assert(N_TAINT_OUTPUTS_b32 == N_COV_POINTS_b32);
-    size_t ini_size = this->io_taint_vecs.size();
-    uint32_t *target_cov_points = this->corpus->get_accumulated_output()->coverage; // the ones that are zero are the ones we want to taint!
-    std::vector<Queue *>::iterator q = this->io_taint_vecs.begin();
-    while(q != this->io_taint_vecs.end()){
-        doutput_t *ioq_acc_output = (*q)->get_accumulated_output();
-        ioq_acc_output->check();
-        bool keep = false;
-        for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){
-            if(ioq_acc_output->taints[i] & (~target_cov_points[i])){ // we keep the queue if it tainted an untoggled coverage point
-                keep = true;
-            }
-        }
-        if(keep) ++q;
-        else{
-            (*q)->clear_tb_inputs();
-            (*q)->clear_tb_outputs();
-            q = this->io_taint_vecs.erase(q);  
-        }
-    }
-    std::cout << "Deleted " << ini_size - this->io_taint_vecs.size() << " queues. Now have " << this->io_taint_vecs.size() << "\n";
-}
-
-void TaintMutator::find_candidate(){ // find taint input vectors that cover all untoggled coverage points
-    assert(N_TAINT_OUTPUTS_b32 == N_COV_POINTS_b32);
-    uint32_t *target_cov_points = this->corpus->get_accumulated_output()->coverage; // the ones that are zero are the ones we want to taint!
-    // std::cout << "looking to taint: \n";
-    // this->corpus->get_accumulated_output()->print();
-    std::vector<Queue *>::iterator q = this->io_taint_vecs.begin();
-    while(q != this->io_taint_vecs.end()){
-        size_t score = 0;
-        doutput_t *ioq_acc_output = (*q)->get_accumulated_output();
-        ioq_acc_output->check();
-        for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){
-            score += __builtin_popcount(ioq_acc_output->taints[i] & (~target_cov_points[i]));
-        }
-        if(score > this->candidate_score){
-            this->candidate = *q;
-            this->candidate_score = score;
-        } 
-        ++q;
-    }
-    assert(this->candidate != nullptr);
-    for(auto &inp: this->candidate->inputs){
-        for(int i=0; i<N_TAINT_INPUTS_b32; i++){
-            this->candidate_weight += __builtin_popcount(inp->taints[i]);
-        }
-    }
-   
-    this->ini_candidate_weight = this->candidate_weight;
-}
-
-bool TaintMutator::check_good(Queue *q){
-    size_t count = 0;
-    doutput_t *acc_out = q->get_accumulated_output();
-    uint32_t *target_cov_points = this->corpus->get_accumulated_output()->coverage; // the ones that are zero are the ones we want to taint!
-    for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){
-        count += __builtin_popcount(acc_out->taints[i] & (~target_cov_points[i]));
-    }
-    if(count != this->candidate_score) return false; // we cant taint more outputs by reducing the input taints anyway -> need to change this if we start messing with the inputs too
-    return true;
-}
-
-void TaintMutator::set_new_candidate(Queue *q){
-    assert(q != this->candidate);
-    this->candidate->clear_tb_inputs();
-    this->candidate->clear_tb_outputs();
-    this->candidate = q;
-    this->candidate_weight = 0;
-    for(auto &inp: this->candidate->inputs){
-        for(int i=0; i<N_TAINT_INPUTS_b32; i++){
-            this->candidate_weight += __builtin_popcount(inp->taints[i]);
-        }
-    }
-}
-
-TaintBruteForceMutator::TaintBruteForceMutator(Queue *candidate){
-    this->candidate = candidate;
-    this->candidate_weight = 0;
-    this->permutation_idx = 0;
-    this->done = false;
-
-    for(auto &inp: this->candidate->inputs){
-        for(int i=0; i<N_TAINT_INPUTS_b32; i++){
-            this->candidate_weight += __builtin_popcount(inp->taints[i]);
-        }
-    }
-
-    this->n_permutations = 2<<this->candidate_weight;
-}
-
-bool TaintBruteForceMutator::is_done(){
-    return this->done;
-}
-Queue *TaintBruteForceMutator::apply_next(Queue *q){
-    assert(N_FUZZ_INPUTS_b32 == N_TAINT_INPUTS_b32);
-    size_t taint_idx = 0;
-    Queue *out_q = q->copy();
-    out_q->clear_tb_outputs();
-    out_q->clear_accumulated_output();
-    for(auto &inp: out_q->inputs){
-        for(int i=0; i<N_FUZZ_INPUTS_b32; i++){
-            for(int j=0; j<32; j++){
-                if(inp->taints[i] & (1<<j)){ // bit is tainted
-                    if(this->permutation_idx & (1<<taint_idx)){ // the bit in the permutation index is set, so we flip the bit
-                        inp->inputs[i] = (inp->inputs[i] & ~(1<<j)) | (~inp->inputs[i] & (1<<j)); // this is the uint_32 with the bit inverted
-                    }
-                    taint_idx++; // go to next bit in permutaton idx
-                } 
-            }
-        }
-    }
-    if(this->permutation_idx == this->n_permutations-1) this->done = true;
-    this->permutation_idx++;
-    return out_q;
-}
-
-#endif // TAINT_EN
-
 void Mutator::init(){
     this->done = false;
     this->idx = -1;
@@ -200,7 +22,7 @@ Queue *Mutator::apply_next(Queue *in_q){
     return this->apply(in_q);
 }
 
-Queue *Mutator::apply(Queue *in_q) { // flip a bit in input but just copy taints for now
+Queue *Mutator::apply(Queue *in_q) {
     assert(in_q->size());
     size_t input_size = in_q->inputs.size() * N_FUZZ_INPUTS_b32 * sizeof(uint32_t); // total number of bytes 
     uint8_t *inp_buf = (uint8_t *) malloc(input_size);
@@ -212,9 +34,6 @@ Queue *Mutator::apply(Queue *in_q) { // flip a bit in input but just copy taints
     for(int i=0; i<in_q->inputs.size(); i++){
         dinput_t *new_input = (dinput_t *) malloc(sizeof(dinput_t));
         memcpy(new_input->inputs, inp_buf + i * N_FUZZ_INPUTS_b32 * sizeof(uint32_t),  N_FUZZ_INPUTS_b32 * sizeof(uint32_t));
-        #ifdef TAINT_EN
-        memcpy(new_input->taints, in_q->inputs[i]->taints,  N_TAINT_INPUTS_b32 * sizeof(uint32_t));
-        #endif // TAINT_EN
         new_input->clean();
         out_q->push_tb_input(new_input);
     }

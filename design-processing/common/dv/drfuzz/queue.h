@@ -29,7 +29,7 @@ class Queue {
         void push_tb_inputs(std::deque<dinput_t *> *inputs);
         void clear_tb_outputs();
         void clear_tb_inputs();
-        void generate_inputs(bool taint = true, int n_inputs = N_MAX_INPUTS);
+        void generate_inputs(int n_inputs = N_MAX_INPUTS);
         void seed();
         void print_inputs();
         void print_outputs();
@@ -45,12 +45,5 @@ class Queue {
             this->clear_tb_inputs();
             this->clear_tb_outputs();
         }
-        
-        #ifdef TAINT_EN
-        void invert_tainted_bits();
-        void check_taint_progess();
-        #endif // TAINT_EN
-
-
 };
 #endif // QUEUE_H

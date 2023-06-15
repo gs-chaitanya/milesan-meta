@@ -44,7 +44,7 @@ static long fuzz(){
 	Corpus *corpus = new Corpus();
 
 	Queue *rnd = new Queue();
-	rnd->generate_inputs(true,1000);
+	rnd->generate_inputs(1000);
 	tb->push_inputs(rnd->pop_tb_inputs());
 	fuzz_once(tb, true);
 	rnd->push_tb_outputs(tb->pop_outputs());
@@ -77,9 +77,6 @@ static long fuzz(){
 
 	seed->push_tb_inputs(tb->pop_retired_inputs());
 	std::cout << "**********\n";
-	#ifdef TAINT_EN
-	TaintMutator *taint_mut = new TaintMutator(corpus); // just one single global taint mutator
-	#endif // TAINT_EN
 	std::cout << "***CORPUS***\n";
 	corpus->add_q(seed);
 	while(!corpus->empty()){
@@ -98,19 +95,13 @@ static long fuzz(){
 				fuzz_once(tb, true);
 				mut_q->push_tb_outputs(tb->pop_outputs());
 				mut_q->push_tb_inputs(tb->pop_retired_inputs()); // retrieve inputs back into q
-				#ifdef TAINT_EN
-				taint_mut->add_io_taint_vec(mut_q); // collect the taint maps here
-				mut_q->check_taint_progess();
-				#endif // TAINT_EN
 				// mut_q->clear_tb_outputs(); // the individual outputs per cycle dont matter, we just care for the accumulated output
 				if(corpus->is_interesting(mut_q)){
 					corpus->add_q(mut_q);
 				}
-				#ifndef TAINT_EN
 				else{
 					delete mut_q;
 				}
-				#endif // TAINT_EN
 			}
 		}
 	}

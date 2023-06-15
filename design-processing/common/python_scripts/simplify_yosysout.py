@@ -21,7 +21,7 @@ UGLY_MODULENAME_MAX_LENGTH = 30
 
 module_hash_correspondances = dict()
 
-# WARNING: the lines generated into module_hash_correspondances_debugheaderlines may be used by subsequent scripts (e.g., cva6/scripts/make_wt_adapter_taint_public.py). Modify their format with care.
+# WARNING: the lines generated into module_hash_correspondances_debugheaderlines may be used by subsequent scripts. Modify their format with care.
 module_hash_correspondances_debugheaderlines = []
 
 def simplify_module_name(modulename_ugly):

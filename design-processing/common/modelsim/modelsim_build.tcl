@@ -23,13 +23,12 @@ if { [info exists ::env(MODELSIM_VLOG_COVERFLAG)] }  { set MODELSIM_VLOG_COVERFL
 set LIB ${MODELSIM_WORKROOT}/${TOP_SOC}${VARIANT_ID}_${FUZZCOREID}/work_${INSTRUMENTATION}_${TRACE}
 
 vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG +define+RANDOMIZE_INIT=1 +define+STOP_COND=0 -ccflags '-std=c++11' $MODELSIM_INCDIRSTR -sv $CASCADE_DIR/generated/out/$INSTRUMENTATION.sv
-vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG $CASCADE_META_COMMON/src/custom_irqgen.sv
 
 vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG -ccflags '-std=c++11' -sv $SV_TOP
 vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -suppress 7034 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG -ccflags '-std=c++11' -sv $SV_MEM
 vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG -ccflags '-std=c++11' -sv $SV_TB
 
-vlog -64 -ccflags '-std=c++11' -work $LIB $MODELSIM_VLOG_COVERFLAG -dpiheader $CASCADE_META_COMMON/dv/elf.h $CASCADE_META_COMMON/dv/elfloader.cc $CASCADE_META_COMMON/dv/taintloader.cc $CASCADE_META_COMMON/dv/common_functions.cc
+vlog -64 -ccflags '-std=c++11' -work $LIB $MODELSIM_VLOG_COVERFLAG -dpiheader $CASCADE_META_COMMON/dv/elf.h $CASCADE_META_COMMON/dv/elfloader.cc $CASCADE_META_COMMON/dv/common_functions.cc
 
 vlog -64 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG $CASCADE_META_COMMON/dv/sv/rst_gen.sv $CASCADE_META_COMMON/dv/sv/clk_rst_gen.sv $SV_TOP
 

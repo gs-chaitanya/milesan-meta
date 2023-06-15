@@ -9,8 +9,6 @@
 
 extern "C" {
   const char *Get_SRAM_ELF_object_filename(void);
-  const char *Get_SRAM_TaintsPath(void);
-  const char *Get_BootROM_TaintsPath(void);
   const char *Get_BootROM_ELF_object_filename(void);
   const char *cascade_getenv(char *varname);
 }
@@ -24,28 +22,6 @@ extern "C" const char *Get_SRAM_ELF_object_filename(void)
     const char* simsram_env = std::getenv("SIMSRAMELF");
     if(simsram_env == NULL) { fprintf(stderr, "SIMSRAMELF required\n"); exit(1); }
     return simsram_env;
-}
-
-extern "C" const char *Get_SRAM_TaintsPath(void)
-{
-    /* This function is used inside the taint Loader code in ift_sram.sv
-     * to determine the filename to load. The environment variable
-     * SIMSRAMTAINT can be used to override the default.
-     */
-    const char* simsram_env = std::getenv("SIMSRAMTAINT");
-    if(simsram_env == NULL) return "../../../taint_data/sram/sram_taint_data.txt"; 
-    return simsram_env;
-}
-
-extern "C" const char *Get_BootROM_TaintsPath(void)
-{
-    /* This function is used inside the taint loading code in ift_boot_rom_hdac.sv
-     * to determine the filename to load. The environment variable
-     * SIMROMTAINT can be used to override the default.
-     */
-    const char* taint_env = std::getenv("SIMROMTAINT");
-    if(taint_env == NULL) return "../../../taint_data/boot_rom/boot_rom_taint_data.txt";
-    return taint_env;
 }
 
 extern "C" const char *Get_BootROM_ELF_object_filename(void)

@@ -24,5 +24,4 @@ yosys port_fuzz_inputs $VERBOSE $EXCLUDE_SIGNALS
 yosys meta_reset $VERBOSE
 yosys opt_clean
 
-yosys list_state_elements -display-celltypes
 yosys write_verilog -simple-lhs -sv $VERILOG_OUTPUT

@@ -39,12 +39,6 @@ void Corpus::accumulate_output(Queue *q){ // we don't need initial coverage here
             this->acc_output->coverage[i] |= this->acc_output->coverage[i] ^ output->coverage[i];
         }
 
-        #ifdef TAINT_EN
-        for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){
-            this->acc_output->taints[i] |= output->taints[i];
-        }
-        #endif // TAINT_EN
-
         for(int i=0; i<N_ASSERTS_b32; i++){
             this->acc_output->asserts[i] |= output->asserts[i];
         }
@@ -57,7 +51,7 @@ bool Corpus::is_interesting(Queue *q){
     if(this->acc_output==nullptr) return true;
     doutput_t *new_output = q->get_accumulated_output();
     std::deque<size_t> new_toggles_idx;;
-    for(int i=0; i<N_COV_POINTS_b32; i++){ // TODO: modifiy this to include taints
+    for(int i=0; i<N_COV_POINTS_b32; i++){
         uint32_t check = (~this->acc_output->coverage[i]) & new_output->coverage[i];
         if(check != 0){
             is_interesting = true;

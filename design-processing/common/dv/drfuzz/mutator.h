@@ -9,47 +9,6 @@
 #define N_DET_MUTATORS 9
 #define N_RAND_MUTATORS 11
 
-//*** TAINT MUTATOR *** 
-#ifdef TAINT_EN
-class TaintMutator{
-    public: 
-        std::vector<Queue *> io_taint_vecs; // store the queues because they contain f(inputs):input taints -> output taints
-        Queue *candidate;
-        size_t candidate_score;
-        size_t candidate_weight;
-        size_t ini_candidate_weight;
-        doutput_t acc_output;
-        bool done;
-        Corpus *corpus;
-        size_t taint_idx = 0;
-        size_t n_untainted_bits;
-
-        
-        TaintMutator(Corpus *corpus);        
-        void reduce(Queue *q);
-        void add_io_taint_vec(Queue *q);
-        void filter_taint_vecs();
-        void find_candidate();
-        bool check_good(Queue *q);
-        void set_new_candidate(Queue *q);
-        bool is_done();
-
-};
-
-class TaintBruteForceMutator{ // this mutator just brute forces all input permutations of the candidate that differ only in the tainted bits
-    public:
-        bool done;
-        Queue *candidate;
-        size_t n_permutations;
-        size_t candidate_weight;
-        size_t permutation_idx;
-        TaintBruteForceMutator(Queue *candidate);
-        bool is_done();
-        Queue *apply_next(Queue *q);
-
-};
-#endif
-
 //*** INPUT MUTATORS ***
 
 class Mutator{
