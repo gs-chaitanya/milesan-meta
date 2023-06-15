@@ -10,7 +10,7 @@ from cascade.randomize.createcfinstr import gen_random_rounding_mode
 from cascade.toleratebugs import TOLERATE_ROCKET_MINSTRET, TOLERATE_KRONOS_READBADCSR, TOLERATE_PICORV32_READNONIMPLCSR, FORBID_VEXRISCV_CSRS
 from cascade.util import ExceptionCauseVal, IntRegIndivState
 from common.spike import SPIKE_MEDELEG_MASK
-from params.fuzzparams import MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, SIMPLE_ILLEGAL_INSTRUCTION_PROBA, PROBA_PICK_WRONG_FPU
+from params.fuzzparams import MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, SIMPLE_ILLEGAL_INSTRUCTION_PROBA, PROBA_PICK_WRONG_FPU, MAX_NUM_PICKABLE_FLOATING_REGS
 from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS, INTERESTING_CSRS_INACCESSIBLE_FROM_SUPERVISOR, INTERESTING_CSRS_INACCESSIBLE_FROM_USER
 from copy import copy
@@ -91,8 +91,8 @@ def pick_illegal_instruction(is_mtvec, fuzzerstate, old_privilege):
         and not ("vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS):
         if random.random() < PROBA_PICK_WRONG_FPU * 0.01**fuzzerstate.design_has_fpu:
             rm = gen_random_rounding_mode()
-            frs1, frs2 = tuple(fuzzerstate.floatregpickstate.pick_float_inputregs(2))
-            frd = fuzzerstate.floatregpickstate.pick_float_outputreg()
+            frs1, frs2 = random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS), random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS)
+            frd = random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS)
             return SimpleExceptionEncapsulator(is_mtvec, None, Float3Instruction(random.choice(Float3Instructions), frd, frs1, frs2, rm, False)) # FUTURE: Add more diversity
 
     if old_privilege == PrivilegeStateEnum.MACHINE:

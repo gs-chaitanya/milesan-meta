@@ -15,8 +15,8 @@ if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
-    # benchmark_collect_construction_performance(int(sys.argv[1]))
+    benchmark_collect_construction_performance(int(sys.argv[1]))
     plot_construction_performance()
-    
+
 else:
     raise Exception("This module must be at the toplevel.")

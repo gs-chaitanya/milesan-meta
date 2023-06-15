@@ -14,7 +14,7 @@ import multiprocessing as mp
 import json
 import os
 
-def __time_measurement_worker(design_name: str, worker_randseed: int, expected_run_duration_seconds_per_worker: float):
+def _time_measurement_worker(design_name: str, worker_randseed: int, expected_run_duration_seconds_per_worker: float):
     assert expected_run_duration_seconds_per_worker > 0
     assert worker_randseed >= 0
 
@@ -31,7 +31,7 @@ def __time_measurement_worker(design_name: str, worker_randseed: int, expected_r
         try:
             time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf, time_seconds_spent_in_rtl_sim = run_rtl(memsize, design_name, curr_seed, nmax_bbs, True, False)
         except Exception as e:
-            print('Exception in time-measuring process with randseed', worker_randseed, 'and round id', round_id, ':', e)
+            print('Exception in time-measuring process with design', design_name, 'randseed', worker_randseed, 'and round id', round_id, ':', e)
             continue
 
         cumul_time_seconds_spent_in_gen_bbs += time_seconds_spent_in_gen_bbs
@@ -39,23 +39,23 @@ def __time_measurement_worker(design_name: str, worker_randseed: int, expected_r
         cumul_time_seconds_spent_in_gen_elf += time_seconds_spent_in_gen_elf
         cumul_time_seconds_spent_in_rtl_sim += time_seconds_spent_in_rtl_sim
         round_id += 1
-        print(cumul_time_seconds_spent_in_gen_bbs + cumul_time_seconds_spent_in_spike_resol + cumul_time_seconds_spent_in_gen_elf + cumul_time_seconds_spent_in_rtl_sim, '/', expected_run_duration_seconds_per_worker) # TODO Remove the print
+        # print(cumul_time_seconds_spent_in_gen_bbs + cumul_time_seconds_spent_in_spike_resol + cumul_time_seconds_spent_in_gen_elf + cumul_time_seconds_spent_in_rtl_sim, '/', expected_run_duration_seconds_per_worker)
     return cumul_time_seconds_spent_in_gen_bbs, cumul_time_seconds_spent_in_spike_resol, cumul_time_seconds_spent_in_gen_elf, cumul_time_seconds_spent_in_rtl_sim
 
 
 design_names_for_fuzzperf = [
-    'vexriscv',
-    'picorv32',
     'kronos',
-    # 'rocket', TODO
+    'picorv32',
+    'vexriscv',
+    'rocket',
     'cva6',
-    # 'boom', TODO
+    'boom',
 ]
 
 # Each worker must reach the total desired duration divided by the number of workers.
 def benchmark_collect_construction_performance(num_workers: int):
     assert num_workers > 0
-    TOTAL_DURATION_PER_DESIGN_SECONDS = 24*60# TODO*60
+    TOTAL_DURATION_PER_DESIGN_SECONDS = 24*60# TODO *60
 
     cumul_time_seconds_spent_in_gen_bbs = dict()
     cumul_time_seconds_spent_in_spike_resol = dict()
@@ -71,7 +71,7 @@ def benchmark_collect_construction_performance(num_workers: int):
         print(f"Starting performance testing of `{design_name}` on {num_workers} processes.")
 
         with mp.Pool(num_workers) as p:
-            results = p.starmap(__time_measurement_worker, worker_instances)
+            results = p.starmap(_time_measurement_worker, worker_instances)
 
         cumul_time_seconds_spent_in_gen_bbs[design_name]     = sum(map(lambda s: s[0], results))
         cumul_time_seconds_spent_in_spike_resol[design_name] = sum(map(lambda s: s[1], results))
