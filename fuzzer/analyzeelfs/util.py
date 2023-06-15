@@ -1,4 +1,4 @@
-from common.runparams import PATH_TO_TMP
+from params.runparams import PATH_TO_TMP
 import subprocess
 import os
 import re
@@ -48,7 +48,7 @@ def get_max_reached_l_symbol(spike_log: str):
     return max(ret)
 
 # @param finaladdr not used by difuzzrtl
-def compute_density(is_difuzzrtl: bool, spike_log: str, finaladdr: int):
+def compute_prevalence(is_difuzzrtl: bool, spike_log: str, finaladdr: int):
     num_overhead_instructions = 0
     num_effective_instructions = 0
 

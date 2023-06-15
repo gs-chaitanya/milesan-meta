@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from analyzeelfs.dependencies import get_dependencies_per_instruction
-from cascade.util import get_instance_elfpath, get_instance_finaladdr, filter_list_by_cf, get_instance_max_l_symbol, get_max_reached_l_symbol, compute_density
+from analyzeelfs.util import get_instance_elfpath, get_instance_finaladdr, filter_list_by_cf, get_instance_max_l_symbol, get_max_reached_l_symbol, compute_prevalence
 from params.runparams import PATH_TO_TMP
 
 import itertools
@@ -46,43 +46,36 @@ def symbol_analysis_worker(instance_id: int):
     max_reached_lsymbol = get_max_reached_l_symbol(spike_log)
     return max_available_lsymbol, max_reached_lsymbol
 
-def density_analysis_worker(is_difuzzrtl: bool, instance_id: int):
+def prevalence_analysis_worker(is_difuzzrtl: bool, instance_id: int):
     design_name = 'rocket'
     elfpath = get_instance_elfpath(is_difuzzrtl, design_name, instance_id)
     finaladdr = get_instance_finaladdr(is_difuzzrtl, design_name, instance_id, elfpath)
     spike_log = spike_get_run_log(is_difuzzrtl, design_name, instance_id, elfpath, finaladdr)
-    num_effective_instructions, num_overhead_instructions = compute_density(is_difuzzrtl, spike_log, finaladdr)
+    num_effective_instructions, num_overhead_instructions = compute_prevalence(is_difuzzrtl, spike_log, finaladdr)
     if num_effective_instructions < 0 or num_overhead_instructions < 0:
         print('num_effective_instructions < 0 or num_overhead_instructions < 0', num_effective_instructions, num_overhead_instructions, is_difuzzrtl, instance_id)
         print(elfpath)
     return num_effective_instructions, num_overhead_instructions
 
-def analyze_elf_density(is_difuzzrtl: bool, num_instances: int):
+def analyze_elf_prevalence(is_difuzzrtl: bool, num_instances: int):
     num_effective_instructions_list = []
     num_overhead_instructions_list = []
 
     instances = list(zip(itertools.repeat(is_difuzzrtl), range(num_instances)))
     with mp.Pool(mp.cpu_count()) as p:
-        for num_effective_instructions, num_overhead_instructions in p.starmap(density_analysis_worker, instances):
+        for num_effective_instructions, num_overhead_instructions in p.starmap(prevalence_analysis_worker, instances):
             num_effective_instructions_list.append(num_effective_instructions)
             num_overhead_instructions_list.append(num_overhead_instructions)
 
     rates_reached = [num_effective_instructions_list[i] / (num_overhead_instructions_list[i] + num_effective_instructions_list[i]) for i in range(len(num_effective_instructions_list))]
 
-    # Plot the histogram of ages
-    import matplotlib.pyplot as plt
-    plt.clf()
-    plt.hist(list(filter(lambda x: x is not None, rates_reached)), bins=100, density=True)
-
-    plt.title(f"Fuzzing density for difuzzRTL")
-    plt.xlabel("Proportion of fuzzing instructions")
-    plt.ylabel("Frequency")
-    plt.savefig(f"figures/densities.pdf")
-    plt.savefig(f"figures/densities.png", dpi=300)
-
-    json.dump(rates_reached, open("figures/densities.json", "w"))
+    retpath = os.path.join(PATH_TO_TMP, f"prevalences_{int(is_difuzzrtl)}.json")
+    json.dump(rates_reached, open(retpath, "w"))
+    print('Saved prevalence results to', retpath)
+    return retpath
 
 def analyze_elf_symbols(num_instances: int):
+    is_difuzzrtl = True
     max_available_lsymbols = []
     max_reached_lsymbols = []
 
@@ -94,20 +87,14 @@ def analyze_elf_symbols(num_instances: int):
 
     rates_reached = [max_reached_lsymbols[i] / max_available_lsymbols[i] for i in range(len(max_available_lsymbols))]
 
-    # Plot the histogram of ages
-    import matplotlib.pyplot as plt
-    plt.clf()
-    plt.hist(list(filter(lambda x: x is not None, rates_reached)), bins=100, density=True)
+    retpath = os.path.join(PATH_TO_TMP, f"completions_{int(is_difuzzrtl)}.json")
+    json.dump(rates_reached, open(retpath, "w"))
+    print('Saved completion results to', retpath)
+    return retpath
 
-    plt.title(f"Completion rates for difuzzRTL")
-    plt.xlabel("Max progress in test case")
-    plt.ylabel("Frequency")
-    plt.savefig(f"figures/completions.pdf")
-    plt.savefig(f"figures/completions.png", dpi=300)
-
-    json.dump(rates_reached, open("figures/rates_reached.json", "w"))
-
-def analyze_elf_ages(is_difuzzrtl: bool, design_name: str, num_instances: int):
+def analyze_elf_dependencies(is_difuzzrtl: bool, design_name: str, num_instances: int):
+    assert design_name == 'rocket'
+    
     instr_ages = []
     instr_ages_cfonly = []
 
@@ -121,10 +108,13 @@ def analyze_elf_ages(is_difuzzrtl: bool, design_name: str, num_instances: int):
     instr_ages = [item for sublist in instr_ages for item in sublist]
     instr_ages_cfonly = [item for sublist in instr_ages_cfonly for item in sublist]
 
+    retpath = os.path.join(PATH_TO_TMP, f"dependencies_{int(is_difuzzrtl)}.json")
     json.dump(
         {
             'instr_ages': instr_ages,
             'instr_ages_cfonly': instr_ages_cfonly
         },
-        open(f"figures/ages.json", 'w')
+        open(retpath, 'w')
     )
+    print('Saved dependency results to', retpath)
+    return retpath
