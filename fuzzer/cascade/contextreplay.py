@@ -144,14 +144,20 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
     # mscratch
     addr_csr_loads[CSR_IDS.MSCRATCH] = curr_addr
     fuzzerstate.ctxsv_bb.append(None)
-    fuzzerstate.ctxsv_bb.append(IntLoadInstruction("lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1, fuzzerstate.is_design_64bit))
+    if fuzzerstate.is_design_64bit:
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction("ld", 1, 1, 0, -1, fuzzerstate.is_design_64bit))
+    else:
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction("lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1, fuzzerstate.is_design_64bit))
     fuzzerstate.ctxsv_bb.append(CSRRegInstruction("csrrw", 0, 1, CSR_IDS.MSCRATCH))
     curr_addr += 12 # NO_COMPRESSED
 
     if fuzzerstate.design_has_supervisor_mode:
         addr_csr_loads[CSR_IDS.SSCRATCH] = curr_addr
         fuzzerstate.ctxsv_bb.append(None)
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction("lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1, fuzzerstate.is_design_64bit))
+        if fuzzerstate.is_design_64bit:
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction("ld", 1, 1, 0, -1, fuzzerstate.is_design_64bit))
+        else:
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction("lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1, fuzzerstate.is_design_64bit))
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction("csrrw", 0, 1, CSR_IDS.SSCRATCH))
         curr_addr += 12 # NO_COMPRESSED
 
@@ -229,7 +235,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         curr_addr += 4 # NO_COMPRESSED
         # Populate mepc
         mepc_target = curr_addr + 12
-        fuzzerstate.ctxsv_bb.append(RegImmInstruction("addi", 1, MAX_NUM_PICKABLE_REGS, mepc_target-fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.is_design_64bit)) # The reg `MAX_NUM_PICKABLE_REGS` contains the start address of the context sette, is_rd_nonpickable_ok=Truer
+        fuzzerstate.ctxsv_bb.append(RegImmInstruction("addi", 1, MAX_NUM_PICKABLE_REGS, mepc_target-fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True)) # The reg `MAX_NUM_PICKABLE_REGS` contains the start address of the context sette, is_rd_nonpickable_ok=Truer
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction("csrrw", 0, 1, CSR_IDS.MEPC))
         fuzzerstate.ctxsv_bb.append(PrivilegeDescentInstruction(True)) # mret
         # Add 2 nops for the mret, just in case the CPU is not doing great with mret sometimes :)
@@ -354,14 +360,14 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
 
     # mscratch
     fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MSCRATCH])] = RegImmInstruction("addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True)
-    fuzzerstate.ctxsv_bb.append(RawDataWord(saved_context.mscratch))
-    fuzzerstate.ctxsv_bb.append(RawDataWord(0xdeadbeef))
+    fuzzerstate.ctxsv_bb.append(RawDataWord(saved_context.mscratch & 0xffffffff))
+    fuzzerstate.ctxsv_bb.append(RawDataWord(saved_context.mscratch >> 32))
     curr_addr += 8 # NO_COMPRESSED
 
     if fuzzerstate.design_has_supervisor_mode:
         fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SSCRATCH])] = RegImmInstruction("addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True)
-        fuzzerstate.ctxsv_bb.append(RawDataWord(saved_context.sscratch))
-        fuzzerstate.ctxsv_bb.append(RawDataWord(0xdeadbeef))
+        fuzzerstate.ctxsv_bb.append(RawDataWord(saved_context.sscratch & 0xffffffff))
+        fuzzerstate.ctxsv_bb.append(RawDataWord(saved_context.sscratch >> 32))
         curr_addr += 8 # NO_COMPRESSED
 
     if fuzzerstate.design_has_supervisor_mode:

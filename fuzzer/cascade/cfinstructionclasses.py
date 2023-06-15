@@ -1036,7 +1036,7 @@ class RawDataWord:
                 assert wordval < (1 << 32), f"signed wordval: {wordval}, 1 << 32: {1 << 32}"
             else:
                 assert wordval >= 0
-                assert wordval < (1 << 32), f"unsigne wordval: {wordval}, 1 << 32: {1 << 32}"
+                assert wordval < (1 << 32), f"unsigned wordval: {hex(wordval)}, 1 << 32: {hex(1 << 32)}"
         self.wordval = wordval
         if signed:
             if wordval < 0:
@@ -1126,10 +1126,8 @@ class MisalignedMemInstruction(ExceptionInstruction):
         # Third, the destination register for loads, and the source register for stores does not matter because will not be architecturally accessed.
         random_reg = random.randrange(MAX_NUM_PICKABLE_REGS)
         # Finally, pick a readable or writable address, since page or access faults would have priority
-        if meminstr_type in (MisalignedMemInstruction.MISALIGNED_LH, MisalignedMemInstruction.MISALIGNED_LW, MisalignedMemInstruction.MISALIGNED_LHU, MisalignedMemInstruction.MISALIGNED_LWU, MisalignedMemInstruction.MISALIGNED_LD, MisalignedMemInstruction.MISALIGNED_FLW, MisalignedMemInstruction.MISALIGNED_FLD):
-            memrange = fuzzerstate.mmustate.get_some_readable_range(fuzzerstate)
-        else:
-            memrange = fuzzerstate.mmustate.get_some_writable_range(fuzzerstate)
+        # if meminstr_type in (MisalignedMemInstruction.MISALIGNED_LH, MisalignedMemInstruction.MISALIGNED_LW, MisalignedMemInstruction.MISALIGNED_LHU, MisalignedMemInstruction.MISALIGNED_LWU, MisalignedMemInstruction.MISALIGNED_LD, MisalignedMemInstruction.MISALIGNED_FLW, MisalignedMemInstruction.MISALIGNED_FLD):
+        memrange = 0, fuzzerstate.memsize
         # Choose a misaligned address in the range
         if meminstr_type in (MisalignedMemInstruction.MISALIGNED_LH, MisalignedMemInstruction.MISALIGNED_LHU, MisalignedMemInstruction.MISALIGNED_SH):
             curr_access_size = 2
