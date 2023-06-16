@@ -2,10 +2,10 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-# This script generates many Cascade ELFs.
+# This script plots the bars related to the bug categories and their security implications.
 
-from analyzeelfs.genmanyelfs import gen_many_elfs
-from params.runparams import PATH_TO_TMP
+from miscplots.plotcategories import plot_bugtypes_bars
+from miscplots.plotsecuimplications import plot_security_implications
 
 import os
 
@@ -13,7 +13,5 @@ if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
-    gen_many_elfs('rocket', 160, 500, os.path.join(PATH_TO_TMP, 'manyelfs'))
-
-else:
-    raise Exception("This module must be at the toplevel.")
+    plot_bugtypes_bars()
+    plot_security_implications()
