@@ -3,8 +3,8 @@ import subprocess
 import os
 import re
 
-DISCO_NUM_INITIAL_INSTR = 5 + 64 # 64 instructions in the initial block + 5 instructions in the spike bootrom
-DISCO_NUM_FINAL_INSTR = 105 # 105 instructions in the final block
+CASCADE_NUM_INITIAL_INSTR = 5 + 64 # 64 instructions in the initial block + 5 instructions in the spike bootrom
+CASCADE_NUM_FINAL_INSTR = 105 # 105 instructions in the final block
 
 # PATH_TO_DIFFUZZRTL_ELFS = '/scratch/dockerdifuzzrtl/difuzz-rtl/out_rocket_state/illegal/elf/'
 PATH_TO_DIFFUZZRTL_ELFS = '/data/flsolt/savedifuzz/out_rocket_state/illegal/elf/'
@@ -67,8 +67,8 @@ def compute_prevalence(is_difuzzrtl: bool, spike_log: str, finaladdr: int):
     else:
         # Filter the lines that correspond to executed instructions
         num_executed_instrs = len(list(filter(lambda l: l.startswith('core   0: 0x'), spike_log.split('\n'))))
-        num_effective_instructions = num_executed_instrs - DISCO_NUM_INITIAL_INSTR
-        num_overhead_instructions = DISCO_NUM_FINAL_INSTR + DISCO_NUM_INITIAL_INSTR
+        num_effective_instructions = num_executed_instrs - CASCADE_NUM_INITIAL_INSTR
+        num_overhead_instructions = CASCADE_NUM_FINAL_INSTR + CASCADE_NUM_INITIAL_INSTR
         return num_effective_instructions, num_overhead_instructions
 
 # @param only_cf: If True, only return the control-flow instructions. Else, only the non-control-flow.

@@ -1,3 +1,9 @@
+# Copyright 2023 Flavien Solt, ETH Zurich.
+# Licensed under the General Public License, Version 3.0, see LICENSE for details.
+# SPDX-License-Identifier: GPL-3.0-only
+
+# Toplevel for a cycle of program generation and RTL simulation.
+
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
 from cascade.fuzzfromdescriptor import gen_new_test_instance, fuzz_single_from_descriptor
