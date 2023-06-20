@@ -92,6 +92,8 @@ class FuzzerState:
         self.is_minstret_inaccurate_because_ecall_ebreak = False
         # To avoid having too many fences
         self.special_instrs_count = 0
+        # Coordinates of the FPU enable/disable instructions. Only used in program reduction.
+        self.fpuendis_coords = []
 
     def init_new_bb(self):
         self.instr_objs_seq.append([])

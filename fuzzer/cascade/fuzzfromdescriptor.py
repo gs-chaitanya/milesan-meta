@@ -76,6 +76,7 @@ def run_rtl(memsize: int, design_name: str, randseed: int, nmax_bbs: int, author
 ###
 
 # This function runs a single test run from a test descriptor (memsize, design_name, randseed, nmax_bbs) and returns the gathered times (used for the performance evaluation plot).
+# Loggers are not yet very tested facilities.
 @timeout(seconds=60*60*2)
 def fuzz_single_from_descriptor(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, loggers: list = None, check_pc_spike_again: bool = False, start_time: float = None):
     try:
@@ -93,4 +94,4 @@ def fuzz_single_from_descriptor(memsize: int, design_name: str, randseed: int, n
                 loggers[random.randrange(len(loggers))].log(False, {'memsize': memsize, 'design_name': design_name, 'randseed': randseed, 'nmax_bbs': nmax_bbs}, False, emsg)
         else:
             print(f"Failed test_run_rtl_single for params memsize: `{memsize}`, design_name: `{design_name}`, check_pc_spike_again: `{check_pc_spike_again}`, randseed: `{randseed}`, nmax_bbs: `{nmax_bbs}` -- ({memsize}, design_name, {randseed}, {nmax_bbs})\n{e}")
-        return 0, 0, 0, 0 # Do not take failing runs into account
+        return 0, 0, 0, 0

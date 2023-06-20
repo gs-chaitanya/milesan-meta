@@ -56,7 +56,6 @@ def gen_basicblock(fuzzerstate):
 
         # Get the next instruction class
         curr_isa_class = gen_next_isainstrclass(fuzzerstate)
-        # print('next isa class', curr_isa_class, fuzzerstate.is_fpu_activated)
 
         # If this is an instruction that influences offset register states
         if curr_isa_class == ISAInstrClass.REGFSM:
@@ -70,9 +69,11 @@ def gen_basicblock(fuzzerstate):
                 fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[next_instrobj_id])
             del new_instrobjs # For safety, we prevent accidental reuse of this variable
             continue
-        # If this is an FPU enable-disable instruction
+        # If this is an FPU enable-disable instruction or a rounding mode change
         elif curr_isa_class == ISAInstrClass.FPUFSM:
             new_instrobjs = gen_fpufsm_instrs(fuzzerstate)
+            if len(new_instrobjs) == 1: # Equivalent to FPU enable/disable
+                fuzzerstate.fpuendis_coords.append((len(fuzzerstate.instr_objs_seq)-1, len(fuzzerstate.instr_objs_seq[-1])))
             if DO_ASSERT:
                 assert len(new_instrobjs) * 4 < BASIC_BLOCK_MIN_SPACE # NO_COMPRESSED
             fuzzerstate.instr_objs_seq[-1] += new_instrobjs
@@ -508,13 +509,14 @@ def gen_basicblocks(fuzzerstate):
 
     fuzzerstate.producer_id_to_tgtaddr, fuzzerstate.producer_id_to_noreloc_spike = gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs)
 
-    # # TODO Remove, debug only
+    # TODO Remove, debug only
     # for bb_id, bb in enumerate(fuzzerstate.instr_objs_seq):
     #     for bb_instr_id, bb_instr in enumerate(bb):
     #         curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + bb_instr_id * 4 # NO_COMPRESSED
-    #         if curr_addr == 0x34df4:
-    #             print('Instr type:', bb_instr.instr_str)
+    #         if curr_addr == 0x3ec4c:
+    #             print('BB id:', bb_instr_id)
+    #             print('Instr type:', bb_instr)
     #             print('Plan taken:', bb_instr.plan_taken)
-    # print('Start addr:', hex(fuzzerstate.bb_start_addr_seq[147]))
+    # # print('Start addr:', hex(fuzzerstate.bb_start_addr_seq[147]))
 
     return fuzzerstate

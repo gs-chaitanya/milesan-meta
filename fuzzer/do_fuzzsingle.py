@@ -13,14 +13,13 @@ from common.profiledesign import profile_get_medeleg_mask
 from common.spike import calibrate_spikespeed
 
 import os
-import sys
 
 if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
-    design_name = 'boom'
-    descriptor = (360772, design_name, 7000000, 280, True)
+    design_name = 'picorv32'
+    descriptor = (347120, design_name, 281, 4, True)
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)

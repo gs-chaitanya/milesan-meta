@@ -9,7 +9,6 @@ from params.runparams import DO_ASSERT
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MPP_TOP_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID
 from rv.csrids import CSR_IDS
 from common.spike import SPIKE_STARTADDR
-from cascade.toleratebugs import NO_INTERACTION_MINSTRET
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, IntLoadInstruction, IntStoreInstruction, FloatLoadInstruction, CSRRegInstruction, JALInstruction, RawDataWord, PrivilegeDescentInstruction
 from cascade.randomize.pickstoreaddr import ALIGNMENT_BITS_MAX
@@ -229,10 +228,12 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
     if saved_context.privilege == PrivilegeStateEnum.SUPERVISOR or saved_context.privilege == PrivilegeStateEnum.USER:
         # Populate mpp
         if saved_context.privilege == PrivilegeStateEnum.SUPERVISOR:
+            fuzzerstate.ctxsv_bb.append(CSRRegInstruction("csrrs", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
             fuzzerstate.ctxsv_bb.append(CSRRegInstruction("csrrc", 0, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
         else:
             fuzzerstate.ctxsv_bb.append(CSRRegInstruction("csrrc", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
-        curr_addr += 4 # NO_COMPRESSED
+            fuzzerstate.ctxsv_bb.append(RegImmInstruction("addi", 0, 0, 0, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True))
+        curr_addr += 8 # NO_COMPRESSED
         # Populate mepc
         mepc_target = curr_addr + 12
         fuzzerstate.ctxsv_bb.append(RegImmInstruction("addi", 1, MAX_NUM_PICKABLE_REGS, mepc_target-fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True)) # The reg `MAX_NUM_PICKABLE_REGS` contains the start address of the context sette, is_rd_nonpickable_ok=Truer
@@ -240,8 +241,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         fuzzerstate.ctxsv_bb.append(PrivilegeDescentInstruction(True)) # mret
         # Add 2 nops for the mret, just in case the CPU is not doing great with mret sometimes :)
         fuzzerstate.ctxsv_bb.append(RegImmInstruction("addi", 0, 0, 0, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True))
-        fuzzerstate.ctxsv_bb.append(RegImmInstruction("addi", 0, 0, 0, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True))
-        curr_addr += 20 # NO_COMPRESSED
+        curr_addr += 16 # NO_COMPRESSED
 
     ###
     # Third, set the memory bytes to the expected values
@@ -259,7 +259,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         fuzzerstate.ctxsv_bb.append(None)
         curr_addr += 4 # NO_COMPRESSED
         # We load the byte addr into register 1
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction("lw", 1, 1, 0, -1, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True))
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction("lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True))
         curr_addr += 4 # NO_COMPRESSED
         # We set the byte value using an immediate
         fuzzerstate.ctxsv_bb.append(RegImmInstruction("addi", 2, 0, mem_byte_val, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True))

@@ -179,6 +179,11 @@ def _feed_regdump_to_instrs(fuzzerstate, regdumps: list):
                 branch_rs2_content = regdumps[index_in_regdump]
                 index_in_regdump += 1
                 # Now, we can redetermine the branch opcode depending on the register values
+                # # TODO Remove, debug
+                # if curr_addr == 0x34470:
+                #     print('rs1: ', bb_instr.rs1, branch_rs1_content)
+                #     print('rs2: ', bb_instr.rs2, branch_rs2_content)
+
                 bb_instr.select_suitable_opcode(branch_rs1_content, branch_rs2_content)
 
     # Feed the consumer-level information into the producers

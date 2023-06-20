@@ -72,7 +72,7 @@ def collect_coverage_rfuzz(design_name: str, num_cores: int, num_testcases: int)
 
     pool = mp.Pool(processes=num_workers)
     process_instance_id = 0
-    # First, apply the function to all the workers. We do not use map because some instances, rarely, seem to be stuck for unexplained reasons.
+    # First, apply the function to all the workers.
     for process_id in range(num_workers):
         pool.apply_async(_measure_coverage_rfuzz_worker, args=(*gen_new_test_instance(design_name, process_instance_id, True),), callback=callback_collectrfuzz)
         process_instance_id += 1    

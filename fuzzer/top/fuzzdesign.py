@@ -42,7 +42,7 @@ def fuzzdesign(design_name: str, num_cores: int, seed_offset: int, authorize_pri
     newly_finished_tests = 0
     pool = mp.Pool(processes=num_workers)
     process_instance_id = seed_offset
-    # First, apply the function to all the workers. We do not use map because some instances, rarely, seem to be stuck for unexplained reasons.
+    # First, apply the function to all the workers.
     for _ in range(num_workers):
         memsize, _, _, num_bbs, _ = gen_new_test_instance(design_name, process_instance_id, authorize_privileges)
         pool.apply_async(fuzz_single_from_descriptor, args=(memsize, design_name, process_instance_id, num_bbs, authorize_privileges, None, True), callback=test_done_callback)

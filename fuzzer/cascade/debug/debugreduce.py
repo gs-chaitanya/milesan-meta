@@ -24,7 +24,6 @@ import subprocess
 from typing import List
 from tqdm import tqdm
 
-NUM_INSTRS = 10
 NUM_ELEMS_PER_INSTR = 76
 INTREG_ABI_NAMES = ['zero', 'ra', 'sp', 'gp', 'tp', 't0', 't1', 't2', 's0', 's1', 'a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11', 't3', 't4', 't5', 't6']
 
@@ -240,13 +239,14 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
     # Generate the full program
     fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges)
     gen_basicblocks(fuzzerstate)
-
+    # end_addr = fuzzerstate.final_bb_base_addr
 
     # Get the number of interesting instructions
     is_critical_section = False
     num_interesting_instrs = 0
     instr_addrs = []
     instr_addrs_rev_dict = dict()
+
     for bb_id, bb in enumerate(fuzzerstate.instr_objs_seq):
         if bb_id != start_bb and not is_critical_section:
             continue
@@ -254,7 +254,7 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
             if bb_id == start_bb and bb_instr_id == start_instr:
                 is_critical_section = True
             curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + bb_instr_id * 4 # NO_COMPRESSED
-            print(f"Curr addr: {hex(curr_addr)}, end addr: {hex(end_addr)}, instr id: {bb_instr_id}, is_critical_section: {is_critical_section}")
+            print(f"Curr addr: {hex(curr_addr)}, end addr: {hex(end_addr)}, bb id: {bb_id}, instr id: {bb_instr_id}, is_critical_section: {is_critical_section}")
             if is_critical_section:
                 instr_addrs_rev_dict[curr_addr] = num_interesting_instrs
                 num_interesting_instrs += 1
@@ -265,14 +265,7 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
                 break
     assert not is_critical_section, "Critical section not closed"
 
-    # num_interesting_instrs += 1000
     print(f"Number of interesting instructions: {num_interesting_instrs}")
-
-    # curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + bb_instr_id * 4 # NO_COMPRESSED
-    # if curr_addr == 0x34df4:
-    #     print('Instr type:', bb_instr.instr_str)
-    #     print('Plan taken:', bb_instr.plan_taken)
-
 
     spikecheck_out = spike_resolution_debug(fuzzerstate, True, start_bb, start_instr, num_interesting_instrs)
 
@@ -282,18 +275,12 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
 
     print(f"Spikecheck trace parsed")
 
-    # # regdump_reqs and regvals are for debug purposes.
-    # req_ids = []
-    # for dumpreq_id, (pc, is_fp, reg_id) in enumerate(regdump_reqs):
-    #     if pc == 0x64298:
-    #         req_ids.append(dumpreq_id)
-    #         print(f"At pc {pc}, is_fp={is_fp}, reg_id={reg_id}")
-
+    # TODO Remove, debug
     # Ensure the instruction is the expected
     for bb_id, bb in enumerate(fuzzerstate.instr_objs_seq):
         for bb_instr_id, bb_instr in enumerate(bb):
             curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + bb_instr_id * 4 # NO_COMPRESSED
-            if curr_addr == 0x64298:
+            if curr_addr == 0x34470:
                 print(f"{curr_addr} -- {bb_instr}")
                 print(f"Plan taken: {bb_instr.plan_taken}")
                 print(f"rs1: {bb_instr.rs1}")

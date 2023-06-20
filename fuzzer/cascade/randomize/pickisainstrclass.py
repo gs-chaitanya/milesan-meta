@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT
-from cascade.toleratebugs import TOLERATE_KRONOS_FENCE, TOLERATE_PICORV32_FENCE, FORBID_VEXRISCV_CSRS
+from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_fence, is_forbid_vexriscv_csrs
 from cascade.util import ISAInstrClass, IntRegIndivState
 from params.fuzzparams import NUM_MIN_FREE_INTREGS
 from cascade.privilegestate import PrivilegeStateEnum, is_ready_to_descend_privileges
@@ -102,19 +102,19 @@ def _get_isainstrclass_filtered_weights(fuzzerstate):
     if not fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
         ret_dict[ISAInstrClass.FPUFSM] = 0
     if (not fuzzerstate.authorize_privileges) or not (fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and fuzzerstate.design_has_supervisor_mode) \
-        or "vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS:
+        or "vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs():
         # There is no notion of delegation if supervisor mode is not supported
         ret_dict[ISAInstrClass.MEDELEG] = 0
     # For now, do not populate the mtvec/stvec more than necessary
     if (not fuzzerstate.authorize_privileges) or not (fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not fuzzerstate.privilegestate.is_mtvec_populated) and not ((fuzzerstate.privilegestate.privstate in (PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR)) and not fuzzerstate.privilegestate.is_stvec_populated and fuzzerstate.design_has_supervisor_mode) or \
         fuzzerstate.design_name == "picorv32" \
-        or "vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS:
+        or "vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs():
         ret_dict[ISAInstrClass.TVECFSM] = 0
     # For now, do not populate the mepc/sepc more than necessary
     if (not fuzzerstate.authorize_privileges) or not ((fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not (fuzzerstate.privilegestate.is_mepc_populated or fuzzerstate.privilegestate.is_sepc_populated)) or \
         fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR and not fuzzerstate.privilegestate.is_sepc_populated) or \
         fuzzerstate.design_name == "picorv32" \
-        or "vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS:
+        or "vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs():
         ret_dict[ISAInstrClass.EPCFSM] = 0
     # Do not descend privileges as long as medeleg is undefined because we have no way of certainly coming back up
     # However, this ISA class still encompasses setting mpp and spp bits, to we tolerate this ISA class at all times when executing as a non-user.
@@ -127,10 +127,10 @@ def _get_isainstrclass_filtered_weights(fuzzerstate):
     if (not fuzzerstate.authorize_privileges) or not fuzzerstate.privilegestate.is_ready_to_take_exception(fuzzerstate) or fuzzerstate.design_name == "picorv32":
         ret_dict[ISAInstrClass.EXCEPTION] = 0
     if not fuzzerstate.privilegestate.privstate in (PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR) \
-        or "vexriscv" in fuzzerstate.design_name and FORBID_VEXRISCV_CSRS:
+        or "vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs():
         ret_dict[ISAInstrClass.RANDOM_CSR] = 0
-    if fuzzerstate.design_name == "kronos" and not TOLERATE_KRONOS_FENCE \
-        or fuzzerstate.design_name == "picorv32" and not TOLERATE_PICORV32_FENCE \
+    if fuzzerstate.design_name == "kronos" and not is_tolerate_kronos_fence() \
+        or fuzzerstate.design_name == "picorv32" and not is_tolerate_picorv32_fence() \
             or fuzzerstate.special_instrs_count:
         ret_dict[ISAInstrClass.SPECIAL] = 0
 

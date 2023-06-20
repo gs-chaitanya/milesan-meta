@@ -18,8 +18,8 @@ if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
-    design_name = 'vexriscv-v8-9-v15'
-    descriptor = (623973, design_name, 4874, 866, False)
+    design_name = 'rocket'
+    descriptor = (347120, design_name, 281, 388, True)
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     # 0x80015050 (0x00000113) li      sp, 0      
     # 0x80015054 (0x00208023) sb      sp, 0(ra)  
     # Value at addr 0x8006c06a: 0x0000000f
-    debug_top(*descriptor, 286, 35, 0x10924)
+    debug_top(*descriptor, 10, 0, 0x39fcc) # 0x34470)
 
 else:
     raise Exception("This module must be at the toplevel.")

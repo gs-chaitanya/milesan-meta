@@ -15,11 +15,13 @@ from cascade.privilegestate import PrivilegeStateEnum
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
 
 from copy import deepcopy
+import itertools
+import os
 import random
 import shutil
-import os
-from pathlib import Path
 import subprocess
+import time
+from pathlib import Path
 
 REDUCTION_SIMULATOR = SimulatorEnum.VERILATOR
 NOPIZE_SANDWICH_INSTRUCTIONS = False # Not fully implemented & tested, hence do not yet set to True
@@ -150,16 +152,17 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
 
     return fuzzerstate
 
-# @param max_bb_id_to_consider: the number of BBs to consider, hence from 1 to len(fuzzerstate.instr_objs_seq). If zero, we consider that the test still fails (I'm not 100% sure right now)
+# @param max_bb_id_to_consider: the number of BBs to consider, hence from 0 to len(fuzzerstate.instr_objs_seq)-1.
 # @param max_instr_id_except_cf: the number of instructions in the bb `max_bb_id_to_consider` to consider in total, including the cf instruction that may be added (equivalently, the max instruction index to consider in the bb `max_bb_id_to_consider` when ignoring the cf instruction). -1 means that we only want the CF instruction. None means that we do not expect to do any replacement.
 # @param index_first_bb_to_consider: the index of the first BB to consider. 1 if we remove no bb on the left side.
 # @return test_fuzzerstate, rtl_elfpath, (finalintregvals_spikeresol[1:], finalfloatregvals_spikeresol), numinstrs
 def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except_cf: int = None, index_first_bb_to_consider: int = 1, index_first_instr_to_consider: int = 0):
+    # print(f"gen_reduced_elf with max_bb_id_to_consider: {max_bb_id_to_consider}, max_instr_id_except_cf: {max_instr_id_except_cf}, index_first_bb_to_consider: {index_first_bb_to_consider}, index_first_instr_to_consider: {index_first_instr_to_consider}")
     if DO_ASSERT:
         assert max_bb_id_to_consider >= 0
         assert max_bb_id_to_consider < len(fuzzerstate.instr_objs_seq), f"Expected max_bb_id_to_consider `{max_bb_id_to_consider}` <= len(fuzzerstate.instr_objs_seq) `{len(fuzzerstate.instr_objs_seq)}`"
         assert index_first_bb_to_consider >= 0
-        assert index_first_bb_to_consider <= max_bb_id_to_consider or max_bb_id_to_consider == 2, f"index_first_bb_to_consider: `{index_first_bb_to_consider}`, max_bb_id_to_consider: `{max_bb_id_to_consider}`"
+        assert index_first_bb_to_consider <= max_bb_id_to_consider or max_bb_id_to_consider == 0, f"index_first_bb_to_consider: `{index_first_bb_to_consider}`, max_bb_id_to_consider: `{max_bb_id_to_consider}`"
 
     if max_bb_id_to_consider == 0:
         return False
@@ -171,9 +174,9 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
             assert max_instr_id_except_cf >= -1, f"Expected max_instr_id_except_cf `{max_instr_id_except_cf}` >= -1"  # if -1, then it means that we only want the CF instruction.
             assert max_instr_id_except_cf <= len(fuzzerstate.instr_objs_seq[max_bb_id_to_consider]), f"Expected `{max_instr_id_except_cf}` <= `{len(fuzzerstate.instr_objs_seq[max_bb_id_to_consider])}-1`"
         # Check that we do not remove beyond the buggy instruction
-        if index_first_bb_to_consider == max_bb_id_to_consider-1 and max_instr_id_except_cf is not None and index_first_instr_to_consider is not None:
-            assert max_instr_id_except_cf+1 >= index_first_instr_to_consider
-            assert index_first_instr_to_consider <= len(fuzzerstate.instr_objs_seq[index_first_bb_to_consider-1])-1, f"Expected `{index_first_instr_to_consider}` <= `{len(fuzzerstate.instr_objs_seq[index_first_bb_to_consider])-1}`"
+        if index_first_bb_to_consider == max_bb_id_to_consider and max_instr_id_except_cf is not None and index_first_instr_to_consider is not None:
+            assert max_instr_id_except_cf+1 >= index_first_instr_to_consider, f"Expected max_instr_id_except_cf+1 `{max_instr_id_except_cf+1}` >= index_first_instr_to_consider `{index_first_instr_to_consider}`"
+            assert index_first_instr_to_consider <= len(fuzzerstate.instr_objs_seq[index_first_bb_to_consider])-1, f"Expected `{index_first_instr_to_consider}` <= `{len(fuzzerstate.instr_objs_seq[index_first_bb_to_consider])-1}`"
 
     ###
     # Remove the last basic blocks
@@ -195,15 +198,10 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     # Pop intermediate instructions if required
     if max_instr_id_except_cf < len(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider]):
         curr_addr = test_fuzzerstate.bb_start_addr_seq[max_bb_id_to_consider] + (max_instr_id_except_cf+1) * 4 # NO_COMPRESSED
-        # print('Curr id: ', max_instr_id_except_cf, '(value -1 is ok)')
-        # print('Size of the list: ', len(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider]))
         test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1] = JALInstruction("jal", 0, test_fuzzerstate.final_bb_base_addr-curr_addr)
-        # print('Final instr address: ', hex(curr_addr))
-        # print('Final bb address:    ', hex(test_fuzzerstate.final_bb_base_addr))
     else:
         curr_addr = test_fuzzerstate.bb_start_addr_seq[max_bb_id_to_consider] + (len(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider])-1) * 4 # NO_COMPRESSED
         test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1] = JALInstruction("jal", 0, test_fuzzerstate.final_bb_base_addr-curr_addr)
-        # print('Final instr address: ', hex(curr_addr))
 
     ###
     # Remove the first basic blocks and instructions
@@ -226,9 +224,7 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
 
 
     # This is actually only needed for generating the final reg and freg values iirc.
-    # print('W:', spikereduce_elfpath)
     _, (finalintregvals_spikeresol, finalfloatregvals_spikeresol) = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags(test_fuzzerstate.design_name), SPIKE_STARTADDR, regdump_reqs, True, test_fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
-    # print('X')
 
     rtl_elfpath = spikereduce_elfpath
 
@@ -242,24 +238,20 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
 # This module resolves a mismatch between design and simulation by finding the first basic block that causes a mismatch.
 # @param failing_instr_id the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore. It is None if the failing instruction is actually the last one in the previous bb. Only used in the second step.
 # @param index_first_bb_to_consider: only used in the second step
-def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int = None, index_first_bb_to_consider: int = 1, index_first_instr_to_consider: int = 0):
-    try:
-        test_fuzzerstate, rtl_elfpath, expected_regvals_pair, numinstrs = gen_reduced_elf(fuzzerstate, max_bb_id_to_consider, failing_instr_id, index_first_bb_to_consider, index_first_instr_to_consider)
-    except Exception as e:
-        print(f"Error when generating reduced elf: {e}")
-        raise Exception(e)
+def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int = None, index_first_bb_to_consider: int = 1, index_first_instr_to_consider: int = 0, quiet: bool = False):
+    # try:
+    test_fuzzerstate, rtl_elfpath, expected_regvals_pair, numinstrs = gen_reduced_elf(fuzzerstate, max_bb_id_to_consider, failing_instr_id, index_first_bb_to_consider, index_first_instr_to_consider)
+    # except Exception as e:
+    #     print(f"Error when generating reduced elf: `{e}`, for tuple: ({fuzzerstate.memsize}, design_name, {fuzzerstate.randseed}, {fuzzerstate.nmax_bbs})")
+    #     raise Exception(e)
     if NO_REMOVE_TMPFILES:
         print(f"Generated RTL elf: {rtl_elfpath}")
 
     del fuzzerstate
-    # print('Num instrs: ', list(map(len, test_fuzzerstate.instr_objs_seq)))
-    # print(len(test_fuzzerstate.instr_objs_seq), max_bb_id_to_consider)
     is_success, rtl_msg = runtest_simulator(test_fuzzerstate, rtl_elfpath, expected_regvals_pair, numinstrs, REDUCTION_SIMULATOR)
 
-    if not is_success:
-        # print('For is_mismatch params', max_bb_id_to_consider, failing_instr_id)
+    if quiet and not is_success:
         print(rtl_msg)
-    # print(f"RTL mismatch: {not is_success}: {max_bb_id_to_consider} bbs, {failing_instr_id} instrs in last bb, {index_first_bb_to_consider} first bb, {index_first_instr_to_consider} first instr")
     return not is_success
 
 # Flattens the control flow except for the initial block, the context setter and the final block.
@@ -483,8 +475,10 @@ def _find_pillar_instr(fuzzerstate, failing_bb_id: int, failing_instr_id: int, p
         right_bound = hint_right_pillar_instr
     else:
         if pillar_bb_id == failing_bb_id:
+            print('pillar_bb_id == failing_bb_id', pillar_bb_id, failing_bb_id)
             right_bound = failing_instr_id+1
         else:
+            print('pillar_bb_id != failing_bb_id', pillar_bb_id, failing_bb_id)
             right_bound = len(fuzzerstate.instr_objs_seq[pillar_bb_id])
 
     if right_bound == left_bound:
@@ -497,6 +491,7 @@ def _find_pillar_instr(fuzzerstate, failing_bb_id: int, failing_instr_id: int, p
     # Invariant:
     #   is_mismatch(fuzzerstate, failing_bb_id, left_bound)  always False
     #   is_mismatch(fuzzerstate, failing_bb_id, right_bound) always True
+
     while right_bound - left_bound > 1:
         print('left_bound', left_bound, 'right_bound', right_bound, 'candidate_bound', (right_bound + left_bound) // 2)
         if DO_ASSERT:
@@ -636,8 +631,10 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 # Fourth, reduce some initial instructions in the first problematic bb.
 # @param target_dir: If not None, the directory where to save the generated files. Else, will be saved in the design's directory
 # @param find_pillars: If false, the front of the test case will not be reduced.
+# @return a boolean indicating whether the reduction was successful, a float measuring the elapesd time (in seconds), and the number of instructions in the test case.
 def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
     from cascade.fuzzerstate import FuzzerState
+
     ###
     # Prepare the basic blocks
     ###
@@ -645,10 +642,13 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     if DO_ASSERT:
         assert nmax_bbs is None or nmax_bbs > 0
 
+    start_time = time.time()
+
     random.seed(randseed)
     fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges)
 
     gen_basicblocks(fuzzerstate)
+    numinstrs = sum([len(bb) for bb in fuzzerstate.instr_objs_seq])
 
     # spike resolution
     expected_regvals = spike_resolution(fuzzerstate, check_pc_spike_again)
@@ -656,7 +656,15 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     if len(fuzzerstate.instr_objs_seq) == 1:
         print('Only one basic block. Trivial case.')
         print('Is mismatch', is_mismatch(fuzzerstate, 1, len(fuzzerstate.instr_objs_seq[0])-1))
-        return
+        return True, time.time() - start_time, numinstrs
+
+    # Try to replace all FPU enable/disable instructions with nops, to make the FPU dumping possible.
+    for block_id, instr_id in fuzzerstate.fpuendis_coords:
+        if block_id >= len(fuzzerstate.instr_objs_seq):
+            continue
+        if DO_ASSERT:
+            assert 'csr' in fuzzerstate.instr_objs_seq[block_id][instr_id].instr_str, f"Block id {block_id}, instr id {instr_id} was not a csr instruction but was {fuzzerstate.instr_objs_seq[block_id][instr_id].instr_str}"
+        fuzzerstate.instr_objs_seq[block_id][instr_id] = RegImmInstruction("addi", 0, 0, 0, is_design_64bit=fuzzerstate.is_design_64bit)
 
     ###
     # Find the first bb that causes trouble.
@@ -673,16 +681,17 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             test_fuzzerstate_larger, rtl_elfpath_larger, expected_regvals_pairs_larger, numinstrs = gen_reduced_elf(fuzzerstate, failing_bb_id, len(fuzzerstate.instr_objs_seq[0])-1)
             if target_dir is None:
                 target_dir = os.path.join(get_design_cascade_path(design_name), 'sw', 'fuzzsample')
-            Path(target_dir).mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(rtl_elfpath_larger, os.path.join(target_dir, 'app_buggy.elf'))
-            subprocess.run(' '.join(['riscv32-unknown-elf-objdump', '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_buggy.elf'), '>', os.path.join(target_dir, 'app_buggy.elf.dump')]), shell=True)
-            return True
+            if not quiet:
+                Path(target_dir).mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(rtl_elfpath_larger, os.path.join(target_dir, 'app_buggy.elf'))
+                subprocess.run(' '.join(['riscv32-unknown-elf-objdump', '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_buggy.elf'), '>', os.path.join(target_dir, 'app_buggy.elf.dump')]), shell=True)
+            return True, time.time() - start_time, numinstrs
 
     # If no fail at all
     if failing_bb_id == len(fuzzerstate.instr_objs_seq) and not is_mismatch(fuzzerstate, failing_bb_id-1):
         if not quiet:
-            print(f"Success (no failure at all with test case design_name=`{design_name}`, memsize=`{memsize}`, randseed=`{randseed}`, nmax_bbs=`{nmax_bbs}`).")
-        return
+            print(f"Success (no failure at all with tuple: ({memsize}, design_name, {randseed}, {nmax_bbs})")
+        return True, time.time() - start_time, numinstrs
 
     ###
     # Find the specific problematic instruction in the bb.
@@ -746,28 +755,29 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         # The advantage of doing this before the reduction of the ELF size is that we may successfully remove some load instructions targeting the instructions we will remove. The downside is that it is slower than cleaning up after the reduction.
         fuzzerstate = _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, fault_from_prev_bb)
 
-    if find_pillars:
-        # Instructions in the pillar bb
-        if pillar_bb_id == failing_bb_id:
-            for instr_id in range(pillar_instr, failing_instr_id+1):
-                curr_addr = fuzzerstate.bb_start_addr_seq[pillar_bb_id] + 4*instr_id # NO_COMPRESSED
-                if not quiet:
-                    print('Problematic PC:', hex(curr_addr+SPIKE_STARTADDR))
-        # If there are multiple bbs involved
-        else:
-            for instr_id in range(pillar_instr, len(fuzzerstate.instr_objs_seq[pillar_bb_id])):
-                curr_addr = fuzzerstate.bb_start_addr_seq[pillar_bb_id] + 4*instr_id # NO_COMPRESSED
-                if not quiet:
-                    print('(A) Problematic PC:', hex(curr_addr+SPIKE_STARTADDR))
-            for bb_id in range(pillar_bb_id, failing_bb_id):
-                for instr_id in range(len(fuzzerstate.instr_objs_seq[bb_id])):
-                    curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + 4*instr_id # NO_COMPRESSED
-                    if not quiet:
-                        print('(B) Problematic PC:', hex(curr_addr+SPIKE_STARTADDR))
-            for instr_id in range(failing_instr_id+1):
-                curr_addr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id # NO_COMPRESSED
-                if not quiet:
-                    print('(C) Problematic PC:', hex(curr_addr+SPIKE_STARTADDR))
+    # if find_pillars:
+    #     if not quiet:
+    #         # Instructions in the pillar bb
+    #         if pillar_bb_id == failing_bb_id:
+    #             for instr_id in range(pillar_instr, failing_instr_id+1):
+    #                 curr_addr = fuzzerstate.bb_start_addr_seq[pillar_bb_id] + 4*instr_id # NO_COMPRESSED
+    #                 if not quiet:
+    #                     print('Problematic PC:', hex(curr_addr+SPIKE_STARTADDR))
+    #         # If there are multiple bbs involved
+    #         else:
+    #             for instr_id in range(pillar_instr, len(fuzzerstate.instr_objs_seq[pillar_bb_id])):
+    #                 curr_addr = fuzzerstate.bb_start_addr_seq[pillar_bb_id] + 4*instr_id # NO_COMPRESSED
+    #                 if not quiet:
+    #                     print('(A) Problematic PC:', hex(curr_addr+SPIKE_STARTADDR))
+    #             for bb_id in range(pillar_bb_id, failing_bb_id):
+    #                 for instr_id in range(len(fuzzerstate.instr_objs_seq[bb_id])):
+    #                     curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + 4*instr_id # NO_COMPRESSED
+    #                     if not quiet:
+    #                         print('(B) Problematic PC:', hex(curr_addr+SPIKE_STARTADDR))
+    #             for instr_id in range(failing_instr_id+1):
+    #                 curr_addr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id # NO_COMPRESSED
+    #                 if not quiet:
+    #                     print('(C) Problematic PC:', hex(curr_addr+SPIKE_STARTADDR))
 
     # Not mature code yet.
     if FLATTEN_SANDWICH_INSTRUCTIONS and not pillar_bb_id == failing_bb_id:
@@ -811,9 +821,13 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         print(f"Larger ELF: {rtl_elfpath_larger}")
 
     if failing_instr_id == -1 and fault_from_prev_bb:
-        # Probably it's something like test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs = gen_reduced_elf(fuzzerstate, failing_bb_id-1, None)
-        # raise NotImplementedError('This case is not implemented yet.')
-        test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller = gen_reduced_elf(fuzzerstate, failing_bb_id-1)
+        ret = gen_reduced_elf(fuzzerstate, failing_bb_id-1)
+        if ret is False:
+            test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller = itertools.repeat(None)
+            print('Warning: smaller is trivial. Error may come from initial block.')
+            return True, time.time() - start_time, numinstrs
+        else:
+            test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller = ret
     else:
         test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller = gen_reduced_elf(fuzzerstate, failing_bb_id, failing_instr_id-1)
         print(f"Smaller: failing_bb_id: {failing_bb_id}, failing_instr_id: {failing_instr_id-1}, numinstrs_smaller: {numinstrs_smaller}")
@@ -830,20 +844,19 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         print('smaller msg:', rtl_msg_smaller)
 
     if not (is_success_smaller and not is_success_larger):
-        # This means that the identification of the problematic instruction was wrong.
-        print('Fail for both small and big')
-        # return False
-
-    if not quiet:
-        print('Copying both ELFs')
+        print('Reduction did not totally succeed.')
 
     if target_dir is None:
         target_dir = os.path.join(get_design_cascade_path(design_name), 'sw', 'fuzzsample')
-    Path(target_dir).mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(rtl_elfpath_larger, os.path.join(target_dir, 'app_buggy.elf'))
-    subprocess.run(' '.join(['riscv32-unknown-elf-objdump', '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_buggy.elf'), '>', os.path.join(target_dir, 'app_buggy.elf.dump')]), shell=True)
-    shutil.copyfile(rtl_elfpath_smaller, os.path.join(target_dir, 'app_ok.elf'))
-    subprocess.run(' '.join(['riscv32-unknown-elf-objdump', '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_ok.elf'), '>', os.path.join(target_dir, 'app_ok.elf.dump')]), shell=True)
+    if not quiet:
+        print('Copying both ELFs')
+        Path(target_dir).mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(rtl_elfpath_larger, os.path.join(target_dir, 'app_buggy.elf'))
+        subprocess.run(' '.join(['riscv32-unknown-elf-objdump', '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_buggy.elf'), '>', os.path.join(target_dir, 'app_buggy.elf.dump')]), shell=True)
+        shutil.copyfile(rtl_elfpath_smaller, os.path.join(target_dir, 'app_ok.elf'))
+        subprocess.run(' '.join(['riscv32-unknown-elf-objdump', '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_ok.elf'), '>', os.path.join(target_dir, 'app_ok.elf.dump')]), shell=True)
     # Write the error message
     with open(os.path.join(target_dir, 'err.log'), 'w') as f:
         f.write(rtl_msg_larger)
+
+    return is_success_smaller and not is_success_larger, time.time() - start_time, numinstrs

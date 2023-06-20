@@ -9,6 +9,7 @@
 # sys.argv[3]: offset for seed (to avoid running the fuzzing on the same instances over again)
 
 from cascade.reduce import reduce_program
+from cascade.toleratebugs import tolerate_bug_for_eval_reduction
 from common.profiledesign import profile_get_medeleg_mask
 from common.spike import calibrate_spikespeed
 
@@ -18,13 +19,14 @@ if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
-    design_name = 'boom'
-    descriptor = (822183, design_name, 47, 36, True)
+    design_name = 'kronos'
+    descriptor = (818531, design_name, 71, 424, True)
+    tolerate_bug_for_eval_reduction(design_name)
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
 
-    reduce_program(*descriptor, True, check_pc_spike_again=True, hint_left_bound_bb=25)
+    reduce_program(*descriptor, True, check_pc_spike_again=True)
 
 else:
     raise Exception("This module must be at the toplevel.")

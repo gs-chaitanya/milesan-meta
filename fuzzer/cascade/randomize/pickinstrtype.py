@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from cascade.cfinstructionclasses import *
-from cascade.toleratebugs import TOLERATE_CVA6_FDIVS_FLAGS, TOLERATE_VEXRISCV_IMPRECISE_FCVT, TOLERATE_VEXRISCV_FMIN, TOLERATE_VEXRISCV_DOUBLE_TO_FLOAT, TOLERATE_VEXRISCV_DEPENDENT_SINGLE_PRECISION, TOLERATE_VEXRISCV_DEPENDENT_FLE_FEQ_RET1, TOLERATE_VEXRISCV_DEPENDENT_FLT_RET0, TOLERATE_VEXRISCV_SQRT, TOLERATE_VEXRISCV_MULDIV_CONVERSION
+from cascade.toleratebugs import is_tolerate_cva6_fdivs_flags, is_tolerate_vexriscv_imprecise_fcvt, is_tolerate_vexriscv_fmin, is_tolerate_vexriscv_double_to_float, is_tolerate_vexriscv_dependent_single_precision, is_tolerate_vexriscv_dependent_fle_feq_ret1, is_tolerate_vexriscv_dependent_flt_ret0, is_tolerate_vexriscv_sqrt, is_tolerate_vexriscv_muldiv_conversion
 from cascade.util import ISAInstrClass, IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS
 from params.fuzzparams import NUM_MIN_FREE_INTREGS
 
@@ -44,9 +44,9 @@ def forbid_vexriscv_ops(keys_and_weights_dict):
     keys_and_weights_dict_ret["fnmsub.d"] = 0
     keys_and_weights_dict_ret["fmsub.d"] = 0
 
-    assert TOLERATE_VEXRISCV_IMPRECISE_FCVT + TOLERATE_VEXRISCV_FMIN + TOLERATE_VEXRISCV_DOUBLE_TO_FLOAT + TOLERATE_VEXRISCV_DEPENDENT_SINGLE_PRECISION + TOLERATE_VEXRISCV_DEPENDENT_FLE_FEQ_RET1 + TOLERATE_VEXRISCV_DEPENDENT_FLT_RET0 + TOLERATE_VEXRISCV_SQRT + TOLERATE_VEXRISCV_MULDIV_CONVERSION  <= 1
+    assert is_tolerate_vexriscv_imprecise_fcvt() + is_tolerate_vexriscv_fmin() + is_tolerate_vexriscv_double_to_float() + is_tolerate_vexriscv_dependent_single_precision() + is_tolerate_vexriscv_dependent_fle_feq_ret1() + is_tolerate_vexriscv_dependent_flt_ret0() + is_tolerate_vexriscv_sqrt() + is_tolerate_vexriscv_muldiv_conversion()  <= 1
 
-    if TOLERATE_VEXRISCV_IMPRECISE_FCVT or TOLERATE_VEXRISCV_FMIN or TOLERATE_VEXRISCV_DOUBLE_TO_FLOAT or TOLERATE_VEXRISCV_DEPENDENT_SINGLE_PRECISION or TOLERATE_VEXRISCV_DEPENDENT_FLE_FEQ_RET1 or TOLERATE_VEXRISCV_DEPENDENT_FLT_RET0 or TOLERATE_VEXRISCV_SQRT or TOLERATE_VEXRISCV_MULDIV_CONVERSION:
+    if is_tolerate_vexriscv_imprecise_fcvt() or is_tolerate_vexriscv_fmin() or is_tolerate_vexriscv_double_to_float() or is_tolerate_vexriscv_dependent_single_precision() or is_tolerate_vexriscv_dependent_fle_feq_ret1() or is_tolerate_vexriscv_dependent_flt_ret0() or is_tolerate_vexriscv_sqrt() or is_tolerate_vexriscv_muldiv_conversion():
         keys_and_weights_dict_ret["fcvt.w.s"] = 0
         keys_and_weights_dict_ret["fcvt.wu.s"] = 0
         keys_and_weights_dict_ret["fmin.s"] = 0
@@ -71,41 +71,41 @@ def forbid_vexriscv_ops(keys_and_weights_dict):
         keys_and_weights_dict_ret["fmin.d"] = 0
         keys_and_weights_dict_ret["fmax.d"] = 0
 
-        if TOLERATE_VEXRISCV_IMPRECISE_FCVT or TOLERATE_VEXRISCV_FMIN or TOLERATE_VEXRISCV_DOUBLE_TO_FLOAT or TOLERATE_VEXRISCV_DEPENDENT_SINGLE_PRECISION or TOLERATE_VEXRISCV_DEPENDENT_FLE_FEQ_RET1 or TOLERATE_VEXRISCV_DEPENDENT_FLT_RET0 or TOLERATE_VEXRISCV_SQRT:
+        if is_tolerate_vexriscv_imprecise_fcvt() or is_tolerate_vexriscv_fmin() or is_tolerate_vexriscv_double_to_float() or is_tolerate_vexriscv_dependent_single_precision() or is_tolerate_vexriscv_dependent_fle_feq_ret1() or is_tolerate_vexriscv_dependent_flt_ret0() or is_tolerate_vexriscv_sqrt():
             keys_and_weights_dict_ret["fcvt.w.s"] = keys_and_weights_dict["fcvt.w.s"]
             keys_and_weights_dict_ret["fcvt.wu.s"] = keys_and_weights_dict["fcvt.wu.s"]
             keys_and_weights_dict_ret["fcvt.l.s"] = keys_and_weights_dict["fcvt.l.s"]
             keys_and_weights_dict_ret["fcvt.lu.s"] = keys_and_weights_dict["fcvt.lu.s"]
             keys_and_weights_dict_ret["fcvt.d.s"] = keys_and_weights_dict["fcvt.d.s"]
 
-        if TOLERATE_VEXRISCV_IMPRECISE_FCVT:
+        if is_tolerate_vexriscv_imprecise_fcvt():
             keys_and_weights_dict_ret["fcvt.s.w"] = keys_and_weights_dict["fcvt.s.w"]
             keys_and_weights_dict_ret["fcvt.s.wu"] = keys_and_weights_dict["fcvt.s.wu"]
             keys_and_weights_dict_ret["fcvt.s.l"] = keys_and_weights_dict["fcvt.s.l"]
             keys_and_weights_dict_ret["fcvt.s.lu"] = keys_and_weights_dict["fcvt.s.lu"]
-        if TOLERATE_VEXRISCV_FMIN:
+        if is_tolerate_vexriscv_fmin():
             keys_and_weights_dict_ret["fmin.s"] = keys_and_weights_dict["fmin.s"]
             keys_and_weights_dict_ret["fmin.d"] = keys_and_weights_dict["fmin.d"]
-        if TOLERATE_VEXRISCV_DOUBLE_TO_FLOAT:
+        if is_tolerate_vexriscv_double_to_float():
             keys_and_weights_dict_ret["fcvt.d.s"] = keys_and_weights_dict["fcvt.d.s"]
-        if TOLERATE_VEXRISCV_DEPENDENT_SINGLE_PRECISION:
+        if is_tolerate_vexriscv_dependent_single_precision():
             keys_and_weights_dict_ret["fmul.s"] = keys_and_weights_dict["fmul.s"]
             keys_and_weights_dict_ret["fadd.s"] = keys_and_weights_dict["fadd.s"]
             keys_and_weights_dict_ret["fsub.s"] = keys_and_weights_dict["fsub.s"]
             keys_and_weights_dict_ret["fdiv.s"] = keys_and_weights_dict["fdiv.s"]
-        if TOLERATE_VEXRISCV_DEPENDENT_FLE_FEQ_RET1:
+        if is_tolerate_vexriscv_dependent_fle_feq_ret1():
             keys_and_weights_dict_ret["fle.s"] = keys_and_weights_dict["fle.s"]
             keys_and_weights_dict_ret["fle.d"] = keys_and_weights_dict["fle.d"]
             keys_and_weights_dict_ret["feq.s"] = keys_and_weights_dict["feq.s"]
             keys_and_weights_dict_ret["feq.d"] = keys_and_weights_dict["feq.d"]
-        if TOLERATE_VEXRISCV_DEPENDENT_FLT_RET0:
+        if is_tolerate_vexriscv_dependent_flt_ret0():
             keys_and_weights_dict_ret["flt.s"] = keys_and_weights_dict["flt.s"]
             keys_and_weights_dict_ret["flt.d"] = keys_and_weights_dict["flt.d"]
-        if TOLERATE_VEXRISCV_SQRT:
+        if is_tolerate_vexriscv_sqrt():
             keys_and_weights_dict_ret["fsqrt.s"] = keys_and_weights_dict["fsqrt.s"]
             keys_and_weights_dict_ret["fsqrt.d"] = keys_and_weights_dict["fsqrt.d"]
     
-        if TOLERATE_VEXRISCV_MULDIV_CONVERSION:
+        if is_tolerate_vexriscv_muldiv_conversion():
             keys_and_weights_dict_ret["fmul.s"] = keys_and_weights_dict["fmul.s"]
             keys_and_weights_dict_ret["fmul.d"] = keys_and_weights_dict["fmul.d"]
             keys_and_weights_dict_ret["fdiv.s"] = keys_and_weights_dict["fdiv.s"]
@@ -139,7 +139,7 @@ def gen_next_instrstr_from_isaclass(isaclass: ISAInstrClass, fuzzerstate) -> str
 
         # Single precision
         keys_and_weights_dict["fsqrt.s"] = 0
-        if not TOLERATE_CVA6_FDIVS_FLAGS:
+        if not is_tolerate_cva6_fdivs_flags():
             keys_and_weights_dict["fdiv.s"] = 0
         keys_and_weights_dict["fcvt.d.s"] = 0
         keys_and_weights_dict["fcvt.s.d"] = 0
