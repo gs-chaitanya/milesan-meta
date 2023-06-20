@@ -129,6 +129,8 @@ def gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider: int, first_ins
     ret_dumpreqs.append((tgt_pc, False, 'medeleg'))
     ret_dumpreqs.append((tgt_pc, False, 'mstatus'))
     ret_dumpreqs.append((tgt_pc, False, 'minstret'))
+    if not fuzzerstate.is_design_64bit:
+        ret_dumpreqs.append((tgt_pc, False, 'minstreth'))
 
     ret_dumpreqs.append((tgt_pc, False, 'priv'))
 

@@ -15,14 +15,21 @@ if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
-    num_failing_programs_to_consider = 100 # TODO Restore to 100
-    num_cores = max(int(os.getenv('CASCADE_JOBS', 160)) // 2, 1)
+    num_failing_programs_to_consider = 100
+    num_cores = max(int(os.getenv('CASCADE_JOBS', 160)) // 4, 1)
 
-    design_names = ['kronos']
+    design_names = [
+        'vexriscv',
+        'kronos',
+        'picorv32',
+        'rocket',
+        'boom',
+        'cva6',
+    ]
 
     for design_name in design_names:
         tolerate_bug_for_eval_reduction(design_name)
-        find_n_failing_descriptors(design_name, num_failing_programs_to_consider, num_cores, 0, True)
+        find_n_failing_descriptors(design_name, num_failing_programs_to_consider*2, num_cores, 0, True)
         eval_reduction(design_name, num_failing_programs_to_consider, num_cores)
 
     plot_eval_reduction(design_names, num_failing_programs_to_consider)

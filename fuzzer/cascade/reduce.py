@@ -43,7 +43,7 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
         del spikereduce_elfpath
 
     # Generate the context setter
-    NUM_CSRS = 13 # includes the privilege request
+    NUM_CSRS = 13 + int(not fuzzerstate.is_design_64bit) # includes the privilege request. +1 for minstreth if 32-bit
     if DO_ASSERT:
         assert (len(dumpedvals) - NUM_CSRS - fuzzerstate.num_pickable_floating_regs - fuzzerstate.num_pickable_regs) % 2 == 0, "The number of dumps for memory operations must be even: one address for one value."
 
@@ -97,6 +97,12 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
     saved_minstret = dumpedvals[curr_id_in_dumpedvals]
     curr_id_in_dumpedvals += 1
     csr_count_fordebug += 1
+    if not fuzzerstate.is_design_64bit:
+        saved_minstreth = dumpedvals[curr_id_in_dumpedvals]
+        curr_id_in_dumpedvals += 1
+        csr_count_fordebug += 1
+    else:
+        saved_minstreth = None
 
     # Parse the privilege level
     saved_privilege_char = dumpedvals[curr_id_in_dumpedvals]
@@ -140,6 +146,7 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
                                     saved_medeleg,
                                     saved_mstatus,
                                     saved_minstret,
+                                    saved_minstreth,
                                     saved_privilege,
                                     saved_stores,
                                     saved_fregvals,

@@ -42,6 +42,7 @@ def reduce_program_worker(size: int, design_name: str, randseed: int, nmax_bbs: 
     except Exception as e:
         print(f"Exception in reduce_program_worker for tuple: ({size}, '{design_name}', {randseed}, {nmax_bbs})")
         traceback.print_exc()
+        return None
 
 def eval_reduction(design_name: str, num_testcases: int, num_workers: int):
     global callback_lock

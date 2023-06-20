@@ -104,6 +104,7 @@ ELEM_PRETTY = [
     'medeleg',
     'mstatus',
     'minstret',
+    'minstreth',
 ]
 
 FROM_FILE = False
@@ -111,7 +112,7 @@ REDUCTION_SIMULATOR = SimulatorEnum.VERILATOR
 NOPIZE_SANDWICH_INSTRUCTIONS = False # Not fully implemented & tested, hence do not yet set to True
 FLATTEN_SANDWICH_INSTRUCTIONS = False # Not fully implemented & tested, hence do not yet set to True
 
-def __gen_spike_dbgcmd_file_for_full_trace(numinstrs: int, startpc: int):
+def __gen_spike_dbgcmd_file_for_full_trace(numinstrs: int, startpc: int, is_64bit: bool):
     assert startpc >= SPIKE_STARTADDR
     path_to_debug_file = os.path.join(PATH_TO_TMP, 'dbgcmds', f"cmds_fulltrace{startpc:x}_{numinstrs}.txt")
     Path(os.path.dirname(path_to_debug_file)).mkdir(parents=True, exist_ok=True)
@@ -168,14 +169,17 @@ def __gen_spike_dbgcmd_file_for_full_trace(numinstrs: int, startpc: int):
         spike_debug_commands.append('reg 0 medeleg')
         spike_debug_commands.append('reg 0 mstatus')
         spike_debug_commands.append('reg 0 minstret')
+        if not is_64bit:
+            spike_debug_commands.append('reg 0 minstreth')
 
-        assert len(spike_debug_commands) == curr_size + NUM_ELEMS_PER_INSTR, f"len(spike_debug_commands)={len(spike_debug_commands)}, curr_size={curr_size}"
+        num_elems_per_instr_according_to_bitwidth = NUM_ELEMS_PER_INSTR + int(not is_64bit)
+        assert len(spike_debug_commands) == curr_size + num_elems_per_instr_according_to_bitwidth, f"len(spike_debug_commands)={len(spike_debug_commands)}, curr_size={curr_size}"
 
         spike_debug_commands.append('r 1')
 
     spike_debug_commands.append('q\n')
 
-    assert len(spike_debug_commands) == 1 + numinstrs * (NUM_ELEMS_PER_INSTR + 1) + 1, f"len(spike_debug_commands)={len(spike_debug_commands)}, expected {numinstrs * (NUM_ELEMS_PER_INSTR + 1) + 1} , numinstrs={numinstrs}"
+    assert len(spike_debug_commands) == 1 + numinstrs * (num_elems_per_instr_according_to_bitwidth + 1) + 1, f"len(spike_debug_commands)={len(spike_debug_commands)}, expected {numinstrs * (NUM_ELEMS_PER_INSTR + 1) + 1} , numinstrs={numinstrs}"
     spike_debug_commands_str = '\n'.join(spike_debug_commands)
 
     with open(path_to_debug_file, 'w') as f:
@@ -183,8 +187,8 @@ def __gen_spike_dbgcmd_file_for_full_trace(numinstrs: int, startpc: int):
 
     return path_to_debug_file
 
-def gen_full_trace(elfpath: str, rvflags: str, startpc: int, numinstrs: int):
-    path_to_debug_file = __gen_spike_dbgcmd_file_for_full_trace(numinstrs, startpc)
+def gen_full_trace(elfpath: str, rvflags: str, startpc: int, numinstrs: int, is_64bit: bool):
+    path_to_debug_file = __gen_spike_dbgcmd_file_for_full_trace(numinstrs, startpc, is_64bit)
     print(f"Generated debug file: {path_to_debug_file}")
 
     # Second, run the Spike command
@@ -205,18 +209,20 @@ def gen_full_trace(elfpath: str, rvflags: str, startpc: int, numinstrs: int):
         raise Exception(f"Spike timeout in the debug script.\nCommand: {' '.join(spike_shell_command)}")
 
     spike_out = '\n'.join(filter(lambda s: ':' not in s and len(s) > 0, spike_out.split('\n')))
-    assert len(spike_out.split('\n')) == numinstrs * NUM_ELEMS_PER_INSTR, f"Unexpected number of lines in the full trace:" + str(len(spike_out.split('\n'))) + " -- expected: " + str(numinstrs * NUM_ELEMS_PER_INSTR)
+    num_elems_per_instr_according_to_bitwidth = NUM_ELEMS_PER_INSTR + int(not is_64bit)
+    assert len(spike_out.split('\n')) == numinstrs * num_elems_per_instr_according_to_bitwidth, f"Unexpected number of lines in the full trace:" + str(len(spike_out.split('\n'))) + " -- expected: " + str(numinstrs * NUM_ELEMS_PER_INSTR)
     return spike_out
 
-def parse_full_trace(spike_out: str):
+def parse_full_trace(spike_out: str, is_64bit: bool):
     ret = []
     spike_out_splitted = spike_out.split('\n')
-    assert len(spike_out_splitted) % NUM_ELEMS_PER_INSTR == 0, f"Unexpected number of lines in the full trace:" + str(len(spike_out_splitted)) + " -- modulo: " + str(len(spike_out_splitted) % NUM_ELEMS_PER_INSTR)
-    num_instrs = len(spike_out_splitted) // NUM_ELEMS_PER_INSTR
+    num_elems_per_instr_according_to_bitwidth = NUM_ELEMS_PER_INSTR + int(not is_64bit)
+    assert len(spike_out_splitted) % num_elems_per_instr_according_to_bitwidth == 0, f"Unexpected number of lines in the full trace:" + str(len(spike_out_splitted)) + " -- modulo: " + str(len(spike_out_splitted) % num_elems_per_instr_according_to_bitwidth)
+    num_instrs = len(spike_out_splitted) // num_elems_per_instr_according_to_bitwidth
     for instr_id in range(num_instrs):
         ret.append([])
-        entry_start = instr_id * NUM_ELEMS_PER_INSTR
-        for elem_id in range(NUM_ELEMS_PER_INSTR):
+        entry_start = instr_id * num_elems_per_instr_according_to_bitwidth
+        for elem_id in range(num_elems_per_instr_according_to_bitwidth):
             ret[instr_id].append(spike_out_splitted[entry_start + elem_id])
     return ret
 
@@ -269,22 +275,18 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
 
     spikecheck_out = spike_resolution_debug(fuzzerstate, True, start_bb, start_instr, num_interesting_instrs)
 
-    spikecheck_trace = parse_full_trace(spikecheck_out)
-    print('spikecheck x7', spikecheck_trace[instr_addrs_rev_dict[end_addr]][7])
-    print('spikecheck x8', spikecheck_trace[instr_addrs_rev_dict[end_addr]][8])
+    spikecheck_trace = parse_full_trace(spikecheck_out, fuzzerstate.is_design_64bit)
 
-    print(f"Spikecheck trace parsed")
-
-    # TODO Remove, debug
-    # Ensure the instruction is the expected
-    for bb_id, bb in enumerate(fuzzerstate.instr_objs_seq):
-        for bb_instr_id, bb_instr in enumerate(bb):
-            curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + bb_instr_id * 4 # NO_COMPRESSED
-            if curr_addr == 0x34470:
-                print(f"{curr_addr} -- {bb_instr}")
-                print(f"Plan taken: {bb_instr.plan_taken}")
-                print(f"rs1: {bb_instr.rs1}")
-                print(f"rs2: {bb_instr.rs2}")
+    # # TODO Remove, debug
+    # # Ensure the instruction is the expected
+    # for bb_id, bb in enumerate(fuzzerstate.instr_objs_seq):
+    #     for bb_instr_id, bb_instr in enumerate(bb):
+    #         curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + bb_instr_id * 4 # NO_COMPRESSED
+    #         if curr_addr == 0x34470:
+    #             print(f"{curr_addr} -- {bb_instr}")
+    #             print(f"Plan taken: {bb_instr.plan_taken}")
+    #             print(f"rs1: {bb_instr.rs1}")
+    #             print(f"rs2: {bb_instr.rs2}")
 
     ###
     # Get the expected values from the full program
@@ -293,7 +295,7 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
     if not FROM_FILE:
         expected_rtl_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'debugctx_expected', fuzzerstate.instance_to_str(), fuzzerstate.design_base_addr)
         start_addr = fuzzerstate.bb_start_addr_seq[start_bb] + 4*start_instr # NO_COMPRESSED
-        expected_spike_out = gen_full_trace(expected_rtl_elfpath, get_design_march_flags(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs)
+        expected_spike_out = gen_full_trace(expected_rtl_elfpath, get_design_march_flags(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs, fuzzerstate.is_design_64bit)
         with open(os.path.join(PATH_TO_TMP, 'spike_expected_trace.txt'), 'w') as f:
             f.write(expected_spike_out)
             print(f"Expected trace written to {os.path.join(PATH_TO_TMP, 'spike_expected_trace.txt')}")
@@ -301,7 +303,7 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
         with open(os.path.join(PATH_TO_TMP, 'spike_expected_trace.txt'), 'r') as f:
             expected_spike_out = f.read()
 
-    expected_trace = parse_full_trace(expected_spike_out)
+    expected_trace = parse_full_trace(expected_spike_out, fuzzerstate.is_design_64bit)
 
     # print('x7', expected_trace[instr_addrs_rev_dict[end_addr]][7])
     # print('x8', expected_trace[instr_addrs_rev_dict[end_addr]][8])
@@ -318,7 +320,7 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
     if not FROM_FILE:
         reduced_fuzzerstate = _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, start_bb, start_instr)
         reduced_rtl_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'debugctx_reduced', reduced_fuzzerstate.instance_to_str(), reduced_fuzzerstate.design_base_addr)
-        reduced_spike_out = gen_full_trace(reduced_rtl_elfpath, get_design_march_flags(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs)
+        reduced_spike_out = gen_full_trace(reduced_rtl_elfpath, get_design_march_flags(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs, fuzzerstate.is_design_64bit)
         with open(os.path.join(PATH_TO_TMP, 'spike_reduced_trace.txt'), 'w') as f:
             f.write(reduced_spike_out)
             print(f"Expected trace written to {os.path.join(PATH_TO_TMP, 'spike_reduced_trace.txt')}")
@@ -326,7 +328,7 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
         with open(os.path.join(PATH_TO_TMP, 'spike_reduced_trace.txt'), 'r') as f:
             expected_spike_out = f.read()
 
-    reduced_trace = parse_full_trace(reduced_spike_out)
+    reduced_trace = parse_full_trace(reduced_spike_out, fuzzerstate.is_design_64bit)
 
     # print('start_addr', hex(start_addr))
 
@@ -372,6 +374,6 @@ def spike_resolution_debug(fuzzerstate, check_pc_spike_again: bool, start_bb: in
             print('rtl_spike_elfpath:', rtl_spike_elfpath)
         
         start_addr = fuzzerstate.bb_start_addr_seq[start_bb] + 4*start_instr # NO_COMPRESSED
-        spikecheck_out = gen_full_trace(rtl_spike_elfpath, get_design_march_flags(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs)
+        spikecheck_out = gen_full_trace(rtl_spike_elfpath, get_design_march_flags(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs, fuzzerstate.is_design_64bit)
 
         return spikecheck_out

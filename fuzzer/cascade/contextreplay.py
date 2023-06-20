@@ -66,6 +66,7 @@ class SavedContext:
     medeleg: int
     mstatus: int
     minstret: int
+    minstreth: int # Only used for 32-bit
     privilege: PrivilegeStateEnum
     mem_bytes_dict: dict # mem_bytes_dict[addr]: value
     freg_vals: list
@@ -161,7 +162,8 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         curr_addr += 12 # NO_COMPRESSED
 
     # mtvec
-    if fuzzerstate.design_has_supervisor_mode:
+    # if fuzzerstate.design_has_supervisor_mode:
+    if 'picorv32' not in fuzzerstate.design_name:
         addr_csr_loads[CSR_IDS.MTVEC] = curr_addr
         fuzzerstate.ctxsv_bb.append(None)
         fuzzerstate.ctxsv_bb.append(IntLoadInstruction("lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1, fuzzerstate.is_design_64bit))
@@ -370,7 +372,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         fuzzerstate.ctxsv_bb.append(RawDataWord(saved_context.sscratch >> 32))
         curr_addr += 8 # NO_COMPRESSED
 
-    if fuzzerstate.design_has_supervisor_mode:
+    if 'picorv32' not in fuzzerstate.design_name:
         fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MTVEC])] = RegImmInstruction("addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True)
         fuzzerstate.ctxsv_bb.append(RawDataWord(saved_context.mtvec))
         fuzzerstate.ctxsv_bb.append(RawDataWord(0xdeadbeef))
@@ -410,7 +412,14 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MINSTRET])+1] = RegImmInstruction("addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True)
 
     fuzzerstate.ctxsv_bb.append(RawDataWord((saved_context.minstret - ((instr_end_addr - (minstret_base_addr - 4 - 4*int(fuzzerstate.is_design_64bit))) // 4)) & 0xffffffff, signed=True))
-    fuzzerstate.ctxsv_bb.append(RawDataWord((saved_context.minstret - ((instr_end_addr - minstret_base_addr - 4) // 4)) >> 32, signed=True))
+    if fuzzerstate.is_design_64bit:
+        fuzzerstate.ctxsv_bb.append(RawDataWord((saved_context.minstret - ((instr_end_addr - minstret_base_addr - 4) // 4)) >> 32, signed=True))
+    else:
+        # Should be checked in detail
+        if (saved_context.minstret - ((instr_end_addr - (minstret_base_addr - 4 - 4*int(fuzzerstate.is_design_64bit))) // 4)) < 0: # If minstret is negative and will be increased before the start of the run
+            fuzzerstate.ctxsv_bb.append(RawDataWord((((saved_context.minstret + (saved_context.minstreth << 32)) - ((instr_end_addr - minstret_base_addr - 4) // 4)) >> 32), signed=True))
+        else:
+            fuzzerstate.ctxsv_bb.append(RawDataWord((((saved_context.minstret + (saved_context.minstreth << 32)) - ((instr_end_addr - minstret_base_addr - 4) // 4)) >> 32), signed=True))
     curr_addr += 8 # NO_COMPRESSED
 
     ###

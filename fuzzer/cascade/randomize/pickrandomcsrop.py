@@ -28,7 +28,6 @@ class MachineCSROpCandidates32(Enum):
     SSCRATCH = auto()
     MSCRATCH = auto()
     MINSTRET = auto()
-    MINSTRETH = auto()
 
 class SupervisorCSROpCandidates(Enum):
     SCAUSE = auto()
@@ -77,10 +76,10 @@ def gen_random_csr_op(fuzzerstate):
         else:
             if fuzzerstate.design_name == "picorv32" and not is_tolerate_picorv32_missingmandatorycsrs():
                 assert not is_no_interaction_minstret(), "picorv32 only has minstret in this config."
-                target_csr = random.choice([MachineCSROpCandidates32.MINSTRET, MachineCSROpCandidates32.MINSTRETH])
+                target_csr = MachineCSROpCandidates32.MINSTRET
             else:
                 target_csr = None
-                while target_csr is None or (target_csr in (MachineCSROpCandidates32.MINSTRET, MachineCSROpCandidates32.MINSTRETH) and is_no_interaction_minstret()) \
+                while target_csr is None or (target_csr == MachineCSROpCandidates32.MINSTRET and is_no_interaction_minstret()) \
                     or (not fuzzerstate.design_has_supervisor_mode and (target_csr in (MachineCSROpCandidates32.SCAUSE, MachineCSROpCandidates32.SSCRATCH))):
                     target_csr = random.choice(list(MachineCSROpCandidates32))
             if target_csr == MachineCSROpCandidates32.SCAUSE:
@@ -103,13 +102,6 @@ def gen_random_csr_op(fuzzerstate):
                     ret = CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MINSTRET)
                 else:
                     ret = CSRRegInstruction("csrrw", fuzzerstate.intregpickstate.pick_int_outputreg(), fuzzerstate.intregpickstate.pick_int_inputreg(), CSR_IDS.MINSTRET)
-            elif target_csr == MachineCSROpCandidates32.MINSTRETH:
-                if fuzzerstate.design_name == "kronos" and not is_tolerate_kronos_minstret() or "vexriscv" in fuzzerstate.design_name and not is_tolerate_vexriscv_minstret():
-                    ret = CSRRegInstruction("csrrw", 0, fuzzerstate.intregpickstate.pick_int_inputreg(), CSR_IDS.MINSTRETH)
-                elif fuzzerstate.design_name == "picorv32" and not is_tolerate_picorv32_writehpm():
-                    ret = CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MINSTRETH)
-                else:
-                    ret = CSRRegInstruction("csrrw", fuzzerstate.intregpickstate.pick_int_outputreg(), fuzzerstate.intregpickstate.pick_int_inputreg(), CSR_IDS.MINSTRETH)
             else:
                 raise Exception("Unexpected target_csr: {}".format(target_csr))
     else:

@@ -32,6 +32,8 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
                 addr_instrs[curr_addr] = curr_byte
 
     for instr_id_in_bb, instr_obj in enumerate(fuzzerstate.ctxsv_bb):
+        if instr_obj is None:
+            raise ValueError(f"instrobj is None for ctxsv_bb at index {instr_id_in_bb}")
         curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(4, 'little')
         for curr_byte_id, curr_byte in enumerate(curr_bytecode):
             curr_addr = fuzzerstate.ctxsv_bb_base_addr + 4*instr_id_in_bb + curr_byte_id # NO_COMPRESSED

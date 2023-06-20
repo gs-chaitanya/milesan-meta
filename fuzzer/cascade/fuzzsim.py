@@ -44,13 +44,13 @@ def runsim_verilator(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_P
 
     # Run Verilator
     exec_out = subprocess.run([sim_executable_path], check=True, text=True, capture_output=True, env=my_env)
-    outlines = exec_out.stdout.split('\n')
+    outlines = list(filter(lambda l: 'Writing ELF word to' not in l, exec_out.stdout.split('\n')))
 
     # Check stop success
     is_stop_successful = 'Found a stop request.' in exec_out.stdout
     if not is_stop_successful:
         return False, None
-
+    
     # Retrieve the register values
     ret_intregs = []
     ret_floatregs = []

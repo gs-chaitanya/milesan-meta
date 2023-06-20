@@ -83,7 +83,7 @@ def finalblock(fuzzerstate, design_name: str):
     ]
 
     # Store the register values to the register dump address
-    ret.append(IntStoreInstruction("sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, 0, 0, -1, is_design_64bit))
+    ret.append(IntStoreInstruction("sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, 0, 0 & 0xFFFF, -1, is_design_64bit))
     ret.append(SpecialInstruction("fence"))
 
     # Infinite loop in the end of the simulation
