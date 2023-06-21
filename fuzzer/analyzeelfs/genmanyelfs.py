@@ -6,13 +6,12 @@
 
 from common.profiledesign import profile_get_medeleg_mask
 from common.spike import calibrate_spikespeed
-from cascade.fuzzfromdescriptor import LOG2_MEMSIZE_UPPERBOUND, NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
+from cascade.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 
 import multiprocessing as mp
 import os
 import random
 import shutil
-import threading
 from tqdm import tqdm
 
 

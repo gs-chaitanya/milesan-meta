@@ -9,7 +9,6 @@ from benchmarking.findnfailinginstances import find_n_failing_descriptors
 from cascade.toleratebugs import tolerate_bug_for_eval_reduction
 
 import os
-import sys
 
 if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
@@ -19,12 +18,12 @@ if __name__ == '__main__':
     num_cores = max(int(os.getenv('CASCADE_JOBS', 160)) // 4, 1)
 
     design_names = [
-        'vexriscv',
-        'kronos',
         'picorv32',
+        'kronos',
+        'vexriscv',
         'rocket',
-        'boom',
         'cva6',
+        'boom',
     ]
 
     for design_name in design_names:

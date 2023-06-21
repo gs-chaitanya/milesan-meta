@@ -30,6 +30,10 @@ def fuzzdesign(design_name: str, num_cores: int, seed_offset: int, authorize_pri
     global all_times_to_detection
     global curr_round_id
 
+    newly_finished_tests = 0
+    curr_round_id = 0
+    all_times_to_detection = []
+
     import multiprocessing as mp
 
     num_workers = num_cores

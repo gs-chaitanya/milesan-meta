@@ -69,6 +69,9 @@ def get_design_march_ccflags_nocompressed(design_name) -> int:
 def get_design_march_flags(design_name) -> str:
     return get_design_march_ccflags(design_name).split('-march=')[1].split(' ')[0].lower()
 
+def get_design_march_flags_nocompressed(design_name) -> str:
+    return get_design_march_ccflags(design_name).split('-march=')[1].split(' ')[0].lower().replace('c', '')
+
 # @param design_name: must be one of the keys of the design_repos.json dict.
 # @return the stop signal address of the design: the address to which to write to stop the simulation.
 def get_design_stop_sig_addr(design_name) -> int:

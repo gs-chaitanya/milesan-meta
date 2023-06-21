@@ -4,7 +4,7 @@
 
 # This module is for debugging the context setter.
 
-from common.designcfgs import get_design_march_flags, get_design_boot_addr, get_design_cascade_path, get_design_march_ccflags_nocompressed
+from common.designcfgs import get_design_march_flags_nocompressed, get_design_boot_addr, get_design_cascade_path, get_design_march_ccflags_nocompressed
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES, get_spike_timeout_seconds
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES, PATH_TO_TMP
 from cascade.basicblock import gen_basicblocks
@@ -295,7 +295,7 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
     if not FROM_FILE:
         expected_rtl_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'debugctx_expected', fuzzerstate.instance_to_str(), fuzzerstate.design_base_addr)
         start_addr = fuzzerstate.bb_start_addr_seq[start_bb] + 4*start_instr # NO_COMPRESSED
-        expected_spike_out = gen_full_trace(expected_rtl_elfpath, get_design_march_flags(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs, fuzzerstate.is_design_64bit)
+        expected_spike_out = gen_full_trace(expected_rtl_elfpath, get_design_march_flags_nocompressed(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs, fuzzerstate.is_design_64bit)
         with open(os.path.join(PATH_TO_TMP, 'spike_expected_trace.txt'), 'w') as f:
             f.write(expected_spike_out)
             print(f"Expected trace written to {os.path.join(PATH_TO_TMP, 'spike_expected_trace.txt')}")
@@ -320,7 +320,7 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
     if not FROM_FILE:
         reduced_fuzzerstate = _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, start_bb, start_instr)
         reduced_rtl_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'debugctx_reduced', reduced_fuzzerstate.instance_to_str(), reduced_fuzzerstate.design_base_addr)
-        reduced_spike_out = gen_full_trace(reduced_rtl_elfpath, get_design_march_flags(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs, fuzzerstate.is_design_64bit)
+        reduced_spike_out = gen_full_trace(reduced_rtl_elfpath, get_design_march_flags_nocompressed(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs, fuzzerstate.is_design_64bit)
         with open(os.path.join(PATH_TO_TMP, 'spike_reduced_trace.txt'), 'w') as f:
             f.write(reduced_spike_out)
             print(f"Expected trace written to {os.path.join(PATH_TO_TMP, 'spike_reduced_trace.txt')}")
@@ -355,7 +355,7 @@ def spike_resolution_debug(fuzzerstate, check_pc_spike_again: bool, start_bb: in
     regdump_reqs = gen_regdump_reqs(fuzzerstate)
     flat_instr_objs = list(itertools.chain.from_iterable(fuzzerstate.instr_objs_seq))
     # len(flat_instr_objs)+1: the +1 is to reach the final basic block and thereby overwrite the potential destination register of a jal/jalr
-    regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags(design_name), SPIKE_STARTADDR, regdump_reqs, True, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
+    regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags_nocompressed(design_name), SPIKE_STARTADDR, regdump_reqs, True, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
     if not NO_REMOVE_TMPFILES:
         os.remove(spike_resolution_elfpath)
         del spike_resolution_elfpath
@@ -374,6 +374,6 @@ def spike_resolution_debug(fuzzerstate, check_pc_spike_again: bool, start_bb: in
             print('rtl_spike_elfpath:', rtl_spike_elfpath)
         
         start_addr = fuzzerstate.bb_start_addr_seq[start_bb] + 4*start_instr # NO_COMPRESSED
-        spikecheck_out = gen_full_trace(rtl_spike_elfpath, get_design_march_flags(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs, fuzzerstate.is_design_64bit)
+        spikecheck_out = gen_full_trace(rtl_spike_elfpath, get_design_march_flags_nocompressed(design_name), start_addr + SPIKE_STARTADDR, num_interesting_instrs, fuzzerstate.is_design_64bit)
 
         return spikecheck_out

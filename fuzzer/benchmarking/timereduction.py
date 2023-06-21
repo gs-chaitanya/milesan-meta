@@ -14,7 +14,6 @@ import json
 import os
 import time
 import threading
-import traceback
 import multiprocessing as mp
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -38,10 +37,12 @@ def reduction_done_callback(ret):
 
 def reduce_program_worker(size: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
     try:
-        return reduce_program(size, design_name, randseed, nmax_bbs, authorize_privileges, find_pillars, quiet, target_dir, hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_instr, hint_right_bound_instr, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr, check_pc_spike_again)
+        try:
+            return reduce_program(size, design_name, randseed, nmax_bbs, authorize_privileges, find_pillars, quiet, target_dir, hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_instr, hint_right_bound_instr, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr, check_pc_spike_again)
+        except Exception as e:
+            print(f"Exception in reduce_program_worker for tuple: ({size}, '{design_name}', {randseed}, {nmax_bbs})")
+            return None
     except Exception as e:
-        print(f"Exception in reduce_program_worker for tuple: ({size}, '{design_name}', {randseed}, {nmax_bbs})")
-        traceback.print_exc()
         return None
 
 def eval_reduction(design_name: str, num_testcases: int, num_workers: int):
@@ -51,20 +52,20 @@ def eval_reduction(design_name: str, num_testcases: int, num_workers: int):
     global num_failures
 
     newly_completed_reductions_nb = 0
-    all_reduction_results = []
+    all_reduction_results.clear()
     num_failures = 0
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
 
     # Read the failing program descriptors
-    json_path = os.path.join(PATH_TO_TMP, f"failinginstances_{design_name}_{num_testcases}.json")
+    json_path = os.path.join(PATH_TO_TMP, f"failinginstances_{design_name}_{2*num_testcases}.json")
     workloads = json.load(open(json_path, 'r'))
 
     # Also find the pillars (aka. head)
     workloads = [(memsize, design_name, process_instance_id, num_bbs, authorize_privileges, True) for memsize, design_name, process_instance_id, num_bbs, authorize_privileges in workloads]
 
-    assert len(workloads) == num_testcases, f"Expected {num_testcases} failing instances, but found {len(workloads)} in {json_path}"
+    assert len(workloads) == 2*num_testcases, f"Expected {2*num_testcases} failing instances, but found {len(workloads)} in {json_path}"
 
     pool = mp.Pool(processes=num_workers)
     workload_id = 0
@@ -76,7 +77,7 @@ def eval_reduction(design_name: str, num_testcases: int, num_workers: int):
 
     # Respawn processes until we received the desired number of reductions
     with tqdm(total=num_testcases) as pbar:
-        while newly_completed_reductions_nb < num_testcases:
+        while len(all_reduction_results) < num_testcases:
             # Yield the execution
             time.sleep(1)
             # Check whether we received new coverage paths
@@ -87,18 +88,16 @@ def eval_reduction(design_name: str, num_testcases: int, num_workers: int):
                         print(f"Received enough failing instances for design `{design_name}`. Stopping.")
                         break
                     for new_process_id in range(newly_completed_reductions_nb):
-                        if workload_id >= num_testcases:
+                        if workload_id >= len(workloads):
                             break
                         pool.apply_async(reduce_program_worker, args=workloads[workload_id], callback=reduction_done_callback)
                         workload_id += 1
                     newly_completed_reductions_nb = 0
 
-
     # Save the requested number of failing instances
     json_path = os.path.join(PATH_TO_TMP, f"evalreduction_{design_name}_{num_testcases}.json")
     json.dump({'all_reduction_results': all_reduction_results, 'num_failures': num_failures}, open(json_path, 'w'))
     print('Saved program reduction evaluation results to', json_path)
-
 
 DESIGN_PRETTY_NAMES = {
     'picorv32': 'PicoRV32',
@@ -144,9 +143,7 @@ def plot_eval_reduction(design_names: str, num_testcases: int):
         median_line.set(color='blue', linewidth=1.2, zorder=0)
 
     ax.set_xticklabels(list(map(lambda design_name: DESIGN_PRETTY_NAMES[design_name], design_names)))
-
     ax.set_ylabel('Seconds / k instr')
-
     ax.yaxis.grid(which='major')
 
     plt.tight_layout()

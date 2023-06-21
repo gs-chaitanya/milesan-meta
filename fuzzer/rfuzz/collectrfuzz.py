@@ -58,8 +58,8 @@ def collect_coverage_rfuzz(design_name: str, num_cores: int, num_testcases: int)
     global newly_collected_coverages_size
     global collected_durations
 
-    collected_coverages = []
-    collected_durations = []
+    collected_coverages.clear()
+    collected_durations.clear()
     newly_collected_coverages_size = 0
 
     num_workers = min(num_cores, num_testcases)

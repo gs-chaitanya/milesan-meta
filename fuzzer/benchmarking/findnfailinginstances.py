@@ -50,7 +50,7 @@ def find_n_failing_descriptors(design_name: str, num_testcases: int, num_workers
 
     newly_failing_instances = 0
     newly_finishing_instances = 0
-    all_failing_instances = []
+    all_failing_instances.clear()
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)

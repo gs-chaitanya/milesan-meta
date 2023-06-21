@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
-from common.designcfgs import get_design_march_flags
+from common.designcfgs import get_design_march_flags_nocompressed
 from common.spike import run_trace_all_pcs, run_trace_regs_at_pc_locs, SPIKE_STARTADDR, FPREG_ABINAMES
 
 from cascade.cfinstructionclasses import PlaceholderConsumerInstr, BranchInstruction, PlaceholderProducerInstr0, PlaceholderProducerInstr1, JALRInstruction, PlaceholderPreConsumerInstr, IntStoreInstruction, FloatStoreInstruction
@@ -248,7 +248,7 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False):
     regdump_reqs = gen_regdump_reqs(fuzzerstate)
     flat_instr_objs = list(itertools.chain.from_iterable(fuzzerstate.instr_objs_seq))
     # len(flat_instr_objs)+1: the +1 is to reach the final basic block and thereby overwrite the potential destination register of a jal/jalr
-    regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags(design_name), SPIKE_STARTADDR, regdump_reqs, True, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
+    regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags_nocompressed(design_name), SPIKE_STARTADDR, regdump_reqs, True, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
     if not NO_REMOVE_TMPFILES:
         os.remove(spike_resolution_elfpath)
         del spike_resolution_elfpath
@@ -264,7 +264,7 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False):
         rtl_spike_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'spikedoublecheck', fuzzerstate.instance_to_str(), SPIKE_STARTADDR)
         if NO_REMOVE_TMPFILES:
             print('rtl_spike_elfpath:', rtl_spike_elfpath)
-        rtl_spike_pc_seq, (finalintregvals_spikecheck, finalfpuregvals_spikecheck) = run_trace_all_pcs(fuzzerstate.instance_to_str(), rtl_spike_elfpath, get_design_march_flags(design_name), len(flat_instr_objs)+1, SPIKE_STARTADDR, True,  fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud, fuzzerstate)
+        rtl_spike_pc_seq, (finalintregvals_spikecheck, finalfpuregvals_spikecheck) = run_trace_all_pcs(fuzzerstate.instance_to_str(), rtl_spike_elfpath, get_design_march_flags_nocompressed(design_name), len(flat_instr_objs)+1, SPIKE_STARTADDR, True,  fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud, fuzzerstate)
         if not NO_REMOVE_TMPFILES:
             os.remove(rtl_spike_elfpath)
             del rtl_spike_elfpath

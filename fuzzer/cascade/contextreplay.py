@@ -412,6 +412,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MINSTRET])+1] = RegImmInstruction("addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, fuzzerstate.is_design_64bit, is_rd_nonpickable_ok=True)
 
     fuzzerstate.ctxsv_bb.append(RawDataWord((saved_context.minstret - ((instr_end_addr - (minstret_base_addr - 4 - 4*int(fuzzerstate.is_design_64bit))) // 4)) & 0xffffffff, signed=True))
+
     if fuzzerstate.is_design_64bit:
         fuzzerstate.ctxsv_bb.append(RawDataWord((saved_context.minstret - ((instr_end_addr - minstret_base_addr - 4) // 4)) >> 32, signed=True))
     else:

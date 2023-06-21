@@ -50,7 +50,7 @@ def runsim_verilator(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_P
     is_stop_successful = 'Found a stop request.' in exec_out.stdout
     if not is_stop_successful:
         return False, None
-    
+
     # Retrieve the register values
     ret_intregs = []
     ret_floatregs = []

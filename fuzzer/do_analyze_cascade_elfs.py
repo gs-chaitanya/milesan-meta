@@ -10,7 +10,6 @@ from analyzeelfs.analyze import analyze_elf_prevalence, analyze_elf_dependencies
 from analyzeelfs.plot import plot_cascade_dependencies, plot_cascade_prevalences
 
 import os
-import sys
 
 if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
