@@ -7,10 +7,10 @@
 from cascade.cfinstructionclasses import JALInstruction, SimpleIllegalInstruction, SimpleExceptionEncapsulator, MisalignedMemInstruction, EcallEbreakInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, CSRRegInstruction, PrivilegeDescentInstruction, CSRRegInstructions, Float3Instruction, Float3Instructions
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.randomize.createcfinstr import gen_random_rounding_mode
-from cascade.toleratebugs import is_tolerate_rocket_minstret, is_tolerate_kronos_readbadcsr, is_tolerate_picorv32_readnonimplcsr, is_forbid_vexriscv_csrs
+from cascade.toleratebugs import is_tolerate_rocket_minstret, is_tolerate_kronos_readbadcsr, is_tolerate_picorv32_readnonimplcsr, is_forbid_vexriscv_csrs, is_tolerate_vexriscv_fpu_disabled, is_tolerate_vexriscv_fpu_leak
 from cascade.util import ExceptionCauseVal, IntRegIndivState
 from common.spike import SPIKE_MEDELEG_MASK
-from params.fuzzparams import MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, SIMPLE_ILLEGAL_INSTRUCTION_PROBA, PROBA_PICK_WRONG_FPU, MAX_NUM_PICKABLE_FLOATING_REGS
+from params.fuzzparams import MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, SIMPLE_ILLEGAL_INSTRUCTION_PROBA, PROBA_PICK_WRONG_FPU, MAX_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_REGS
 from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS, INTERESTING_CSRS_INACCESSIBLE_FROM_SUPERVISOR, INTERESTING_CSRS_INACCESSIBLE_FROM_USER
 from copy import copy
@@ -80,6 +80,17 @@ def _get_exceptionoptype_filtered_weights(fuzzerstate):
 # Warning: the privilege state of fuzzerstate is already updated!!
 # @param old_privilege the privilege state before the exception
 def pick_illegal_instruction(is_mtvec, fuzzerstate, old_privilege):
+
+    if "vexriscv" in fuzzerstate.design_name and is_tolerate_vexriscv_fpu_disabled() and not fuzzerstate.is_fpu_activated:
+        rm = gen_random_rounding_mode()
+        frs1, frs2 = random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS), random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS)
+        frd = random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS)
+        return SimpleExceptionEncapsulator(is_mtvec, None, Float3Instruction('fadd.s', 0, 0, 0, 0, False))
+    if "vexriscv" in fuzzerstate.design_name and is_tolerate_vexriscv_fpu_leak() and fuzzerstate.is_fpu_activated:
+        rs1 = random.randrange(MAX_NUM_PICKABLE_REGS)
+        rd = random.randrange(MAX_NUM_PICKABLE_REGS)
+        return SimpleExceptionEncapsulator(is_mtvec, None, CSRRegInstruction('csrrw', rd, rs1, CSR_IDS.FCSR))
+
     if "vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs():
         corrected_simple_illegal_instruction_proba = 1
     else:
@@ -93,11 +104,11 @@ def pick_illegal_instruction(is_mtvec, fuzzerstate, old_privilege):
             rm = gen_random_rounding_mode()
             frs1, frs2 = random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS), random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS)
             frd = random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS)
-            return SimpleExceptionEncapsulator(is_mtvec, None, Float3Instruction(random.choice(Float3Instructions), frd, frs1, frs2, rm, False)) # FUTURE: Add more diversity
+            return SimpleExceptionEncapsulator(is_mtvec, None, Float3Instruction(random.choice(Float3Instructions), frd, frs1, frs2, rm, False))
 
     if old_privilege == PrivilegeStateEnum.MACHINE:
-        if fuzzerstate.design_name == "kronos" and not is_tolerate_kronos_readbadcsr() \
-            or fuzzerstate.design_name == "picorv32" and not is_tolerate_picorv32_readnonimplcsr():
+        if 'kronos' in fuzzerstate.design_name and not is_tolerate_kronos_readbadcsr() \
+            or 'picorv32' in fuzzerstate.design_name and not is_tolerate_picorv32_readnonimplcsr():
             candidate_instructions = [
                 SimpleExceptionEncapsulator(is_mtvec, None, SimpleIllegalInstruction(is_mtvec)),
             ]
@@ -176,7 +187,7 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
     elif exception_op_type == ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION:
         return pick_illegal_instruction(is_mtvec, fuzzerstate, old_privilege)
     elif exception_op_type == ExceptionCauseVal.ID_BREAKPOINT:
-        fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = (fuzzerstate.design_name == "rocket" and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
+        fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = ('rocket' in fuzzerstate.design_name and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
         return SimpleExceptionEncapsulator(is_mtvec, None, EcallEbreakInstruction("ebreak"))
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:
         if DO_ASSERT:
@@ -193,17 +204,17 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
     elif exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE:
         if DO_ASSERT:
             assert old_privilege == PrivilegeStateEnum.USER
-        fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = (fuzzerstate.design_name == "rocket" and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
+        fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = ('rocket' in fuzzerstate.design_name and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
         return SimpleExceptionEncapsulator(is_mtvec, None, EcallEbreakInstruction("ecall"))
     elif exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE:
         if DO_ASSERT:
             assert old_privilege == PrivilegeStateEnum.SUPERVISOR
-        fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = (fuzzerstate.design_name == "rocket" and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
+        fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = ('rocket' in fuzzerstate.design_name and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
         return SimpleExceptionEncapsulator(is_mtvec, None, EcallEbreakInstruction("ecall"))
     elif exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE:
         if DO_ASSERT:
             assert old_privilege == PrivilegeStateEnum.MACHINE
-        fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = (fuzzerstate.design_name == "rocket" and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
+        fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = ('rocket' in fuzzerstate.design_name and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
         return SimpleExceptionEncapsulator(is_mtvec, None, EcallEbreakInstruction("ecall"))
     elif exception_op_type == ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT:
         raise NotImplementedError("ID_INSTRUCTION_PAGE_FAULT not yet supported")

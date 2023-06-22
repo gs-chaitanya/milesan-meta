@@ -86,7 +86,7 @@ def __get_medeleg_mask(design_name: str):
 PROFILED_MEDELEG_MASK = None
 
 def profile_get_medeleg_mask(design_name: str):
-    if design_name == "picorv32":
+    if "picorv32" in design_name:
         return 0 # This design does not support medeleg
     global PROFILED_MEDELEG_MASK
     PROFILED_MEDELEG_MASK = __get_medeleg_mask(design_name)

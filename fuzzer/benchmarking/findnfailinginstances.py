@@ -42,7 +42,7 @@ def _find_n_failing_descriptors_worker(memsize, design_name, process_instance_id
     else:
         return None
 
-def find_n_failing_descriptors(design_name: str, num_testcases: int, num_workers: int, seed_offset: int = 0, authorize_privileges: bool = True):
+def find_n_failing_descriptors(design_name: str, num_testcases: int, num_workers: int, seed_offset: int = 0, can_authorize_privileges: bool = True):
     global callback_lock
     global newly_failing_instances
     global newly_finishing_instances
@@ -60,7 +60,7 @@ def find_n_failing_descriptors(design_name: str, num_testcases: int, num_workers
 
     # First, apply the function to all the workers.
     for _ in range(num_workers):
-        memsize, _, _, num_bbs, _ = gen_new_test_instance(design_name, process_instance_id, authorize_privileges)
+        memsize, _, _, num_bbs, authorize_privileges = gen_new_test_instance(design_name, process_instance_id, can_authorize_privileges)
         pool.apply_async(_find_n_failing_descriptors_worker, args=(memsize, design_name, process_instance_id, num_bbs, authorize_privileges), callback=test_done_callback)
         process_instance_id += 1
 

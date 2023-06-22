@@ -33,8 +33,8 @@ def gen_many_elfs(design_name: str, num_cores: int, num_elfs: int, outdir_path, 
     os.makedirs(outdir_path, exist_ok=True)
 
     # Gen the program descriptors.
-    memsizes, _, randseeds, num_bbss, _ = tuple(zip(*[gen_new_test_instance(design_name, i, True) for i in range(num_elfs)]))
-    workloads = [(i, memsizes[i], design_name, False, randseeds[i], num_bbss[i], True, outdir_path) for i in range(num_elfs)]
+    memsizes, _, randseeds, num_bbss, authorize_privilegess = tuple(zip(*[gen_new_test_instance(design_name, i, True) for i in range(num_elfs)]))
+    workloads = [(i, memsizes[i], design_name, False, randseeds[i], num_bbss[i], authorize_privilegess, outdir_path) for i in range(num_elfs)]
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)

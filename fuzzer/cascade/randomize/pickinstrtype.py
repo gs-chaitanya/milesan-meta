@@ -44,8 +44,6 @@ def forbid_vexriscv_ops(keys_and_weights_dict):
     keys_and_weights_dict_ret["fnmsub.d"] = 0
     keys_and_weights_dict_ret["fmsub.d"] = 0
 
-    assert is_tolerate_vexriscv_imprecise_fcvt() + is_tolerate_vexriscv_fmin() + is_tolerate_vexriscv_double_to_float() + is_tolerate_vexriscv_dependent_single_precision() + is_tolerate_vexriscv_dependent_fle_feq_ret1() + is_tolerate_vexriscv_dependent_flt_ret0() + is_tolerate_vexriscv_sqrt() + is_tolerate_vexriscv_muldiv_conversion()  <= 1
-
     if is_tolerate_vexriscv_imprecise_fcvt() or is_tolerate_vexriscv_fmin() or is_tolerate_vexriscv_double_to_float() or is_tolerate_vexriscv_dependent_single_precision() or is_tolerate_vexriscv_dependent_fle_feq_ret1() or is_tolerate_vexriscv_dependent_flt_ret0() or is_tolerate_vexriscv_sqrt() or is_tolerate_vexriscv_muldiv_conversion():
         keys_and_weights_dict_ret["fcvt.w.s"] = 0
         keys_and_weights_dict_ret["fcvt.wu.s"] = 0

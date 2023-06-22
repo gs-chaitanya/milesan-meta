@@ -116,3 +116,4 @@ PROBA_CONSUME_PRODUCED1_SAME = 0.05 # The proba to output the same register as P
 
 SIMPLE_ILLEGAL_INSTRUCTION_PROBA = 0.01
 PROBA_PICK_WRONG_FPU = 0.0 # Having this being zero eases the analysis of the program since we can try to simply remove all the FPU activations/deactivations to ensure that dumping is possible. More sophisticated methods could be implemented.
+PROBA_AUTHORIZE_PRIVILEGES = 0.05

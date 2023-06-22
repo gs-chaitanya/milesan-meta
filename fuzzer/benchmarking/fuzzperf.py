@@ -26,10 +26,10 @@ def _time_measurement_worker(design_name: str, worker_randseed: int, expected_ru
     round_id = 0
     while cumul_time_seconds_spent_in_gen_bbs + cumul_time_seconds_spent_in_spike_resol + cumul_time_seconds_spent_in_gen_elf + cumul_time_seconds_spent_in_rtl_sim < expected_run_duration_seconds_per_worker:
         curr_seed = 1000000 * worker_randseed + round_id
-        memsize, _, _, nmax_bbs, _ = gen_new_test_instance(design_name, curr_seed, True)
+        memsize, _, _, nmax_bbs, authorize_privileges = gen_new_test_instance(design_name, curr_seed, True)
 
         try:
-            time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf, time_seconds_spent_in_rtl_sim = run_rtl(memsize, design_name, curr_seed, nmax_bbs, True, False)
+            time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf, time_seconds_spent_in_rtl_sim = run_rtl(memsize, design_name, curr_seed, nmax_bbs, authorize_privileges, False)
         except Exception as e:
             print('Exception in time-measuring process with design', design_name, 'randseed', worker_randseed, 'and round id', round_id, ':', e)
             continue

@@ -6,7 +6,6 @@
 
 from params.runparams import PATH_TO_TMP
 from cascade.reduce import reduce_program
-from cascade.fuzzfromdescriptor import gen_new_test_instance
 from common.profiledesign import profile_get_medeleg_mask
 from common.spike import calibrate_spikespeed
 
@@ -37,12 +36,9 @@ def reduction_done_callback(ret):
 
 def reduce_program_worker(size: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
     try:
-        try:
-            return reduce_program(size, design_name, randseed, nmax_bbs, authorize_privileges, find_pillars, quiet, target_dir, hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_instr, hint_right_bound_instr, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr, check_pc_spike_again)
-        except Exception as e:
-            print(f"Exception in reduce_program_worker for tuple: ({size}, '{design_name}', {randseed}, {nmax_bbs})")
-            return None
+        return reduce_program(size, design_name, randseed, nmax_bbs, authorize_privileges, find_pillars, quiet, target_dir, hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_instr, hint_right_bound_instr, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr, check_pc_spike_again)
     except Exception as e:
+        print(f"Exception in reduce_program_worker for tuple: ({size}, '{design_name}', {randseed}, {nmax_bbs})")
         return None
 
 def eval_reduction(design_name: str, num_testcases: int, num_workers: int):

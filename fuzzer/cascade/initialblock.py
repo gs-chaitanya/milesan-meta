@@ -6,7 +6,7 @@
 
 from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS
-from cascade.toleratebugs import is_forbid_vexriscv_csrs, is_tolerate_picorv32_writehpm
+from cascade.toleratebugs import is_forbid_vexriscv_csrs
 from cascade.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, R12DInstruction, IntLoadInstruction, FloatLoadInstruction, CSRRegInstruction
 from cascade.randomize.createcfinstr import create_instr
 from cascade.randomize.pickisainstrclass import ISAInstrClass
@@ -48,7 +48,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
             curr_addr += 4
 
         # Write 0 to mtvec and stvec to uniformize across designs. This must be done in initialblock to facilitate the analysis.
-        if fuzzerstate.design_name != 'picorv32' or is_tolerate_picorv32_writehpm():
+        if fuzzerstate.design_name != 'picorv32':
             fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MTVEC))
             curr_addr += 4
         if fuzzerstate.design_has_supervisor_mode:

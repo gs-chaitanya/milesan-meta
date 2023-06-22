@@ -57,14 +57,16 @@ def gen_fpufsm_instrs(fuzzerstate):
             return [CSRRegInstruction("csrrc", rd, FPU_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
 
     # If the FPU is off, then we turn the FPU on.
-    if not fuzzerstate.is_fpu_activated:
+    if fuzzerstate.is_fpu_activated:
         # Else, we arbitrate randomly between changing the rounding mode and turning off the FPU
         do_change_rounding_mode = random.random() < fuzzerstate.proba_change_rm
         if do_change_rounding_mode:
             return create_rmswitch_instrobjs(fuzzerstate)
         else:
+            fuzzerstate.is_fpu_activated = False
             rd = fuzzerstate.intregpickstate.pick_int_outputreg()
             return [CSRRegInstruction("csrrc", rd, FPU_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
     else:
-        rd = 0 # FUTURE WARL
+        rd = 0 # WARL
+        fuzzerstate.is_fpu_activated = True
         return [CSRRegInstruction("csrrs", rd, FPU_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]

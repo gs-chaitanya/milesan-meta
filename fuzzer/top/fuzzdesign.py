@@ -24,7 +24,7 @@ def test_done_callback(arg):
     with callback_lock:
         newly_finished_tests += 1
 
-def fuzzdesign(design_name: str, num_cores: int, seed_offset: int, authorize_privileges: bool):
+def fuzzdesign(design_name: str, num_cores: int, seed_offset: int, can_authorize_privileges: bool):
     global newly_finished_tests
     global callback_lock
     global all_times_to_detection
@@ -48,7 +48,7 @@ def fuzzdesign(design_name: str, num_cores: int, seed_offset: int, authorize_pri
     process_instance_id = seed_offset
     # First, apply the function to all the workers.
     for _ in range(num_workers):
-        memsize, _, _, num_bbs, _ = gen_new_test_instance(design_name, process_instance_id, authorize_privileges)
+        memsize, _, _, num_bbs, authorize_privileges = gen_new_test_instance(design_name, process_instance_id, can_authorize_privileges)
         pool.apply_async(fuzz_single_from_descriptor, args=(memsize, design_name, process_instance_id, num_bbs, authorize_privileges, None, True), callback=test_done_callback)
         process_instance_id += 1
 
@@ -58,7 +58,7 @@ def fuzzdesign(design_name: str, num_cores: int, seed_offset: int, authorize_pri
         with callback_lock:
             if newly_finished_tests > 0:
                 for _ in range(newly_finished_tests):
-                    memsize, _, _, num_bbs, _ = gen_new_test_instance(design_name, process_instance_id, authorize_privileges)
+                    memsize, _, _, num_bbs, authorize_privileges = gen_new_test_instance(design_name, process_instance_id, can_authorize_privileges)
                     pool.apply_async(fuzz_single_from_descriptor, args=(memsize, design_name, process_instance_id, num_bbs, authorize_privileges, None, True), callback=test_done_callback)
                     process_instance_id += 1
                 newly_finished_tests = 0

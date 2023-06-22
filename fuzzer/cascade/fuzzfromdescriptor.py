@@ -7,6 +7,7 @@
 from common.timeout import timeout
 from common.designcfgs import get_design_boot_addr
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
+from params.fuzzparams import PROBA_AUTHORIZE_PRIVILEGES
 from cascade.basicblock import gen_basicblocks
 from cascade.fuzzsim import SimulatorEnum, runtest_simulator
 from cascade.genelf import gen_elf_from_bbs
@@ -22,8 +23,8 @@ LOG2_MEMSIZE_UPPERBOUND = 20
 NUM_MAX_BBS_UPPERBOUND = 1000
 
 # Creates a new program descriptor.
-def gen_new_test_instance(design_name: str, randseed: int, authorize_privileges: bool):
-    return random.randrange(1 << 14, 1 << LOG2_MEMSIZE_UPPERBOUND), design_name, randseed, random.randrange(20, NUM_MAX_BBS_UPPERBOUND), authorize_privileges
+def gen_new_test_instance(design_name: str, randseed: int, can_authorize_privileges: bool):
+    return random.randrange(1 << 14, 1 << LOG2_MEMSIZE_UPPERBOUND), design_name, randseed, random.randrange(20, NUM_MAX_BBS_UPPERBOUND), can_authorize_privileges and random.random() < PROBA_AUTHORIZE_PRIVILEGES
 
 # The main function for a single fuzzer run. It creates a new fuzzer state, populates it with basic blocks, and then runs the spike resolution. It does not run the RTL simulation.
 # @return (fuzzerstate, rtl_elfpath, expected_regvals: list) where expected_regval is a list of num_pickable_regs-1 expected reg values (we ignore x0)
