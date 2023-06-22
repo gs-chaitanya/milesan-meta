@@ -1,4 +1,4 @@
-# Copyright 2023 Flavien Solt & Tobias Kovats, ETH Zurich.
+# Copyright 2023 Flavien Solt, ETH Zurich.
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
@@ -9,13 +9,6 @@ if { [info exists ::env(TOP_MODULE)] }       { set TOP_MODULE $::env(TOP_MODULE)
 yosys read_verilog -defer -sv $VERILOG_INPUT
 yosys hierarchy -top $TOP_MODULE -check
 yosys proc
-yosys pmuxtree
 yosys opt -purge
-
-yosys mark_resets
-yosys mux_probes
-yosys port_mux_probes
-
-yosys opt_clean
 
 yosys write_verilog -sv -noattr $VERILOG_OUTPUT
