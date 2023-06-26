@@ -22,3 +22,5 @@
 [submodule "tools/riscv-isa-sim"]
 	path = tools/riscv-isa-sim
 	url = https://github.com/riscv-software-src/riscv-isa-sim.git
+[submodule "tools/cellift-yosys"]
+	url = https://github.com/flaviens/disco-yosys.git
