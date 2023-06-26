@@ -9,7 +9,7 @@ import subprocess
 import threading
 
 def capture_process_output(cmd, timeout=None):
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, shell=True)
 
     # Flag to indicate if the process has finished
     process_finished = threading.Event()

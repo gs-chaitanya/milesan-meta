@@ -5,33 +5,45 @@
 # This script measures the simulator coverage of Cascade and DifuzzRTL.
 
 from params.runparams import PATH_TO_TMP
-from fuzzer.analyzeelfs.genmanyelfs import gen_many_elfs
-from difuzzrtl.difuzzmodelsim import collect_coverage_modelsim_difuzzrtl_nomerge, merge_and_extract_coverages_modelsim
+from analyzeelfs.genmanyelfs import gen_many_elfs
+from difuzzrtl.difuzzmodelsim import collect_coverage_modelsim_difuzzrtl_nomerge, merge_coverage_modelsim_difuzzrtl
+from difuzzrtl.gendifuzzelfs import gen_many_difuzzrtl_elfs
+from common.profiledesign import profile_get_medeleg_mask
+from common.spike import calibrate_spikespeed
 
+import multiprocessing as mp
 import os
-import sys
-
-# sys.argv[1]: Design name.
-# sys.argv[2]: Number of workers.
 
 if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
-    num_workers = int(sys.argv[2])
+    num_workers = max(int(os.getenv('CASCADE_JOBS', 160)) // 4, 1)
     path_to_cascade_elfs = os.path.join(PATH_TO_TMP, 'manyelfs_modelsim')
 
-    num_elfs_to_produce = 10000
+    num_elfs_to_produce = 10000 # Heuristic, should ensure that we have enough to cover all instructions / durations
+
+    target_numinstrs = 1_100_000
+
+    calibrate_spikespeed()
+    profile_get_medeleg_mask('rocket')
 
     # Cascade
+
     # Generate enough ELFs
-    gen_many_elfs(sys.argv[1], num_workers, num_elfs_to_produce, path_to_cascade_elfs)
+    # gen_many_elfs('rocket', 250, num_elfs_to_produce, path_to_cascade_elfs) # TODO Uncomment
+    collect_coverage_modelsim_difuzzrtl_nomerge(False, 0, 'rocket', num_workers, target_numinstrs, None)
 
-    all_coverage_paths_numinstrs_tuples = collect_coverage_modelsim_difuzzrtl_nomerge(True, 0, 'rocket', num_workers, TARGET_NUM_INSTRS)
-    
+    # DifuzzRTL
+
+    # Generate the DifuzzRTL ELFs
+    # gen_many_difuzzrtl_elfs() # TODO Uncomment
+    collect_coverage_modelsim_difuzzrtl_nomerge(True, 0, 'rocket', num_workers, target_numinstrs, None)
+
     # Run merging the coverage
-    test_merge_coverage_modelsim_difuzzrtl(True, 0, TARGET_NUM_INSTRS, all_coverage_paths_numinstrs_tuples[0], all_coverage_paths_numinstrs_tuples[1])
-
+    workloads = [(False, 0, target_numinstrs), (True, 0, target_numinstrs)]
+    with mp.Pool(2) as pool:
+        pool.starmap(merge_coverage_modelsim_difuzzrtl, workloads)
 
     # benchmark_collect_construction_performance(int(sys.argv[1]))
     # plot_construction_performance()

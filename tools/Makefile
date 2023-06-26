@@ -10,7 +10,7 @@ CARGOEXEC=$(CARGO_HOME)/bin/cargo
 
 LOGFILES=log
 
-installtools: install_rust install_morty install_bender install_fusesoc install_verilator install_sv2v install_cascade_python install_yosys install_miniconda install_toolchain install_spike install_makeelf
+installtools: install_verilator install_morty install_rust install_bender install_fusesoc install_sv2v install_cascade_python install_yosys install_miniconda install_toolchain install_spike install_makeelf
 
 install_verilator: | log
 	( unset VERILATOR_ROOT && cd verilator && autoconf && ./configure --prefix=$(PREFIX_CASCADE) && make -j$(CASCADE_JOBS) && make install ) >$(LOGFILES)/verilator.log 2>&1
@@ -24,19 +24,17 @@ $(PREFIX_CASCADE)/bin/stack: | log
 install_yosys: | log
 	( cd cascade-yosys && make config-gcc && make PREFIX=$(PREFIX_CASCADE) -j$(CASCADE_JOBS) && make PREFIX=$(PREFIX_CASCADE) install ) >$(LOGFILES)/yosys.log 2>&1
 
-install_rust: $(RUSTEXEC) | log
+install_rust: $(RUSTEXEC)
 
 install_cascade_python: $(CASCADE_PYTHON_VENV) | log
 	(  \
 		set -e; \
 		$(CASCADE_PYTHON_VENV)/bin/pip install -r ../design-processing/python-requirements.txt; \
-		$(CASCADE_PYTHON_VENV)/bin/pip install -r ibex-python-requirements.txt; \
-	    $(CASCADE_PYTHON_VENV)/bin/pip install -r ../external-dependencies/cascade-opentitan/python-requirements.txt; \
 		$(CASCADE_PYTHON_VENV)/bin/pip install ninja==1.10.2 \
 	)  >$(LOGFILES)/cascade-python.log 2>&1
 
 $(RUSTEXEC): | log
-	( CARGO_HOME=\$CARGO_HOME RUSTUP_HOME=\$RUSTUP_HOME curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y ) >$(LOGFILES)/rust.log 2>&1 | log
+	( CARGO_HOME=\$CARGO_HOME RUSTUP_HOME=\$RUSTUP_HOME curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y ) >$(LOGFILES)/rust.log 2>&1
 
 install_morty: $(RUSTEXEC) | log
 ifdef DO_INSTALL_OLD_VERSIONS
@@ -58,10 +56,10 @@ install_fusesoc: $(CASCADE_PYTHON_VENV) | log
 install_miniconda: $(CASCADE_PYTHON_VENV) | log
 	mkdir -p miniconda
 	( wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda/miniconda.sh \
-		&& cd miniconda/ && bash miniconda.sh -u -b -p $(CONDA_PREFIX) \
-		&& $(CONDA_PREFIX)/bin/conda update -y -n base -c defaults conda \
-		&& $(CONDA_PREFIX)/bin/conda config --add channels conda-forge \
-		&& $(CONDA_PREFIX)/bin/conda config --set channel_priority strict \
+		&& cd miniconda/ && bash miniconda.sh -u -b -p $(PREFIX_CASCADE)/miniconda \
+		&& $(PREFIX_CASCADE)/miniconda/bin/conda update -y -n base -c defaults conda \
+		&& $(PREFIX_CASCADE)/miniconda/bin/conda config --add channels conda-forge \
+		&& $(PREFIX_CASCADE)/miniconda/bin/conda config --set channel_priority strict \
 		) >$(LOGFILES)/miniconda.log 2>&1
 
 install_toolchain: $(PREFIX_CASCADE)/riscv | log
@@ -82,10 +80,9 @@ cleantools:
 	@echo "If so, press enter. Otherwise, press ^C."
 	@echo -n "  >  "
 	@read line
-	set -x; for x in riscv-isa-sim bender morty riscv-gnu-toolchain sv2v verilator yosys-ift gcc; do ( cd $$x && git clean -xfd ); done
+	set -x; for x in riscv-isa-sim bender morty riscv-gnu-toolchain sv2v verilator; do ( cd $$x && git clean -xfd ); done
 	rm -rf $(PREFIX_CASCADE)
 	rm -f $(LOGFILES)/*.log
 
 $(PREFIX_CASCADE)/riscv log:
 	mkdir -p $@
-

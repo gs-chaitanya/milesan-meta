@@ -9,7 +9,7 @@
 # sys.argv[3]: offset for seed (to avoid running the fuzzing on the same instances over again)
 # sys.argv[4]: authorize privileges (by default 1)
 
-from top.fuzzdesigntiming import measure_time_to_bug
+from top.fuzzdesigntiming import measure_time_to_bug, plot_bug_timings
 from cascade.toleratebugs import tolerate_bug_for_bug_timing
 
 from params.runparams import PATH_TO_TMP
@@ -63,17 +63,22 @@ if __name__ == '__main__':
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     NUM_WORKERS = 64
-    NUM_REPS = 1 # TODO 10
+    NUM_REPS = 10
 
-    for bug_name, design_name in bug_designs.items():
-        tolerate_bug_for_bug_timing(design_name, bug_name, True)
-        ret = measure_time_to_bug(design_name, NUM_WORKERS, NUM_REPS)
-        tolerate_bug_for_bug_timing(design_name, bug_name, False)
-        
-        retpath = os.path.join(PATH_TO_TMP, f"bug_timings_{bug_name}_{NUM_WORKERS}_{NUM_REPS}.json")
-        json.dump(ret, open(retpath, "w"))
-        print('Saved bug timing results to', retpath)
+    # Measure the time to detect each bug.
 
+    # TODO Uncomment
+    # for bug_name, design_name in bug_designs.items():
+    #     tolerate_bug_for_bug_timing(design_name, bug_name, True)
+    #     ret = measure_time_to_bug(design_name, NUM_WORKERS, NUM_REPS)
+    #     tolerate_bug_for_bug_timing(design_name, bug_name, False)
+
+    #     retpath = os.path.join(PATH_TO_TMP, f"bug_timings_{bug_name}_{NUM_WORKERS}_{NUM_REPS}.json")
+    #     json.dump(ret, open(retpath, "w"))
+    #     print('Saved bug timing results to', retpath)
+
+    # Plot these measurements.
+    plot_bug_timings(NUM_WORKERS, NUM_REPS)
 
 else:
     raise Exception("This module must be at the toplevel.")

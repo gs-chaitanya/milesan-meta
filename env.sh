@@ -68,6 +68,7 @@ elif [[ "${HOSTNAME}" == *"cn106"* ]]; # ETHZ cn106
 then
     # Example customization
     export CASCADE_JOBS=250
+    export CASCADE_DOCKER_MNT_DIR=/scratch/"${USER}"/shareddir
     export MODELSIM_MAX_INSTANCES=256
 
     ulimit -n 10000 # many FD's

@@ -2,8 +2,8 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from common.runparams import DO_ASSERT, NO_REMOVE_TMPFILES, PATH_TO_TMP
-from common.spike.spikepuppet import SPIKE_STARTADDR, get_spike_timeout_seconds
+from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES, PATH_TO_TMP
+from common.spike import SPIKE_STARTADDR, get_spike_timeout_seconds
 import os
 import subprocess
 from pathlib import Path
@@ -38,14 +38,20 @@ def countinstrs_cascade_fromelf(elf_id: int, elfpath: str, rvflags: str, final_a
 def countinstrs_cascade(elf_id: int) -> int:
     rvflags = 'rv64g'
     design_name = 'rocket'
-    elfpath = os.path.join(PATH_TO_TMP, 'elfsfordifuzzrtl', f"{design_name}_{elf_id}.elf")
-    final_addr_path = os.path.join(PATH_TO_TMP, 'elfsfordifuzzrtl', f"{design_name}_{elf_id}_finaladdr.txt")
+    # elfpath = os.path.join(PATH_TO_TMP, 'manyelfs_modelsim', f"{design_name}_{elf_id}.elf")
+    # final_addr_path = os.path.join(PATH_TO_TMP, 'manyelfs_modelsim', f"{design_name}_{elf_id}_finaladdr.txt")
 
-    with open(final_addr_path, 'r') as file:
+    # with open(final_addr_path, 'r') as file:
+    #     content = file.read()
+    # final_addr = SPIKE_STARTADDR + int(content, 16)
+
+    # return countinstrs_cascade_fromelf(elf_id, elfpath, rvflags, final_addr)
+
+    # Actually, we just take the pre-computed number of instructions
+    num_instrs_path = os.path.join(PATH_TO_TMP, 'manyelfs_modelsim', f"{design_name}_{elf_id}_numinstrs.txt")
+    with open(num_instrs_path, 'r') as file:
         content = file.read()
-    final_addr = SPIKE_STARTADDR + int(content, 16)
-
-    return countinstrs_cascade_fromelf(elf_id, elfpath, rvflags, final_addr)
+    return int(content, 16)
 
 def countinstrs_difuzzrtl(elf_id: int) -> int:
     rvflags = 'rv64g'

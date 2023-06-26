@@ -20,7 +20,7 @@ import time
 FUZZ_USE_MODELSIM = False
 
 LOG2_MEMSIZE_UPPERBOUND = 20
-NUM_MAX_BBS_UPPERBOUND = 1000
+NUM_MAX_BBS_UPPERBOUND = 100
 
 # Creates a new program descriptor.
 def gen_new_test_instance(design_name: str, randseed: int, can_authorize_privileges: bool):

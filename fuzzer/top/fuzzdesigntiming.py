@@ -4,12 +4,12 @@
 
 # This module is responsible to measure the time required to find a bug, given some behavior tolerances and a specific design name
 
+from params.runparams import PATH_TO_TMP
 from common.timeout import timeout
 from common.profiledesign import profile_get_medeleg_mask
 from common.spike import calibrate_spikespeed
 from cascade.fuzzfromdescriptor import gen_new_test_instance, run_rtl
 
-import traceback
 import threading
 import time
 
@@ -35,7 +35,6 @@ def run_rtl_single_for_timebugdetection(memsize: int, design_name: str, randseed
         run_rtl(memsize, design_name, randseed, nmax_bbs, authorize_privileges, False)
         return None
     except Exception as e:
-        traceback.print_exc()
         print(f"Failed run_rtl_single_for_timebugdetection for params memsize: `{memsize}`, design_name: `{design_name}`, check_pc_spike_again: `{False}`, randseed: `{randseed}`, nmax_bbs: `{nmax_bbs}` -- ({memsize}, design_name, {randseed}, {nmax_bbs})")
         print(e)
         if start_time is None:
@@ -108,3 +107,50 @@ def measure_time_to_bug(design_name: str, num_cores: int, num_reps: int):
     # This code is only reached if we are measuring the time to bug detection
     print(f"Times to bug detection (seconds): {all_times_to_detection}")
     return all_times_to_detection
+
+
+
+def plot_bug_timings(num_workers: int, num_reps: int):
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as mticker
+    import numpy as np
+    import json
+    import os
+
+    bug_names = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9', 'v10', 'v11', 'v12', 'v13', 'v14', 'v15', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'k1', 'k2', 'k3', 'k4', 'k5', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'b1', 'b2', 'y1', 'r1']
+    all_series = []
+    for bug_name in bug_names:
+        jsonpath = os.path.join(PATH_TO_TMP, f"bug_timings_{bug_name}_{num_workers}_{num_reps}.json")
+        new_series = json.load(open(jsonpath, 'r'))
+        all_series.append(new_series)
+
+    fig, ax = plt.subplots(figsize=(15, 2))
+    boxplot = ax.boxplot(all_series, vert=True, showfliers=False)
+
+    # Customize the colors
+    for median_line in boxplot['medians']:
+        median_line.set(color='red', linewidth=1.2, zorder=0)
+
+    ax.set_xticklabels(list(map(lambda s: s.upper(), bug_names)))
+    ax.set_ylabel('Time to discovery (s)')
+
+    # Make the y axis logarithmic
+    ax.set_yscale('log')
+
+    # Add y ticks at 10, 100 and 1000
+    ax.set_yticks([1, 10, 100, 1000])
+    ax.yaxis.set_major_formatter(mticker.ScalarFormatter())
+
+    # Straddle the x ticks
+    for i, tick in enumerate(ax.xaxis.get_ticklabels()):
+        if i % 2 == 0:
+            tick.set_y(0)
+        else:
+            tick.set_y(0-0.05)
+
+    ax.yaxis.grid(which='major')
+
+    plt.tight_layout()
+
+    print('Saving figure to', os.path.join(PATH_TO_TMP, 'bug_detection_timings.png'))
+    plt.savefig(os.path.join(PATH_TO_TMP, 'bug_detection_timings.png'), dpi=300)

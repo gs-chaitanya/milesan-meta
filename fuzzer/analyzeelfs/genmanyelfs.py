@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 # @param in_tuple: instance_id: int, memsize: int, design_name: str, check_pc_spike_again: bool, randseed: int, nmax_bbs: int, authorize_privileges: bool, outdir_path: str
 def __gen_elf_worker(in_tuple):
-    instance_id, memsize, design_name, check_pc_spike_again, randseed, nmax_bbs, authorize_privileges, outdir_path = in_tuple
+    instance_id, memsize, design_name, randseed, nmax_bbs, authorize_privileges, check_pc_spike_again, outdir_path = in_tuple
     fuzzerstate, elfpath, _, _, _, _ = gen_fuzzerstate_elf_expectedvals(memsize, design_name, randseed, nmax_bbs, authorize_privileges, check_pc_spike_again)
     # Move the file from elfpath to outdir_path, and name it after the design name and instance id.
     shutil.move(elfpath, os.path.join(outdir_path, f"{design_name}_{instance_id}.elf"))
@@ -25,6 +25,18 @@ def __gen_elf_worker(in_tuple):
     # Write the end address (where spike will fail), for further analysis.
     with open(os.path.join(outdir_path, f"{design_name}_{instance_id}_finaladdr.txt"), "w") as f:
         f.write(hex(fuzzerstate.final_bb_base_addr))
+
+    # Count the instructions
+    num_instrs = len(fuzzerstate.final_bb)
+    for bb in fuzzerstate.instr_objs_seq:
+        num_instrs += len(bb)
+    with open(os.path.join(outdir_path, f"{design_name}_{instance_id}_numinstrs.txt"), "w") as f:
+        f.write(hex(num_instrs))
+
+    # Save the tuple for debug purposes
+    with open(os.path.join(outdir_path, f"{design_name}_{instance_id}_tuple.txt"), "w") as f:
+        f.write('(' + ', '.join(map(str, [memsize, design_name, randseed, nmax_bbs, authorize_privileges])) + ')')
+
 
 def gen_many_elfs(design_name: str, num_cores: int, num_elfs: int, outdir_path, verbose: bool = True):
     random.seed(0)
@@ -34,7 +46,7 @@ def gen_many_elfs(design_name: str, num_cores: int, num_elfs: int, outdir_path, 
 
     # Gen the program descriptors.
     memsizes, _, randseeds, num_bbss, authorize_privilegess = tuple(zip(*[gen_new_test_instance(design_name, i, True) for i in range(num_elfs)]))
-    workloads = [(i, memsizes[i], design_name, False, randseeds[i], num_bbss[i], authorize_privilegess, outdir_path) for i in range(num_elfs)]
+    workloads = [(i, memsizes[i], design_name, randseeds[i], num_bbss[i], authorize_privilegess[i], False, outdir_path) for i in range(num_elfs)]
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
