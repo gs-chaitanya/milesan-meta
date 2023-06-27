@@ -5,6 +5,7 @@ if "CASCADE_ENV_SOURCED" not in os.environ:
     raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
 PATH_TO_TMP = os.path.join(os.environ['CASCADE_DATADIR'], 'python-tmp')
+PATH_TO_FIGURES = os.environ['CASCADE_PATH_TO_FIGURES']
 
 DO_ASSERT = True
 DO_EXPENSIVE_ASSERT = False # More expensive assertions

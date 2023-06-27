@@ -6,13 +6,11 @@ import re
 CASCADE_NUM_INITIAL_INSTR = 5 + 64 # 64 instructions in the initial block + 5 instructions in the spike bootrom
 CASCADE_NUM_FINAL_INSTR = 105 # 105 instructions in the final block
 
-# PATH_TO_DIFFUZZRTL_ELFS = '/scratch/dockerdifuzzrtl/difuzz-rtl/out_rocket_state/illegal/elf/'
-PATH_TO_DIFFUZZRTL_ELFS = '/data/flsolt/savedifuzz/out_rocket_state/illegal/elf/'
-
 def get_instance_elfpath(is_difuzzrtl: bool, design_name: str, instance_id: int):
     if is_difuzzrtl:
         assert design_name == 'rocket', "Only Rocket is supported for difuzz-rtl."
-        return os.path.join(PATH_TO_DIFFUZZRTL_ELFS, f"id_{instance_id}.elf")
+        path_to_diffuzzrtl_elfs = os.environ['CASCADE_PATH_TO_DIFUZZRTL_ELFS']
+        return os.path.join(path_to_diffuzzrtl_elfs, f"id_{instance_id}.elf")
     else:
         elfdir_path = os.path.join(PATH_TO_TMP, 'elfsfordifuzzrtl')
         return os.path.join(elfdir_path, f"{design_name}_{instance_id}.elf")
