@@ -72,7 +72,7 @@ then
     export MODELSIM_MAX_INSTANCES=256
 
     ulimit -n 10000 # many FD's
-    export CASCADE_DATADIR=/scratch/"${USER}"/data
+    export CASCADE_DATADIR=/scratch/"${USER}"/data/python-tmp
     export MODELSIM_VERSION=
     export MODELSIM_WORKROOT=/scratch/"${USER}"/modelsimfuzz
 elif [[ "${HOSTNAME}" == *"cn107"* ]]; # ETHZ cn107
