@@ -77,6 +77,7 @@ def analyze_elf_prevalence(is_difuzzrtl: bool, num_instances: int):
     rates_reached = [num_effective_instructions_list[i] / (num_overhead_instructions_list[i] + num_effective_instructions_list[i]) for i in range(len(num_effective_instructions_list))]
 
     retpath = os.path.join(PATH_TO_TMP, f"prevalences_{int(is_difuzzrtl)}.json")
+    os.makedirs(os.path.dirname(retpath), exist_ok=True)
     json.dump(rates_reached, open(retpath, "w"))
     print('Saved prevalence results to', retpath)
     return retpath
@@ -96,6 +97,7 @@ def analyze_elf_symbols(num_instances: int):
     rates_reached = [max_reached_lsymbols[i] / max_available_lsymbols[i] for i in range(len(max_available_lsymbols))]
 
     retpath = os.path.join(PATH_TO_TMP, f"completions_{int(is_difuzzrtl)}.json")
+    os.makedirs(os.path.dirname(retpath), exist_ok=True)
     json.dump(rates_reached, open(retpath, "w"))
     print('Saved completion results to', retpath)
     return retpath
@@ -118,6 +120,7 @@ def analyze_elf_dependencies(is_difuzzrtl: bool, design_name: str, num_instances
     instr_ages_cfonly = [item for sublist in instr_ages_cfonly for item in sublist]
 
     retpath = os.path.join(PATH_TO_TMP, f"dependencies_{int(is_difuzzrtl)}.json")
+    os.makedirs(os.path.dirname(retpath), exist_ok=True)
     json.dump(
         {
             'instr_ages': instr_ages,
