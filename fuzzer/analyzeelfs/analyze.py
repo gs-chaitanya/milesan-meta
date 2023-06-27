@@ -30,6 +30,7 @@ def spike_get_run_log(is_difuzzrtl: bool, design_name: str, instance_id: int, pa
 def age_analysis_worker(is_difuzzrtl: bool, design_name: str, instance_id: int):
     elfpath = get_instance_elfpath(is_difuzzrtl, design_name, instance_id)
     if not os.path.exists(elfpath):
+        print('ELF not found', elfpath) # TODO Remove
         return None, None
     finaladdr = get_instance_finaladdr(is_difuzzrtl, design_name, instance_id, elfpath)
     spike_log = spike_get_run_log(is_difuzzrtl, design_name, instance_id, elfpath, finaladdr)

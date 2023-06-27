@@ -21,9 +21,9 @@ if __name__ == '__main__':
     dependencies_json = analyze_elf_dependencies(True, 'rocket', NUM_ELFS)
     symbols_json = analyze_elf_symbols(NUM_ELFS)
 
-    plot_difuzzrtl_completions(symbols_json)
     plot_difuzzrtl_prevalences(prevalence_json)
     plot_difuzzrtl_instrages(dependencies_json)
+    plot_difuzzrtl_completions(symbols_json)
 
 else:
     raise Exception("This module must be at the toplevel.")
