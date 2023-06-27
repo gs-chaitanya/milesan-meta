@@ -7,6 +7,7 @@
 
 from params.runparams import DO_ASSERT
 from makeelf.elf import *
+import os
 import subprocess
 
 # @param inbytes the bytes to put into the ELF file. Be careful that they must be in little endian format already.
@@ -35,9 +36,9 @@ def gen_elf(inbytes: bytes, start_addr: int, section_addr: int, destination_path
     # Relocate the section
     if section_addr is not None:
         if is_64bit:
-            subprocess.run(['riscv32-unknown-elf-objcopy', '--change-section-address', f".text.init={hex(section_addr)}", '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path])
+            subprocess.run([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objcopy", '--change-section-address', f".text.init={hex(section_addr)}", '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path])
         else:
-            subprocess.run(['riscv32-unknown-elf-objcopy', '--change-section-address', f".text.init={hex(section_addr)}", destination_path])
+            subprocess.run([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objcopy", '--change-section-address', f".text.init={hex(section_addr)}", destination_path])
     else:
         if is_64bit:
-            subprocess.run(['riscv32-unknown-elf-objcopy', '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path])
+            subprocess.run([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objcopy", '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path])

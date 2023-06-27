@@ -40,6 +40,8 @@ export CASCADE_PYTHON_COMMON=$CASCADE_DESIGN_PROCESSING_ROOT/common/python_scrip
 # If you would like to customize some of the settings, add another
 # $USER test clause like the one below.
 
+export CASCADE_RISCV_BITWIDTH=64
+
 # Modelsim
 export MODELSIM_VERSION=questa-2022.3
 export PATH_TO_INSTANCELIMIT_PY=/data/flsolt/gits/instancelimit/instancelimit.py
@@ -70,6 +72,7 @@ then
     export CASCADE_JOBS=250
     export CASCADE_DOCKER_MNT_DIR=/scratch/"${USER}"/shareddir
     export MODELSIM_MAX_INSTANCES=256
+    export CASCADE_RISCV_BITWIDTH=32
 
     ulimit -n 10000 # many FD's
     export CASCADE_DATADIR=/scratch/"${USER}"/data/python-tmp

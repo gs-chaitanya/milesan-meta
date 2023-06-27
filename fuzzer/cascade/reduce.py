@@ -691,7 +691,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             if not quiet:
                 Path(target_dir).mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(rtl_elfpath_larger, os.path.join(target_dir, 'app_buggy.elf'))
-                subprocess.run(' '.join(['riscv32-unknown-elf-objdump', '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_buggy.elf'), '>', os.path.join(target_dir, 'app_buggy.elf.dump')]), shell=True)
+                subprocess.run(' '.join([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objdump", '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_buggy.elf'), '>', os.path.join(target_dir, 'app_buggy.elf.dump')]), shell=True)
             return True, time.time() - start_time, numinstrs
 
     # If no fail at all
@@ -859,9 +859,9 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         print('Copying both ELFs')
         Path(target_dir).mkdir(parents=True, exist_ok=True)
         shutil.copyfile(rtl_elfpath_larger, os.path.join(target_dir, 'app_buggy.elf'))
-        subprocess.run(' '.join(['riscv32-unknown-elf-objdump', '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_buggy.elf'), '>', os.path.join(target_dir, 'app_buggy.elf.dump')]), shell=True)
+        subprocess.run(' '.join([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objdump", '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_buggy.elf'), '>', os.path.join(target_dir, 'app_buggy.elf.dump')]), shell=True)
         shutil.copyfile(rtl_elfpath_smaller, os.path.join(target_dir, 'app_ok.elf'))
-        subprocess.run(' '.join(['riscv32-unknown-elf-objdump', '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_ok.elf'), '>', os.path.join(target_dir, 'app_ok.elf.dump')]), shell=True)
+        subprocess.run(' '.join([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objdump", '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_ok.elf'), '>', os.path.join(target_dir, 'app_ok.elf.dump')]), shell=True)
     # Write the error message
     with open(os.path.join(target_dir, 'err.log'), 'w') as f:
         f.write(rtl_msg_larger)
