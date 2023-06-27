@@ -144,6 +144,7 @@ mkdir -p $MPLCONFIGDIR
 
 # Make configuration usable; prioritize our tools
 PATH=$PREFIX_CASCADE/miniconda/bin:$PATH
+PATH=$PREFIX_CASCADE/bin:$PATH
 PATH=$PREFIX_CASCADE/bin:$CARGO_HOME/bin:$PREFIX_CASCADE/python-venv/bin/:$PATH
 PATH=$RISCV/bin:$PATH
 
@@ -155,3 +156,8 @@ export CASCADE_PK64=$RISCV/riscv32-unknown-elf/bin/pk
 
 # TODO Remove, not really a cascade thing, just used to eval DifuzzRTL
 PATH=/data/flsolt/opt/elf2hex:$PATH
+
+export CASCADE_PATH_TO_FIGURES=$CASCADE_META_ROOT/figures
+
+# export CASCADE_PATH_TO_DIFUZZRTL_ELFS=/cascade-meta/difuzzrtl/docker/shareddir/savedockerdifuzzrtl/Fuzzer/outdir/illegal/elf/
+export CASCADE_PATH_TO_DIFUZZRTL_ELFS=/scratch/flsolt/shareddir/Fuzzer/outdir1000/illegal/elf
