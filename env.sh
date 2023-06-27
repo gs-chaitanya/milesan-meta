@@ -159,5 +159,5 @@ PATH=/data/flsolt/opt/elf2hex:$PATH
 
 export CASCADE_PATH_TO_FIGURES=$CASCADE_META_ROOT/figures
 
-# export CASCADE_PATH_TO_DIFUZZRTL_ELFS=/cascade-meta/difuzzrtl/docker/shareddir/savedockerdifuzzrtl/Fuzzer/outdir/illegal/elf/
-export CASCADE_PATH_TO_DIFUZZRTL_ELFS=/scratch/flsolt/shareddir/Fuzzer/outdir1000/illegal/elf
+export CASCADE_PATH_TO_DIFUZZRTL_ELFS=/cascade-meta/difuzzrtl/docker/shareddir/savedockerdifuzzrtl/Fuzzer/outdir/illegal/elf/
+# export CASCADE_PATH_TO_DIFUZZRTL_ELFS=/scratch/flsolt/shareddir/Fuzzer/outdir1000/illegal/elf
