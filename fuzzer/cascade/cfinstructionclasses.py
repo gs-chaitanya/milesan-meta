@@ -73,6 +73,12 @@ class ImmInstruction(CFInstruction):
         self.imm = imm
         self.assert_imm_size()
 
+# The taint subclass has additionally an imm_t0 field
+class ImmInstruction_t0(ImmInstruction):
+    def __init__(self, instr_str: str, imm: int, imm_t0, is_design_64bit: bool, iscompressed: bool = False):
+        super().__init__(instr_str, imm, is_design_64bit,iscompressed)
+        self.imm_t0 = imm_t0
+
 ###
 # Concrete classes: integers
 ###
@@ -186,11 +192,11 @@ class ImmRdInstruction(ImmInstruction):
 
 # Instructions with rs1, imm and rd
 RegImmInstructions = ("addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai", "addiw", "slliw", "srliw", "sraiw")
-class RegImmInstruction(ImmInstruction):
+class RegImmInstruction(ImmInstruction_t0):
     authorized_instr_strs = RegImmInstructions
 
     def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed)
+        super().__init__(instr_str, imm, 0xfff, is_design_64bit, iscompressed) # for now fully taint 
         if DO_ASSERT:
             assert rs1 >= 0
             assert is_rd_nonpickable_ok or rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID), f"Got rs1 (select) =`{rs1}`"
@@ -233,6 +239,40 @@ class RegImmInstruction(ImmInstruction):
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
+
+    def gen_bytecode_int_t0(self, is_spike_resolution: bool):
+        if self.instr_str == "addi":
+            return rv32i_addi(0x0, 0x0, self.imm_t0) ^ rv32i_addi(0x0, 0x0, 0x0) # xor to only get taint mask
+        elif self.instr_str == "slti":
+            return rv32i_slti(0x0, 0x0, self.imm_t0) ^ rv32i_slti(0x0, 0x0, 0x0)
+        elif self.instr_str == "sltiu":
+            return rv32i_sltiu(0x0, 0x0, self.imm_t0) ^ rv32i_sltiu(0x0, 0x0, 0x0)
+        elif self.instr_str == "xori":
+            return rv32i_xori(0x0, 0x0, self.imm_t0) ^  rv32i_xori(0x0, 0x0, 0x0)
+        elif self.instr_str == "ori":
+            return rv32i_ori(0x0, 0x0, self.imm_t0) ^ rv32i_ori(0x0, 0x0, 0x0)
+        elif self.instr_str == "andi":
+            return rv32i_andi(0x0, 0x0, self.imm_t0) ^ rv32i_andi(0x0, 0x0, 0x0)
+        elif self.instr_str == "slli":
+            return rv32i_slli(0x0, 0x0, self.imm_t0&0x1f) ^ rv32i_slli(0x0, 0x0, 0x0) # shamt is only 5 bits so mask imm
+        elif self.instr_str == "srli":
+            return rv32i_srli(0x0, 0x0, self.imm_t0&0x1f) ^ rv32i_srli(0x0, 0x0, 0x0)
+        elif self.instr_str == "srai":
+            return rv32i_srai(0x0, 0x0, self.imm_t0&0x1f) ^ rv32i_srai(0x0, 0x0, 0x0)
+        # rv64i
+        elif self.instr_str == "addiw":
+            return rv64i_addiw(0x0, 0x0, self.imm_t0) ^ rv64i_addiw(0x0, 0x0, 0x0)
+        elif self.instr_str == "slliw":
+            return rv64i_slliw(0x0, 0x0, self.imm_t0&0x1f) ^ rv64i_slliw(0x0, 0x0, 0x0)
+        elif self.instr_str == "srliw":
+            return rv64i_srliw(0x0, 0x0, self.imm_t0&0x1f) ^ rv64i_srliw(0x0, 0x0, 0x0)
+        elif self.instr_str == "sraiw":
+            return rv64i_sraiw(0x0, 0x0, self.imm_t0&0x1f) ^ rv64i_sraiw(0x0, 0x0, 0x0)
+        # Default case
+        else:
+            raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
+
+
 
 # Branch instructions: with rs1, rs2 and an immediate
 BranchInstructions = ("beq", "bne", "blt", "bge", "bltu", "bgeu")
