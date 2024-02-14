@@ -5,9 +5,61 @@
 #include "afl.h"
 #include "queue.h"
 #include "corpus.h"
+#include "log.h"
 
 #define N_DET_MUTATORS 9
 #define N_RAND_MUTATORS 11
+
+#define EN_SBITFLIP_TAINT_MUT
+#define EN_DBITFLIP_TAINT_MUT
+#define EN_QBITFLIP_TAINT_MUT
+#define EN_SBYTEFLIP_TAINT_MUT
+#define EN_DBYTEFLIP_TAINT_MUT
+#define EN_QBYTEFLIP_TAINT_MUT
+
+//*** TAINT MUTATOR *** 
+#ifdef TAINT_EN
+class TaintMutator{
+    public: 
+        std::vector<Queue *> io_taint_vecs; // store the queues because they contain f(inputs):input taints -> output taints
+        Queue *candidate;
+        size_t candidate_score;
+        size_t candidate_weight;
+        size_t ini_candidate_weight;
+        doutput_t acc_output;
+        bool done;
+        Corpus *corpus;
+        size_t taint_idx = 0;
+        size_t n_untainted_bits;
+
+        
+        TaintMutator(Corpus *corpus);        
+        void reduce(Queue *q);
+        void add_io_taint_vec(Queue *q);
+        void filter_taint_vecs();
+        void find_candidate();
+        void remove_candidate(Queue *candidate);
+        bool check_good(Queue *q);
+        void set_new_candidate(Queue *q);
+        bool is_done();
+        bool check_weight();
+        void init();
+
+};
+
+class TaintBruteForceMutator{ // this mutator just brute forces all input permutations of the candidate that differ only in the tainted bits
+    public:
+        bool done;
+        Queue *candidate;
+        size_t n_permutations;
+        size_t candidate_weight;
+        size_t permutation_idx;
+        TaintBruteForceMutator(Queue *candidate);
+        bool is_done();
+        Queue *apply_next(Queue *q);
+
+};
+#endif
 
 //*** INPUT MUTATORS ***
 
@@ -17,13 +69,25 @@ class Mutator{
         bool done;
         size_t max;
         const char* name;
+        uint8_t *prev_taint_buf;
+
         bool is_done();
         void init();
         virtual void next() {return;};
         Queue *apply(Queue *in_q);
         virtual void permute(uint8_t *buf) {return;};
+        #ifdef TAINT_EN
+        virtual void permute_taints(uint8_t *buf){return;};
+        void revert_taints(Queue *in_q);
+        #endif
         Queue *apply_next(Queue *in_q);
         void print();
+        void set_max(size_t max);
+        ~Mutator(){
+            if(prev_taint_buf != nullptr){
+                free(prev_taint_buf);
+            }
+        }
 };
 
 class DetMutator: public virtual Mutator{
@@ -36,16 +100,30 @@ class RandMutator: public virtual Mutator{
         void next() override;
 };
 
+class EndlessMutator: public virtual Mutator{
+    public:
+        void next() override;
+};
+
 //*** SINGLE BIT FLIP MUTATOR ***
 
 class SingleBitFlipMutator: public virtual Mutator{
     public:
-        SingleBitFlipMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32 - 1;
+        SingleBitFlipMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max)*8;
+            if(max_b8>1) this->max = max_b8 - 1; // at some points the HW might be smaller than 32 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 - 1;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf);
+        #endif
 };
 
 class DetSingleBitFlipMutator: public DetMutator, public SingleBitFlipMutator{
@@ -64,12 +142,21 @@ class RandSingleBitFlipMutator: public RandMutator, public SingleBitFlipMutator{
 
 class DoubleBitFlipMutator: public virtual Mutator{
     public:
-        DoubleBitFlipMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32 - 2;
+        DoubleBitFlipMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max)*8;
+            if(max_b8>2) this->max = max_b8 - 2; // at some points the HW might be smaller than 2 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 - 2;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf);
+        #endif
 };
 
 class DetDoubleBitFlipMutator: public DetMutator, public DoubleBitFlipMutator{
@@ -88,12 +175,21 @@ class RandDoubleBitFlipMutator: public RandMutator, public DoubleBitFlipMutator{
 
 class NibbleFlipMutator: public virtual Mutator{
     public:
-        NibbleFlipMutator(size_t qsize, const char *name){
-            this->max = qsize *  N_FUZZ_INPUTS_b32 * 32 - 5;
+        NibbleFlipMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max)*8;
+            if(max_b8>4) this->max = max_b8 - 4; // at some points the HW might be smaller than 4 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 - 4;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf);
+        #endif
 };
 
 class DetNibbleFlipMutator: public DetMutator, public NibbleFlipMutator{
@@ -112,12 +208,21 @@ class RandNibbleFlipMutator: public RandMutator, public NibbleFlipMutator{
 
 class SingleByteFlipMutator: public virtual Mutator{
     public:
-        SingleByteFlipMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32 / 8 - 1;
+        SingleByteFlipMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>1) this->max = max_b8 - 1; // at some points the HW might be smaller than 32 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 1;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf);
+        #endif
 };
 
 class DetSingleByteFlipMutator: public DetMutator, public SingleByteFlipMutator{
@@ -136,12 +241,22 @@ class RandSingleByteFlipMutator: public RandMutator, public SingleByteFlipMutato
 
 class DoubleByteFlipMutator: public virtual Mutator{
     public:
-        DoubleByteFlipMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 - 2;
+        DoubleByteFlipMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>2) this->max = max_b8 - 2; // at some points the HW might be smaller than 32 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 2;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf);
+        #endif
+
 };
 
 class DetDoubleByteFlipMutator: public DetMutator, public DoubleByteFlipMutator{
@@ -160,12 +275,21 @@ class RandDoubleByteFlipMutator: public RandMutator, public DoubleByteFlipMutato
 
 class QuadByteFlipMutator: public virtual Mutator{
     public:
-        QuadByteFlipMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 - 5;
+        QuadByteFlipMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>4) this->max = max_b8 - 4; // at some points the HW might be smaller than 32 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 4;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf);
+        #endif
 };
 
 class DetQuadByteFlipMutator: public DetMutator, public QuadByteFlipMutator{
@@ -184,12 +308,21 @@ class RandQuadByteFlipMutator: public RandMutator, public QuadByteFlipMutator{
 
 class AddSingleByteMutator: public virtual Mutator{
     public:
-        AddSingleByteMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 - 1;
+        AddSingleByteMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>1) this->max = max_b8 - 1; // at some points the HW might be smaller than 32 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 1;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf){return;};
+        #endif
 };
 
 class DetAddSingleByteMutator: public DetMutator, public AddSingleByteMutator{
@@ -208,12 +341,21 @@ class RandAddSingleByteMutator: public RandMutator, public AddSingleByteMutator{
 
 class AddDoubleByteMutator: public virtual Mutator{
     public:
-        AddDoubleByteMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 - 2;
+        AddDoubleByteMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>2) this->max = max_b8 - 2; // at some points the HW might be smaller than 32 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 2;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf){return;};
+        #endif
 };
 
 class DetAddDoubleByteMutator: public DetMutator, public AddDoubleByteMutator{
@@ -233,12 +375,21 @@ class RandAddDoubleByteMutator: public RandMutator, public AddDoubleByteMutator{
 
 class AddQuadByteMutator: public virtual Mutator{
     public:
-        AddQuadByteMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 - 5;
+        AddQuadByteMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>4) this->max = max_b8 - 4;
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 4;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf){return;};
+        #endif
 };
 
 class DetAddQuadByteMutator: public DetMutator, public AddQuadByteMutator{
@@ -257,12 +408,21 @@ class RandAddQuadByteMutator: public RandMutator, public AddQuadByteMutator{
 
 class OverwriteInterestingSingleByteMutator: public virtual Mutator{
     public:
-        OverwriteInterestingSingleByteMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 - 5;
+        OverwriteInterestingSingleByteMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>1) this->max = max_b8 - 1; // at some points the HW might be smaller than 8 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 1;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf){return;};
+        #endif
 };
 
 class DetOverwriteInterestingSingleByteMutator: public DetMutator, public OverwriteInterestingSingleByteMutator{
@@ -282,12 +442,21 @@ class RandOverwriteInterestingSingleByteMutator: public RandMutator, public Over
 
 class OverwriteInterestingDoubleByteMutator: public virtual Mutator{
     public:
-        OverwriteInterestingDoubleByteMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 - 5;
+        OverwriteInterestingDoubleByteMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>2) this->max = max_b8 - 2; // at some points the HW might be smaller than 8 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 2;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf){return;};
+        #endif
 };
 
 class DetOverwriteInterestingDoubleByteMutator: public DetMutator, public OverwriteInterestingDoubleByteMutator{
@@ -307,12 +476,21 @@ class RandOverwriteInterestingDoubleByteMutator: public RandMutator, public Over
 
 class OverwriteInterestingQuadByteMutator: public virtual Mutator{
     public:
-        OverwriteInterestingQuadByteMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 - 5;
+        OverwriteInterestingQuadByteMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>4) this->max = max_b8 - 4; // at some points the HW might be smaller than 8 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 4;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf){return;};
+        #endif
 };
 
 class DetOverwriteInterestingQuadByteMutator: public DetMutator, public OverwriteInterestingQuadByteMutator{
@@ -331,12 +509,21 @@ class RandOverwriteInterestingQuadByteMutator: public RandMutator, public Overwr
 
 class OverwriteRandomByteMutator: public virtual Mutator{
     public:
-        OverwriteRandomByteMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 - 5;
+        OverwriteRandomByteMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>1) this->max = max_b8 - 1; // at some points the HW might be smaller than 8 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 1;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf){return;};
+        #endif
 };
 
 class DetOverwriteRandomByteMutator: public DetMutator, public OverwriteRandomByteMutator{
@@ -355,12 +542,21 @@ class RandOverwriteRandomByteMutator: public RandMutator, public OverwriteRandom
 
 class DeleteRandomBytesMutator: public virtual Mutator{
     public:
-        DeleteRandomBytesMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 - 1;
+        DeleteRandomBytesMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>1) this->max = max_b8 - 1; // at some points the HW might be smaller than 8 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 1;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf){return;};
+        #endif
 };
 
 class RandDeleteRandomBytesMutator: public RandMutator, public DeleteRandomBytesMutator{
@@ -374,12 +570,21 @@ class RandDeleteRandomBytesMutator: public RandMutator, public DeleteRandomBytes
 
 class CloneRandomBytesMutator: public virtual Mutator{
     public:
-        CloneRandomBytesMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 -1;
+        CloneRandomBytesMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>1) this->max = max_b8 - 1; // at some points the HW might be smaller than 8 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 1;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf){return;};
+        #endif
 };
 
 class RandCloneRandomBytesMutator: public RandMutator, public CloneRandomBytesMutator{
@@ -393,12 +598,21 @@ class RandCloneRandomBytesMutator: public RandMutator, public CloneRandomBytesMu
 
 class OverwriteRandomBytesMutator: public virtual Mutator{
     public:
-        OverwriteRandomBytesMutator(size_t qsize, const char *name){
-            this->max = qsize * N_FUZZ_INPUTS_b32 * 32/8 - 5;
+        OverwriteRandomBytesMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            if(max_b8>1) this->max = max_b8 - 1; // at some points the HW might be smaller than 8 so we cant mutate then
+            else this->max = 0;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8 - 1;
+            #endif
             this->name = name;
             this->init();
         }
         void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf){return;};
+        #endif
 };
 
 class RandOverwriteRandomBytesMutator: public RandMutator, public OverwriteRandomBytesMutator{
@@ -406,6 +620,30 @@ class RandOverwriteRandomBytesMutator: public RandMutator, public OverwriteRando
         RandOverwriteRandomBytesMutator(size_t max): OverwriteRandomBytesMutator(max, "overwrite"){
         }
 };
+
+class RandomMutator: public virtual Mutator{
+    public:
+        RandomMutator(size_t max, const char *name){
+            #ifdef TAINT_EN // max is taint hamming weight
+            int max_b8 = b8(max);
+            this->max =  max_b8;
+            #else // max is total number of bits
+            this->max = max * N_FUZZ_INPUTS_b32 * 32 / 8;
+            #endif
+            this->name = name;
+            this->init();
+        }
+        void permute(uint8_t *buf);
+        #ifdef TAINT_EN
+        void permute_taints(uint8_t *buf);
+        #endif
+};
+
+class EndlessRandomMutator: public EndlessMutator, public RandomMutator{
+    public: 
+        EndlessRandomMutator(size_t max): RandomMutator(max, "endless random"){};
+};
+
 
 
 std::deque<Mutator *> *get_det_mutators(size_t max);

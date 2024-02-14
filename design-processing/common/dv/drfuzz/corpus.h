@@ -17,9 +17,12 @@
 class Corpus{
     private:
         std::deque<Queue *> qs;
-        doutput_t *acc_output;
-
+        doutput_t *acc_output = nullptr;
+        #ifdef WRITE_COVERAGE
+        std::chrono::_V2::steady_clock::time_point t_last_dump;
+        #endif
     public:
+        Corpus();
         void dump_current_cov(Testbench *tb);
         void add_q(Queue *q);
         void accumulate_output(Queue *q);
@@ -29,6 +32,11 @@ class Corpus{
         bool is_interesting(Queue *q);
         int get_coverage_amount();
         void print_acc_coverage();
+        bool taints_all_untoggled_mux(Queue *q);
+        size_t size();
+        #ifdef TAINT_EN
+        void sort_qs();
+        #endif // TAINT_EN
 
 };
 #endif // CORPUS_H

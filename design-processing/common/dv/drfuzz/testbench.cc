@@ -1,8 +1,22 @@
-// Copyright 2023 Flavien Solt, Tobias Kovats, ETH Zurich
+// Copyright 2022 Flavien Solt, Tobias Kovats, ETH Zurich
 // Licensed under the General Public License, Version 3.0, see LICENSE for details.
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "testbench.h"
+
+#ifdef TAINT_EN
+void Testbench::apply_vtaints(uint32_t* taints){
+    for(int i=0; i<N_TAINT_INPUTS_b32; i++){
+        this->module_->taint_in[i] = taints[i];
+    }
+
+}
+void Testbench::read_vtaints(uint32_t* taints){
+     for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){
+        taints[i] = this->module_->taint_out[i];
+    }
+}
+#endif // TAINT_EN
 
 void Testbench::apply_vinput(uint32_t* inputs){
     for(int i=0; i<N_COV_POINTS_b32; i++){
@@ -15,30 +29,32 @@ void Testbench::read_vcoverage(uint32_t* cov){
         cov[i] = this->module_->auto_cover_out[i];
     }
     cov[N_COV_POINTS_b32-1] &= COV_MASK;
-
-    // uint64_t sum = 0;
-    // for(int i=0; i<N_COV_POINTS_b32; i++){
-    //     sum += cov[i];
-    // }
-    // std::cout << "sum: " << sum << " N_COV_POINTS_b32: " << N_COV_POINTS_b32 << std::endl;
 }
 
 void Testbench::read_vasserts(uint32_t* asserts){
     #ifdef CHECK_ASSERTS
+    #if N_ASSERTS_b32>1
     for(int i=0; i<N_ASSERTS_b32; i++){
-        asserts[i] = this->module_->assert_probes[i];
+        asserts[i] = this->module_->assert_out[i];
     }
+    #else
+    asserts[0] = this->module_->assert_out;
+    #endif // N_ASSERTS_b32>1
     asserts[N_ASSERTS_b32-1] &= ASSERTS_MASK;
-    #endif
+    #endif CHECK_ASSERTS
 }
 
 
 void Testbench::reset(){
     uint32_t inputs[N_FUZZ_INPUTS_b32] = {0};
+    uint32_t taints[N_TAINT_INPUTS_b32] = {0};
 
     this->module_->rst_ni = 1;
     this->module_->meta_rst_ni = 1;
     this->apply_vinput(inputs);
+    #ifdef TAINT_EN
+    this->apply_vtaints(taints);
+    #endif
 
     this->tick(1);
     this->module_->rst_ni = 0;
@@ -48,10 +64,14 @@ void Testbench::reset(){
 
 void Testbench::meta_reset(){
     uint32_t inputs[N_FUZZ_INPUTS_b32] = {0};
+    uint32_t taints[N_TAINT_INPUTS_b32] = {0};
 
     this->module_->meta_rst_ni = 1;
     this->module_->rst_ni = 1; // deassert normal reset while meta reset is running
     this->apply_vinput(inputs);
+    #ifdef TAINT_EN
+    this->apply_vtaints(taints);
+    #endif
     this->tick(1);
     this->module_->meta_rst_ni = 0;
     this->tick(N_META_RESET_TICKS);
@@ -84,6 +104,10 @@ void Testbench::apply_next_input(){
         return; 
     }
     this->apply_vinput(this->scheduled_inputs.front()->inputs);
+    #ifdef TAINT_EN
+    this->apply_vtaints(this->scheduled_inputs.front()->taints);
+    #endif
+
     this->retired_inputs.push_back(this->scheduled_inputs.front());
     this->scheduled_inputs.pop_front();
 }
@@ -91,6 +115,9 @@ void Testbench::apply_next_input(){
 void Testbench::read_new_output(){
     doutput_t *new_output = (doutput_t *) malloc(sizeof(doutput_t));
     this->read_vcoverage(new_output->coverage);
+    #ifdef TAINT_EN
+    this->read_vtaints(new_output->taints);
+    #endif
     this->read_vasserts(new_output->asserts);
     new_output->check_failed();
     new_output->check(); // sanity check

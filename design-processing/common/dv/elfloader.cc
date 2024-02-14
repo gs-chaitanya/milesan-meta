@@ -149,8 +149,13 @@ extern "C" {
   char get_section(long long* address, long long* len);
   char read_section(long long address, const svOpenArrayHandle buffer);
   void read_elf(const char* filename);
+  void reset_section_index();
 }
 
+extern "C" void reset_section_index(){
+  section_index = 0;
+  mems.clear();
+}
 // Communicate the section address and len
 // Returns:
 // 0 if there are no more sections
@@ -183,7 +188,7 @@ extern "C" char read_section(long long address, const svOpenArrayHandle buffer) 
 extern "C" void read_elf(const char* filename) {
   int fd = open(filename, O_RDONLY);
   struct stat s;
-  printf("Opening ELF at path: %s\n", filename);
+  // printf("Opening ELF at path: %s\n", filename);
   if(fd < 0) {
       /* Allow debug of which filename it wanted to open in case it fails */
       perror(filename);
@@ -255,4 +260,5 @@ extern "C" void read_elf(const char* filename) {
     LOAD_ELF(Elf64_Ehdr, Elf64_Phdr, Elf64_Shdr, Elf64_Sym);
 
   munmap(buf, size);
+  // printf("Finished loading ELF.\n");
 }

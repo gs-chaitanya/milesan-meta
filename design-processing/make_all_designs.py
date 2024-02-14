@@ -82,15 +82,15 @@ for design_to_exclude in set(exclude_designs):
 
 # Generate the pairs (design_name, instrumentation method <as a string>).
 # These pairs are to be used in a later stage of the multiprocessing pool.
+instrumentation_methods = ["vanilla_mem", "vanilla_nomem", "rfuzz", "rfuzz_mem", "drfuzz", "drfuzz_mem"] # no drfuzz for now
+
 design_instrumentation_pairs = []
 for design_name in design_names:
-    instrumentation_methods = ["vanilla"]
     design_instrumentation_pairs += [(design_name, im) for im in instrumentation_methods]
 
 # For the last multiprocessing stage, add suffixes to specify whether to use traces or not.
 design_instrumentation_extended_pairs = []
 for design_name in design_names:
-    instrumentation_methods = ["vanilla"]
 
     # Generate the instrumentation methods *_trace and *_notrace
     instrumentation_methods_with_suffix = []
