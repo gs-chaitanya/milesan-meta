@@ -11,7 +11,7 @@ from params.fuzzparams import PROBA_AUTHORIZE_PRIVILEGES
 from cascade.basicblock import gen_basicblocks
 from cascade.fuzzsim import SimulatorEnum, runtest_simulator
 from cascade.genelf import gen_elf_from_bbs
-from cascade.spikeresolution import spike_resolution
+from cascade.spikeresolution import spike_resolution, spike_resolution_return_interm
 
 import os
 import random
@@ -20,11 +20,12 @@ import time
 FUZZ_USE_MODELSIM = False
 
 LOG2_MEMSIZE_UPPERBOUND = 20
-NUM_MAX_BBS_UPPERBOUND = 100
+NUM_MAX_BBS_UPPERBOUND = 10
+NUM_MIN_BBS_LOWERBOUND = 3
 
 # Creates a new program descriptor.
 def gen_new_test_instance(design_name: str, randseed: int, can_authorize_privileges: bool):
-    return random.randrange(1 << 14, 1 << LOG2_MEMSIZE_UPPERBOUND), design_name, randseed, random.randrange(20, NUM_MAX_BBS_UPPERBOUND), can_authorize_privileges and random.random() < PROBA_AUTHORIZE_PRIVILEGES
+    return random.randrange(1 << 14, 1 << LOG2_MEMSIZE_UPPERBOUND), design_name, randseed, random.randrange(NUM_MIN_BBS_LOWERBOUND, NUM_MAX_BBS_UPPERBOUND), can_authorize_privileges and random.random() < PROBA_AUTHORIZE_PRIVILEGES
 
 # The main function for a single fuzzer run. It creates a new fuzzer state, populates it with basic blocks, and then runs the spike resolution. It does not run the RTL simulation.
 # @return (fuzzerstate, rtl_elfpath, expected_regvals: list) where expected_regval is a list of num_pickable_regs-1 expected reg values (we ignore x0)
@@ -49,6 +50,24 @@ def gen_fuzzerstate_elf_expectedvals(memsize: int, design_name: str, randseed: i
     rtl_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'rtl', fuzzerstate.instance_to_str(), fuzzerstate.design_base_addr)
     time_seconds_spent_in_gen_elf = time.time() - start
     return fuzzerstate, rtl_elfpath, expected_regvals, time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf
+
+def gen_fuzzerstate_elf_expectedvals_interm(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, check_pc_spike_again: bool):
+    from cascade.fuzzerstate import FuzzerState
+    if DO_ASSERT:
+        assert nmax_bbs is None or nmax_bbs > 0
+
+    start = time.time()
+    random.seed(randseed)
+    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges)
+    gen_basicblocks(fuzzerstate)
+    time_seconds_spent_in_gen_bbs = time.time() - start
+
+    # spike resolution
+    start = time.time()
+    expected_regvals, interm_elfpath = spike_resolution_return_interm(fuzzerstate, check_pc_spike_again)
+    time_seconds_spent_in_gen_elf = time.time() - start
+    
+    return fuzzerstate, interm_elfpath
 
 ###
 # Exposed function

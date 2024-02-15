@@ -7,11 +7,15 @@ if "CASCADE_ENV_SOURCED" not in os.environ:
 PATH_TO_TMP = os.path.join(os.environ['CASCADE_DATADIR'])
 os.makedirs(PATH_TO_TMP, exist_ok=True)
 
+PATH_TO_MNT = os.path.join(os.environ['LOCAL_MNT'])
+
+PATH_TO_COV = os.path.join(os.environ['COVDUMP_DIR'])
+
 PATH_TO_FIGURES = os.environ['CASCADE_PATH_TO_FIGURES']
 
 DO_ASSERT = True
 DO_EXPENSIVE_ASSERT = False # More expensive assertions
 
-NO_REMOVE_TMPFILES = False # Used for debugging purposes.
+NO_REMOVE_TMPFILES = True # Used for debugging purposes.
 
 RUN_TIMEOUT_SECONDS = 60*60*2 # A program is not supposed to run longer than this in RTL simulation.
