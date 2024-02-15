@@ -1,13 +1,16 @@
-from params.runparams import PATH_TO_TMP, PATH_TO_COV
-from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals, gen_fuzzerstate_interm_elf, gen_new_test_instance
+from params.runparams import PATH_TO_TMP, PATH_TO_COV, 
+from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_new_test_instance
 import os, random
 from cascade.cfinstructionclasses import RegImmInstruction,R12DInstruction
-import subprocess
+import subprocess, itertools
 from common import designcfgs
+MAX_CYCLES_PER_INSTR = 30
+SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
+
 def gen_elf_and_inject_taints(design_name, max_n_insts_per_bb, seed):
     # fuzzerstate, rtl_elfpath, interm_elfpath, _, _, _, _  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(DESIGN_NAME, 0, True), True)
     
-    fuzzerstate, rtl_elfpath, interm_elfpath, _, _, _, _  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), True)
+    fuzzerstate, interm_elfpath  = gen_fuzzerstate_elf_expectedvals_interm(*gen_new_test_instance(design_name, seed, True), True)
     ID = fuzzerstate.instance_to_str()
     cov_dir = os.path.join(PATH_TO_COV,fuzzerstate.design_name,'drfuzz_mem',ID,"cov")
     q_dir = os.path.join(PATH_TO_COV,fuzzerstate.design_name,'drfuzz_mem',ID,"queue")
@@ -84,10 +87,13 @@ def gen_elf_and_inject_taints(design_name, max_n_insts_per_bb, seed):
     with open(mut_inst_path, "w") as f:
         f.write(inst_str)
 
+
+    num_instrs = len(list(itertools.chain.from_iterable(fuzzerstate.instr_objs_seq)))
+
     env = os.environ.copy()
     env["SIMSRAMELF"] = interm_elfpath
     env["ID"] = ID
-    env["SIMLEN"] = "100000"
+    env["SIMLEN"] = num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES
     env["MUT_INST_PATH"] = mut_inst_path
     env["COV_DIR"] = cov_dir
     env["Q_DIR"] = q_dir
