@@ -1,4 +1,4 @@
-from params.runparams import PATH_TO_TMP, PATH_TO_COV, 
+from params.runparams import PATH_TO_TMP, PATH_TO_COV
 from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_new_test_instance
 import os, random
 from cascade.cfinstructionclasses import RegImmInstruction,R12DInstruction
@@ -93,7 +93,7 @@ def gen_elf_and_inject_taints(design_name, max_n_insts_per_bb, seed):
     env = os.environ.copy()
     env["SIMSRAMELF"] = interm_elfpath
     env["ID"] = ID
-    env["SIMLEN"] = num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES
+    env["SIMLEN"] =str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
     env["MUT_INST_PATH"] = mut_inst_path
     env["COV_DIR"] = cov_dir
     env["Q_DIR"] = q_dir
