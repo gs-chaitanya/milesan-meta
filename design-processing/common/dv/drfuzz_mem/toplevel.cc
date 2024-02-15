@@ -37,7 +37,6 @@ static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simle
 	size_t step_id = 1;
 	for (; step_id < simlen; step_id++) {
 		tick_req_t tick_req = tb->tick(1,false);
-		// meta_reset_t0 &= !meta_reset_t0; // stays false if false, sets to false if true
 		if (tick_req.type == REQ_INTREGDUMP) {
 			#ifdef PRINT_REG_REQ
 			printf("Dump of reg i%02d: 0x%016lx.\n", curr_int_req_dump_id, tick_req.content);
@@ -130,7 +129,7 @@ long fuzz(size_t simlen, bool prune = true){
 	seed->print_accumulated_output();
 	#ifdef SINGLE_FUZZ
 	#ifdef DUMP_COVERAGE
-	seed->dump_q(tb);
+	seed->dump(tb);
 	#endif
 	exit(0);
 	#endif
