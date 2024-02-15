@@ -26,9 +26,8 @@ def gen_elf_and_inject_taints(design_name, max_n_insts_per_bb, seed):
         if bb_id == 0: continue
         insts[bb_id] = []
         for instr_id_in_bb, instr_obj in enumerate(bb_instrs):
-            if isinstance(instr_obj, RegImmInstruction):
+            if isinstance(instr_obj, RegImmInstruction) or isinstance(instr_obj, R12DInstruction):
                 # if instr_obj.instr_str not in mut_insts: continue
-                if len({instr_obj.rs1, instr_obj.rd} & exclude_regs): continue  # dont taint rs1 if its tp, sp etc
                 addr = bb_start_addr + 4*instr_id_in_bb
                 insts[bb_id] += [{"bytecode":instr_obj.gen_bytecode_int(is_spike_resolution=True),
                                 "bytecode_t0":instr_obj.gen_bytecode_int_t0(is_spike_resolution=True),
@@ -38,21 +37,13 @@ def gen_elf_and_inject_taints(design_name, max_n_insts_per_bb, seed):
                                 "bb_id":bb_id}]
             # elif isinstance(instr_obj, R12DInstruction):
             #     if len({instr_obj.rs1, instr_obj.rs2, instr_obj.rd} & exclude_regs): continue # at 0x5 the temp regs start, below is tp, gp, sp, ra and zero which we dont want to mutate on
-            #     bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=True)
             #     addr = bb_start_addr + 4*instr_id_in_bb
-            #     insts[bb_id] += [{"bytecode":bytecode,
-            #                     "bytecode_t0": 0x1F<<20, 
+            #     insts[bb_id] += [{"bytecode":instr_obj.gen_bytecode_int(is_spike_resolution=True),
+            #                     "bytecode_t0": instr_obj.gen_bytecode_int_t0(is_spike_resolution=True), 
             #                     "addr": addr,
             #                     "type":"R", 
             #                     "str": instr_obj.instr_str,
             #                     "bb_id":bb_id}] # dont taint rs2 if its tp, sp etc
-            #     insts[bb_id] += [{"bytecode":bytecode,
-            #                     "bytecode_t0": 0x1F<<15, 
-            #                     "addr": addr,
-            #                     "type":"R", 
-            #                     "str": instr_obj.instr_str,
-            #                     "bb_id":bb_id}] # same for rs1
-            #     insts[bb_id] += [{"bytecode":bytecode,"bytecode_t0": 0x1F<<7, "addr": addr,"type":"R"}] # RD, might break CF
 
     inst_str_blocks = []
     assert(len(insts)), "No instructions chosen for injection."
