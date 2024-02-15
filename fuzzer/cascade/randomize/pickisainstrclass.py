@@ -44,6 +44,38 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.SPECIAL:     0
 }
 
+
+# ISAINSTRCLASS_INITIAL_BOOSTERS = {
+#     ISAInstrClass.REGFSM:      1,
+#     ISAInstrClass.FPUFSM:      0.1,
+#     ISAInstrClass.ALU:         0.1,
+#     ISAInstrClass.ALU64:       0.1,
+#     ISAInstrClass.MULDIV:      0.1,
+#     ISAInstrClass.MULDIV64:    0.1,
+#     ISAInstrClass.AMO:         0,
+#     ISAInstrClass.AMO64:       0,
+#     ISAInstrClass.JAL :        0.1,
+#     ISAInstrClass.JALR:        0.4,
+#     ISAInstrClass.BRANCH:      0.2,
+#     ISAInstrClass.MEM:         0.5,
+#     ISAInstrClass.MEM64:       0.5,
+#     ISAInstrClass.MEMFPU:      0.2,
+#     ISAInstrClass.FPU:         0.1,
+#     ISAInstrClass.FPU64:       0.1,
+#     ISAInstrClass.MEMFPUD:     0.2,
+#     ISAInstrClass.FPUD:        0.1,
+#     ISAInstrClass.FPUD64:      0.1,
+#     ISAInstrClass.TVECFSM:     0.05,
+#     ISAInstrClass.PPFSM:       0.01,
+#     ISAInstrClass.EPCFSM:      0.1,
+#     ISAInstrClass.MEDELEG:     0.1,
+#     ISAInstrClass.EXCEPTION:   0.1,
+#     ISAInstrClass.RANDOM_CSR:  0.01,
+#     ISAInstrClass.DESCEND_PRV: .01,
+#     ISAInstrClass.SPECIAL:     0.0001
+# }
+
+
 ###
 # Helper functions
 ###
