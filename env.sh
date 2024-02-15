@@ -4,6 +4,7 @@
 
 # absolute path we are executing from
 
+
 if [ "$0" != "$BASH_SOURCE" -a "$BASH_SOURCE" ]
 then  # sourced in bash
 	myroot=$(dirname $(realpath -- $BASH_SOURCE))
@@ -16,6 +17,21 @@ echo "metarepo root: $myroot"
 # Set meta repo root
 export CASCADE_META_ROOT=$myroot
 
+PWD=$(pwd)
+if [[ "${PWD}" == *"ssh_mnt"* ]];
+then
+echo "Running natively, modelsim workroot is ${PWD}"
+export LOCAL_MNT=/local/home/tkovats/ssh_mnt
+source $LOCAL_MNT/cellift-meta/env.sh
+else
+echo "Running inside container, modelsim workroot is ${PWD}"
+export LOCAL_MNT=/mnt
+export PATH=$PATH:/mnt/questa-2022-3/questasim/bin
+export LM_LICENSE_FILE=8161@lic-mentor.ethz.ch
+source /cellift-meta/env.sh
+fi
+
+export COVDUMP_DIR=$LOCAL_MNT/cov_dump
 # Where are the design submodules located
 export CASCADE_DESIGN_PROCESSING_ROOT=$CASCADE_META_ROOT/design-processing
 
@@ -40,13 +56,20 @@ export CASCADE_PYTHON_COMMON=$CASCADE_DESIGN_PROCESSING_ROOT/common/python_scrip
 # If you would like to customize some of the settings, add another
 # $USER test clause like the one below.
 
-export CASCADE_RISCV_BITWIDTH=64
+export CASCADE_RISCV_BITWIDTH=32
 
 # Modelsim
-export MODELSIM_VERSION=questa-2022.3
-export PATH_TO_INSTANCELIMIT_PY=/data/flsolt/gits/instancelimit/instancelimit.py
+# export MODELSIM_VERSION=questa-2022.3
+export MODELSIM_VERSION=
+
+export PATH_TO_INSTANCELIMIT_PY=$LOCAL_MNT/gits/instancelimit/instancelimit.py
 export MODELSIM_MAX_INSTANCES=100
-export MODELSIM_WORKROOT=.
+export MODELSIM_WORKROOT=$LOCAL_MNT/modelsim_workroot
+
+
+export MODELSIM_VLOG_COVERFLAG=+cover
+export MODELSIM_VSIM_COVERFLAG=-coverage
+export MODELSIM_VSIM_COVERPATH=cover.ucdb
 
 HOSTNAME=$(hostname)
 if [[ "${HOSTNAME}" == *"eda3"* ]]; # ETHZ EDA server
@@ -77,7 +100,7 @@ then
     ulimit -n 10000 # many FD's
     export CASCADE_DATADIR=/scratch/"${USER}"/data/python-tmp
     export MODELSIM_VERSION=
-    export MODELSIM_WORKROOT=/scratch/"${USER}"/modelsimfuzz
+    # export MODELSIM_WORKROOT=//"${USER}"/modelsimfuzz
 elif [[ "${HOSTNAME}" == *"cn107"* ]]; # ETHZ cn107
 then
     # Example customization
@@ -158,7 +181,7 @@ export MODELSIM_LOCKFILE=$CASCADE_META_ROOT/tmp/modelsim_lock
 export CASCADE_PK64=$RISCV/riscv32-unknown-elf/bin/pk
 
 # TODO Remove, not really a cascade thing, just used to eval DifuzzRTL
-PATH=/data/flsolt/opt/elf2hex:$PATH
+# PATH=/data/flsolt/opt/elf2hex:$PATH
 
 export CASCADE_PATH_TO_FIGURES=$CASCADE_META_ROOT/figures
 
