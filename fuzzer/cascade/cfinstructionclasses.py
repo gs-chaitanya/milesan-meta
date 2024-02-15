@@ -8,6 +8,7 @@ from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP
 from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
+from cascade.util import CFInstructionClass
 from rv.asmutil import li_into_reg, twos_complement, to_unsigned
 from rv.rvprivileged import rvprivileged_mret, rvprivileged_sret
 from rv.zifencei import *
@@ -20,8 +21,10 @@ from rv.rv64i import *
 from rv.rv64f import *
 from rv.rv64d import *
 from rv.rv64m import *
+from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, SHAMT_INSTRUCTIONS
 
 import random
+import numpy as np
 
 # These classes are here for generating multi-instruction fuzzing programs.
 
@@ -73,11 +76,12 @@ class ImmInstruction(CFInstruction):
         self.imm = imm
         self.assert_imm_size()
 
-# The taint subclass has additionally an imm_t0 field
+
 class ImmInstruction_t0(ImmInstruction):
-    def __init__(self, instr_str: str, imm: int, imm_t0, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit,iscompressed)
-        self.imm_t0 = imm_t0
+    def __init__(self, instr_str: str, imm: int, is_design_64bit: bool, iscompressed: bool = False):
+        super().__init__(instr_str, imm, is_design_64bit, iscompressed)
+        self.imm_t0 = 0x00
+
 
 ###
 # Concrete classes: integers
@@ -100,6 +104,17 @@ class R12DInstruction(CFInstruction):
         self.rs1 = rs1
         self.rs2 = rs2
         self.rd =  rd
+        probs = CFINSTRCLASS_TAINT_PROBS[CFInstructionClass.R12D]
+        p_rs1_t0 = probs["rs1"]*RS_INT_TAINT_PROBS_MASK[self.rs1]
+        p_rs2_t0 = probs["rs2"]*RS_INT_TAINT_PROBS_MASK[self.rs2]
+        p_rd_t0 = probs["rd"]*RD_INT_TAINT_PROBS_MASK[self.rd]
+        self.rs1_t0 = 0
+        self.rs2_t0 = 0
+        self.rd_t0 = 0
+        while self.rs1_t0 == 0 and self.rs2_t0 == 0 and self.rd_t0 == 0:
+            self.rs1_t0 = np.random.choice([0x1F,0], 1, [p_rs1_t0, 1-p_rs1_t0])[0]
+            self.rs2_t0 = np.random.choice([0x1F,0], 1, [p_rs2_t0, 1-p_rs2_t0])[0]
+            self.rd_t0 = np.random.choice([0x1F,0], 1, [p_rd_t0, 1-p_rd_t0])[0]
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -166,6 +181,26 @@ class R12DInstruction(CFInstruction):
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
+    # returns the taints for the bytecode. We use the existing gen_bytecode_int method while temporarily overwriting class attributes
+    def gen_bytecode_int_t0(self, is_spike_resolution: bool):
+        rd = self.rd
+        rs1 = self.rs1
+        rs2 = self.rs2
+        self.rd = self.rd_t0
+        self.rs1 = self.rs1_t0
+        self.rs2 = self.rs1_t0
+        taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = 0x00
+        self.rs1 = 0x00
+        self.rs2 = 0x00
+        taint_bytecode_mask = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = rd
+        self.rs1 = rs1
+        self.rs2 = rs2
+        return taint_bytecode ^ taint_bytecode_mask
+
+
+
 # Instructions with imm and rd
 ImmRdInstructions = ("lui", "auipc")
 class ImmRdInstruction(ImmInstruction):
@@ -196,7 +231,7 @@ class RegImmInstruction(ImmInstruction_t0):
     authorized_instr_strs = RegImmInstructions
 
     def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
-        super().__init__(instr_str, imm, 0xfff, is_design_64bit, iscompressed) # for now fully taint 
+        super().__init__(instr_str, imm, is_design_64bit, iscompressed) # for now fully taint 
         if DO_ASSERT:
             assert rs1 >= 0
             assert is_rd_nonpickable_ok or rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID), f"Got rs1 (select) =`{rs1}`"
@@ -206,6 +241,18 @@ class RegImmInstruction(ImmInstruction_t0):
         self.rd =  rd
         if self.instr_str == "sraiw" and self.imm < 0:
             assert False
+        
+        probs = CFINSTRCLASS_TAINT_PROBS[CFInstructionClass.REGIMM]
+        p_rs1_t0 = probs["rs1"]*RS_INT_TAINT_PROBS_MASK[self.rs1]
+        p_imm_t0 = probs["imm"]
+        p_rd_t0 = probs["rd"]*RD_INT_TAINT_PROBS_MASK[self.rd]
+        self.rs1_t0 = 0
+        self.imm_t0 = 0
+        self.rd_t0 = 0
+        while self.rs1_t0 == 0 and self.imm_t0 == 0 and self.rd_t0 == 0:
+            self.rs1_t0 = np.random.choice([0x1F,0], 1, [p_rs1_t0, 1-p_rs1_t0])[0]
+            self.imm_t0 = np.random.choice([0xFFF if self.instr_str not in SHAMT_INSTRUCTIONS else 0x1F,0], 1, [p_imm_t0, 1-p_imm_t0])[0]
+            self.rd_t0 = np.random.choice([0x1F,0], 1, [p_rd_t0, 1-p_rd_t0])[0]
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -240,39 +287,23 @@ class RegImmInstruction(ImmInstruction_t0):
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
+    # returns the taints for the bytecode. We use the existing gen_bytecode_int method while temporarily overwriting class attributes
     def gen_bytecode_int_t0(self, is_spike_resolution: bool):
-        if self.instr_str == "addi":
-            return rv32i_addi(0x0, 0x0, self.imm_t0) ^ rv32i_addi(0x0, 0x0, 0x0) # xor to only get taint mask
-        elif self.instr_str == "slti":
-            return rv32i_slti(0x0, 0x0, self.imm_t0) ^ rv32i_slti(0x0, 0x0, 0x0)
-        elif self.instr_str == "sltiu":
-            return rv32i_sltiu(0x0, 0x0, self.imm_t0) ^ rv32i_sltiu(0x0, 0x0, 0x0)
-        elif self.instr_str == "xori":
-            return rv32i_xori(0x0, 0x0, self.imm_t0) ^  rv32i_xori(0x0, 0x0, 0x0)
-        elif self.instr_str == "ori":
-            return rv32i_ori(0x0, 0x0, self.imm_t0) ^ rv32i_ori(0x0, 0x0, 0x0)
-        elif self.instr_str == "andi":
-            return rv32i_andi(0x0, 0x0, self.imm_t0) ^ rv32i_andi(0x0, 0x0, 0x0)
-        elif self.instr_str == "slli":
-            return rv32i_slli(0x0, 0x0, self.imm_t0&0x1f) ^ rv32i_slli(0x0, 0x0, 0x0) # shamt is only 5 bits so mask imm
-        elif self.instr_str == "srli":
-            return rv32i_srli(0x0, 0x0, self.imm_t0&0x1f) ^ rv32i_srli(0x0, 0x0, 0x0)
-        elif self.instr_str == "srai":
-            return rv32i_srai(0x0, 0x0, self.imm_t0&0x1f) ^ rv32i_srai(0x0, 0x0, 0x0)
-        # rv64i
-        elif self.instr_str == "addiw":
-            return rv64i_addiw(0x0, 0x0, self.imm_t0) ^ rv64i_addiw(0x0, 0x0, 0x0)
-        elif self.instr_str == "slliw":
-            return rv64i_slliw(0x0, 0x0, self.imm_t0&0x1f) ^ rv64i_slliw(0x0, 0x0, 0x0)
-        elif self.instr_str == "srliw":
-            return rv64i_srliw(0x0, 0x0, self.imm_t0&0x1f) ^ rv64i_srliw(0x0, 0x0, 0x0)
-        elif self.instr_str == "sraiw":
-            return rv64i_sraiw(0x0, 0x0, self.imm_t0&0x1f) ^ rv64i_sraiw(0x0, 0x0, 0x0)
-        # Default case
-        else:
-            raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
-
-
+        rd = self.rd
+        rs1 = self.rs1
+        imm = self.imm
+        self.rd = self.rd_t0 # set regs to taints to get taint bytecode
+        self.rs1 = self.rs1_t0
+        self.imm = self.imm_t0
+        taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = 0x00 # set regs to 0 to get taint bytecode mask to remove func and opcode fields
+        self.rs1 = 0x00
+        self.imm = 0x00
+        taint_bytecode_mask = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = rd
+        self.rs1 = rs1
+        self.imm = imm
+        return taint_bytecode ^ taint_bytecode_mask
 
 # Branch instructions: with rs1, rs2 and an immediate
 BranchInstructions = ("beq", "bne", "blt", "bge", "bltu", "bgeu")

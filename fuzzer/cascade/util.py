@@ -34,6 +34,12 @@ class ISAInstrClass(enum.IntEnum):
     DESCEND_PRV = enum.auto() # mret and sret
     SPECIAL     = enum.auto() # fence, ecall, ebreak
 
+
+# Use this for taints
+class CFInstructionClass(enum.IntEnum):
+    REGIMM = 0
+    R12D = 1
+
 # Also used by the medeleg CSR
 class ExceptionCauseVal(enum.IntEnum):
     # Important: the values must match the ones in the RISC-V specification, so do not use enum.auto and make sure to skip the reserved values
