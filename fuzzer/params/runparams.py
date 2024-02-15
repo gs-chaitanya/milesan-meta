@@ -16,6 +16,6 @@ PATH_TO_FIGURES = os.environ['CASCADE_PATH_TO_FIGURES']
 DO_ASSERT = True
 DO_EXPENSIVE_ASSERT = False # More expensive assertions
 
-NO_REMOVE_TMPFILES = True # Used for debugging purposes.
+NO_REMOVE_TMPFILES = False # Used for debugging purposes.
 
 RUN_TIMEOUT_SECONDS = 60*60*2 # A program is not supposed to run longer than this in RTL simulation.
