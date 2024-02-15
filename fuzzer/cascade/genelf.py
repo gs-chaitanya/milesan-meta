@@ -51,10 +51,12 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
             addr_instrs[curr_addr] = curr_byte
 
     # Add the final basic block
-    if is_spike_resolution:
-        final_block = finalblock_spike_resolution()
-    else:
-        final_block = fuzzerstate.final_bb
+    # if is_spike_resolution:
+    #     final_block = finalblock_spike_resolution()
+    # else:
+    #     final_block = fuzzerstate.final_bb
+
+    final_block = fuzzerstate.final_bb
     for instr_id_in_bb, instr_obj in enumerate(final_block):
         curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(4, 'little')
         for curr_byte_id, curr_byte in enumerate(curr_bytecode):
