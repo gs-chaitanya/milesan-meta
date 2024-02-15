@@ -2,6 +2,9 @@ from drfuzz_mem.inject_taints import gen_elf_and_inject_taints
 import multiprocessing as mp
 import time
 import threading
+from common.spike import calibrate_spikespeed
+from common.profiledesign import profile_get_medeleg_mask
+
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 curr_round_id = 0
@@ -23,6 +26,11 @@ def test_done_callback(arg):
 if __name__ == "__main__":
     process_instance_id = 0
     pool = mp.Pool(processes=N_WORKERS)
+
+
+    calibrate_spikespeed()
+    profile_get_medeleg_mask(DUT)
+
     if(N_WORKERS==1):
         gen_elf_and_inject_taints(DUT,MAX_N_INJECT_PER_BB,0)
         exit(0)
