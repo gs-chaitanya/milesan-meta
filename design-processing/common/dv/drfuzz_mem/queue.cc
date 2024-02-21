@@ -314,11 +314,12 @@ void Queue::revert_taints(Queue *other){
     }
     this->recompute_inst_taint_hw();
 }
+#endif
 
 void Queue::dump(Testbench *tb){
     std::string q_dir = get_q_dir();
     std::string q_path = q_dir + "/" + std::to_string(this->ID) + ".queue.json";
-    std::cout << "dumping to " << q_path << std::endl;
+    std::cout << "Dumping queue to " << q_path << std::endl;
     std::string coverage_str = this->get_accumulated_output()->get_str(tb);
     std::string instruction_str = this->get_instructions_json_str();
     std::ofstream ofstream;
@@ -332,4 +333,3 @@ void Queue::dump(Testbench *tb){
     ofstream << "\n\t}\n]"; 
     ofstream.close();
 }
-#endif

@@ -19,10 +19,12 @@
 #include "progressbar.h"
 
 
-static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simlen, bool reset = false) {
+static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simlen, bool reset = false, bool stop_pc_tainted = false) {
 	if (reset){
 		tb->meta_reset();
+		#ifdef TAIN_EN
 		tb->meta_reset_t0();
+		#endif // TAINT_EN
 		tb->reset();
 		tb->clear_outputs();
 	}
@@ -69,15 +71,13 @@ static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simle
 		if (step_id == simlen-1)
 			std::cout << "Reached SIMLEN (" << simlen << " cycles). Stopping." << std::endl;
 		#endif
-		
+		#ifdef TAINT_EN
 		#ifndef DISABLE_PC_TAINT
 		if(tb->module_->pc_probe_t0){
 			#ifdef PRINT_TAINT_PC
 			std::cout << "PC tainted\n";
 			#endif
-			#ifdef STOP_TAINT_PC
-			break;
-			#endif
+			if(stop_pc_tainted) break;
 			#ifdef RESET_TAINT_PC
 			Queue *q = new_queue(nullptr,false);
 			q->push_tb_outputs(tb->pop_outputs());
@@ -90,7 +90,8 @@ static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simle
 			// tb->meta_reset_pc_t0();
 			#endif
 		}
-		#endif
+		#endif // DISABLE_PC_TAINT
+		#endif // TAIN_EN
 
 		#ifdef DUMP_COV_OVER_TICKS
 		#ifdef EN_COV_QUANTIZATION
@@ -117,9 +118,9 @@ long fuzz(size_t simlen, bool prune = true){
 
 	tb->reset();
 	Queue *seed = new_queue(nullptr,true);
-	// exit(0);
+
 	tb->push_instructions(seed->pop_tb_instructions());
-	std::map<std::string, uint64_t> reg_dumps = fuzz_once(tb, simlen, true);
+	std::map<std::string, uint64_t> reg_dumps = fuzz_once(tb, simlen, true ,false);
 		
 	tb->check_all_inst_retired();
 	seed->push_tb_outputs(tb->pop_outputs());
@@ -127,10 +128,10 @@ long fuzz(size_t simlen, bool prune = true){
 	tb->clear_outputs();
 	tb->clear_instructions();
 	seed->print_accumulated_output();
-	#ifdef SINGLE_FUZZ
-	#ifdef DUMP_COVERAGE
+	#ifdef DUMP_QUEUES
 	seed->dump(tb);
 	#endif
+	#ifdef SINGLE_FUZZ
 	exit(0);
 	#endif
 	// seed->get_accumulated_output()->dump(tb);
@@ -152,21 +153,24 @@ long fuzz(size_t simlen, bool prune = true){
 	Queue *prev_q;
 	Queue *q;
 	Queue *min_hw_q = seed->copy();
-
+	
 	if(corpus->is_interesting(seed)){
+		#ifdef TAIN_EN
 		size_t n_untoggled_and_tainted_mux = seed->get_accumulated_output()->get_untoggled_taintcount();
 		if(n_untoggled_and_tainted_mux == 0){
 			std::cout << "Seed did not taint any untoggled mux.\n"; // TODO do this for only untoggled mux
 			exit(-1);
 		}
 		std::cout << "Seed is interesting and taints " << std::dec << n_untoggled_and_tainted_mux << " untoggled mux.\n";
+		#else
+		std::cout << "Seed is interesting\n";
+		#endif // TAINT_EN
 		corpus->add_q(seed);
 	}
 	else{
 		std::cerr << "Seed is not interesting.\n";
 		exit(-1);
 	} 
-
 
 	#ifdef DUMP_COVERAGE
 	corpus->dump_current_cov(tb);
@@ -191,11 +195,11 @@ long fuzz(size_t simlen, bool prune = true){
 			mut->print();
 			while(!mut->is_done()){
 				Queue *mut_q = mut->apply_next(q);
-				// #ifdef TAINT_EN
+				#ifdef TAINT_EN
 				if(prev_q != nullptr){ // is only true when previously taints was reduced and still toggled all interesting mux
 					mut_q->reduce_instruction_taints(prev_q);
 				} 
-				// #endif
+				#endif
 				#ifdef PRINT_TESTS
 				std::cout << "*** Fuzzing instructions ***\n";
 				mut_q->print_instructions();
@@ -203,8 +207,11 @@ long fuzz(size_t simlen, bool prune = true){
 				#endif
 				tb->push_instructions(mut_q->pop_tb_instructions());
 
-				reg_dumps = fuzz_once(tb, simlen, true);
-
+				#ifdef STOP_TAINT_PC
+				reg_dumps = fuzz_once(tb, simlen, true, true);
+				#else
+				reg_dumps = fuzz_once(tb, simlen, true, false);
+				#endif
 				#ifdef CHECK_REG_REQ
 				tb->check_all_inst_retired();
 				if(reg_dumps.size() == 0){ // killed the control flow so was an invalid mutation
@@ -225,21 +232,26 @@ long fuzz(size_t simlen, bool prune = true){
 				tb->clear_outputs();
 				tb->clear_instructions();
 
+				#ifdef TAIN_EN
 				size_t n_untainted_mux = corpus->get_n_untoggled_and_untainted_mux(mut_q);
-
-
-				if(corpus->is_interesting(mut_q)){					
+				#endif
+				if(corpus->is_interesting(mut_q)){		
+					#ifdef DUMP_QUEUES
+					mut_q->dump(tb);
+					#endif			
 					#ifdef TAINT_EN
 					if(!corpus->taints_all_untoggled_mux(mut_q) && prev_q != nullptr){
 						mut_q->revert_taints(prev_q); // untainted bit toggled a mux so must still be interesting to fuzz, so taint it again
 					}
 					#endif
 					corpus->add_q(mut_q);
+					#ifdef DUMP_COVERAGE
+					corpus->dump_current_cov(tb);
+					#endif
 				}
 				#ifdef TAINT_EN
 				// for bit flip mutator: if untainting that bit did not change reachibility of untoggled mux, keep it untainted
 				else if (n_untainted_mux <= MUX_UNTAINT_TH){
-					// std::cout << "All taints preserved." << std::endl;
 					#ifdef PRINT_N_UNTAINTS
 					std::cout << "Untainted " << std::dec << n_untainted_mux << " <= MUX_UNTAINT_TH (" << MUX_UNTAINT_TH << "). Keeping taints.\n";
 					#endif
@@ -273,7 +285,6 @@ long fuzz(size_t simlen, bool prune = true){
 					delete min_hw_q;
 					min_hw_q = mut_q->copy();
 				}
-
 			}
 		}
 		mutators->clear();
@@ -287,7 +298,6 @@ long fuzz(size_t simlen, bool prune = true){
 	corpus->print_acc_coverage();
 	// exit(0);
 
-	#ifdef TAINT_EN
 	PRINT("Starting brute force fuzzing on " << min_hw_q->inst_taint_hw << " tainted instruction bits\n");
 	PRINT("Taint mask derived from instruction:\n");
 	min_hw_q->print_instructions();
@@ -322,15 +332,19 @@ long fuzz(size_t simlen, bool prune = true){
 		if(corpus->is_interesting(mut_q)){
 			// nothing more to gain from min_hw_q, does not taint any untoggled mux anymore
 			corpus->add_q(mut_q);
+			#ifdef TAINT_EN
 			if(!corpus->get_accumulated_output()->get_n_untoggled_by_this_and_tainted_by_other(mut_q->get_accumulated_output())){
 				std::cout << "MIN_HW_Q exhausted.\n";
 				break;
 			}		
+			#endif
+			#ifdef DUMP_COVERAGE
+			corpus->dump_current_cov(tb);
+			#endif
 		}
 		else{
 			delete mut_q;
 		}
-		// corpus->print_acc_coverage();
 	}
 
 	PRINT("**********\n");
@@ -339,7 +353,6 @@ long fuzz(size_t simlen, bool prune = true){
 	PRINT("DRFUZZ total number of cycles: \n" << std::dec << tb->tick_count_ << std::endl);
 	PRINT("DRFUZZ final coverage map: \n");
 	corpus->print_acc_coverage();
-	#endif // TAINT_EN
 
 
 	auto stop = std::chrono::steady_clock::now();
@@ -368,7 +381,9 @@ void test_mutators(){
 		mutators->pop_front();
 		while(!mut->is_done()){
 			Queue *mut_q = mut->apply_next(q);
+			#ifdef TAIN_EN
 			if(prev_q != nullptr) mut_q->reduce_instruction_taints(prev_q);
+			#endif
 			mut_q->print_instructions();
 			std::cout << std::endl;
 

@@ -105,7 +105,7 @@ bool Corpus::is_interesting(Queue *q){
     }
 
     if(is_interesting){
-        std::cout << "NEW TEST FOUND: \n";
+        std::cout << "***NEW TEST FOUND***\n";
         q->print_instructions();
         std::cout << "Toggled " << std::dec << new_toggles_idx.size() << " new coverage point(s): [";
         for(auto &mux: new_toggles_idx){
@@ -118,10 +118,9 @@ bool Corpus::is_interesting(Queue *q){
         std::cout << "TIMESTAMP TOGGLE: " << milliseconds_since_epoch << std::endl;
         #endif
         std::cout << "New total coverage: " << std::dec << this->get_coverage_amount() + new_toggles_idx.size() << "/" << N_COV_POINTS << std::endl;
-        // #ifdef PRINT_COVERAGE
         this->acc_output->print_increase(new_output);
-        // #endif // PRINT_COVERAGE
-        std::cout << std::endl;
+        std::cout << "********************\n";
+
     }
     return is_interesting;
 }

@@ -36,8 +36,8 @@ void doutput_t::dump(Testbench *tb){ // write current values into json
     std::ofstream cov_ofstream;
     long timestamp = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - tb->start_time).count();
 
-    std::string path = get_cov_dir() + "/" +std::to_string(tb->tick_count_) + ".cov.json"; 
-    std::cout << "writing to " << path << std::endl;
+    std::string path = get_cov_dir() + std::to_string(tb->tick_count_) + ".cov.json"; 
+    std::cout << "Dumping coverage to " << path << std::endl;
     cov_ofstream.open(path);
 
 
@@ -270,19 +270,22 @@ void doutput_t::print_increase(doutput_t *other){ // increase of this by adding 
         if(i == N_COV_POINTS_b32-1) trail = N_COV_TRAIL_BITS;
         for(int j=0; j<trail; j++){
             if(((other->coverage[i] & (1ul<<j))>>j) & !((coverage[i] & (1ul<<j))>>j)){
-                #ifdef TAINT_EN
-                if(other->taints[i] & (1ul<<j)){
-                    std::cout << "\033[1;33m" << ((other->coverage[i] & (1<<j))>>j) << "\033[1;0m";
-                }
-                else{
+                // #ifdef TAINT_EN
+                // if(other->taints[i] & (1ul<<j)){
+                //     std::cout << "\033[1;33m" << ((other->coverage[i] & (1<<j))>>j) << "\033[1;0m";
+                // }
+                // else{
+                // std::cout << "\033[1;32m" << ((other->coverage[i] & (1<<j))>>j) << "\033[1;0m";
+                // }
+                // #else
                 std::cout << "\033[1;32m" << ((other->coverage[i] & (1<<j))>>j) << "\033[1;0m";
-                }
-                #else
-                std::cout << "\033[1;32m" << ((other->coverage[i] & (1<<j))>>j) << "\033[1;0m";
-                #endif
+                // #endif
 
             }
             #ifdef TAINT_EN
+            else if(this->coverage[i] & other->taints[i] & (1ul<<j)){
+                std::cout << "\033[1;33m" << ((this->coverage[i] & (1<<j))>>j) << "\033[1;0m";
+            }
             else if(other->taints[i] & (1ul<<j)){
                 std::cout << "\033[1;31m" << ((this->coverage[i] & (1<<j))>>j) << "\033[1;0m";
             }
@@ -346,7 +349,7 @@ size_t doutput_t::get_muxcount(){
     }
     return count;
 }
-
+#ifdef TAINT_EN
 size_t doutput_t::get_taintcount(){
     size_t count = 0;
     for(int i=0; i<N_COV_POINTS_b32; i++){
@@ -358,6 +361,7 @@ size_t doutput_t::get_taintcount(){
     }
     return count;
 }
+#endif
 
 #ifdef TAINT_EN
 size_t doutput_t::get_untoggled_taintcount(){

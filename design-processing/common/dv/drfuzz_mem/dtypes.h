@@ -28,9 +28,7 @@ typedef struct {
 struct doutput_t {
 	public:
 		uint32_t coverage[N_COV_POINTS_b32];
-		#ifdef TAINT_EN
 		uint32_t taints[N_TAINT_OUTPUTS_b32];
-		#endif
 		uint32_t asserts[N_ASSERTS_b32];
 
 		void dump(Testbench *tb);

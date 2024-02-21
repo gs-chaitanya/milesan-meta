@@ -4,7 +4,7 @@
 #define OPCODE_MASK 0x3F
 
 #define RD_BIT 7
-#define RD_MASK 0x1f
+#define RD_MASK 0x1F
 
 #define FUNCT3_BIT 12
 #define FUNCT3_MASK 0x7

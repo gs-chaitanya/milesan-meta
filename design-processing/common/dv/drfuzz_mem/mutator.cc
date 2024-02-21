@@ -38,39 +38,6 @@ Queue *Mutator::apply_next(Queue *in_q){
     return this->apply(in_q);
 }
 
-#ifndef TAINT_EN
-Queue *Mutator::apply(Queue *in_q) { // flip a bit in instruction but just copy taints for now
-     assert(in_q->instructions.size());
-
-    size_t n_instructions = in_q->instructions.size();
-
-    size_t nbytes_instructions = n_instructions * N_BYTES_PER_INST; // total number of bytes 
-    uint8_t *inp_buf = (uint8_t *) malloc(nbytes_instructions);
-    for(int i=0; i<n_instructions; i++){ // copy all instructions in queue to contigous memory
-        *((uint32_t *)(inp_buf + i * N_BYTES_PER_INST)) = in_q->instructions[i]->get_binary();
-        // std::cout << std::hex << *((uint32_t *)(inp_buf + i * N_BYTES_PER_INST)) << std::endl;
-    }
-    
-    this->permute(inp_buf);
-
-    Queue *out_q = new_queue(in_q,false);
-    out_q->mutator = std::string(this->name);
-
-    for(int i=0; i<n_instructions; i++){
-        uint32_t bin = *((uint32_t *)(inp_buf + i * N_BYTES_PER_INST));
-        Instruction *new_inst = in_q->instructions[i]->copy();
-        new_inst->set_binary(bin);     
-        new_inst->retired = false;   
-        out_q->push_tb_instruction(new_inst);
-    }
-    assert(inp_buf != nullptr);
-    free(inp_buf);
-    assert(out_q->instructions.size() == in_q->instructions.size());
-    out_q->recompute_inst_taint_hw();
-    return out_q;
-
-}
-#else
 
 Queue *Mutator::apply(Queue *in_q) { // only apply mutator to tainted bits
     assert(in_q->instructions.size());
@@ -107,7 +74,7 @@ Queue *Mutator::apply(Queue *in_q) { // only apply mutator to tainted bits
     }
 
     
-    std::cout << std::endl;
+    // std::cout << std::endl;
     this->permute(inp_t_buf);
     // for(int i=0; i<inp_t_size; i++){
     //     for(int j=7; j>=0; j--) std::cout << ((inp_t_buf[i]&(1<<j))>>j);
@@ -134,8 +101,9 @@ Queue *Mutator::apply(Queue *in_q) { // only apply mutator to tainted bits
     uint8_t *taint_t_buf = (uint8_t *) calloc(inp_t_size, sizeof(uint8_t)); 
     std::fill_n(taint_t_buf,inp_t_size,-1);
     // taint_t_buf[inp_t_size-1] &= ~(0xff<<remainder); // mask out the 8-remainder bits, note the lsb is at position 0 within the byte
+    #ifdef TAINT_EN
     this->permute_taints(taint_t_buf);
-
+    #endif
 
     taint_idx = 0;
     for(int i=0; i<taint_size; i++){ // is this shift madness going to work? Or is it just phantasy?
@@ -170,17 +138,6 @@ Queue *Mutator::apply(Queue *in_q) { // only apply mutator to tainted bits
     out_q->recompute_inst_taint_hw();
     return out_q;
 }
-
-// void Mutator::revert_taints(Queue *new_q, Queue *prev_q){
-//     // assert(this->prev_taint_buf != nullptr);
-//     assert(new_q->instructions.size() == prev_q->instructions.size());
-//     for(int i=0; i<new_q->instructions.size(); i++){
-//         new_q->instructions[i]->set_binary_t0(prev_q->instructions[i]->get_binary_t0());
-//     }
-//     new_q->recompute_inst_taint_hw();
-// }
-
-#endif // TAINT_EN
 
 void DetMutator::next(){
             assert(!this->done);

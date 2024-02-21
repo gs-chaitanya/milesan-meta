@@ -32,11 +32,12 @@ class Corpus{
         bool is_interesting(Queue *q);
         int get_coverage_amount();
         void print_acc_coverage();
-        bool taints_all_untoggled_mux(Queue *q);
-        size_t get_n_untoggled_and_untainted_mux(Queue *q);
         size_t size();
+        
         #ifdef TAINT_EN
         void sort_qs();
+        size_t get_n_untoggled_and_untainted_mux(Queue *q);
+        bool taints_all_untoggled_mux(Queue *q);
         #endif // TAINT_EN
 
 };

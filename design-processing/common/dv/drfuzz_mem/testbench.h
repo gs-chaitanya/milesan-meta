@@ -67,8 +67,6 @@ class Testbench {
 
 		void reset(void);
 		void meta_reset();
-        void meta_reset_t0();
-        void meta_reset_pc_t0();
         void reset_memory();
         void reset_memory_t();
 		void close_trace(void);
@@ -79,6 +77,9 @@ class Testbench {
         void dump_mem();
         #ifdef TAINT_EN
         bool is_output_tainted();
+        void meta_reset_t0();
+        void meta_reset_pc_t0();
+
         #endif // TAINT_EN
         void print_outputs();
         std::deque<doutput_t *> *pop_outputs();
@@ -88,6 +89,7 @@ class Testbench {
         int check_all_inst_retired();
         void clear_instructions();
 		tick_req_t tick(int num_ticks = 1, bool false_tick = false);
+
 
 
 
