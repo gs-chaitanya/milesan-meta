@@ -21,7 +21,7 @@ from rv.rv64i import *
 from rv.rv64f import *
 from rv.rv64d import *
 from rv.rv64m import *
-from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, SHAMT_INSTRUCTIONS
+from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, SHAMT_INSTRUCTIONS, CFINSTRCLASS_TAINT_ONLY_ONE
 
 import random
 import numpy as np
@@ -108,13 +108,22 @@ class R12DInstruction(CFInstruction):
         p_rs1_t0 = probs["rs1"]*RS_INT_TAINT_PROBS_MASK[self.rs1]
         p_rs2_t0 = probs["rs2"]*RS_INT_TAINT_PROBS_MASK[self.rs2]
         p_rd_t0 = probs["rd"]*RD_INT_TAINT_PROBS_MASK[self.rd]
-        self.rs1_t0 = 0
-        self.rs2_t0 = 0
-        self.rd_t0 = 0
-        while self.rs1_t0 == 0 and self.rs2_t0 == 0 and self.rd_t0 == 0:
-            self.rs1_t0 = np.random.choice([0x1F,0], 1, [p_rs1_t0, 1-p_rs1_t0])[0]
-            self.rs2_t0 = np.random.choice([0x1F,0], 1, [p_rs2_t0, 1-p_rs2_t0])[0]
-            self.rd_t0 = np.random.choice([0x1F,0], 1, [p_rd_t0, 1-p_rd_t0])[0]
+        if not CFINSTRCLASS_TAINT_ONLY_ONE: # several bytecode fields can be tainted
+            self.rs1_t0 = 0
+            self.rs2_t0 = 0
+            self.rd_t0 = 0
+            while self.rs1_t0 == 0 and self.rs2_t0 == 0 and self.rd_t0 == 0:
+                self.rs1_t0 = np.random.choice([0x1F,0], 1, p=[p_rs1_t0, 1-p_rs1_t0])[0]
+                self.rs2_t0 = np.random.choice([0x1F,0], 1, p=[p_rs2_t0, 1-p_rs2_t0])[0]
+                self.rd_t0 = np.random.choice([0x1F,0], 1, p=[p_rd_t0, 1-p_rd_t0])[0]
+        else:
+            bytecode_t0 = np.random.choice([0x1F<<15,0x1F<<20,0x1F<<7], 1, p=[p_rs1_t0, p_rs2_t0,p_rd_t0])[0]
+            self.rs1_t0 = (bytecode_t0>>15)&0x1F
+            self.rs2_t0 = (bytecode_t0>>20)&0x1F
+            self.rd_t0 =  (bytecode_t0>>7)&0x1F
+
+        # print(f"rd: {self.rd_t0} {p_rd_t0}, rs1: {self.rs1_t0} {p_rs1_t0}, rs2: {self.rs2_t0} {p_rs2_t0}")
+        assert(self.rs1_t0 or self.rs2_t0 or self.rd_t0), "Did not taint anything, this should not happen."
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -188,7 +197,7 @@ class R12DInstruction(CFInstruction):
         rs2 = self.rs2
         self.rd = self.rd_t0
         self.rs1 = self.rs1_t0
-        self.rs2 = self.rs1_t0
+        self.rs2 = self.rs2_t0
         taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
         self.rd = 0x00
         self.rs1 = 0x00
@@ -197,7 +206,9 @@ class R12DInstruction(CFInstruction):
         self.rd = rd
         self.rs1 = rs1
         self.rs2 = rs2
-        return taint_bytecode ^ taint_bytecode_mask
+        masked_taint = taint_bytecode ^ taint_bytecode_mask
+        assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, rs2_t0: {hex(self.rs2_t0)},  this should not happen."
+        return masked_taint
 
 
 
@@ -227,6 +238,7 @@ class ImmRdInstruction(ImmInstruction):
 
 # Instructions with rs1, imm and rd
 RegImmInstructions = ("addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai", "addiw", "slliw", "srliw", "sraiw")
+RegImmShiftInstructions = ("slli", "srli", "srai", "slliw", "srliw", "sraiw")
 class RegImmInstruction(ImmInstruction_t0):
     authorized_instr_strs = RegImmInstructions
 
@@ -246,13 +258,23 @@ class RegImmInstruction(ImmInstruction_t0):
         p_rs1_t0 = probs["rs1"]*RS_INT_TAINT_PROBS_MASK[self.rs1]
         p_imm_t0 = probs["imm"]
         p_rd_t0 = probs["rd"]*RD_INT_TAINT_PROBS_MASK[self.rd]
-        self.rs1_t0 = 0
-        self.imm_t0 = 0
-        self.rd_t0 = 0
-        while self.rs1_t0 == 0 and self.imm_t0 == 0 and self.rd_t0 == 0:
-            self.rs1_t0 = np.random.choice([0x1F,0], 1, [p_rs1_t0, 1-p_rs1_t0])[0]
-            self.imm_t0 = np.random.choice([0xFFF if self.instr_str not in SHAMT_INSTRUCTIONS else 0x1F,0], 1, [p_imm_t0, 1-p_imm_t0])[0]
-            self.rd_t0 = np.random.choice([0x1F,0], 1, [p_rd_t0, 1-p_rd_t0])[0]
+        has_shamt = self.instr_str in RegImmShiftInstructions
+        if not CFINSTRCLASS_TAINT_ONLY_ONE: # several bytecode fields can be tainted
+            self.rs1_t0 = 0
+            self.imm_t0 = 0
+            self.rd_t0 = 0
+            while self.rs1_t0 == 0 and self.imm_t0 == 0 and self.rd_t0 == 0:
+                self.rs1_t0 = np.random.choice([0x1F,0], 1, p=[p_rs1_t0, 1-p_rs1_t0])[0]
+                self.imm_t0 = np.random.choice([0xFFF if not has_shamt else 0x1F,0], 1, p=[p_imm_t0, 1-p_imm_t0])[0]
+                self.rd_t0 = np.random.choice([0x1F,0], 1, p=[p_rd_t0, 1-p_rd_t0])[0]
+        else:
+            bytecode_t0 = np.random.choice([0x1F<<15,0xFFF<<20,0x1F<<7],1, p=[p_rs1_t0, p_imm_t0,p_rd_t0])[0]
+            self.rs1_t0 = (bytecode_t0>>15)&0x1F
+            self.imm_t0 = (bytecode_t0>>20)&(0xFFF if not has_shamt else 0x1F)
+            self.rd_t0 =  (bytecode_t0>>7)&0x1F
+
+        # print(f"rd: {self.rd_t0} {p_rd_t0}, rs1: {self.rs1_t0} {p_rs1_t0}, imm: {self.imm_t0} {p_imm_t0}")
+        assert(self.rs1_t0 or self.imm_t0 or self.rd_t0), "Did not taint anything, this should not happen."
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -303,7 +325,9 @@ class RegImmInstruction(ImmInstruction_t0):
         self.rd = rd
         self.rs1 = rs1
         self.imm = imm
-        return taint_bytecode ^ taint_bytecode_mask
+        masked_taint = taint_bytecode ^ taint_bytecode_mask
+        assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
+        return masked_taint
 
 # Branch instructions: with rs1, rs2 and an immediate
 BranchInstructions = ("beq", "bne", "blt", "bge", "bltu", "bgeu")

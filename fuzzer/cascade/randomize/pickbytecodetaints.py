@@ -1,9 +1,15 @@
 from cascade.util import CFInstructionClass
 import enum
-CFINSTRCLASS_TAINT_PROBS = {
-    CFInstructionClass.REGIMM: {"rd": 0.1,"rs1": 0.5, "imm": 0.5}, # individual probs that rd and/or rs1 are tainted
-    CFInstructionClass.R12D: {"rd": 0.1,"rs1": 0.5, "rs2": 0.5} # individual probs that rd, rs1 and/or rs2 are tainted
+
+CFINSTRCLASS_TAINT_ONLY_ONE = True # if true only EITHER rd, rs1 etc are tainted, if false several bytecode fields can be tainted
+
+# if CFINSTRCLASS_TAINT_ONLY_ONE is true, the probilities are evaluated with respect to each other, otherwise independently
+CFINSTRCLASS_TAINT_PROBS = { 
+    CFInstructionClass.REGIMM: {"rd": 0,"rs1": 0, "imm": 1},
+    CFInstructionClass.R12D: {"rd": 0,"rs1": 0.5, "rs2":0.5} 
 }
+
+
 
 class IntegerRegisterClass(enum.IntEnum):
     zero = 0
@@ -40,17 +46,53 @@ class IntegerRegisterClass(enum.IntEnum):
     t6 = 31
 
 
+#  # use this to mask out any destination regs from being tainted in the bytecode
+# RD_INT_TAINT_PROBS_MASK = {
+#     IntegerRegisterClass.zero : 0,
+#     IntegerRegisterClass.ra: 1,
+#     IntegerRegisterClass.sp : 0,
+#     IntegerRegisterClass.gp: 0,
+#     IntegerRegisterClass.tp: 0,
+#     IntegerRegisterClass.t0 : 1,
+#     IntegerRegisterClass.t1: 1,
+#     IntegerRegisterClass.t2: 1,
+#     IntegerRegisterClass.s0: 0,
+#     IntegerRegisterClass.s1: 1,
+#     IntegerRegisterClass.a0: 1,
+#     IntegerRegisterClass.a1: 1,
+#     IntegerRegisterClass.a2: 1,
+#     IntegerRegisterClass.a3: 1,
+#     IntegerRegisterClass.a4: 1,
+#     IntegerRegisterClass.a5: 1,
+#     IntegerRegisterClass.a6: 1,
+#     IntegerRegisterClass.a7: 1,
+#     IntegerRegisterClass.s2: 1,
+#     IntegerRegisterClass.s3: 1,
+#     IntegerRegisterClass.s4: 1,
+#     IntegerRegisterClass.s5: 1,
+#     IntegerRegisterClass.s6: 1,
+#     IntegerRegisterClass.s7: 1,
+#     IntegerRegisterClass.s8: 1,
+#     IntegerRegisterClass.s9: 1,
+#     IntegerRegisterClass.s10: 1,
+#     IntegerRegisterClass.s11: 1,
+#     IntegerRegisterClass.t3: 1,
+#     IntegerRegisterClass.t4: 1,
+#     IntegerRegisterClass.t5: 1,
+#     IntegerRegisterClass.t6: 1
+# }
+
  # use this to mask out any destination regs from being tainted in the bytecode
 RD_INT_TAINT_PROBS_MASK = {
-    IntegerRegisterClass.zero : 0,
+    IntegerRegisterClass.zero : 1,
     IntegerRegisterClass.ra: 1,
-    IntegerRegisterClass.sp : 0,
-    IntegerRegisterClass.gp: 0,
-    IntegerRegisterClass.tp: 0,
+    IntegerRegisterClass.sp : 1,
+    IntegerRegisterClass.gp: 1,
+    IntegerRegisterClass.tp: 1,
     IntegerRegisterClass.t0 : 1,
     IntegerRegisterClass.t1: 1,
     IntegerRegisterClass.t2: 1,
-    IntegerRegisterClass.s0: 0,
+    IntegerRegisterClass.s0: 1,
     IntegerRegisterClass.s1: 1,
     IntegerRegisterClass.a0: 1,
     IntegerRegisterClass.a1: 1,
@@ -77,16 +119,51 @@ RD_INT_TAINT_PROBS_MASK = {
 }
 
  # use this to mask out any destination regs from being tainted in the bytecode
+# RS_INT_TAINT_PROBS_MASK = {
+#     IntegerRegisterClass.zero : 0,
+#     IntegerRegisterClass.ra: 1,
+#     IntegerRegisterClass.sp : 0,
+#     IntegerRegisterClass.gp: 0,
+#     IntegerRegisterClass.tp: 0,
+#     IntegerRegisterClass.t0 : 1,
+#     IntegerRegisterClass.t1: 1,
+#     IntegerRegisterClass.t2: 1,
+#     IntegerRegisterClass.s0: 0,
+#     IntegerRegisterClass.s1: 1,
+#     IntegerRegisterClass.a0: 1,
+#     IntegerRegisterClass.a1: 1,
+#     IntegerRegisterClass.a2: 1,
+#     IntegerRegisterClass.a3: 1,
+#     IntegerRegisterClass.a4: 1,
+#     IntegerRegisterClass.a5: 1,
+#     IntegerRegisterClass.a6: 1,
+#     IntegerRegisterClass.a7: 1,
+#     IntegerRegisterClass.s2: 1,
+#     IntegerRegisterClass.s3: 1,
+#     IntegerRegisterClass.s4: 1,
+#     IntegerRegisterClass.s5: 1,
+#     IntegerRegisterClass.s6: 1,
+#     IntegerRegisterClass.s7: 1,
+#     IntegerRegisterClass.s8: 1,
+#     IntegerRegisterClass.s9: 1,
+#     IntegerRegisterClass.s10: 1,
+#     IntegerRegisterClass.s11: 1,
+#     IntegerRegisterClass.t3: 1,
+#     IntegerRegisterClass.t4: 1,
+#     IntegerRegisterClass.t5: 1,
+#     IntegerRegisterClass.t6: 1
+# }
+
 RS_INT_TAINT_PROBS_MASK = {
-    IntegerRegisterClass.zero : 0,
+    IntegerRegisterClass.zero : 1,
     IntegerRegisterClass.ra: 1,
-    IntegerRegisterClass.sp : 0,
-    IntegerRegisterClass.gp: 0,
-    IntegerRegisterClass.tp: 0,
+    IntegerRegisterClass.sp : 1,
+    IntegerRegisterClass.gp: 1,
+    IntegerRegisterClass.tp: 1,
     IntegerRegisterClass.t0 : 1,
     IntegerRegisterClass.t1: 1,
     IntegerRegisterClass.t2: 1,
-    IntegerRegisterClass.s0: 0,
+    IntegerRegisterClass.s0: 1,
     IntegerRegisterClass.s1: 1,
     IntegerRegisterClass.a0: 1,
     IntegerRegisterClass.a1: 1,
@@ -111,6 +188,7 @@ RS_INT_TAINT_PROBS_MASK = {
     IntegerRegisterClass.t5: 1,
     IntegerRegisterClass.t6: 1
 }
+
 
 class FloatRegisterClass(enum.IntEnum):
     ft0 = 0
@@ -225,3 +303,7 @@ SHAMT_INSTRUCTIONS = {
     "srlw",
     "sraw"
 }
+
+
+
+
