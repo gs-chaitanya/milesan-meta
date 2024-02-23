@@ -11,7 +11,7 @@
 #define PERMISSIONS S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH
 
 // standard vals, Q_DIR and COV_DIR can be overwritten by environment vars
-#define DUMP_DIR "/cascade-data/cov_dumps_mem_stdout"
+#define DUMP_DIR "/cascade-data/cov_dump_mem_stdout"
 #define DUT_DIR DUMP_DIR "/" DUT
 #define INST_DIR DUT_DIR "/" INST
 #define SEED_DIR INST_DIR "/seed" STR(SEED)
