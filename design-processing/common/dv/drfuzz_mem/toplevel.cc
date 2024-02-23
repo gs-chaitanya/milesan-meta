@@ -192,6 +192,13 @@ long fuzz(size_t simlen, bool prune = true){
 			mutators->pop_front();
 			mut->print();
 			while(!mut->is_done()){
+				#ifdef TAINT_EN
+				if(!corpus->taints_any_untoggled_mux(q)){
+					std::cout << "Queue exhausted, skipping.\n";
+					// q->print_accumulated_output();
+					break; // q does not taint anything interesting anymore so no point in mutating it
+				}
+				#endif
 				Queue *mut_q = mut->apply_next(q);
 				#ifdef TAINT_EN
 				if(prev_q != nullptr){ // is only true when previously taints was reduced and still toggled all interesting mux
@@ -295,7 +302,11 @@ long fuzz(size_t simlen, bool prune = true){
 	PRINT(INST << " coverage map: \n");
 	corpus->print_acc_coverage();
 	// exit(0);
-
+	#ifdef TAINT_EN
+	if(!corpus->taints_any_untoggled_mux(min_hw_q)){
+		PRINT("Skipping bruteforce because min_hw_q exhaused. Exiting.");
+	}
+	#endif
 	PRINT("Starting brute force fuzzing on " << min_hw_q->inst_taint_hw << " tainted instruction bits\n");
 	PRINT("Taint mask derived from instruction:\n");
 	min_hw_q->print_instructions();
