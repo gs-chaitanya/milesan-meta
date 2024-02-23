@@ -17,7 +17,7 @@
 class Corpus{
     private:
         std::deque<Queue *> qs;
-        doutput_t *acc_output;
+        Queue *acc_queue;
         #ifdef DUMP_COVERAGE
         std::chrono::_V2::steady_clock::time_point t_last_dump;
         #endif
@@ -38,6 +38,7 @@ class Corpus{
         void sort_qs();
         size_t get_n_untoggled_and_untainted_mux(Queue *q);
         bool taints_all_untoggled_mux(Queue *q);
+        bool taints_any_untoggled_mux(Queue *q);
         #endif // TAINT_EN
 
 };

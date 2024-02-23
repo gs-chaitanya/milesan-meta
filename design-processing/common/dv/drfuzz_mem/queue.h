@@ -8,7 +8,7 @@
 #include "testbench.h"
 #include "instructions.h"
 
-// this Queue class represents a set of instruction register values and the resulting DUT outputs collected during execution
+// This Queue class represents a set of instructions and the resulting coverage and taints.
 class Queue {
     private:
         doutput_t *acc_output;
@@ -49,6 +49,9 @@ class Queue {
         Queue *copy();
         size_t size();
         void print_diff(Queue *other);
+        void print_increase(Queue *other);
+        std::deque<size_t> get_toggles();
+        std::deque<size_t> get_new_toggles(Queue *q);
         ~Queue(){
             this->clear_tb_outputs();
             if(this->acc_output != nullptr) free(this->acc_output);
@@ -64,6 +67,7 @@ class Queue {
         size_t compute_inst_taint_hw();
         void recompute_inst_taint_hw();
         void decode_instructions();
+        void accumulate(Queue *other);
         #ifdef TAINT_EN
         // void invert_tainted_bits();
         // void check_taint_progess();
@@ -73,6 +77,9 @@ class Queue {
         void rand_taints();
         void untaint();
         void revert_taints(Queue *other);
+        bool taints_all_untoggled_mux(Queue *other);
+        bool taints_any_untoggled_mux(Queue *other);
+        size_t get_n_untoggled_and_untainted_mux(Queue *other);
         #endif // TAINT_EN
 };
 

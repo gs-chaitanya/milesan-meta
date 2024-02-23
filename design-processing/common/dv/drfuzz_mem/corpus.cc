@@ -6,11 +6,12 @@ Corpus::Corpus(){
     #ifdef DUMP_COVERAGE
     this->t_last_dump = std::chrono::steady_clock::now();
     #endif // COV_DUMP
-    this->acc_output = nullptr;
+    this->acc_queue = nullptr;
 }
 void Corpus::add_q(Queue *q){
     this->qs.push_back(q);
-    this->accumulate_output(q);
+    if(this->acc_queue == nullptr) this->acc_queue = q->copy();
+    else this->acc_queue->accumulate(q);
     assert(this->qs.size());
 }
 
@@ -23,7 +24,7 @@ void Corpus::dump_current_cov(Testbench *tb){
     if(t_since_last_dump < T_DELTA_COV_DUMP && !is_first_call) return; 
     is_first_call = false;
     #endif
-    this->acc_output->dump(tb);
+    this->acc_queue->dump(tb);
     this->t_last_dump = now;
     #else
     std::cout << "enable DUMP_COVERAGE compile flag!\n";
@@ -63,45 +64,20 @@ bool Corpus::empty(){
 }
 
 void Corpus::accumulate_output(Queue *q){ // we don't need initial coverage here since all the queues are already accumulated
-    doutput_t *output = q->get_accumulated_output();
-    assert(output != nullptr);
-    assert(this->acc_output != nullptr);
-    for(int i=0; i<N_COV_POINTS_b32; i++){
-        this->acc_output->coverage[i] |= this->acc_output->coverage[i] ^ output->coverage[i];
-    }
-
-    #ifdef TAINT_EN
-    for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){
-        this->acc_output->taints[i] |= output->taints[i];
-    }
-    #endif // TAINT_EN
-
-    for(int i=0; i<N_ASSERTS_b32; i++){
-        this->acc_output->asserts[i] |= output->asserts[i];
-    }
-    this->acc_output->check();
+    this->acc_queue->accumulate(q);
 }
 
 bool Corpus::is_interesting(Queue *q){
     bool is_interesting = false;
     if(!q->get_coverage_amount()) return false;
-    if(this->acc_output==nullptr){
-        this->acc_output =  (doutput_t *) malloc(sizeof(doutput_t));
-        this->acc_output->init();
+    std::deque<size_t> new_toggles_idx;
+    if(this->acc_queue==nullptr){
+        new_toggles_idx = q->get_toggles();
         is_interesting = true;
     }
-    doutput_t *new_output = q->get_accumulated_output();
-    std::deque<size_t> new_toggles_idx;;
-    for(int i=0; i<N_COV_POINTS_b32; i++){ // TODO: modifiy this to include taints
-        uint32_t check = (~this->acc_output->coverage[i]) & new_output->coverage[i];
-        if(check != 0){
-            is_interesting = true;
-            for(int j=0; j<32; j++){
-                if(check & (1<<j)){
-                    new_toggles_idx.push_back(j+i*32); // maybe need the indices sometime later
-                }
-            }
-        } 
+    else{
+        new_toggles_idx = this->acc_queue->get_new_toggles(q);
+        if(new_toggles_idx.size()) is_interesting = true;
     }
 
     if(is_interesting){
@@ -113,12 +89,14 @@ bool Corpus::is_interesting(Queue *q){
             if(mux != new_toggles_idx.back()) std::cout << ",";
         }
         std::cout << "]\n";
-        unsigned long milliseconds_since_epoch = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1);
-        #ifdef PRINT_TIMESTAMPS
-        std::cout << "TIMESTAMP TOGGLE: " << milliseconds_since_epoch << std::endl;
-        #endif
-        std::cout << "New total coverage: " << std::dec << this->get_coverage_amount() + new_toggles_idx.size() << "/" << N_COV_POINTS << std::endl;
-        this->acc_output->print_increase(new_output);
+        if(this->acc_queue != nullptr){
+            std::cout << "New total coverage: " << std::dec << this->get_coverage_amount() + new_toggles_idx.size() << "/" << N_COV_POINTS << std::endl;
+            this->acc_queue->print_increase(q);
+        }
+        else{
+            std::cout << "Seed coverage: " << std::dec << new_toggles_idx.size() << "/" << N_COV_POINTS << std::endl;
+            q->print_accumulated_output();
+        }
         std::cout << "********************\n";
 
     }
@@ -126,59 +104,28 @@ bool Corpus::is_interesting(Queue *q){
 }
 #ifdef TAINT_EN
 bool Corpus::taints_all_untoggled_mux(Queue *q){
-    if(this->acc_output==nullptr) return true;
-    doutput_t *new_output = q->get_accumulated_output();
-    assert(N_COV_POINTS_b32 == N_TAINT_OUTPUTS_b32);
+    return this->acc_queue->taints_all_untoggled_mux(q);
+}
 
-    for(int i=0; i<N_COV_POINTS_b32; i++){ // TODO: modifiy this to include taints
-        int trail = 32;
-        if(i == N_COV_POINTS_b32-1) trail = N_COV_TRAIL_BITS;
-        for(int j=0; j<trail; j++){
-            if(((this->acc_output->coverage[i] & (1<<j)) == 0) && ((this->acc_output->taints[i] & (1<<j)))){ // untoggled but tainted coverage points
-                if(!(new_output->taints[i] & (1<<j))){ // is not tainted by queue
-                    return false;
-                } 
-
-            }
-        }
-    }
-    return true;
+bool Corpus::taints_any_untoggled_mux(Queue *q){
+    return this->acc_queue->taints_any_untoggled_mux(q);
 }
 
 size_t Corpus::get_n_untoggled_and_untainted_mux(Queue *q){
-    if(this->acc_output==nullptr) return 0;
-    doutput_t *new_output = q->get_accumulated_output();
-    assert(N_COV_POINTS_b32 == N_TAINT_OUTPUTS_b32);
-    assert(COV_MASK == TAINT_OUPUT_MASK);
-    size_t count = 0;
-    uint32_t mask;
-    for(int i=0; i<N_COV_POINTS_b32; i++){
-        mask = (i == N_COV_POINTS_b32 -1) ? COV_MASK : FULLMASK_b32;
-        count += __builtin_popcount(~this->acc_output->coverage[i] & this->acc_output->taints[i] & ~new_output->taints[i] & mask);
-    }
-    return count;
+    return this->acc_queue->get_n_untoggled_and_untainted_mux(q);
 }
-
 #endif
 
 
 int Corpus::get_coverage_amount() {
-    assert((this->acc_output->coverage[N_COV_POINTS_b32-1] & ~COV_MASK) == 0);
-    // Count the bits equal to 1.
-    int ret = 0;
-    for (int i = 0; i < N_COV_POINTS_b32; i++) {
-        ret += __builtin_popcount(this->acc_output->coverage[i]);
-    }
-    assert(ret >= 0);
-    assert(ret <= N_COV_POINTS);
-    return ret;
+    return this->acc_queue->get_coverage_amount();
 }
 
 void Corpus::print_acc_coverage(){
-    this->acc_output->print();
+    this->get_accumulated_output()->print();
 }
 
 doutput_t *Corpus::get_accumulated_output(){
-    return this->acc_output;
+    return this->acc_queue->get_accumulated_output();
 }
 

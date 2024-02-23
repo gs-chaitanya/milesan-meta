@@ -16,7 +16,7 @@
 #include <jsoncpp/json/json.h>
 
 
-// use this to have relationships betweem queues
+// Use this to have relationships betweem queues or load the instructions from MUT_INST_PATH.
 Queue* new_queue(Queue *parent_q, bool load_instructions){
     static size_t id = 0;
     Queue *new_q = new Queue();
@@ -46,7 +46,10 @@ void Queue::load_instructions(){
         uint32_t bytecode_t0 = std::stoul(bytecode_t0_str, nullptr, 16);
         Instruction *new_inst;
         if(type=="R12D") new_inst = new R12DInstruction(addr,bytecode,bytecode_t0,i_str);
-        else if(type=="RegImm") new_inst = new RegImmInstruction(addr,bytecode,bytecode_t0,i_str);
+        else if(type=="REGIMM") new_inst = new RegImmInstruction(addr,bytecode,bytecode_t0,i_str);
+        else if(type=="IMMRD") new_inst = new ImmRdInstruction(addr,bytecode,bytecode_t0,i_str);
+        else if(type=="F2I") new_inst = new FloatToIntInstruction(addr,bytecode,bytecode_t0,i_str);
+        else if(type=="I2F") new_inst = new IntToFloatInstruction(addr,bytecode,bytecode_t0,i_str);
         else assert(0); // not supported
         this->instructions.push_back(new_inst);
     }
@@ -238,6 +241,39 @@ void Queue::print_diff(Queue *other){
     #endif // TAINT_EN
 }
 
+void Queue::print_increase(Queue *other){
+    this->acc_output->print_increase(other->get_accumulated_output());
+}
+
+std::deque<size_t> Queue::get_new_toggles(Queue *other){
+    doutput_t *new_output = other->get_accumulated_output();
+    std::deque<size_t> new_toggles_idx;;
+    for(int i=0; i<N_COV_POINTS_b32; i++){ // TODO: modifiy this to include taints
+        uint32_t check = (~this->acc_output->coverage[i]) & new_output->coverage[i];
+        if(check != 0){
+            for(int j=0; j<32; j++){
+                if(check & (1<<j)){
+                    new_toggles_idx.push_back(j+i*32); // maybe need the indices sometime later
+                }
+            }
+        } 
+    }
+    return new_toggles_idx;
+}
+
+std::deque<size_t> Queue::get_toggles(){
+    std::deque<size_t> toggles_idx;
+    for(int i=0; i<N_COV_POINTS_b32; i++){ // TODO: modifiy this to include taints
+        if(this->acc_output->coverage[i]){
+            for(int j=0; j<32; j++){
+                if(this->acc_output->coverage[i] & (1<<j)){
+                    toggles_idx.push_back(j+i*32); // maybe need the indices sometime later
+                }
+            }
+        } 
+    }
+    return toggles_idx;
+}
 
 size_t Queue::size(){
     return this->outputs.size();
@@ -322,7 +358,6 @@ void Queue::dump(Testbench *tb){
     std::string q_dir = get_q_dir();
     std::string q_path = q_dir + "/" + std::to_string(this->ID) + ".queue.json";
     std::cout << "Dumping queue to " << q_path << std::endl;
-    std::string coverage_str = this->get_accumulated_output()->get_str(tb);
     std::string instruction_str = this->get_instructions_json_str();
     std::ofstream ofstream;
     ofstream.open(q_path);
@@ -330,8 +365,76 @@ void Queue::dump(Testbench *tb){
     ofstream << "\n\t\t" << "\"simsramelf\":\"" << get_sramelf() << "\",";
     ofstream << "\n\t\t" << "\"mut_inst_path\":\"" << get_mut_inst_path() << "\",";
     ofstream << "\n\t\t" << "\"got_stop_request\":" << tb->got_stop_req << ",";
-    ofstream << "\t\t" << "\"instructions\":" << instruction_str << ",";
-    ofstream << "\n\t\t" << "\"output\":" << coverage_str;
+    ofstream << "\n\t\t" << "\"instructions\":" << instruction_str << ",";
+    ofstream << "\n\t\t" << "\"id\": " << "\"" << get_id() << "\",";
+    ofstream << "\n\t\t" << "\"inst\": " << "\"" << INST << "\",";
+    ofstream << "\n\t\t" << "\"dut\": " <<  "\"" << DUT << "\",";
+    ofstream << "\n\t\t" << "\"elf\": " <<  "\"" << get_sramelf() << "\",";
+    ofstream << "\n\t\t" << "\"cov\":" << this->get_accumulated_output()->get_cov_str() << ",";
+    #ifdef TAINT_EN
+    ofstream << "\n\t\t" << "\"cov_t0\":" << this->get_accumulated_output()->get_cov_t0_str() << ",";
+    #endif
+    ofstream << "\n\t\t" << "\"ticks\":" << tb->tick_count_;
     ofstream << "\n\t}\n]"; 
     ofstream.close();
 }
+
+void Queue::accumulate(Queue *other){
+    this->acc_output->add_or(other->get_accumulated_output());
+    for(auto &inst: other->instructions){
+        this->push_tb_instruction(inst->copy());
+    }
+}
+#ifdef TAINT_EN
+bool Queue::taints_all_untoggled_mux(Queue *other){
+    if(this->acc_output==nullptr) return true;
+    doutput_t *new_output = other->get_accumulated_output();
+    assert(N_COV_POINTS_b32 == N_TAINT_OUTPUTS_b32);
+
+    for(int i=0; i<N_COV_POINTS_b32; i++){ // TODO: modifiy this to include taints
+        int trail = 32;
+        if(i == N_COV_POINTS_b32-1) trail = N_COV_TRAIL_BITS;
+        for(int j=0; j<trail; j++){
+            if(((this->acc_output->coverage[i] & (1<<j)) == 0) && ((this->acc_output->taints[i] & (1<<j)))){ // untoggled but tainted coverage points
+                if(!(new_output->taints[i] & (1<<j))){ // is not tainted by queue
+                    return false;
+                } 
+
+            }
+        }
+    }
+    return true;
+
+}
+
+bool Queue::taints_any_untoggled_mux(Queue *q){
+    if(this->acc_output==nullptr) return true;
+    doutput_t *new_output = q->get_accumulated_output();
+    assert(N_COV_POINTS_b32 == N_TAINT_OUTPUTS_b32);
+
+    for(int i=0; i<N_COV_POINTS_b32; i++){ // TODO: modifiy this to include taints
+        int trail = 32;
+        if(i == N_COV_POINTS_b32-1) trail = N_COV_TRAIL_BITS;
+        for(int j=0; j<trail; j++){
+            if(~this->acc_output->coverage[i] & new_output->taints[i] & (1<<j)){ // untoggled but tainted coverage points
+                return true; // is tainted by queue
+            }
+        }
+    }
+    return false;
+}
+
+size_t Queue::get_n_untoggled_and_untainted_mux(Queue *other){
+    if(this->acc_output==nullptr) return 0;
+    doutput_t *new_output = other->get_accumulated_output();
+    assert(N_COV_POINTS_b32 == N_TAINT_OUTPUTS_b32);
+    assert(COV_MASK == TAINT_OUPUT_MASK);
+    size_t count = 0;
+    uint32_t mask;
+    for(int i=0; i<N_COV_POINTS_b32; i++){
+        mask = (i == N_COV_POINTS_b32 -1) ? COV_MASK : FULLMASK_b32;
+        count += __builtin_popcount(~this->acc_output->coverage[i] & this->acc_output->taints[i] & ~new_output->taints[i] & mask);
+    }
+    return count;
+}
+#endif
