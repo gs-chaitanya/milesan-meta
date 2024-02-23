@@ -1,9 +1,11 @@
+import os, random, numpy as np
+
 from params.runparams import PATH_TO_TMP, PATH_TO_COV
 from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_new_test_instance
-import os, random
 from cascade.cfinstructionclasses import RegImmInstruction,R12DInstruction
 import subprocess, itertools
 from common import designcfgs
+from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
 MAX_CYCLES_PER_INSTR = 30
 SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
 def gen_elf_and_inject_instructions(design_name, max_n_insts_per_bb, en_taint,seed):    
@@ -25,12 +27,13 @@ def gen_elf_and_inject_instructions(design_name, max_n_insts_per_bb, en_taint,se
         if bb_id == 0: continue
         insts[bb_id] = []
         for instr_id_in_bb, instr_obj in enumerate(bb_instrs):
-            if isinstance(instr_obj, RegImmInstruction):
+            p_pick = CFINSTRCLASS_INJECT_PROBS[instr_obj.instr_type]
+            if np.random.choice([True,False],1,p=[p_pick,1-p_pick])[0]:
                 addr = bb_start_addr + 4*instr_id_in_bb
                 insts[bb_id] += [{"bytecode":instr_obj.gen_bytecode_int(is_spike_resolution=True),
                                 "bytecode_t0":instr_obj.gen_bytecode_int_t0(is_spike_resolution=True),
                                 "addr": addr,
-                                "type":"I" if isinstance(instr_obj, RegImmInstruction) else "R", 
+                                "type":instr_obj.instr_type.name, 
                                 "str": instr_obj.instr_str,
                                 "bb_id":bb_id}]
 

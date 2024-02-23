@@ -4,12 +4,11 @@ import time
 import threading
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
-
+from cascade.randomize.pickbytecodetaints import MAX_N_INJECT_PER_BB
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 total_finished_tests = 0
 
-MAX_N_INJECT_PER_BB = 1
 
 def test_done_callback(ret):
     global newly_finished_tests
@@ -42,9 +41,10 @@ def inject_instructions(design_name: str, num_cores: int, total_tests: int, en_t
     assert num_workers > 0
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
-    if num_workers == 1 or total_tests == 1:
-        print(f"Starting instruction injection on `{design_name}`.")
-        gen_elf_and_inject_instructions(design_name,MAX_N_INJECT_PER_BB,en_taint, process_instance_id)
+    if num_workers == 1:
+        for _ in range(total_tests):
+            print(f"Starting instruction injection on `{design_name}`.")
+            gen_elf_and_inject_instructions(design_name,MAX_N_INJECT_PER_BB,en_taint, process_instance_id)
         exit(0)
 
     print(f"Starting parallel instruction injection on {total_tests} total tests of `{design_name}` on {num_workers} processes.")
