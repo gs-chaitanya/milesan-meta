@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
 
     if len(sys.argv) > 4:
-        en_taint = sys.argv[4]==1
+        en_taint = sys.argv[4]=="1"
     else:
         en_taint = True
     if len(sys.argv) > 5:
@@ -35,6 +35,7 @@ if __name__ == '__main__':
         authorize_privileges = int(sys.argv[6])
     else:
         authorize_privileges = 1
+        
     inject_instructions(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), en_taint, seed_offset, authorize_privileges)
     
 else:
