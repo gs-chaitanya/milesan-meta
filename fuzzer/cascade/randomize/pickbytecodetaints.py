@@ -1,14 +1,32 @@
 from cascade.util import CFInstructionClass
 import enum
 
-CFINSTRCLASS_TAINT_ONLY_ONE = True # if true only EITHER rd, rs1 etc are tainted, if false several bytecode fields can be tainted
+# If true only EITHER rd, rs1 etc are tainted, if false several bytecode fields can be tainted.
+CFINSTRCLASS_TAINT_ONLY_ONE = True 
 
-# if CFINSTRCLASS_TAINT_ONLY_ONE is true, the probilities are evaluated with respect to each other, otherwise independently
+# If CFINSTRCLASS_TAINT_ONLY_ONE is true, the probabilities must sum up to 1. Otherwise each probability individually determines the likelyhoold that the resp. bits get tainted.
 CFINSTRCLASS_TAINT_PROBS = { 
     CFInstructionClass.REGIMM: {"rd": 0,"rs1": 0, "imm": 1},
-    CFInstructionClass.R12D: {"rd": 0,"rs1": 0.5, "rs2":0.5} 
+    CFInstructionClass.IMMRD: {"rd": 0,"imm": 1},
+    CFInstructionClass.R12D: {"rd": 0,"rs1": 0.5, "rs2":0.5},
+    CFInstructionClass.F2I: {"rd": 0.4,"frs1": 0.4, "rm":0.2},
+    CFInstructionClass.I2F: {"frd": 0.4,"rs1": 0.4, "rm":0.2}
+
 }
 
+# Max number of instructions to be injected within a basic block.
+MAX_N_INJECT_PER_BB = 1
+
+# Probability that instruction is chosen for injection. if more than MAX_N_INJECT_PER_BB are chosen within a block, only the first MAX_N_INJECT_PER_BB are used.
+# This can be used to skip some instruction types from being used for injection.
+CFINSTRCLASS_INJECT_PROBS = {
+    CFInstructionClass.NONE: 0,
+    CFInstructionClass.REGIMM: 0,
+    CFInstructionClass.IMMRD: 0,
+    CFInstructionClass.R12D: 0,
+    CFInstructionClass.F2I: 1,
+    CFInstructionClass.I2F: 1,
+}
 
 
 class IntegerRegisterClass(enum.IntEnum):

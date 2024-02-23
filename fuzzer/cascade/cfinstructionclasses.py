@@ -35,7 +35,7 @@ import numpy as np
 class CFInstruction:
     # Could be any instruction
     authorized_instr_strs = range(len(INSTRUCTION_IDS))
-
+    instr_type = CFInstructionClass.NONE
     # Check that it's not a wrong instruction id.
     def assert_authorized_instr_strs(self):
         if DO_ASSERT:
@@ -94,6 +94,7 @@ class R12DInstruction(CFInstruction):
 
     def __init__(self, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False):
         super().__init__(instr_str, iscompressed)
+        self.instr_type = CFInstructionClass.R12D
         if DO_ASSERT:
             assert rs1 >= 0
             assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID)
@@ -214,16 +215,35 @@ class R12DInstruction(CFInstruction):
 
 # Instructions with imm and rd
 ImmRdInstructions = ("lui", "auipc")
-class ImmRdInstruction(ImmInstruction):
+class ImmRdInstruction(ImmInstruction_t0):
     authorized_instr_strs = ImmRdInstructions
 
     def __init__(self, instr_str: str, rd: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(instr_str, imm, is_design_64bit, iscompressed)
+        self.instr_type = CFInstructionClass.IMMRD
         if DO_ASSERT:
             assert rd >= 0
             assert is_rd_nonpickable_ok or rd < MAX_NUM_PICKABLE_REGS or rd in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID)
         self.imm = imm
         self.rd =  rd
+
+        probs = CFINSTRCLASS_TAINT_PROBS[CFInstructionClass.IMMRD]
+        p_imm_t0 = probs["imm"]
+        p_rd_t0 = probs["rd"]*RD_INT_TAINT_PROBS_MASK[self.rd]
+        if not CFINSTRCLASS_TAINT_ONLY_ONE: # several bytecode fields can be tainted
+            self.imm_t0 = 0
+            self.rd_t0 = 0
+            while self.imm_t0 == 0 and self.rd_t0 == 0:
+                self.imm_t0 = np.random.choice([0xFFF,0], 1, p=[p_imm_t0, 1-p_imm_t0])[0]
+                self.rd_t0 = np.random.choice([0x1F,0], 1, p=[p_rd_t0, 1-p_rd_t0])[0]
+        else:
+            bytecode_t0 = np.random.choice([0xFFF<<20,0x1F<<7],1, p=[p_imm_t0,p_rd_t0])[0]
+            self.imm_t0 = (bytecode_t0>>20)&0x1F
+            self.rd_t0 =  (bytecode_t0>>7)&0x1F
+
+        # print(f"rd: {self.rd_t0} {p_rd_t0}, rs1: {self.rs1_t0} {p_rs1_t0}, imm: {self.imm_t0} {p_imm_t0}")
+        assert(self.imm_t0 or self.rd_t0), "Did not taint anything, this should not happen."
+
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -235,6 +255,22 @@ class ImmRdInstruction(ImmInstruction):
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
+    def gen_bytecode_int_t0(self, is_spike_resolution: bool):
+        rd = self.rd
+        imm = self.imm
+        self.rd = self.rd_t0 # set regs to taints to get taint bytecode
+        self.imm = self.imm_t0
+        taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = 0x00 # set regs to 0 to get taint bytecode mask to remove func and opcode fields
+        self.imm = 0x00
+        taint_bytecode_mask = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = rd
+        self.imm = imm
+        masked_taint = taint_bytecode ^ taint_bytecode_mask
+        assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
+        return masked_taint
+        
+
 
 # Instructions with rs1, imm and rd
 RegImmInstructions = ("addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai", "addiw", "slliw", "srliw", "sraiw")
@@ -244,6 +280,7 @@ class RegImmInstruction(ImmInstruction_t0):
 
     def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(instr_str, imm, is_design_64bit, iscompressed) # for now fully taint 
+        self.instr_type = CFInstructionClass.REGIMM
         if DO_ASSERT:
             assert rs1 >= 0
             assert is_rd_nonpickable_ok or rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID), f"Got rs1 (select) =`{rs1}`"
@@ -599,6 +636,7 @@ class FloatToIntInstruction(CFInstruction):
 
     def __init__(self, instr_str: str, rd: int, frs1: int, rm: int, is_design_64bit: bool, iscompressed: bool = False):
         super().__init__(instr_str, iscompressed)
+        self.instr_type = CFInstructionClass.F2I
         if DO_ASSERT:
             assert rm >= 0
             assert rm < MAX_NUM_PICKABLE_REGS
@@ -609,6 +647,28 @@ class FloatToIntInstruction(CFInstruction):
         self.rm   = rm
         self.frs1 = frs1
         self.rd   = rd
+    
+        probs = CFINSTRCLASS_TAINT_PROBS[CFInstructionClass.F2I]
+        p_frs1_t0 = probs["frs1"]*RS_INT_TAINT_PROBS_MASK[self.frs1]
+        p_rm_t0 = probs["rm"]*RD_INT_TAINT_PROBS_MASK[self.rm]
+        p_rd_t0 = probs["rd"]*RD_INT_TAINT_PROBS_MASK[self.rd]
+        if not CFINSTRCLASS_TAINT_ONLY_ONE: # several bytecode fields can be tainted
+            self.frs1_t0 = 0
+            self.rm_t0 = 0
+            self.rd_t0 = 0
+            while self.frs1_t0 == 0 and self.rm_t0 == 0 and self.rd_t0 == 0:
+                self.frs1_t0 = np.random.choice([0x1F,0], 1, p=[p_frs1_t0, 1-p_frs1_t0])[0]
+                self.rm_t0 = np.random.choice([0x7,0], 1, p=[p_rm_t0, 1-p_rm_t0])[0]
+                self.rd_t0 = np.random.choice([0x1F,0], 1, p=[p_rd_t0, 1-p_rd_t0])[0]
+        else:
+            bytecode_t0 = np.random.choice([0x1F<<15,0x7<<12,0x1F<<7],1, p=[p_frs1_t0,p_rm_t0,p_rd_t0])[0]
+            self.frs1_t0 = (bytecode_t0>>15)&0x1F
+            self.rm_t0 = (bytecode_t0>>12)&0x7
+            self.rd_t0 =  (bytecode_t0>>7)&0x1F
+
+        # print(f"rd: {self.rd_t0} {p_rd_t0}, rs1: {self.rs1_t0} {p_rs1_t0}, imm: {self.imm_t0} {p_imm_t0}")
+        assert(self.frs1_t0 or self.rd_t0 or self.rm_t0), "Did not taint anything, this should not happen."
+
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32f
@@ -637,6 +697,26 @@ class FloatToIntInstruction(CFInstruction):
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
 
+    # returns the taints for the bytecode. We use the existing gen_bytecode_int method while temporarily overwriting class attributes
+    def gen_bytecode_int_t0(self, is_spike_resolution: bool):
+        rd = self.rd
+        frs1 = self.frs1
+        rm = self.rm
+        self.rd = self.rd_t0 # set regs to taints to get taint bytecode
+        self.frs1 = self.frs1_t0
+        self.rm = self.rm_t0
+        taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = 0x00 # set regs to 0 to get taint bytecode mask to remove func and opcode fields
+        self.frs1 = 0x00
+        self.rm = 0x00
+        taint_bytecode_mask = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = rd
+        self.frs1 = frs1
+        self.rm = rm
+        masked_taint = taint_bytecode ^ taint_bytecode_mask
+        assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, frs1_t0: {hex(self.frs1_t0)}, rm_t0: {hex(self.rm_t0)},  this should not happen."
+        return masked_taint
+
 # Int to float instructions
 IntToFloatInstructions = ("fcvt.s.w", "fcvt.s.wu", "fcvt.s.l", "fcvt.s.lu", "fcvt.d.w", "fcvt.d.wu", "fcvt.d.l", "fcvt.d.lu")
 class IntToFloatInstruction(CFInstruction):
@@ -654,6 +734,28 @@ class IntToFloatInstruction(CFInstruction):
         self.rs1 = rs1
         self.frd = frd
         self.rm  = rm
+
+        probs = CFINSTRCLASS_TAINT_PROBS[CFInstructionClass.I2F]
+        p_rs1_t0 = probs["rs1"]*RS_INT_TAINT_PROBS_MASK[self.rs1]
+        p_rm_t0 = probs["rm"]*RD_INT_TAINT_PROBS_MASK[self.rm]
+        p_frd_t0 = probs["frd"]*RD_INT_TAINT_PROBS_MASK[self.frd]
+        if not CFINSTRCLASS_TAINT_ONLY_ONE: # several bytecode fields can be tainted
+            self.rs1_t0 = 0
+            self.rm_t0 = 0
+            self.frd_t0 = 0
+            while self.rs1_t0 == 0 and self.rm_t0 == 0 and self.frd_t0 == 0:
+                self.rs1_t0 = np.random.choice([0x1F,0], 1, p=[p_rs1_t0, 1-p_rs1_t0])[0]
+                self.rm_t0 = np.random.choice([0x7,0], 1, p=[p_rm_t0, 1-p_rm_t0])[0]
+                self.frd_t0 = np.random.choice([0x1F,0], 1, p=[p_frd_t0, 1-p_frd_t0])[0]
+        else:
+            bytecode_t0 = np.random.choice([0x1F<<15,0x7<<12,0x1F<<7],1, p=[p_rs1_t0,p_rm_t0,p_frd_t0])[0]
+            self.frs1_t0 = (bytecode_t0>>15)&0x1F
+            self.rm_t0 = (bytecode_t0>>12)&0x7
+            self.rd_t0 =  (bytecode_t0>>7)&0x1F
+
+        # print(f"rd: {self.rd_t0} {p_rd_t0}, rs1: {self.rs1_t0} {p_rs1_t0}, imm: {self.imm_t0} {p_imm_t0}")
+        assert(self.frs1_t0 or self.rd_t0 or self.rm_t0), "Did not taint anything, this should not happen."
+
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32f
@@ -679,6 +781,26 @@ class IntToFloatInstruction(CFInstruction):
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
+
+    def gen_bytecode_int_t0(self, is_spike_resolution: bool):
+        frd = self.frd
+        rs1 = self.rs1
+        rm = self.rm
+        self.frd = self.frd_t0 # set regs to taints to get taint bytecode
+        self.rs1 = self.rs1_t0
+        self.rm = self.rm_t0
+        taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
+        self.frd = 0x00 # set regs to 0 to get taint bytecode mask to remove func and opcode fields
+        self.rs1 = 0x00
+        self.rm = 0x00
+        taint_bytecode_mask = self.gen_bytecode_int(is_spike_resolution)
+        self.frd = frd
+        self.rs1 = rs1
+        self.rm = rm
+        masked_taint = taint_bytecode ^ taint_bytecode_mask
+        assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.frd_t0)}, frs1_t0: {hex(self.rs1_t0)}, rm_t0: {hex(self.rm_t0)},  this should not happen."
+        return masked_taint
+
 
 # Pure float instructions with frs1, frs2, frs3 and frd
 Float4Instructions = ("fmadd.s", "fmsub.s", "fnmsub.s", "fnmadd.s", "fmadd.d", "fmsub.d", "fnmsub.d", "fnmadd.d")
@@ -1049,6 +1171,7 @@ class PlaceholderProducerInstr0:
         self.spike_resolution_offset = None
         self.rtl_offset = None
         self.is_design_64bit = is_design_64bit
+        self.instr_type = CFInstructionClass.NONE
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using lui
@@ -1071,6 +1194,7 @@ class PlaceholderProducerInstr1:
         self.spike_resolution_offset = None # Is also the target address
         self.rtl_offset = None
         self.is_design_64bit = is_design_64bit
+        self.instr_type = CFInstructionClass.NONE
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using addi
@@ -1088,6 +1212,8 @@ class PlaceholderPreConsumerInstr:
     # @param rdep: the register that creates the dependency
     def __init__(self, rdep: int):
         self.rdep = rdep
+        self.instr_type = CFInstructionClass.NONE
+
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # Reduce the size of the rdep id to 30 bits
@@ -1105,6 +1231,8 @@ class PlaceholderConsumerInstr:
         self.producer_id = producer_id
         self.dont_relocate_spike = False # We want to relocate spike for addresses, but not for some CSRs such as medeleg.
         # self.target_val = None
+        self.instr_type = CFInstructionClass.NONE
+
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         if DO_ASSERT:
@@ -1125,6 +1253,7 @@ def is_placeholder(obj):
 class RawDataWord:
     # @param intentionally_signed: When unset, we expect a non-negative wordval
     def __init__(self, wordval: int, signed: bool = False):
+        self.instr_type = CFInstructionClass.NONE
         if DO_ASSERT:
             if signed:
                 assert wordval >= -(1 << 31)
@@ -1156,6 +1285,7 @@ class ExceptionInstruction:
         self.instr_str = 'ExceptionInstruction'  # Just for compatibility with the fuzzer
         self.is_mtvec = is_mtvec
         self.producer_id = producer_id
+        self.instr_type = CFInstructionClass.NONE
 
 class SimpleIllegalInstruction(ExceptionInstruction):
     def __init__(self, is_mtvec):

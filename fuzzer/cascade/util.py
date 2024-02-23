@@ -37,8 +37,13 @@ class ISAInstrClass(enum.IntEnum):
 
 # Use this for taints
 class CFInstructionClass(enum.IntEnum):
-    REGIMM = 0
-    R12D = 1
+    NONE = enum.auto() # default
+    REGIMM = enum.auto()
+    IMMRD = enum.auto()
+    R12D = enum.auto()
+    F2I = enum.auto()
+    I2F = enum.auto()
+
 
 # Also used by the medeleg CSR
 class ExceptionCauseVal(enum.IntEnum):
