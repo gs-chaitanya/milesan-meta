@@ -33,7 +33,7 @@ struct doutput_t {
 
 		void dump(Testbench *tb);
 		void dump_q(Testbench *tb);
-		std::string get_str(Testbench *tb);
+		std::string get_cov_str();
 		void print();
 		bool failed();
 		void check_failed();
@@ -48,6 +48,7 @@ struct doutput_t {
 		std::string get_str();
 
 		#ifdef TAINT_EN
+		std::string get_cov_t0_str();
 		void print_taint_map();
 		void print_taint_diff(doutput_t *other);
 		bool compare_taints(doutput_t *other);

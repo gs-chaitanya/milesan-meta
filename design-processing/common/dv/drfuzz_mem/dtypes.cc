@@ -75,9 +75,39 @@ void doutput_t::dump(Testbench *tb){ // write current values into json
 
 }
 
-std::string doutput_t::get_str(Testbench *tb){ // write current values into json
+// std::string doutput_t::get_str(){ // write current values into json
+//     std::stringstream cov_ofstream;
+//     cov_ofstream << "{\"coverage\":[";
+//     for(int i=0; i<N_COV_POINTS_b32; i++){
+//         int trail = 32;
+//         if(i == N_COV_POINTS_b32-1 && N_COV_TRAIL_BITS != 0) trail = N_COV_TRAIL_BITS;
+//         for(int j=0; j<trail; j++){
+//             cov_ofstream << ((this->coverage[i] & (1<<j))>>j);
+//             if((i != N_COV_POINTS_b32-1) || (j!=trail-1)) cov_ofstream << ",";
+//         }
+//     }
+//     cov_ofstream << "],";
+//     cov_ofstream << std::endl;
+//     #ifdef TAINT_EN
+//     cov_ofstream << "\"taints\":[";
+//     for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){
+//         int trail = 32;
+//         if(i == N_TAINT_OUTPUTS_b32-1 && N_TAINT_OUTPUT_TRAIL_BITS != 0) trail = N_TAINT_OUTPUT_TRAIL_BITS;
+//         for(int j=0; j<trail; j++){
+//             cov_ofstream << ((this->taints[i] & (1<<j))>>j);
+//             if((i != N_TAINT_OUTPUTS_b32-1) || (j != trail-1)) cov_ofstream << ",";
+//         }
+//     }
+//     cov_ofstream << "],";
+//     #endif // TAINT_EN
+//     cov_ofstream << "\"ticks\": " << tb->tick_count_;
+//     cov_ofstream << "}";
+//     return cov_ofstream.str();
+
+// }
+std::string doutput_t::get_cov_str(){ // write current values into json
     std::stringstream cov_ofstream;
-    cov_ofstream << "{\"coverage\":[";
+    cov_ofstream << "[";
     for(int i=0; i<N_COV_POINTS_b32; i++){
         int trail = 32;
         if(i == N_COV_POINTS_b32-1 && N_COV_TRAIL_BITS != 0) trail = N_COV_TRAIL_BITS;
@@ -86,10 +116,14 @@ std::string doutput_t::get_str(Testbench *tb){ // write current values into json
             if((i != N_COV_POINTS_b32-1) || (j!=trail-1)) cov_ofstream << ",";
         }
     }
-    cov_ofstream << "],";
-    cov_ofstream << std::endl;
-    #ifdef TAINT_EN
-    cov_ofstream << "\"taints\":[";
+    cov_ofstream << "]";
+    return cov_ofstream.str();
+
+}
+#ifdef TAINT_EN
+std::string doutput_t::get_cov_t0_str(){ // write current values into json
+    std::stringstream cov_ofstream;
+    cov_ofstream << "[";
     for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){
         int trail = 32;
         if(i == N_TAINT_OUTPUTS_b32-1 && N_TAINT_OUTPUT_TRAIL_BITS != 0) trail = N_TAINT_OUTPUT_TRAIL_BITS;
@@ -99,17 +133,11 @@ std::string doutput_t::get_str(Testbench *tb){ // write current values into json
         }
     }
     cov_ofstream << "],";
-    #endif // TAINT_EN
-    cov_ofstream << "\"ticks\": " << tb->tick_count_ << ",";
-    cov_ofstream << "\"id\": " << "\"" << get_id() << "\",";
-    cov_ofstream << "\"inst\": " << "\"" << INST << "\",";
-    cov_ofstream << "\"dut\": " <<  "\"" << DUT <<"\",";
-    cov_ofstream << "\"elf\": " <<  "\"" << get_sramelf() << "\"";
-
-    cov_ofstream << "}";
     return cov_ofstream.str();
-
 }
+#endif
+
+
 
 
 void doutput_t::dump_q(Testbench *tb){ // pickle current values into json like format
@@ -299,6 +327,7 @@ void doutput_t::print_increase(doutput_t *other){ // increase of this by adding 
 }
 
 void doutput_t::add_or(doutput_t *other){
+    assert(other != nullptr);
     for(int i=0; i<N_COV_POINTS_b32; i++){
         this->coverage[i] |= other->coverage[i];
     }
