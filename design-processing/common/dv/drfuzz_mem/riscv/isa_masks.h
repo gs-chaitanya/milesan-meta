@@ -12,6 +12,15 @@
 #define FUNCT7_BIT 25
 #define FUNCT7_MASK 0x7F
 
+#define FUNCT5_BIT 27
+#define FUNCT5_MASK 0x1F
+
+#define FMT_BIT 25
+#define FMT_MASK 0x3
+
+#define RM_BIT 12
+#define RM_MASK 0x7
+
 #define RS1_BIT 15
 #define RS1_MASK 0x1F
 
@@ -37,15 +46,3 @@
 
 #define IMMJ_BIT 12
 #define IMMJ_MASK 0xFFFFF
-
-// #define LUI_OPCODE 0b0110111
-// #define AUIPC_OPCODE 0b0010111
-// #define JAL_OPCODE 0b1101111
-// #define JALR_OPCODE 0b1100111
-// #define BEQ_OPCODE 0b1100011
-// #define BNE_OPCODE 0b1100011
-// #define BLT_OPCODE 0b1100011
-// #define ADDI_OPCODE 0b0010011
-#define I_OPCODE 0b0010011
-
-#define INST_TS "RegImmR12D"
