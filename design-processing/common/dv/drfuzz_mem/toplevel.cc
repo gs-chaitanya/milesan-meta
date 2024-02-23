@@ -22,7 +22,7 @@
 static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simlen, bool reset = false, bool stop_pc_tainted = false) {
 	if (reset){
 		tb->meta_reset();
-		#ifdef TAIN_EN
+		#ifdef TAINT_EN
 		tb->meta_reset_t0();
 		#endif // TAINT_EN
 		tb->reset();
@@ -72,7 +72,6 @@ static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simle
 			std::cout << "Reached SIMLEN (" << simlen << " cycles). Stopping." << std::endl;
 		#endif
 		#ifdef TAINT_EN
-		#ifndef DISABLE_PC_TAINT
 		if(tb->module_->pc_probe_t0){
 			#ifdef PRINT_TAINT_PC
 			std::cout << "PC tainted\n";
@@ -90,8 +89,7 @@ static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simle
 			// tb->meta_reset_pc_t0();
 			#endif
 		}
-		#endif // DISABLE_PC_TAINT
-		#endif // TAIN_EN
+		#endif // TAINT_EN
 
 		#ifdef DUMP_COV_OVER_TICKS
 		#ifdef EN_COV_QUANTIZATION
@@ -155,7 +153,7 @@ long fuzz(size_t simlen, bool prune = true){
 	Queue *min_hw_q = seed->copy();
 	
 	if(corpus->is_interesting(seed)){
-		#ifdef TAIN_EN
+		#ifdef TAINT_EN
 		size_t n_untoggled_and_tainted_mux = seed->get_accumulated_output()->get_untoggled_taintcount();
 		if(n_untoggled_and_tainted_mux == 0){
 			std::cout << "Seed did not taint any untoggled mux.\n"; // TODO do this for only untoggled mux
@@ -232,7 +230,7 @@ long fuzz(size_t simlen, bool prune = true){
 				tb->clear_outputs();
 				tb->clear_instructions();
 
-				#ifdef TAIN_EN
+				#ifdef TAINT_EN
 				size_t n_untainted_mux = corpus->get_n_untoggled_and_untainted_mux(mut_q);
 				#endif
 				if(corpus->is_interesting(mut_q)){		
@@ -381,7 +379,7 @@ void test_mutators(){
 		mutators->pop_front();
 		while(!mut->is_done()){
 			Queue *mut_q = mut->apply_next(q);
-			#ifdef TAIN_EN
+			#ifdef TAINT_EN
 			if(prev_q != nullptr) mut_q->reduce_instruction_taints(prev_q);
 			#endif
 			mut_q->print_instructions();
@@ -425,7 +423,7 @@ void test_ISA_fuzz(size_t simlen){
 	for(int i=IMMI_BIT; i<31; i++){
 
 		// seed2->push_tb_instruction(new I_Instruction(0xca4,0x0091e1b3,0x7<<i));
-		seed2->push_tb_instruction(new I_Instruction(0xcb8,0x97b38393,0x1<<i));
+		seed2->push_tb_instruction(new RegImmInstruction(0xcb8,0x97b38393,0x1<<i,""));
 		tb->push_instructions(seed2->pop_tb_instructions());
 
 		fuzz_once(tb, simlen, true);
@@ -493,7 +491,7 @@ void test_load_ins(){
 
 	uint32_t mask;
 	mask = IMMI_MASK<<IMMI_BIT;
-	std::cout << "eq: " << q->instructions.front()->equals(new R_Instruction(0x281c,0xb7f47493,mask)) << std::endl;
+	std::cout << "eq: " << q->instructions.front()->equals(new R12DInstruction(0x281c,0xb7f47493,mask,"")) << std::endl;
 
 }
 

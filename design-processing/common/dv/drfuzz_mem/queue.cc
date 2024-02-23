@@ -39,19 +39,14 @@ void Queue::load_instructions(){
         std::string address_str = inst_i["addr"].asString();
         std::string bytecode_str = inst_i["bytecode"].asString();
         std::string bytecode_t0_str = inst_i["bytecode_t0"].asString();
-        // uint32_t bytecode_t0 = 0;
-        // for(auto &i_bytecode_t0: inst_i["bytecode_t0"]){
-        //     std::string mask_str = i_bytecode_t0["mask"].asString();
-        //     uint32_t mask = std::stoul(mask_str,nullptr,16); 
-        //     bytecode_t0 |= mask << i_bytecode_t0["offset"].asUInt();
-        // }
+        std::string i_str = inst_i["str"].asString();
         std::string type= inst_i["type"].asString();
         uint32_t addr = std::stoul(address_str, nullptr, 16);
         uint32_t bytecode = std::stoul(bytecode_str, nullptr, 16);
         uint32_t bytecode_t0 = std::stoul(bytecode_t0_str, nullptr, 16);
         Instruction *new_inst;
-        if(type=="R") new_inst = new R_Instruction(addr,bytecode,bytecode_t0);
-        else if(type=="I") new_inst = new I_Instruction(addr,bytecode,bytecode_t0);
+        if(type=="R12D") new_inst = new R12DInstruction(addr,bytecode,bytecode_t0,i_str);
+        else if(type=="RegImm") new_inst = new RegImmInstruction(addr,bytecode,bytecode_t0,i_str);
         else assert(0); // not supported
         this->instructions.push_back(new_inst);
     }
@@ -63,6 +58,10 @@ void Queue::load_instructions(){
         std::cout << "Did not load any instructions from MUT_INST_PATH \"" << mut_inst_path << "\"" << std::endl;
     }
 
+}
+
+void Queue::decode_instructions(){
+    for(int i=0; i<this->instructions.size(); i++) this->instructions[i]->decode();
 }
 
 void Queue::print_instructions(){
@@ -258,9 +257,12 @@ void Queue::recompute_inst_taint_hw(){
 
 #ifdef TAINT_EN
 void Queue::reduce_instruction_taints(Queue *in_q){
-    assert(this->instructions.size() == in_q->instructions.size());
+    assert(this->instructions.size() >= in_q->instructions.size()); // allow that in_q has less instructions
     for(int i=0; i<in_q->instructions.size(); i++){
-        this->instructions[i]->set_binary_t0(this->instructions[i]->bytecode_t0 & in_q->instructions[i]->bytecode_t0);
+        for(int j=0; j<this->instructions.size(); j++){
+            if(this->instructions[j]->addr == in_q->instructions[i]->addr)
+                this->instructions[j]->set_binary_t0(this->instructions[j]->bytecode_t0 & in_q->instructions[i]->bytecode_t0);
+        }
     }
     this->recompute_inst_taint_hw();
 }

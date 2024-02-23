@@ -11,7 +11,7 @@ void Testbench::reset(){
     this->got_stop_req = false;
     this->module_->rst_ni = 1;
     this->module_->meta_rst_ni = 1;
-    #ifdef TAIN_EN
+    #ifdef TAINT_EN
     this->module_->meta_rst_ni_t0 = 1;
     #ifdef DISABLE_PC_TAINT
     this->module_->meta_reset_pc_t0 = 1;
@@ -29,17 +29,17 @@ void Testbench::meta_reset(){
     this->module_->rst_ni = 1; // deassert normal reset while meta reset is running
     this->tick(1);
     this->module_->meta_rst_ni = 0;
-    #ifdef TAIN_EN
+    #ifdef TAINT_EN
     this->module_->meta_rst_ni_t0 = 0;
     #endif
     this->tick(N_META_RESET_TICKS);
     this->module_->meta_rst_ni = 1;
-    #ifdef TAIN_EN
+    #ifdef TAINT_EN
     this->module_->meta_rst_ni_t0 = 1;
     #endif
 }
 
-#ifdef TAIN_EN
+#ifdef TAINT_EN
 void Testbench::meta_reset_t0(){
     this->module_->meta_rst_ni_t0 = 0;
     this->tick(N_META_RESET_TICKS);
@@ -183,9 +183,9 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
             else{
                 assert(intercept->alignment == 4);
                 module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o & (0xFFFFFFFFULL) | ((uint64_t) intercept->get_binary())<<32) : module_->mem_rdata_o;
-                #ifdef TAIN_EN
+                #ifdef TAINT_EN
                 module_->mem_rdata_o_t0 = intercept->inject_taint ? ((uint64_t) intercept->get_binary_t0())<<32 : 0x0;
-                #endif // TAIN_EN
+                #endif // TAINT_EN
                 #ifdef PRINT_INTERCEPT
                 intercept->print_intercept((module_->mem_rdata_o&(0xFFFFFFFFULL<<32))>>32,0x0);
                 #endif // PRINT_INTERCEPT
@@ -210,14 +210,14 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
             intercept->retired = true;
             intercept = nullptr;
             #ifdef DUAL_MEM
-            #ifdef TAIN_EN
+            #ifdef TAINT_EN
             module_->instr_mem_rdata_t0 = 0x0;
             #endif // TAINT_EN
             module_->intercept_instr_mem_en = 0;
             #else
             #ifdef TAINT_EN
             module_->mem_rdata_o_t0 = 0x0;
-            #endif // TAIN_EN
+            #endif // TAINT_EN
             module_->intercept_mem_en = 0;
             #endif // DUAL_MEM
         }
@@ -258,7 +258,7 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
 #ifdef TAINT_EN
 void Testbench::read_vtaints(uint32_t* taints){
      for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){
-        #ifdef READ_UNTIL_PC_TAINT_PC
+        #ifdef READ_UNTIL_PC_TAINTED
         if(this->module_->pc_probe_t0) taints[i] = 0;
         else taints[i] = this->module_->auto_cover_out_t0[i];
         #else
@@ -335,14 +335,15 @@ std::deque<Instruction *> *Testbench::pop_instructions(){
 }
 
 int Testbench::check_all_inst_retired(){
+    int all_retired = 1;
     for(auto &inst: this->intercept_instructions){
         if(!inst.second->retired) {
             std::cout << "Instruction not retired: ";
             inst.second->print();
-            return 0;
+            all_retired = 0;
         }
     }
-    return 1;
+    return all_retired;
 }
 
 void Testbench::clear_instructions(){

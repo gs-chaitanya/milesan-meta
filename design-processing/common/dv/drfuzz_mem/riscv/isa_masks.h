@@ -48,4 +48,4 @@
 // #define ADDI_OPCODE 0b0010011
 #define I_OPCODE 0b0010011
 
-#define INST_TS "RI"
+#define INST_TS "RegImmR12D"

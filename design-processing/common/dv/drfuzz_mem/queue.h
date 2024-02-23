@@ -63,7 +63,7 @@ class Queue {
         bool failed();
         size_t compute_inst_taint_hw();
         void recompute_inst_taint_hw();
-
+        void decode_instructions();
         #ifdef TAINT_EN
         // void invert_tainted_bits();
         // void check_taint_progess();
