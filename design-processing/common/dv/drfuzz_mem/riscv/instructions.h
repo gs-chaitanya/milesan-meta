@@ -52,7 +52,7 @@ class Instruction{
             s << "\"addr\":\"0x" << std::hex << this->get_address() << "\",";
             s << "\"bytecode\":\"0x" << std::hex << this->bytecode << "\",";
             s << "\"bytecode_t0\":\"0x" << std::hex << this->bytecode_t0 << "\",";
-            s << "\"i_str\":\"0x" << std::hex << this->i_str << "\",";
+            s << "\"i_str\":\"" << std::hex << this->i_str << "\",";
             s << "\"type\":\"" << this->type << "\"}"; 
             return s.str();
         }
@@ -156,18 +156,6 @@ class RegImmInstruction: public virtual Instruction{
         }
 
         void decode(){
-            // if(this->opcode_t0 || this->funct3_t0) std::cout << std::left << std::setw(10) << "\033[1;31m" << this->i_str << "\033[1;0m";
-            // else std::cout << std::left << std::setw(10) << this->i_str;
-            // std::cout << " ";
-            // if(this->rd_t0)  std::cout << "\033[1;31m" << " r" << std::setw(2) << this->rd << "\033[1;0m";
-            // else std::cout  << " r" << this->rd;
-            // std::cout << " ";
-            // if(this->rs1_t0)  std::cout << "\033[1;31m" << " r" << std::setw(2) << this->rs1 << "\033[1;0m";
-            // else std::cout << " r" << this->rs1;
-            // std::cout << " ";
-            // if(this->imm_t0) std::cout << "\033[1;31m" << std::right << std::setw(5) << this->imm << "\033[1;0m";
-            // else std::cout << std::right << std::setw(5) << this->imm;
-
             if(this->opcode_t0 || this->funct3_t0) printf("\033[1;31m%10s\033[1;0m",this->i_str.c_str());
             else printf("%10s",this->i_str.c_str());
             std::cout << " ";
@@ -177,8 +165,8 @@ class RegImmInstruction: public virtual Instruction{
             if(this->rs1_t0) printf("\033[1;31mr%02i\033[1;0m",this->rs1);
             else printf("r%02i",this->rs1);
             std::cout << " ";
-            if(this->imm_t0) printf("\033[1;31mr%05i\033[1;0m",this->imm);
-            else printf("r%05i",this->imm);
+            if(this->imm_t0) printf("\033[1;31m%05i\033[1;0m",this->imm);
+            else printf("%05i",this->imm);
         }
 
         RegImmInstruction *copy(){
@@ -472,6 +460,494 @@ class IntToFloatInstruction: public virtual Instruction{
             return new IntToFloatInstruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->i_str);
         }
 };
+
+
+
+
+
+class Float4Instruction: public virtual Instruction{
+    public:
+        Float4Instruction(uint32_t addr, uint32_t bytecode, std::string i_str): Instruction(addr,true,false,i_str,"F4"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(0x0);
+        };
+
+        Float4Instruction(uint32_t addr, uint32_t bytecode, uint32_t bytecode_t0, std::string i_str): Instruction(addr,true,true,i_str,"F4"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(bytecode_t0);
+        };
+
+        uint32_t frd;
+        uint32_t rm; // rounding mode
+        uint32_t frs1;
+        uint32_t frs2;
+        uint32_t frs3;
+
+        uint32_t frd_t0;
+        uint32_t rm_t0;
+        uint32_t frs1_t0;
+        uint32_t frs2_t0;
+        uint32_t frs3_t0;
+
+        uint32_t get_binary(){
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (frs2&RS2_MASK)<<RS2_BIT | (frs3&RS3_MASK)<<RS3_BIT | (rm&RM_MASK)<<RM_BIT | (frd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode;
+        }
+
+        void set_binary(uint32_t bytecode){
+            this->bytecode = bytecode;
+            frs1 = (bytecode>>RS1_BIT)&RS1_MASK;
+            frs2 = (bytecode>>RS2_BIT)&RS2_MASK;
+            frs3 = (bytecode>>RS3_BIT)&RS3_MASK;
+            rm = (bytecode>>RM_BIT)&RM_MASK;
+            frd = (bytecode>>RD_BIT)&RD_MASK;
+            opcode = (bytecode>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (frs2&RS2_MASK)<<RS2_BIT | (frs3&RS3_MASK)<<RS3_BIT | (rm&RM_MASK)<<RM_BIT | (frd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        uint32_t get_binary_t0(){
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (frs2_t0&RS2_MASK)<<RS2_BIT | (frs3_t0&RS3_MASK)<<RS3_BIT | (rm_t0&RM_MASK)<<RM_BIT | (frd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode_t0;
+        }
+        
+        void set_binary_t0(uint32_t bytecode_t0){
+            this->bytecode_t0 = bytecode_t0;
+            frs1_t0 = (bytecode_t0>>RS1_BIT)&RS1_MASK;
+            frs2_t0 = (bytecode_t0>>RS2_BIT)&RS2_MASK;
+            frs3_t0 = (bytecode_t0>>RS3_BIT)&RS3_MASK;
+            rm_t0 =  (bytecode_t0>>RM_BIT)&RM_MASK;
+            frd_t0 = (bytecode_t0>>RD_BIT)&RD_MASK;
+            opcode_t0 = (bytecode_t0>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (frs2_t0&RS2_MASK)<<RS2_BIT | (frs3_t0&RS3_MASK)<<RS3_BIT | (rm_t0&RM_MASK)<<RM_BIT | (frd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        void decode(){
+            if(this->opcode_t0 || this->rm_t0) printf("\033[1;31m%10s\033[1;0m",this->i_str.c_str());
+            else printf("%10s",this->i_str.c_str());
+            std::cout << " ";
+            if(this->frd_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frd);
+            else printf("fr%02i",this->frd);
+            std::cout << " ";
+            if(this->frs1_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frs1);
+            else printf("fr%02i",this->frs1);
+            std::cout << " ";
+            if(this->frs2_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frs2);
+            else printf("fr%02i",this->frs2);
+            std::cout << " ";
+            if(this->frs3_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frs3);
+            else printf("fr%02i",this->frs3);
+        }
+
+        Float4Instruction *copy(){
+            if(inject_taint) return new Float4Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->bytecode_t0, this->i_str);
+            return new Float4Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->i_str);
+        }
+};
+
+
+
+
+class Float3Instruction: public virtual Instruction{
+    public:
+        Float3Instruction(uint32_t addr, uint32_t bytecode, std::string i_str): Instruction(addr,true,false,i_str,"F3"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(0x0);
+        };
+
+        Float3Instruction(uint32_t addr, uint32_t bytecode, uint32_t bytecode_t0, std::string i_str): Instruction(addr,true,true,i_str,"F3"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(bytecode_t0);
+        };
+
+        uint32_t frd;
+        uint32_t rm; // rounding mode
+        uint32_t frs1;
+        uint32_t frs2;
+
+        uint32_t frd_t0;
+        uint32_t rm_t0;
+        uint32_t frs1_t0;
+        uint32_t frs2_t0;
+
+        uint32_t get_binary(){
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (frs2&RS2_MASK)<<RS2_BIT | (rm&RM_MASK)<<RM_BIT | (frd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode;
+        }
+
+        void set_binary(uint32_t bytecode){
+            this->bytecode = bytecode;
+            frs1 = (bytecode>>RS1_BIT)&RS1_MASK;
+            frs2 = (bytecode>>RS2_BIT)&RS2_MASK;
+            rm = (bytecode>>RM_BIT)&RM_MASK;
+            frd = (bytecode>>RD_BIT)&RD_MASK;
+            opcode = (bytecode>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (frs2&RS2_MASK)<<RS2_BIT| (rm&RM_MASK)<<RM_BIT | (frd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        uint32_t get_binary_t0(){
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (frs2_t0&RS2_MASK)<<RS2_BIT | (rm_t0&RM_MASK)<<RM_BIT | (frd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode_t0;
+        }
+        
+        void set_binary_t0(uint32_t bytecode_t0){
+            this->bytecode_t0 = bytecode_t0;
+            frs1_t0 = (bytecode_t0>>RS1_BIT)&RS1_MASK;
+            frs2_t0 = (bytecode_t0>>RS2_BIT)&RS2_MASK;
+            rm_t0 =  (bytecode_t0>>RM_BIT)&RM_MASK;
+            frd_t0 = (bytecode_t0>>RD_BIT)&RD_MASK;
+            opcode_t0 = (bytecode_t0>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (frs2_t0&RS2_MASK)<<RS2_BIT | (rm_t0&RM_MASK)<<RM_BIT | (frd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        void decode(){
+            if(this->opcode_t0 || this->rm_t0) printf("\033[1;31m%10s\033[1;0m",this->i_str.c_str());
+            else printf("%10s",this->i_str.c_str());
+            std::cout << " ";
+            if(this->frd_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frd);
+            else printf("fr%02i",this->frd);
+            std::cout << " ";
+            if(this->frs1_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frs1);
+            else printf("fr%02i",this->frs1);
+            std::cout << " ";
+            if(this->frs2_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frs2);
+            else printf("fr%02i",this->frs2);
+        }
+
+        Float3Instruction *copy(){
+            if(inject_taint) return new Float3Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->bytecode_t0, this->i_str);
+            return new Float3Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->i_str);
+        }
+};
+
+
+
+class Float3NoRmInstruction: public virtual Instruction{
+    public:
+        Float3NoRmInstruction(uint32_t addr, uint32_t bytecode, std::string i_str): Instruction(addr,true,false,i_str,"F3NORM"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(0x0);
+        };
+
+        Float3NoRmInstruction(uint32_t addr, uint32_t bytecode, uint32_t bytecode_t0, std::string i_str): Instruction(addr,true,true,i_str,"F3NORM"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(bytecode_t0);
+        };
+
+        uint32_t frd;
+        uint32_t frs1;
+        uint32_t frs2;
+
+        uint32_t frd_t0;
+        uint32_t frs1_t0;
+        uint32_t frs2_t0;
+
+        uint32_t get_binary(){
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (frs2&RS2_MASK)<<RS2_BIT | (frd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode;
+        }
+
+        void set_binary(uint32_t bytecode){
+            this->bytecode = bytecode;
+            frs1 = (bytecode>>RS1_BIT)&RS1_MASK;
+            frs2 = (bytecode>>RS2_BIT)&RS2_MASK;
+            frd = (bytecode>>RD_BIT)&RD_MASK;
+            opcode = (bytecode>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (frs2&RS2_MASK)<<RS2_BIT | (frd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        uint32_t get_binary_t0(){
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (frs2_t0&RS2_MASK)<<RS2_BIT | (frd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode_t0;
+        }
+        
+        void set_binary_t0(uint32_t bytecode_t0){
+            this->bytecode_t0 = bytecode_t0;
+            frs1_t0 = (bytecode_t0>>RS1_BIT)&RS1_MASK;
+            frs2_t0 = (bytecode_t0>>RS2_BIT)&RS2_MASK;
+            frd_t0 = (bytecode_t0>>RD_BIT)&RD_MASK;
+            opcode_t0 = (bytecode_t0>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (frs2_t0&RS2_MASK)<<RS2_BIT | (frd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        void decode(){
+            if(this->opcode_t0) printf("\033[1;31m%10s\033[1;0m",this->i_str.c_str());
+            else printf("%10s",this->i_str.c_str());
+            std::cout << " ";
+            if(this->frd_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frd);
+            else printf("fr%02i",this->frd);
+            std::cout << " ";
+            if(this->frs1_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frs1);
+            else printf("fr%02i",this->frs1);
+            std::cout << " ";
+            if(this->frs2_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frs2);
+            else printf("fr%02i",this->frs2);
+        }
+
+        Float3NoRmInstruction *copy(){
+            if(inject_taint) return new Float3NoRmInstruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->bytecode_t0, this->i_str);
+            return new Float3NoRmInstruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->i_str);
+        }
+};
+
+
+
+class Float2Instruction: public virtual Instruction{
+    public:
+        Float2Instruction(uint32_t addr, uint32_t bytecode, std::string i_str): Instruction(addr,true,false,i_str,"F2"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(0x0);
+        };
+
+        Float2Instruction(uint32_t addr, uint32_t bytecode, uint32_t bytecode_t0, std::string i_str): Instruction(addr,true,true,i_str,"F2"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(bytecode_t0);
+        };
+
+        uint32_t frd;
+        uint32_t frs1;
+
+        uint32_t frd_t0;
+        uint32_t frs1_t0;
+
+        uint32_t get_binary(){
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (frd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode;
+        }
+
+        void set_binary(uint32_t bytecode){
+            this->bytecode = bytecode;
+            frs1 = (bytecode>>RS1_BIT)&RS1_MASK;
+            frd = (bytecode>>RD_BIT)&RD_MASK;
+            opcode = (bytecode>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (frd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        uint32_t get_binary_t0(){
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (frd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode_t0;
+        }
+        
+        void set_binary_t0(uint32_t bytecode_t0){
+            this->bytecode_t0 = bytecode_t0;
+            frs1_t0 = (bytecode_t0>>RS1_BIT)&RS1_MASK;
+            frd_t0 = (bytecode_t0>>RD_BIT)&RD_MASK;
+            opcode_t0 = (bytecode_t0>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (frd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        void decode(){
+            if(this->opcode_t0) printf("\033[1;31m%10s\033[1;0m",this->i_str.c_str());
+            else printf("%10s",this->i_str.c_str());
+            std::cout << " ";
+            if(this->frd_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frd);
+            else printf("fr%02i",this->frd);
+            std::cout << " ";
+            if(this->frs1_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frs1);
+            else printf("fr%02i",this->frs1);
+        }
+
+        Float2Instruction *copy(){
+            if(inject_taint) return new Float2Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->bytecode_t0, this->i_str);
+            return new Float2Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->i_str);
+        }
+};
+
+
+class FloatIntRd2Instruction: public virtual Instruction{
+    public:
+        FloatIntRd2Instruction(uint32_t addr, uint32_t bytecode, std::string i_str): Instruction(addr,true,false,i_str,"FIRD2"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(0x0);
+        };
+
+        FloatIntRd2Instruction(uint32_t addr, uint32_t bytecode, uint32_t bytecode_t0, std::string i_str): Instruction(addr,true,true,i_str,"FIRD2"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(bytecode_t0);
+        };
+
+        uint32_t rd;
+        uint32_t frs1;
+        uint32_t frs2;
+
+        uint32_t rd_t0;
+        uint32_t frs1_t0;
+        uint32_t frs2_t0;
+
+        uint32_t get_binary(){
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (frs2&RS2_MASK)<<RS2_BIT | (rd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode;
+        }
+
+        void set_binary(uint32_t bytecode){
+            this->bytecode = bytecode;
+            frs1 = (bytecode>>RS1_BIT)&RS1_MASK;
+            frs2 = (bytecode>>RS2_BIT)&RS2_MASK;
+            rd = (bytecode>>RD_BIT)&RD_MASK;
+            opcode = (bytecode>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (frs2&RS2_MASK)<<RS2_BIT | (rd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        uint32_t get_binary_t0(){
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (frs2_t0&RS2_MASK)<<RS2_BIT | (rd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode_t0;
+        }
+        
+        void set_binary_t0(uint32_t bytecode_t0){
+            this->bytecode_t0 = bytecode_t0;
+            frs1_t0 = (bytecode_t0>>RS1_BIT)&RS1_MASK;
+            frs2_t0 = (bytecode_t0>>RS2_BIT)&RS2_MASK;
+            rd_t0 = (bytecode_t0>>RD_BIT)&RD_MASK;
+            opcode_t0 = (bytecode_t0>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (frs2_t0&RS2_MASK)<<RS2_BIT | (rd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        void decode(){
+            if(this->opcode_t0) printf("\033[1;31m%10s\033[1;0m",this->i_str.c_str());
+            else printf("%10s",this->i_str.c_str());
+            std::cout << " ";
+            if(this->rd_t0) printf("\033[1;31mr%02i\033[1;0m",this->rd);
+            else printf("r%02i",this->rd);
+            std::cout << " ";
+            if(this->frs1_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frs1);
+            else printf("fr%02i",this->frs1);
+            std::cout << " ";
+            if(this->frs2_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frs2);
+            else printf("fr%02i",this->frs2);
+        }
+
+        FloatIntRd2Instruction *copy(){
+            if(inject_taint) return new FloatIntRd2Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->bytecode_t0, this->i_str);
+            return new FloatIntRd2Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->i_str);
+        }
+};
+
+
+
+
+class FloatIntRd1Instruction: public virtual Instruction{
+    public:
+        FloatIntRd1Instruction(uint32_t addr, uint32_t bytecode, std::string i_str): Instruction(addr,true,false,i_str,"FIRD1"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(0x0);
+        };
+
+        FloatIntRd1Instruction(uint32_t addr, uint32_t bytecode, uint32_t bytecode_t0, std::string i_str): Instruction(addr,true,true,i_str,"FIRD1"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(bytecode_t0);
+        };
+
+        uint32_t rd;
+        uint32_t frs1;
+
+        uint32_t rd_t0;
+        uint32_t frs1_t0;
+
+        uint32_t get_binary(){
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (rd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode;
+        }
+
+        void set_binary(uint32_t bytecode){
+            this->bytecode = bytecode;
+            frs1 = (bytecode>>RS1_BIT)&RS1_MASK;
+            rd = (bytecode>>RD_BIT)&RD_MASK;
+            opcode = (bytecode>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode==(frs1&RS1_MASK)<<RS1_BIT | (rd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        uint32_t get_binary_t0(){
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (rd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode_t0;
+        }
+        
+        void set_binary_t0(uint32_t bytecode_t0){
+            this->bytecode_t0 = bytecode_t0;
+            frs1_t0 = (bytecode_t0>>RS1_BIT)&RS1_MASK;
+            rd_t0 = (bytecode_t0>>RD_BIT)&RD_MASK;
+            opcode_t0 = (bytecode_t0>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode_t0==(frs1_t0&RS1_MASK)<<RS1_BIT | (rd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        void decode(){
+            if(this->opcode_t0) printf("\033[1;31m%10s\033[1;0m",this->i_str.c_str());
+            else printf("%10s",this->i_str.c_str());
+            std::cout << " ";
+            if(this->rd_t0) printf("\033[1;31mr%02i\033[1;0m",this->rd);
+            else printf("r%02i",this->rd);
+            std::cout << " ";
+            if(this->frs1_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frs1);
+            else printf("fr%02i",this->frs1);
+        }
+
+        FloatIntRd1Instruction *copy(){
+            if(inject_taint) return new FloatIntRd1Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->bytecode_t0, this->i_str);
+            return new FloatIntRd1Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->i_str);
+        }
+};
+
+
+class FloatIntRs1Instruction: public virtual Instruction{
+    public:
+        FloatIntRs1Instruction(uint32_t addr, uint32_t bytecode, std::string i_str): Instruction(addr,true,false,i_str,"FIRD1"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(0x0);
+        };
+
+        FloatIntRs1Instruction(uint32_t addr, uint32_t bytecode, uint32_t bytecode_t0, std::string i_str): Instruction(addr,true,true,i_str,"FIRD1"){
+            this->set_binary(bytecode);
+            this->set_binary_t0(bytecode_t0);
+        };
+
+        uint32_t frd;
+        uint32_t rs1;
+
+        uint32_t frd_t0;
+        uint32_t rs1_t0;
+
+        uint32_t get_binary(){
+            assert(bytecode==(rs1&RS1_MASK)<<RS1_BIT | (frd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode;
+        }
+
+        void set_binary(uint32_t bytecode){
+            this->bytecode = bytecode;
+            rs1 = (bytecode>>RS1_BIT)&RS1_MASK;
+            frd = (bytecode>>RD_BIT)&RD_MASK;
+            opcode = (bytecode>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode==(rs1&RS1_MASK)<<RS1_BIT | (frd&RD_MASK)<<RD_BIT | (opcode&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        uint32_t get_binary_t0(){
+            assert(bytecode_t0==(rs1_t0&RS1_MASK)<<RS1_BIT | (frd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+            return bytecode_t0;
+        }
+        
+        void set_binary_t0(uint32_t bytecode_t0){
+            this->bytecode_t0 = bytecode_t0;
+            rs1_t0 = (bytecode_t0>>RS1_BIT)&RS1_MASK;
+            frd_t0 = (bytecode_t0>>RD_BIT)&RD_MASK;
+            opcode_t0 = (bytecode_t0>>OPCODE_BIT)&OPCODE_MASK;
+            assert(bytecode_t0==(rs1_t0&RS1_MASK)<<RS1_BIT | (frd_t0&RD_MASK)<<RD_BIT | (opcode_t0&OPCODE_MASK)<<OPCODE_BIT);
+        }
+
+        void decode(){
+            if(this->opcode_t0) printf("\033[1;31m%10s\033[1;0m",this->i_str.c_str());
+            else printf("%10s",this->i_str.c_str());
+            std::cout << " ";
+            if(this->frd_t0) printf("\033[1;31mfr%02i\033[1;0m",this->frd);
+            else printf("fr%02i",this->frd);
+            std::cout << " ";
+            if(this->rs1_t0) printf("\033[1;31mr%02i\033[1;0m",this->rs1);
+            else printf("r%02i",this->rs1);
+        }
+
+        FloatIntRs1Instruction *copy(){
+            if(inject_taint) return new FloatIntRs1Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->bytecode_t0, this->i_str);
+            return new FloatIntRs1Instruction((this->addr<<DATA_WIDTH_BYTES_LOG2)+this->alignment, this->bytecode, this->i_str);
+        }
+};
+
+
 
 
 
