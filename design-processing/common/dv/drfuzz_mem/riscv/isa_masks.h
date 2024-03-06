@@ -27,6 +27,9 @@
 #define RS2_BIT 20
 #define RS2_MASK 0x1F
 
+#define RS3_BIT 27
+#define RS3_MASK 0x1F
+
 #define IMMI_BIT 20
 #define IMMI_MASK 0xFFF
 
@@ -39,7 +42,6 @@
 #define IMMB12andto5_MASK 0x7F
 #define IMMB11and4to0BIT 7
 #define IMMB11and4to0MASK 0x1F
-
 
 #define IMMU_BIT 12
 #define IMMU_MASK  0xFFFFF
