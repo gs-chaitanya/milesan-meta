@@ -132,7 +132,7 @@ std::string doutput_t::get_cov_t0_str(){ // write current values into json
             if((i != N_TAINT_OUTPUTS_b32-1) || (j != trail-1)) cov_ofstream << ",";
         }
     }
-    cov_ofstream << "],";
+    cov_ofstream << "]";
     return cov_ofstream.str();
 }
 #endif

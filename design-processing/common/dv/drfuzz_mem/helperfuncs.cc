@@ -59,9 +59,9 @@ std::string get_mut_inst_path(){
 }
 
 int get_seed(){
-  if(const char* seed = std::getenv("SEED")) return std::stoi(seed);
+  const static char* seed = std::getenv("SEED");
+  if(seed) return std::stoi(seed);
   else return SEED;
-
 }
 
 std::string get_new_timeout_path(){

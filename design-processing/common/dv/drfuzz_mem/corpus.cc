@@ -24,7 +24,7 @@ void Corpus::dump_current_cov(Testbench *tb){
     if(t_since_last_dump < T_DELTA_COV_DUMP && !is_first_call) return; 
     is_first_call = false;
     #endif
-    this->acc_queue->dump(tb);
+    this->acc_queue->dump_acc(tb);
     this->t_last_dump = now;
     #else
     std::cout << "enable DUMP_COVERAGE compile flag!\n";

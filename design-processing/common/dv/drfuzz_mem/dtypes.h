@@ -57,6 +57,5 @@ struct doutput_t {
 		size_t get_untoggled_taintcount();
 		size_t get_n_untoggled_by_this_and_tainted_by_other(doutput_t *other);
 		#endif
-
 };
 #endif //DTYPE_H
