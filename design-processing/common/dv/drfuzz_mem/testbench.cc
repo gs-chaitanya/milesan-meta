@@ -152,46 +152,64 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
 
         module_->clk_i = !false_tick;
 
+
         if(intercept != nullptr){
-            #ifdef DUAL_MEM
-            module_->intercept_instr_mem_en = 1;
-            module_->intercept_instr_mem_rdata = intercept->inject_inst ? intercept->get_binary() : module_->instr_mem_rdata;
-            module_->instr_mem_rdata_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
-            #ifdef PRINT_INTERCEPT
-            // std::cout << "Intercepting setting module->instr_mem_rdata: " << std::hex <<  module_->intercept_instr_mem_rdata << "(" << std::hex << module_->instr_mem_rdata << ")\n";
-            // std::cout <<  "\tand module->instr_mem_rdata_t0 " << std::hex <<module_->instr_mem_rdata_t0 << std::endl;
-            intercept->print_intercept(module_->instr_mem_rdata,0x0);
-            #endif // PRINT_INTERCEPT
-            #else
-            module_->intercept_mem_en = 1;
-            #if DATA_WIDTH_BYTES == 4
-            module_->intercept_mem_rdata = intercept->inject_inst ?   module_->mem_rdata_o | intercept->get_binary() : module_->mem_rdata_o;
-            module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
-            #else // DATA_WIDTH_BYTES == 8
-            assert(DATA_WIDTH_BYTES==8);
-            if(intercept->alignment == 0){
-                module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o&(0xFFFFFFFFULL<<32) | intercept->get_binary()) : module_->mem_rdata_o;
+            if(intercept->retired){
+                intercept = nullptr;
+                #ifdef DUAL_MEM
                 #ifdef TAINT_EN
-                module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
+                module_->instr_mem_rdata_t0 = 0x0;
                 #endif // TAINT_EN
-                #ifdef PRINT_INTERCEPT
-                intercept->print_intercept(module_->mem_rdata_o&0xFFFFFFFFULL,0x0);
-                #endif // PRINT_INTERCEPT
-
-
+                module_->intercept_instr_mem_en = 0;
+                #else
+                #ifdef TAINT_EN
+                module_->mem_rdata_o_t0 = 0x0;
+                #endif // TAINT_EN
+                module_->intercept_mem_en = 0;
+                #endif // DUAL_MEM
             }
             else{
-                assert(intercept->alignment == 4);
-                module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o & (0xFFFFFFFFULL) | ((uint64_t) intercept->get_binary())<<32) : module_->mem_rdata_o;
-                #ifdef TAINT_EN
-                module_->mem_rdata_o_t0 = intercept->inject_taint ? ((uint64_t) intercept->get_binary_t0())<<32 : 0x0;
-                #endif // TAINT_EN
+                #ifdef DUAL_MEM
+                module_->intercept_instr_mem_en = 1;
+                module_->intercept_instr_mem_rdata = intercept->inject_inst ? intercept->get_binary() : module_->instr_mem_rdata;
+                module_->instr_mem_rdata_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
                 #ifdef PRINT_INTERCEPT
-                intercept->print_intercept((module_->mem_rdata_o&(0xFFFFFFFFULL<<32))>>32,0x0);
+                // std::cout << "Intercepting setting module->instr_mem_rdata: " << std::hex <<  module_->intercept_instr_mem_rdata << "(" << std::hex << module_->instr_mem_rdata << ")\n";
+                // std::cout <<  "\tand module->instr_mem_rdata_t0 " << std::hex <<module_->instr_mem_rdata_t0 << std::endl;
+                intercept->print_intercept(module_->instr_mem_rdata,0x0);
                 #endif // PRINT_INTERCEPT
+                #else
+                module_->intercept_mem_en = 1;
+                #if DATA_WIDTH_BYTES == 4
+                module_->intercept_mem_rdata = intercept->inject_inst ?   module_->mem_rdata_o | intercept->get_binary() : module_->mem_rdata_o;
+                module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
+                #else // DATA_WIDTH_BYTES == 8
+                assert(DATA_WIDTH_BYTES==8);
+                if(intercept->alignment == 0){
+                    module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o&(0xFFFFFFFFULL<<32) | intercept->get_binary()) : module_->mem_rdata_o;
+                    #ifdef TAINT_EN
+                    module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
+                    #endif // TAINT_EN
+                    #ifdef PRINT_INTERCEPT
+                    intercept->print_intercept(module_->mem_rdata_o&0xFFFFFFFFULL,0x0);
+                    #endif // PRINT_INTERCEPT
+
+
+                }
+                else{
+                    assert(intercept->alignment == 4);
+                    module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o & (0xFFFFFFFFULL) | ((uint64_t) intercept->get_binary())<<32) : module_->mem_rdata_o;
+                    #ifdef TAINT_EN
+                    module_->mem_rdata_o_t0 = intercept->inject_taint ? ((uint64_t) intercept->get_binary_t0())<<32 : 0x0;
+                    #endif // TAINT_EN
+                    #ifdef PRINT_INTERCEPT
+                    intercept->print_intercept((module_->mem_rdata_o&(0xFFFFFFFFULL<<32))>>32,0x0);
+                    #endif // PRINT_INTERCEPT
+                }
+                #endif // DATA_WIDTH_BYTES
+                #endif // DUAL_MEM
+                intercept->retired = true;
             }
-            #endif // DATA_WIDTH_BYTES
-            #endif // DUAL_MEM
         }
         module_->eval();
 
@@ -206,24 +224,9 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
         module_->clk_i = 0;
         module_->eval();
 
-        if(intercept){
-            intercept->retired = true;
-            intercept = nullptr;
-            #ifdef DUAL_MEM
-            #ifdef TAINT_EN
-            module_->instr_mem_rdata_t0 = 0x0;
-            #endif // TAINT_EN
-            module_->intercept_instr_mem_en = 0;
-            #else
-            #ifdef TAINT_EN
-            module_->mem_rdata_o_t0 = 0x0;
-            #endif // TAINT_EN
-            module_->intercept_mem_en = 0;
-            #endif // DUAL_MEM
-        }
         #ifdef DUAL_MEM
-        if(this->intercept_instructions.count((module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2)-1)){ // instr_mem returns instruction in subsequent cycle
-            intercept = this->intercept_instructions[(module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2)-1];
+        if(this->intercept_instructions.count((module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
+            intercept = this->intercept_instructions[(module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2)];
             if(!intercept->retired){
                 // #ifdef PRINT_INTERCEPT
                 // std::cout << "Intercepting instruction found for address " << std::hex << intercept->get_address() <<  ", intercepting next cycle" << std::endl; 
@@ -234,8 +237,8 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
             }
             }
         #else // single memory for data and instructions 
-        if(this->intercept_instructions.count((module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2)-1)){ // instr_mem returns instruction in subsequent cycle
-            intercept = this->intercept_instructions[(module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2)-1];
+        if(this->intercept_instructions.count((module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
+            intercept = this->intercept_instructions[(module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2)];
             if(!intercept->retired){
                 // #ifdef PRINT_INTERCEPT
                 // std::cout << "Intercepting instruction found for address " << std::hex << intercept->get_address() <<  ", intercepting next cycle" << std::endl; 
