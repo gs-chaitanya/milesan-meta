@@ -33,7 +33,8 @@ class Queue {
         void deadbeef(){};
         void accumulate_output(doutput_t *);
         bool has_another_instruction();
-        void dump(Testbench *tb);
+        void dump(Testbench *tb); // dumps the queue to the queue dir
+        void dump_acc(Testbench *tb); // dumps the accumulated corpus queue to the cov dir
         std::string get_instructions_json_str();
         void push_tb_instruction(Instruction *tb_instruction);
         void push_tb_instructions(std::deque<Instruction *> *instructions);

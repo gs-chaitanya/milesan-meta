@@ -50,7 +50,14 @@ void Queue::load_instructions(){
         else if(type=="IMMRD") new_inst = new ImmRdInstruction(addr,bytecode,bytecode_t0,i_str);
         else if(type=="F2I") new_inst = new FloatToIntInstruction(addr,bytecode,bytecode_t0,i_str);
         else if(type=="I2F") new_inst = new IntToFloatInstruction(addr,bytecode,bytecode_t0,i_str);
-        else assert(0); // not supported
+        else if(type=="F4") new_inst = new Float4Instruction(addr,bytecode,bytecode_t0,i_str);
+        else if(type=="F3") new_inst = new Float3Instruction(addr,bytecode,bytecode_t0,i_str);
+        else if(type=="F3NORM") new_inst = new Float3NoRmInstruction(addr,bytecode,bytecode_t0,i_str);
+        else if(type=="FIRD2") new_inst = new FloatIntRd2Instruction(addr,bytecode,bytecode_t0,i_str);
+        else if(type=="FIRD1") new_inst = new FloatIntRd1Instruction(addr,bytecode,bytecode_t0,i_str);
+        else if(type=="F2") new_inst = new Float2Instruction(addr,bytecode,bytecode_t0,i_str);
+        else if(type=="FIRS1") new_inst = new FloatIntRs1Instruction(addr,bytecode,bytecode_t0,i_str);
+        else assert(0); // not implemented instruction type
         this->instructions.push_back(new_inst);
     }
     if(this->instructions.size()){
@@ -367,6 +374,35 @@ void Queue::dump(Testbench *tb){
     ofstream << "\n\t\t" << "\"got_stop_request\":" << tb->got_stop_req << ",";
     ofstream << "\n\t\t" << "\"instructions\":" << instruction_str << ",";
     ofstream << "\n\t\t" << "\"id\": " << "\"" << get_id() << "\",";
+    ofstream << "\n\t\t" << "\"seed\": " << get_seed() << ",";
+    ofstream << "\n\t\t" << "\"inst\": " << "\"" << INST << "\",";
+    ofstream << "\n\t\t" << "\"dut\": " <<  "\"" << DUT << "\",";
+    ofstream << "\n\t\t" << "\"elf\": " <<  "\"" << get_sramelf() << "\",";
+    ofstream << "\n\t\t" << "\"cov\":" << this->get_accumulated_output()->get_cov_str() << ",";
+    #ifdef TAINT_EN
+    ofstream << "\n\t\t" << "\"cov_t0\":" << this->get_accumulated_output()->get_cov_t0_str() << ",";
+    #endif
+    ofstream << "\n\t\t" << "\"ticks\":" << tb->tick_count_;
+    ofstream << "\n\t}\n]"; 
+    ofstream.close();
+}
+
+
+void Queue::dump_acc(Testbench *tb){
+    static int q_it = 0;
+    std::string q_dir = get_cov_dir();
+    std::string q_path = q_dir + "/" + std::to_string(q_it++) + ".queue.json";
+    std::cout << "Dumping accumulated queue to " << q_path << std::endl;
+    std::string instruction_str = this->get_instructions_json_str();
+    std::ofstream ofstream;
+    ofstream.open(q_path);
+    ofstream << "[\n\t{\n";
+    ofstream << "\n\t\t" << "\"simsramelf\":\"" << get_sramelf() << "\",";
+    ofstream << "\n\t\t" << "\"mut_inst_path\":\"" << get_mut_inst_path() << "\",";
+    ofstream << "\n\t\t" << "\"got_stop_request\":" << tb->got_stop_req << ",";
+    ofstream << "\n\t\t" << "\"instructions\":" << instruction_str << ",";
+    ofstream << "\n\t\t" << "\"id\": " << "\"" << get_id() << "\",";
+    ofstream << "\n\t\t" << "\"seed\": " << get_seed() << ",";
     ofstream << "\n\t\t" << "\"inst\": " << "\"" << INST << "\",";
     ofstream << "\n\t\t" << "\"dut\": " <<  "\"" << DUT << "\",";
     ofstream << "\n\t\t" << "\"elf\": " <<  "\"" << get_sramelf() << "\",";
