@@ -7,7 +7,7 @@
 #include "corpus.h"
 #include "log.h"
 
-#define N_DET_MUTATORS 1 // rest not implemented, probably not very useful for instruction mutations
+#define N_DET_MUTATORS 3 // rest not implemented, probably not very useful for instruction mutations
 #define N_RAND_MUTATORS 0
 
 #define EN_SBITFLIP_TAINT_MUT

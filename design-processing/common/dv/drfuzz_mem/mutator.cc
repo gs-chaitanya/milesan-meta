@@ -408,12 +408,12 @@ void DetBruteForceMutator::permute_taints(uint8_t *buf){
 
 std::deque<Mutator *> *get_det_mutators(size_t n_bits){ // adjust macros in header if number of mutarors changes
     Mutator *det_mutators[] = {
-                            new DetSingleBitFlipMutator(n_bits)
-                            // new DetDoubleBitFlipMutator(n_bits),
-                            // new DetNibbleFlipMutator(n_bits),
+                            new DetSingleBitFlipMutator(n_bits),
+                            new DetDoubleBitFlipMutator(n_bits),
+                            new DetNibbleFlipMutator(n_bits)
                             // new DetSingleByteFlipMutator(n_bits),
                             // new DetDoubleByteFlipMutator(n_bits),
-                            // new DetQuadByteFlipMutator(n_bits),
+                            // new DetQuadByteFlipMutator(n_bits)
                             // new DetAddSingleByteMutator(n_bits),
                             // new DetAddDoubleByteMutator(n_bits),
                             // new DetAddQuadByteMutator(n_bits)
