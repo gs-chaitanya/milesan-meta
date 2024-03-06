@@ -126,12 +126,9 @@ long fuzz(size_t simlen, bool prune = true){
 	tb->clear_outputs();
 	tb->clear_instructions();
 	seed->print_accumulated_output();
-	#ifdef DUMP_QUEUES
-	seed->dump(tb);
-	#endif
-	#ifdef SINGLE_FUZZ
-	exit(0);
-	#endif
+	// #ifdef DUMP_QUEUES
+	// seed->dump(tb);
+	// #endif
 	// seed->get_accumulated_output()->dump(tb);
 
 	
@@ -170,9 +167,14 @@ long fuzz(size_t simlen, bool prune = true){
 		exit(-1);
 	} 
 
+
 	#ifdef DUMP_COVERAGE
 	corpus->dump_current_cov(tb);
 	#endif
+	#ifdef SINGLE_FUZZ
+	exit(0);
+	#endif
+
 	// exit(0);
 	while(!corpus->empty()){
 		q = corpus->pop_q(); // generate mutated children of q here and apply each to tb, discard q since we dont need the tests after fuzzing
@@ -180,11 +182,7 @@ long fuzz(size_t simlen, bool prune = true){
 		prev_q = q->copy();
 		#endif
 		size_t max;
-		#ifdef TAINT_EN
 		max = q->compute_inst_taint_hw();
-		#else
-		max = q->instructions.size() * N_BYTES_PER_INST * 8;
-		#endif
 		std::deque<Mutator *> *mutators = get_all_mutators(max);
 
 		while(mutators->size()){
@@ -219,10 +217,12 @@ long fuzz(size_t simlen, bool prune = true){
 				#endif
 				#ifdef CHECK_REG_REQ
 				tb->check_all_inst_retired();
-				if(reg_dumps.size() == 0){ // killed the control flow so was an invalid mutation
-					std::cout << "Killed CF, this should not happen:\n";
+				if(reg_dumps.size() == 0){ // killed the control flow, so was a bug or invalid mutation
+					std::cout << "Killed CF, triggered bug or invalid mutation:\n";
 					mut_q->push_tb_instructions(tb->pop_instructions());
 					mut_q->print_instructions();
+					mut_q->push_tb_outputs(tb->pop_outputs());
+					mut_q->print_accumulated_output();
 					exit(-1);
 					delete mut_q;
 					continue;
@@ -301,7 +301,7 @@ long fuzz(size_t simlen, bool prune = true){
 	PRINT(INST << " total number of cycles: "  << std::dec << tb->tick_count_ << std::endl);
 	PRINT(INST << " coverage map: \n");
 	corpus->print_acc_coverage();
-	// exit(0);
+
 	#ifdef TAINT_EN
 	if(!corpus->taints_any_untoggled_mux(min_hw_q)){
 		PRINT("Skipping bruteforce because min_hw_q exhaused. Exiting.");
