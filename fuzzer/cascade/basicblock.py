@@ -159,6 +159,7 @@ def gen_basicblock(fuzzerstate):
         else:
             instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
             next_instr = create_instr(instr_str, fuzzerstate, curr_addr)
+        next_instr.execute()
         fuzzerstate.instr_objs_seq[-1].append(next_instr)
 
         if curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.JALR) or fuzzerstate.curr_branch_taken:

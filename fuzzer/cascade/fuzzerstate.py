@@ -16,7 +16,6 @@ from cascade.randomize.pickreg import IntRegPickState, FloatRegPickState
 from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
 
-from drfuzz_mem.regstates import IntRegStates
 import random
 
 class FuzzerState:
@@ -184,3 +183,5 @@ class FuzzerState:
 
     def instance_to_str(self):
         return f"{self.memview.memsize}_{self.design_name}_{self.randseed}_{self.nmax_bbs}"
+
+        

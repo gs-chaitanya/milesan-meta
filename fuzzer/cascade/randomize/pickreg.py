@@ -6,7 +6,7 @@ from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT
 from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO, NUM_MIN_FREE_INTREGS
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
 from cascade.util import IntRegIndivState
-
+from cascade.registers import Int32RegState
 from copy import copy, deepcopy
 import math
 import numpy as np
@@ -17,7 +17,8 @@ class IntRegPickState:
         self.num_pickable_regs = num_pickable_regs
         self.__reg_weights  = np.ones(self.num_pickable_regs)
         self.__reg_weights /= np.sum(self.__reg_weights)
-        self.__reg_states   = [IntRegIndivState.FREE for _ in range(self.num_pickable_regs)]
+        # self.regs   = [IntRegIndivState.FREE for _ in range(self.num_pickable_regs)]
+        self.regs = [Int32RegState(id) for id in range(num_pickable_regs)] # id is internal id
         # Permits matching sensitive instructions with the producers
         self.__last_producer_ids = np.zeros(self.num_pickable_regs)
         # For each register, a pair of (basic block id, instr in basic block) that produced the register
@@ -29,12 +30,12 @@ class IntRegPickState:
         # Will ignore x0 if line below is uncommented. This is a design decision.
         # self.__reg_weights[0] = 0
     def get_free_regs_onehot(self):
-        ret = [int(self.__reg_states[reg_id] == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
+        ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
             assert sum(ret) >= NUM_MIN_FREE_INTREGS
         return ret
     def get_free_or_relocused_regs_onehot(self): # WARNING: Use those only for outputs, not for inputs.
-        ret = [int(self.__reg_states[reg_id] == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
+        ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
             assert sum(ret) >= NUM_MIN_FREE_INTREGS
         return ret
@@ -51,16 +52,16 @@ class IntRegPickState:
         authorized_regs_onehot = self.get_free_regs_onehot()
         was_zero_authorized = authorized_regs_onehot[0]
         authorized_regs_onehot[0] = 0
-        ret = random.choices(range(self.num_pickable_regs), self.get_effective_weights(authorized_regs_onehot))[0]
+        id = random.choices(range(self.num_pickable_regs), self.get_effective_weights(authorized_regs_onehot))[0]
         authorized_regs_onehot[0] = was_zero_authorized
-        return ret
+        return id
     # Consuming multiple input registers in one go.
     def pick_int_inputregs(self, n: int):
         authorized_regs_onehot = self.get_free_regs_onehot()
         if DO_ASSERT:
             assert n > 1, "The function pick_int_inputregs should not be used for n < 2. For n = 1, please use pick_int_inputreg."
         return random.choices(range(self.num_pickable_regs), self.get_effective_weights(authorized_regs_onehot), k=n)
-    # This updates the intregstate.
+    # This updates the Int32RegState.
     def pick_int_outputreg(self, authorize_sideeffects: bool = True):
         authorized_regs_onehot = self.get_free_or_relocused_regs_onehot() # We could use any, but let's not waste the generated ones
         if DO_ASSERT:
@@ -71,6 +72,7 @@ class IntRegPickState:
             if rd:
                 self.set_regstate(rd, IntRegIndivState.FREE)
         return rd
+
     def pick_int_outputreg_nonzero(self, authorize_sideeffects: bool = True):
         authorized_regs_onehot = self.get_free_or_relocused_regs_onehot() # We could use any, but let's not waste the generated ones
         was_zero_authorized = authorized_regs_onehot[0]
@@ -84,6 +86,7 @@ class IntRegPickState:
                 self.set_regstate(rd, IntRegIndivState.FREE)
         authorized_regs_onehot[0] = was_zero_authorized
         return rd
+        
     # @param outreg the produced register.
     def _update_probaweights(self, outreg: int):
         if DO_ASSERT:
@@ -104,7 +107,7 @@ class IntRegPickState:
         if DO_ASSERT:
             assert 0 < reg_id
             assert reg_id < self.num_pickable_regs
-        return self.__reg_states[reg_id]
+        return self.regs[reg_id].fsm_state
 
     # @param force: do not check compatibility before->after. Used for restoring some saved state, for example.
     def set_regstate(self, reg_id: int, new_state: int, force: bool = False):
@@ -112,23 +115,23 @@ class IntRegPickState:
             assert 0 < reg_id
             assert reg_id < self.num_pickable_regs
             if not force:
-                if self.__reg_states[reg_id] == IntRegIndivState.FREE:
+                if self.regs[reg_id].fsm_state == IntRegIndivState.FREE:
                     assert new_state in (IntRegIndivState.FREE, IntRegIndivState.PRODUCED0, IntRegIndivState.CONSUMED)
-                elif self.__reg_states[reg_id] == IntRegIndivState.PRODUCED0:
+                elif self.regs[reg_id].fsm_state == IntRegIndivState.PRODUCED0:
                     assert new_state == IntRegIndivState.PRODUCED1
-                elif self.__reg_states[reg_id] == IntRegIndivState.PRODUCED1:
+                elif self.regs[reg_id].fsm_state == IntRegIndivState.PRODUCED1:
                     assert new_state in (IntRegIndivState.CONSUMED, IntRegIndivState.UNRELIABLE)
-                elif self.__reg_states[reg_id] == IntRegIndivState.CONSUMED:
+                elif self.regs[reg_id].fsm_state == IntRegIndivState.CONSUMED:
                     assert new_state == IntRegIndivState.FREE
                 if DO_EXPENSIVE_ASSERT:
                     # Check that the register is registered in exactly one state
                     for s in IntRegIndivState:
-                        assert self.__regs_in_state_onehot[s][reg_id] == int(s == self.__reg_states[reg_id])
+                        assert self.__regs_in_state_onehot[s][reg_id] == int(s == self.regs[reg_id].fsm_state)
                 else:
-                    assert self.__regs_in_state_onehot[self.__reg_states[reg_id]][reg_id]
-        self.__regs_in_state_onehot[self.__reg_states[reg_id]][reg_id] = 0
+                    assert self.__regs_in_state_onehot[self.regs[reg_id].fsm_state][reg_id]
+        self.__regs_in_state_onehot[self.regs[reg_id].fsm_state][reg_id] = 0
         self.__regs_in_state_onehot[new_state][reg_id] = 1
-        self.__reg_states[reg_id] = new_state
+        self.regs[reg_id].fsm_state = new_state
     # Brings iteratively a register to the requested state, as fast as possible
     # @return nothing, but guarantees that a register will be in the target state
     def bring_some_reg_to_state(self, req_state: int, fuzzerstate):
@@ -155,7 +158,7 @@ class IntRegPickState:
 
     # Save at the end of basic blocks, and restore if popping basic blocks from the end.
     def save_curr_state(self):
-        return copy(self.__reg_weights), copy(self.__reg_states), copy(self.__last_producer_ids), deepcopy(self.__last_producer_coords)
+        return copy(self.__reg_weights), copy(self.regs), copy(self.__last_producer_ids), deepcopy(self.__last_producer_coords)
     # Rarely called.
     def restore_state(self, saved_state: tuple):
         if DO_ASSERT:
@@ -192,6 +195,10 @@ class IntRegPickState:
         return ret
     def display(self):
         print('pickreg', self.__regs_in_state_onehot)
+
+    def print(self):
+        for reg in self.regs:
+            reg.print()
 
 # Float registers are never forbidden, therefore this is simpler than integer registers.
 class FloatRegPickState:

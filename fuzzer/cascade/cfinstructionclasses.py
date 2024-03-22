@@ -49,20 +49,25 @@ class CFInstruction:
     authorized_instr_strs = range(len(INSTRUCTION_IDS))
     instr_type = CFInstructionClass.NONE
     injectable = False
+    fuzzerstate = None
     # Check that it's not a wrong instruction id.
     def assert_authorized_instr_strs(self):
         if DO_ASSERT:
             assert self.instr_str in self.__class__.authorized_instr_strs
 
-    def __init__(self, instr_str: str, iscompressed: bool = False):
+    def __init__(self, instr_str: str, iscompressed: bool = False, fuzzerstate = None):
         self.instr_str = instr_str
         self.iscompressed = iscompressed
+        self.fuzzerstate = fuzzerstate
         assert not iscompressed, "Compressed instructions are not yet supported."
         self.assert_authorized_instr_strs()
 
     # @param is_spike_resolution: some rare instructions (typically offset management placeholders) are treated differently between spike resolution and the subsequent actual simulation.
     def gen_bytecode_int(self, is_spike_resolution: bool):
         raise ValueError('Cannot generate bytecode in the abstract instruction classes.')
+
+    def execute(self):
+        pass
 
 # Any instruction with an immediate
 class ImmInstruction(CFInstruction):
@@ -83,8 +88,8 @@ class ImmInstruction(CFInstruction):
                 assert self.imm >= 0
                 assert self.imm <  1<<curr_param_size
 
-    def __init__(self, instr_str: str, imm: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, instr_str: str, imm: int, is_design_64bit: bool, iscompressed: bool = False, fuzzerstate = None):
+        super().__init__(instr_str, iscompressed, fuzzerstate)
         self.is_design_64bit = is_design_64bit
         self.imm = imm
         self.assert_imm_size()
@@ -92,8 +97,8 @@ class ImmInstruction(CFInstruction):
 
 
 class ImmInstruction_t0(ImmInstruction):
-    def __init__(self, instr_str: str, imm: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed)
+    def __init__(self, instr_str: str, imm: int, is_design_64bit: bool, iscompressed: bool = False, fuzzerstate = None):
+        super().__init__(instr_str, imm, is_design_64bit, iscompressed,fuzzerstate)
         self.imm_t0 = 0x00
 
 
@@ -106,8 +111,8 @@ R12DInstructions = ("add", "sub", "sll", "slt", "sltu", "xor", "srl", "sra", "or
 class R12DInstruction(CFInstruction):
     authorized_instr_strs = R12DInstructions
 
-    def __init__(self, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False, fuzzerstate = None):
+        super().__init__(instr_str, iscompressed,fuzzerstate)
         self.instr_type = CFInstructionClass.R12D
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -263,8 +268,8 @@ ImmRdInstructions = ("lui", "auipc")
 class ImmRdInstruction(ImmInstruction_t0):
     authorized_instr_strs = ImmRdInstructions
 
-    def __init__(self, instr_str: str, rd: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed)
+    def __init__(self, instr_str: str, rd: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False, fuzzerstate = None):
+        super().__init__(instr_str, imm, is_design_64bit, iscompressed, fuzzerstate)
         self.instr_type = CFInstructionClass.IMMRD
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -341,8 +346,8 @@ RegImmShiftInstructions = ("slli", "srli", "srai", "slliw", "srliw", "sraiw")
 class RegImmInstruction(ImmInstruction_t0):
     authorized_instr_strs = RegImmInstructions
 
-    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed) # for now fully taint 
+    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, fuzzerstate = None, is_rd_nonpickable_ok: bool = False):
+        super().__init__(instr_str, imm, is_design_64bit, iscompressed, fuzzerstate) # for now fully taint 
         self.instr_type = CFInstructionClass.REGIMM
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 

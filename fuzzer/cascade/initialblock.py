@@ -170,7 +170,11 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     if fuzzerstate.design_has_fpu:
         num_reginit_vals += fuzzerstate.num_pickable_floating_regs
     for _ in range(num_reginit_vals):
-        fuzzerstate.initial_reg_data_content.append(0 if random.random() < fuzzerstate.proba_reg_starts_with_zero else random.randrange(1 << 64))
+        regval = 0 if random.random() < fuzzerstate.proba_reg_starts_with_zero else random.randrange(1 << 64)
+        fuzzerstate.initial_reg_data_content.append(regval)
+        
+    for i in range(fuzzerstate.num_pickable_regs-1):
+        fuzzerstate.intregpickstate.regs[i].set_val(fuzzerstate.initial_reg_data_content[i])
 
     # If there will be padding between the instructions and data, to ensure proper alignment of doubleword load and store ops for 64-bit CPUs 
     has_padding = bool((curr_addr+4) & 0x7) == 0

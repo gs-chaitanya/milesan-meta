@@ -15,8 +15,8 @@ from copy import copy
 
 # Must not all be 0. Must be filtered according to the capabilities of the different CPUs.
 ISAINSTRCLASS_INITIAL_BOOSTERS = {
-    ISAInstrClass.REGFSM:      0.1,
-    ISAInstrClass.FPUFSM:      0.1,
+    ISAInstrClass.REGFSM:      0.3,
+    ISAInstrClass.FPUFSM:      0,
     ISAInstrClass.ALU:         1,
     ISAInstrClass.ALU64:       0,
     ISAInstrClass.MULDIV:      0,
@@ -26,7 +26,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.JAL :        0,
     ISAInstrClass.JALR:        0,
     ISAInstrClass.BRANCH:      0,
-    ISAInstrClass.MEM:         0.1,
+    ISAInstrClass.MEM:         0,
     ISAInstrClass.MEM64:       0,
     ISAInstrClass.MEMFPU:      0,
     ISAInstrClass.FPU:         0,

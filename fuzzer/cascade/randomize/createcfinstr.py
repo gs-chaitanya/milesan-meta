@@ -11,7 +11,7 @@ from params.fuzzparams import NUM_MIN_FREE_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BR
 from cascade.util import IntRegIndivState
 from cascade.cfinstructionclasses import *
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
-
+import cascade.cfinstructions as cfi
 # This module creates an instruction from its instruction string, and some state which will condition which registers and immediates will be picked, and with which probability.
 
 ###
@@ -48,7 +48,30 @@ def _create_R12DInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
         assert instr_str in R12DInstructions
     rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_int_inputregs(2))
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
-    return R12DInstruction(instr_str, rd, rs1, rs2, iscompressed)
+    # return R12DInstruction(instr_str, rd, rs1, rs2, iscompressed)
+    if instr_str == "add":
+        return cfi.AddInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
+    elif instr_str == "sub":
+        return cfi.SubInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
+    elif instr_str == "sll":
+        return cfi.SllInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
+    elif instr_str == "slt":
+        return cfi.SltInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
+    elif instr_str == "sltu":
+        return cfi.SltuInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
+    elif instr_str == "xor":
+        return cfi.XorInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
+    elif instr_str == "srl":
+        return cfi.SrlInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
+    elif instr_str == "sra":
+        return cfi.SraiInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
+    elif instr_str == "or":
+        return cfi.OrInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
+    elif instr_str == "and":
+        return cfi.AndInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
+    else:
+        assert(0), f"Instruction {instr_str} not implemented."
+
 
 def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
@@ -57,7 +80,14 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     if instr_str == "auipc" and rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
-    return ImmRdInstruction(instr_str, rd, imm, fuzzerstate.is_design_64bit, iscompressed)
+    # return ImmRdInstruction(instr_str, rd, imm, fuzzerstate.is_design_64bit, iscompressed)
+
+    if instr_str == "lui":
+        return cfi.LuiInstruction(rd, imm, iscompressed,fuzzerstate)
+    elif instr_str == "auipc":
+        return cfi.AuipcInstruction(rd, imm, iscompressed, fuzzerstate)
+    else:
+        assert(0), f"Instruction {instr_str} not implemented."
 
 def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
@@ -65,7 +95,28 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
-    return RegImmInstruction(instr_str, rd, rs1, imm, fuzzerstate.is_design_64bit, iscompressed)
+    # return RegImmInstruction(instr_str, rd, rs1, imm, fuzzerstate.is_design_64bit, iscompressed)
+    if instr_str == "addi":
+        return cfi.AddiInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
+    elif instr_str == "slli":
+        return cfi.SlliInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
+    elif instr_str == "slti":
+        return cfi.SltiInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
+    elif instr_str == "sltiu":
+        return cfi.SltiuInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
+    elif instr_str == "xori":
+        return cfi.XoriInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
+    elif instr_str == "srli":
+        return cfi.SrliInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
+    elif instr_str == "srai":
+        return cfi.SraiInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
+    elif instr_str == "ori":
+        return cfi.OriInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
+    elif instr_str == "andi":
+        return cfi.AndiInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
+    else:
+        assert(0), f"Instruction {instr_str} not implemented."
+
 
 def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
     if DO_ASSERT:
