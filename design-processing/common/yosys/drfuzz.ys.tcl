@@ -17,13 +17,7 @@ if { [info exists ::env(WIRE_PC_TO_TOP)]} {
     if { [info exists ::env(PC_TARGET_MODULE)] } { set PC_TARGET_MODULE $::env(PC_TARGET_MODULE) }  else { puts "Please set PC_TARGET_MODULE environment variable"; exit 1 }
     if { [info exists ::env(PC_TARGET)] } { set PC_TARGET $::env(PC_TARGET) }  else { puts "Please set PC_TARGET environment variable"; exit 1 }
     } else {set WIRE_PC_TO_TOP 0}
-
-if { [info exists ::env(ADD_SHADOW_PC_RESET)]} {
-    set ADD_SHADOW_PC_RESET $::env(ADD_SHADOW_PC_RESET);
-    if { [info exists ::env(PC_TARGET_MODULE)] } { set PC_TARGET_MODULE $::env(PC_TARGET_MODULE) }  else { puts "Please set PC_TARGET_MODULE environment variable"; exit 1 }
-    if { [info exists ::env(PC_TARGET_T0)] } { set PC_TARGET_T0 $::env(PC_TARGET_T0) }  else { puts "Please set PC_TARGET_T0 environment variable"; exit 1 }
-    } else {set ADD_SHADOW_PC_RESET 0}
-
+if { [info exists ::env(BLOCK_MODULE_SIGNAL_T0_PAIRS)] }    {set BLOCK_MODULE_SIGNAL_T0_PAIRS $::env(BLOCK_MODULE_SIGNAL_T0_PAIRS)}    else { set BLOCK_MODULE_SIGNAL_T0_PAIRS "" }
 
 yosys read_verilog -DSTOP_COND=0 -sv $VERILOG_INPUT 
 yosys hierarchy -top $TOP_MODULE -check
@@ -61,9 +55,10 @@ if {[string equal $INSTRUMENTATION "drfuzz"]} {
         yosys port_cellift_input_probes $VERBOSE
     }
     # yosys port_cellift_output_probes $VERBOSE
-    if {$ADD_SHADOW_PC_RESET == 1} { 
-        yosys meta_reset_pc_t0 $VERBOSE $PC_TARGET_MODULE $PC_TARGET_T0
-    }
+    # if {$ADD_SHADOW_PC_RESET == 1} { 
+    #     yosys meta_reset_pc_t0 $VERBOSE $PC_TARGET_MODULE $PC_TARGET_T0
+    # }
+    # yosys block_signal_t0 $VERBOSE $BLOCK_MODULE_SIGNAL_T0_PAIRS
     yosys meta_reset_t0 $VERBOSE
 
 }
