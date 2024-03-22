@@ -18,6 +18,9 @@ enum tick_req_type_e {
 typedef struct {
 	enum tick_req_type_e type;
 	uint64_t content;
+	uint64_t content_t0;
+	uint32_t id;
+	void print();
 } tick_req_t;
 
 typedef struct {

@@ -85,11 +85,6 @@ class Instruction{
         }
 
         void print_intercept(uint32_t bytecode, uint32_t bytecode_t0){
-            // std::cout << "Intercepting: (" << this->type << ") 0x" << std::hex << this->get_address() << ": ";
-            // std::cout << std::hex << this->bytecode << "(" << bytecode << "), t0: " << this->bytecode_t0 << "(" << bytecode_t0 << ")";
-            // if(!this->inject_inst) std::cout << " (inject_inst off) ";
-            // if(!this->inject_taint) std::cout << " (inject_taint off) ";
-            // std::cout << std::endl;
             std::cout << "Intercepting: ";
             this->print();
 
@@ -241,8 +236,34 @@ class R12DInstruction: public virtual Instruction{
             std::cout << " ";
             if(this->rs1_t0) printf("\033[1;31mr%02i\033[1;0m",this->rs1);
             else printf("r%02i",this->rs1);
+            std::cout << " ";
             if(this->rs2_t0) printf("\033[1;31mr%02i\033[1;0m",this->rs2);
             else printf("r%02i",this->rs2);
+
+            if(this->rd_t0){
+                std::cout << " (possile rds with taint 0x" << std::hex << this->rd_t0 << ": ";
+                for(int reg=0; reg<32; reg++){
+                    // std::cout << ((reg^this->rd)&~this->rd_t0) << ", ";
+                    if(((reg^this->rd)&~this->rd_t0) == 0) printf("r%02i,",reg); // untainted bits match
+                }
+                std::cout << ")\t";
+            }
+            if(this->rs1_t0){
+                std::cout << " (possile rs1 with taint 0x" << std::hex << this->rs1_t0 << ": ";
+                for(int reg=0; reg<32; reg++){
+                    // std::cout << ((reg^this->rd)&~this->rd_t0) << ", ";
+                    if(((reg^this->rs1)&~this->rs1_t0) == 0) printf("r%02i,",reg); // untainted bits match
+                }
+                std::cout << ")\t";
+            }
+            if(this->rs2_t0){
+                std::cout << " (possile rs2 with taint 0x" << std::hex << this->rs2_t0 << ": ";
+                for(int reg=0; reg<32; reg++){
+                    // std::cout << ((reg^this->rd)&~this->rd_t0) << ", ";
+                    if(((reg^this->rs2)&~this->rs2_t0) == 0) printf("r%02i,",reg); // untainted bits match
+                }
+                std::cout << ")\t";
+            }
 
         }
 

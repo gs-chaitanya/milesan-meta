@@ -18,6 +18,7 @@ class Queue {
         size_t ID;
         size_t parent_ID;
         std::deque<doutput_t *> outputs; // mux toggle outputs from DUT, FIFO
+        std::deque<tick_req_t *> tick_reqs;
         std::deque<Instruction *> instructions; // instructions and taints that we intercept to mutate
         size_t inst_taint_hw;
         std::string mutator;
@@ -41,6 +42,8 @@ class Queue {
         std::deque<Instruction *> *pop_tb_instructions();
         void push_tb_output(doutput_t *tb_output);
         void push_tb_outputs(std::deque<doutput_t *> *outputs);
+        void push_tb_tick_req(tick_req_t *tb_tick_req);
+        void push_tb_tick_reqs(std::deque<tick_req_t *> *tb_tick_reqs);
         void clear_tb_outputs();
         void print_outputs();
         void print_accumulated_output();
@@ -81,6 +84,8 @@ class Queue {
         bool taints_all_untoggled_mux(Queue *other);
         bool taints_any_untoggled_mux(Queue *other);
         size_t get_n_untoggled_and_untainted_mux(Queue *other);
+        void check_tick_reqs_taint();
+        void check_reg_reqs();
         #endif // TAINT_EN
 };
 

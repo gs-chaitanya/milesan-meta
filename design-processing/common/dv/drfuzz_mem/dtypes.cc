@@ -12,6 +12,31 @@
 #include "log.h"
 #include "helperfuncs.h"
 
+void tick_req_t::print(){
+    if(this->type == REQ_INTREGDUMP){
+        printf("Dump of reg i%02d: 0x%016lx: ", this->id, this->content);
+    }
+    else printf("Dump of reg f%02d: 0x%016lx: ", this->id, this->content);
+    #ifdef ARCH_32b
+    int n_bits = 32;
+    #else
+    int n_bits = 64;
+    #endif // ARCH_32b
+    for(int i=n_bits-1; i>=0; i--){
+        #ifdef TAINT_EN
+        if(((content_t0 & (1ul<<i))>>i)){
+            std::cout << "\033[1;31m" << ((content & (1ul<<i))>>i) << "\033[1;0m";
+        }
+        else{
+            std::cout << ((content & (1ul<<i))>>i);
+        }
+        #else
+            std::cout << ((content & (1ul<<i))>>i);
+        #endif // TAINT_EN
+    }
+    std::cout << std::endl;
+
+}
 #ifdef TAINT_EN
 void doutput_t::print_taint_map(){
     for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){

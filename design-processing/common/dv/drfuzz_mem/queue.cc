@@ -58,6 +58,8 @@ void Queue::load_instructions(){
         else if(type=="F2") new_inst = new Float2Instruction(addr,bytecode,bytecode_t0,i_str);
         else if(type=="FIRS1") new_inst = new FloatIntRs1Instruction(addr,bytecode,bytecode_t0,i_str);
         else assert(0); // not implemented instruction type
+        // new_inst->inject_inst=false;
+        // new_inst->inject_taint=false;
         this->instructions.push_back(new_inst);
     }
     if(this->instructions.size()){
@@ -181,6 +183,41 @@ void Queue::push_tb_outputs(std::deque<doutput_t *> *outputs){
     assert(outputs->size()==0);
 }
 
+void Queue::push_tb_tick_req(tick_req_t *tick_req){
+    this->tick_reqs.push_back(tick_req);
+}
+
+void Queue::push_tb_tick_reqs(std::deque<tick_req_t *> *tick_reqs){
+    while(tick_reqs->size()){
+        this->push_tb_tick_req(tick_reqs->front());
+        tick_reqs->pop_front();
+    }
+    assert(tick_reqs->size() == 0);
+}
+
+void Queue::check_tick_reqs_taint(){
+    bool all_regs_fully_tainted = true;
+    for(auto &tick_req: this->tick_reqs){
+        #ifdef ARCH_32b
+        all_regs_fully_tainted &= tick_req->content_t0 == 0xFFFFFFFFULL;
+        #else
+        all_regs_fully_tainted &= tick_req->content_t0 == 0xFFFFFFFFFFFFFFFFULL;
+        #endif
+    }
+    if(all_regs_fully_tainted){
+        std::cout << "Taint explosion with ID " << get_id() <<  ": all registers fully tainted!\n";
+		exit(-1);
+    }
+}
+
+void Queue::check_reg_reqs(){
+    #ifdef CHECK_REG_REQ
+    if(this->tick_reqs.size() == 0){
+    	std::cout << "Invalid seed with ID " << get_id() <<  ": did not any receive register requests!\n";
+		exit(-1);
+    }
+    #endif
+}
 void Queue::print_outputs(){
     for(auto &out: this->outputs) out->print();
 }
@@ -369,7 +406,6 @@ void Queue::dump(Testbench *tb){
     std::ofstream ofstream;
     ofstream.open(q_path);
     ofstream << "[\n\t{\n";
-    ofstream << "\n\t\t" << "\"simsramelf\":\"" << get_sramelf() << "\",";
     ofstream << "\n\t\t" << "\"mut_inst_path\":\"" << get_mut_inst_path() << "\",";
     ofstream << "\n\t\t" << "\"got_stop_request\":" << tb->got_stop_req << ",";
     ofstream << "\n\t\t" << "\"instructions\":" << instruction_str << ",";
@@ -382,7 +418,13 @@ void Queue::dump(Testbench *tb){
     #ifdef TAINT_EN
     ofstream << "\n\t\t" << "\"cov_t0\":" << this->get_accumulated_output()->get_cov_t0_str() << ",";
     #endif
-    ofstream << "\n\t\t" << "\"ticks\":" << tb->tick_count_;
+    ofstream << "\n\t\t" << "\"ticks\":" << tb->tick_count_ << ",";
+    #ifdef DUAL_MEM
+    ofstream << "\n\t\t" << "\"pc\":" << tb->module_->instr_mem_addr << ",";
+    #else
+    ofstream << "\n\t\t" << "\"pc\":" << tb->module_->mem_addr_o << ",";
+    #endif
+    ofstream << "\n\t\t" << "\"injected_taint\":" << tb->intercepted;
     ofstream << "\n\t}\n]"; 
     ofstream.close();
 }
@@ -392,12 +434,11 @@ void Queue::dump_acc(Testbench *tb){
     static int q_it = 0;
     std::string q_dir = get_cov_dir();
     std::string q_path = q_dir + "/" + std::to_string(q_it++) + ".queue.json";
-    std::cout << "Dumping accumulated queue to " << q_path << std::endl;
+    // std::cout << "Dumping accumulated queue to " << q_path << std::endl;
     std::string instruction_str = this->get_instructions_json_str();
     std::ofstream ofstream;
     ofstream.open(q_path);
     ofstream << "[\n\t{\n";
-    ofstream << "\n\t\t" << "\"simsramelf\":\"" << get_sramelf() << "\",";
     ofstream << "\n\t\t" << "\"mut_inst_path\":\"" << get_mut_inst_path() << "\",";
     ofstream << "\n\t\t" << "\"got_stop_request\":" << tb->got_stop_req << ",";
     ofstream << "\n\t\t" << "\"instructions\":" << instruction_str << ",";
@@ -410,7 +451,13 @@ void Queue::dump_acc(Testbench *tb){
     #ifdef TAINT_EN
     ofstream << "\n\t\t" << "\"cov_t0\":" << this->get_accumulated_output()->get_cov_t0_str() << ",";
     #endif
-    ofstream << "\n\t\t" << "\"ticks\":" << tb->tick_count_;
+    ofstream << "\n\t\t" << "\"ticks\":" << tb->tick_count_ << ",";
+    #ifdef DUAL_MEM
+    ofstream << "\n\t\t" << "\"pc\":" << tb->module_->instr_mem_addr << ",";
+    #else
+    ofstream << "\n\t\t" << "\"pc\":" << tb->module_->mem_addr_o << ",";
+    #endif
+    ofstream << "\n\t\t" << "\"injected_taint\":" << tb->intercepted;
     ofstream << "\n\t}\n]"; 
     ofstream.close();
 }

@@ -19,7 +19,7 @@
 #include "progressbar.h"
 
 
-static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simlen, bool reset = false, bool stop_pc_tainted = false) {
+void fuzz_once(Testbench *tb, int simlen, bool reset = false) {
 	if (reset){
 		tb->meta_reset();
 		#ifdef TAINT_EN
@@ -29,40 +29,26 @@ static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simle
 		tb->clear_outputs();
 	}
 
-	bool got_stop_req = false;
-	// bool meta_reset_t0 = true;
-	int curr_int_req_dump_id = 1;
-	int curr_float_req_dump_id = 0;
 	int remaining_before_stop = N_TICKS_AFTER_STOP;
-	std::map<std::string, uint64_t> reg_dumps;
-	// Queue *q = new Queue();
+	Queue *q = new Queue();
 	size_t step_id = 1;
 	for (; step_id < simlen; step_id++) {
-		tick_req_t tick_req = tb->tick(1,false);
-		if (tick_req.type == REQ_INTREGDUMP) {
+		tick_req_t *tick_req = tb->tick(1,false);
+		if(tick_req->type == REQ_FLOATREGDUMP || tick_req->type == REQ_INTREGDUMP){
 			#ifdef PRINT_REG_REQ
-			printf("Dump of reg i%02d: 0x%016lx.\n", curr_int_req_dump_id, tick_req.content);
-			#endif // PRINT_REGQ
-			reg_dumps[std::string("i") + std::to_string(curr_int_req_dump_id)] = tick_req.content;
-			curr_int_req_dump_id++;
-		} else if (tick_req.type == REQ_FLOATREGDUMP) {
-			#ifdef PRINT_REG_REQ
-			printf("Dump of reg f%02d: 0x%016lx.\n", curr_float_req_dump_id, tick_req.content);
-			#endif //PRINT_REGQ
-			reg_dumps[std::string("f") + std::to_string(curr_float_req_dump_id)] = tick_req.content;
-			curr_float_req_dump_id++;
+			tick_req->print();
+			#endif
+			tb->tick_reqs.push_back(tick_req);
 		}
-
 		// Check whether stop has been requested.
-		else if (!got_stop_req && tick_req.type == REQ_STOP) {
+		if (!tb->got_stop_req && tick_req->type == REQ_STOP) {
 			#ifdef PRINT_STOP_REQ
 			std::cout << "Found a stop request. Stopping the benchmark after " << N_TICKS_AFTER_STOP << " more ticks, total tickcount was " << step_id << std::endl;
 			#endif
-			got_stop_req = true;
+			tb->got_stop_req = true;
 		}
-
 		// Decrement the chrono and maybe stop if stop request has been detected.
-		if (got_stop_req)
+		if (tb->got_stop_req)
 			if (remaining_before_stop-- == 0)
 				break;
 
@@ -76,7 +62,9 @@ static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simle
 			#ifdef PRINT_TAINT_PC
 			std::cout << "PC tainted\n";
 			#endif
-			if(stop_pc_tainted) break;
+			#ifdef STOP_TAINT_PC
+			break;
+			#endif
 			#ifdef RESET_TAINT_PC
 			Queue *q = new_queue(nullptr,false);
 			q->push_tb_outputs(tb->pop_outputs());
@@ -92,21 +80,12 @@ static inline std::map<std::string, uint64_t> fuzz_once(Testbench *tb, int simle
 		#endif // TAINT_EN
 
 		#ifdef DUMP_COV_OVER_TICKS
-		#ifdef EN_COV_QUANTIZATION
-    	if((step_id%T_DELTA_COV_DUMP) == 0){
-			q->get_accumulated_output()->dump(tb);
-		} 
-		#else 
-		q->get_accumulated_output()->dump(tb);
-		#endif // EN_COV_QUANTIZATION
+		if(tb->intercepted){
+			q->push_tb_outputs(tb->pop_outputs());
+			q->dump_acc(tb);
+		}
 		#endif // DUMP_COV_OVER_TICKS
-		#ifdef PRINT_COV_OVER_TICKS
-		q->push_tb_outputs(tb->pop_outputs());
-		q->print_accumulated_output();
-		#endif  // PRINT_COV_OVER_TICKS
 	}	
-	tb->got_stop_req = got_stop_req;
-	return reg_dumps;
 	}
 
 long fuzz(size_t simlen, bool prune = true){
@@ -118,11 +97,13 @@ long fuzz(size_t simlen, bool prune = true){
 	Queue *seed = new_queue(nullptr,true);
 
 	tb->push_instructions(seed->pop_tb_instructions());
-	std::map<std::string, uint64_t> reg_dumps = fuzz_once(tb, simlen, true ,false);
+	fuzz_once(tb, simlen, true );
 		
 	tb->check_all_inst_retired();
 	seed->push_tb_outputs(tb->pop_outputs());
+	seed->push_tb_tick_reqs(tb->pop_tick_reqs());
 	seed->push_tb_instructions(tb->pop_instructions());
+
 	tb->clear_outputs();
 	tb->clear_instructions();
 	seed->print_accumulated_output();
@@ -136,12 +117,26 @@ long fuzz(size_t simlen, bool prune = true){
 				
 	std::cout << "SEED COVERAGE:\n" << std::dec << seed->get_coverage_amount() << "/" << N_COV_POINTS << "\n";
 
+
+	#ifdef CHECK_OVERTAINT
+	seed->check_tick_reqs_taint();
+	#endif
+	#ifdef CHECK_GOT_STOP_REQ
+	tb->check_got_stop_req();
+	#endif
 	#ifdef CHECK_REG_REQ
-	if(!reg_dumps.size()){
-		std::cout << "Invalid seed, did not receive register requests!\n";
-		exit(-1);
-	}
-	#endif  // CHECK_REG_REQ
+	seed->check_reg_reqs();
+	#endif
+
+	#ifdef SINGLE_FUZZ
+	exit(0);
+	#endif
+	// #ifdef CHECK_REG_REQ
+	// if(!reg_dumps.size()){
+	// 	std::cout << "Invalid seed with ID " << get_id() <<  ": did not receive register requests!\n";
+	// 	exit(-1);
+	// }
+	// #endif  // CHECK_REG_REQ
 
 	Corpus *corpus = new Corpus();
 
@@ -154,7 +149,7 @@ long fuzz(size_t simlen, bool prune = true){
 		size_t n_untoggled_and_tainted_mux = seed->get_accumulated_output()->get_untoggled_taintcount();
 		if(n_untoggled_and_tainted_mux == 0){
 			std::cout << "Seed did not taint any untoggled mux.\n"; // TODO do this for only untoggled mux
-			exit(-1);
+			// exit(0);
 		}
 		std::cout << "Seed is interesting and taints " << std::dec << n_untoggled_and_tainted_mux << " untoggled mux.\n";
 		#else
@@ -164,15 +159,10 @@ long fuzz(size_t simlen, bool prune = true){
 	}
 	else{
 		std::cerr << "Seed is not interesting.\n";
-		exit(-1);
+		exit(0);
 	} 
-
-
 	#ifdef DUMP_COVERAGE
 	corpus->dump_current_cov(tb);
-	#endif
-	#ifdef SINGLE_FUZZ
-	exit(0);
 	#endif
 
 	// exit(0);
@@ -210,24 +200,21 @@ long fuzz(size_t simlen, bool prune = true){
 				#endif
 				tb->push_instructions(mut_q->pop_tb_instructions());
 
-				#ifdef STOP_TAINT_PC
-				reg_dumps = fuzz_once(tb, simlen, true, true);
-				#else
-				reg_dumps = fuzz_once(tb, simlen, true, false);
-				#endif
-				#ifdef CHECK_REG_REQ
-				tb->check_all_inst_retired();
-				if(reg_dumps.size() == 0){ // killed the control flow, so was a bug or invalid mutation
-					std::cout << "Killed CF, triggered bug or invalid mutation:\n";
-					mut_q->push_tb_instructions(tb->pop_instructions());
-					mut_q->print_instructions();
-					mut_q->push_tb_outputs(tb->pop_outputs());
-					mut_q->print_accumulated_output();
-					exit(-1);
-					delete mut_q;
-					continue;
-				}
-				#endif // CHECK_REG_REQ
+				fuzz_once(tb, simlen, true);
+
+				// #ifdef CHECK_REG_REQ
+				// tb->check_all_inst_retired();
+				// if(reg_dumps.size() == 0){ // killed the control flow, so was a bug or invalid mutation
+				// 	std::cout << "Killed CF, triggered bug or invalid mutation:\n";
+				// 	// mut_q->push_tb_instructions(tb->pop_instructions());
+				// 	// mut_q->print_instructions();
+				// 	// mut_q->push_tb_outputs(tb->pop_outputs());
+				// 	// mut_q->print_accumulated_output();
+				// 	// exit(0);
+				// 	delete mut_q;
+				// 	continue;
+				// }
+				// #endif // CHECK_REG_REQ
 				
 				mut_q->push_tb_outputs(tb->pop_outputs());
 				mut_q->push_tb_instructions(tb->pop_instructions());
@@ -512,7 +499,7 @@ int main(int argc, char **argv, char **env) {
 	Verilated::traceEverOn(VM_TRACE);
 	srand(SEED);
 
-	#ifdef DUMP_COVERAGE
+	#if defined DUMP_COVERAGE || defined DUMP_COV_OVER_TICKS
 	if(std::string(COV_DIR) == get_cov_dir()){ // create directories if no environment variable was set
 		std::cout << "Creating standard directories in " << DUMP_DIR << std::endl;
 		mkdir(DUMP_DIR,PERMISSIONS);

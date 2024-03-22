@@ -46,10 +46,12 @@ class Testbench {
 
 	public:
         std::deque<doutput_t *> outputs;
+        std::deque<tick_req_t *> tick_reqs;
         vluint32_t tick_count_;
         std::unique_ptr<Module> module_;
         std::chrono::_V2::steady_clock::time_point start_time;
         std::map<uint32_t, Instruction*> intercept_instructions;
+        bool intercepted;
         bool got_stop_req;
 
         Testbench(const std::string &trace_filename = ""): module_(new Module), tick_count_(0l){
@@ -60,6 +62,7 @@ class Testbench {
             #endif // VM_TRACE
             this->start_time = std::chrono::steady_clock::now();
             this->got_stop_req = false;
+            this->intercepted = false;
         }
         ~Testbench(){
             close_trace();
@@ -79,6 +82,7 @@ class Testbench {
         bool is_output_tainted();
         void meta_reset_t0();
         void meta_reset_pc_t0();
+        void check_got_stop_req();
 
         #endif // TAINT_EN
         void print_outputs();
@@ -88,9 +92,8 @@ class Testbench {
         std::deque<Instruction *> *pop_instructions();
         int check_all_inst_retired();
         void clear_instructions();
-		tick_req_t tick(int num_ticks = 1, bool false_tick = false);
-
-
+		tick_req_t *tick(int num_ticks = 1, bool false_tick = false);
+        std::deque<tick_req_t *> *pop_tick_reqs();
 
 
 		

@@ -13,9 +13,9 @@ void Testbench::reset(){
     this->module_->meta_rst_ni = 1;
     #ifdef TAINT_EN
     this->module_->meta_rst_ni_t0 = 1;
-    #ifdef DISABLE_PC_TAINT
-    this->module_->meta_reset_pc_t0 = 1;
-    #endif // DISABLE_PC_TAIN
+    #ifdef BLOCK_TAINT
+    this->module_->block_signal_t0 = 1;
+    #endif // BLOCK_TAINT
     #endif // TAINT_EN
     this->tick(1);
     this->module_->rst_ni = 0;
@@ -47,9 +47,9 @@ void Testbench::meta_reset_t0(){
 }
 
 void Testbench::meta_reset_pc_t0(){
-    this->module_->meta_reset_pc_t0 = 1;
-    this->tick(N_META_RESET_TICKS);
-    this->module_->meta_reset_pc_t0 = 0;
+    // this->module_->block_signal_t0 = 1;
+    // this->tick(N_META_RESET_TICKS);
+    // this->module_->block_signal_t0 = 0;
 }
 #endif
 
@@ -134,15 +134,14 @@ void Testbench::close_trace(void) {
 	#endif // VM_TRACE
   }
 
-tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
+tick_req_t *Testbench::tick(int num_ticks, bool false_tick) {
     static Instruction *intercept = nullptr;
-	tick_req_t ret;
-	ret.type = REQ_NONE;
+	tick_req_t *ret = (tick_req_t *) malloc(sizeof(tick_req_t));
+	ret->type = REQ_NONE;
 
 	for (size_t i = 0; i < num_ticks || num_ticks == -1; i++) {
         this->tick_count_++;
 
-  
         module_->clk_i = 0;
         module_->eval();
 
@@ -152,7 +151,6 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
 
         module_->clk_i = !false_tick;
 
-
         if(intercept != nullptr){
             if(intercept->retired){
                 intercept = nullptr;
@@ -160,11 +158,13 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
                 #ifdef TAINT_EN
                 module_->instr_mem_rdata_t0 = 0x0;
                 #endif // TAINT_EN
+                module_->intercept_instr_mem_rdata = 0x0;
                 module_->intercept_instr_mem_en = 0;
-                #else
+                #else // DUAL_MEM
                 #ifdef TAINT_EN
                 module_->mem_rdata_o_t0 = 0x0;
                 #endif // TAINT_EN
+                module_->intercept_mem_rdata = 0x0;
                 module_->intercept_mem_en = 0;
                 #endif // DUAL_MEM
             }
@@ -174,11 +174,9 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
                 module_->intercept_instr_mem_rdata = intercept->inject_inst ? intercept->get_binary() : module_->instr_mem_rdata;
                 module_->instr_mem_rdata_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
                 #ifdef PRINT_INTERCEPT
-                // std::cout << "Intercepting setting module->instr_mem_rdata: " << std::hex <<  module_->intercept_instr_mem_rdata << "(" << std::hex << module_->instr_mem_rdata << ")\n";
-                // std::cout <<  "\tand module->instr_mem_rdata_t0 " << std::hex <<module_->instr_mem_rdata_t0 << std::endl;
                 intercept->print_intercept(module_->instr_mem_rdata,0x0);
                 #endif // PRINT_INTERCEPT
-                #else
+                #else // DUAL_MEM
                 module_->intercept_mem_en = 1;
                 #if DATA_WIDTH_BYTES == 4
                 module_->intercept_mem_rdata = intercept->inject_inst ?   module_->mem_rdata_o | intercept->get_binary() : module_->mem_rdata_o;
@@ -193,8 +191,6 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
                     #ifdef PRINT_INTERCEPT
                     intercept->print_intercept(module_->mem_rdata_o&0xFFFFFFFFULL,0x0);
                     #endif // PRINT_INTERCEPT
-
-
                 }
                 else{
                     assert(intercept->alignment == 4);
@@ -209,6 +205,7 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
                 #endif // DATA_WIDTH_BYTES
                 #endif // DUAL_MEM
                 intercept->retired = true;
+                this->intercepted = true;
             }
         }
         module_->eval();
@@ -218,37 +215,23 @@ tick_req_t Testbench::tick(int num_ticks, bool false_tick) {
         trace_->dump(5 * this->tick_count_);
         #endif // VM_TRACE
 
-        _update_req(module_, &ret); // design specific function
+        _update_req(module_, ret); // design specific function
         this->read_new_output();
 
         module_->clk_i = 0;
         module_->eval();
 
-        #ifdef DUAL_MEM
-        if(this->intercept_instructions.count((module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
-            intercept = this->intercept_instructions[(module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2)];
-            if(!intercept->retired){
-                // #ifdef PRINT_INTERCEPT
-                // std::cout << "Intercepting instruction found for address " << std::hex << intercept->get_address() <<  ", intercepting next cycle" << std::endl; 
-                // #endif // PRINT_INTERCEPT
+        if(intercept==nullptr){
+            #ifdef DUAL_MEM
+            if(this->intercept_instructions.count((module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
+                intercept = this->intercept_instructions[(module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2)];
+                }
+            #else // single memory for data and instructions 
+            if(this->intercept_instructions.count((module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
+                intercept = this->intercept_instructions[(module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2)];
             }
-            else{
-                intercept = nullptr;
-            }
-            }
-        #else // single memory for data and instructions 
-        if(this->intercept_instructions.count((module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
-            intercept = this->intercept_instructions[(module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2)];
-            if(!intercept->retired){
-                // #ifdef PRINT_INTERCEPT
-                // std::cout << "Intercepting instruction found for address " << std::hex << intercept->get_address() <<  ", intercepting next cycle" << std::endl; 
-                // #endif // PRINT_INTERCEPT
-            }
-            else{
-                intercept = nullptr;
-            }
+            #endif
         }
-        #endif
         // if(module_->mem_addr_o) std::cout << std::hex << (module_->mem_addr_o>>3) << ":" << module_->mem_rdata_o << std::endl;
         #if VM_TRACE
             trace_->dump(5 * tick_count_ + 2);
@@ -317,6 +300,10 @@ std::deque<doutput_t *> *Testbench::pop_outputs(){
     return &this->outputs;
 }
 
+std::deque<tick_req_t *> *Testbench::pop_tick_reqs(){
+    return &this->tick_reqs;
+}
+
 void Testbench::push_instruction(Instruction *instruction){
     instruction->retired = false;
     this->intercept_instructions[instruction->addr] = instruction;
@@ -355,6 +342,13 @@ void Testbench::clear_instructions(){
 
 void Testbench::print_outputs(){
     for(auto &out: this->outputs) out->print();
+}
+
+void Testbench::check_got_stop_req(){
+    if(!this->got_stop_req){
+    	std::cout << "Invalid seed with ID " << get_id() <<  ": did not receive stop request!\n";
+		exit(-1);
+    }
 }
 
 
