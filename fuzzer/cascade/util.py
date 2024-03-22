@@ -37,14 +37,30 @@ class ISAInstrClass(enum.IntEnum):
 
 # Use this for taints
 class CFInstructionClass(enum.IntEnum):
-    NONE = enum.auto() # default
+    NONE = 0 # default, start at 0
     REGIMM = enum.auto()
     IMMRD = enum.auto()
     R12D = enum.auto()
     F2I = enum.auto()
     I2F = enum.auto()
-
-
+    F4 = enum.auto()
+    F3 = enum.auto()
+    F3NORM = enum.auto()
+    F2 = enum.auto()
+    FIRD2 = enum.auto()
+    FIRD1 = enum.auto()
+    FIRS1 = enum.auto()
+    BRANCH = enum.auto()
+    JAL = enum.auto()
+    JALR = enum.auto()
+    SPECIAL = enum.auto()
+    ECALL = enum.auto()
+    INTLOAD = enum.auto()
+    INTSTORE = enum.auto()
+    FLOATLOAD = enum.auto()
+    FLOATSTORE = enum.auto()
+    CSR = enum.auto()
+    
 # Also used by the medeleg CSR
 class ExceptionCauseVal(enum.IntEnum):
     # Important: the values must match the ones in the RISC-V specification, so do not use enum.auto and make sure to skip the reserved values

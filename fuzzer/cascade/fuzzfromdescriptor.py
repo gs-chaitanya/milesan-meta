@@ -12,7 +12,7 @@ from cascade.basicblock import gen_basicblocks
 from cascade.fuzzsim import SimulatorEnum, runtest_simulator
 from cascade.genelf import gen_elf_from_bbs
 from cascade.spikeresolution import spike_resolution, spike_resolution_return_interm
-
+import numpy as np
 import os
 import random
 import time
@@ -20,15 +20,17 @@ import time
 FUZZ_USE_MODELSIM = False
 
 LOG2_MEMSIZE_UPPERBOUND = 20
+LOG2_MEMSIZE_LOWERBOUND = 17
 NUM_MAX_BBS_UPPERBOUND = 100
 NUM_MIN_BBS_LOWERBOUND = 10
-NUM_BBS = 50
+NUM_BBS = 3
 
 # Creates a new program descriptor.
 def gen_new_test_instance(design_name: str, randseed: int, can_authorize_privileges: bool):
     random.seed(randseed)
+    np.random.seed(randseed)
     n_bbs = random.randrange(NUM_MIN_BBS_LOWERBOUND, NUM_MAX_BBS_UPPERBOUND) if NUM_BBS == 0 else NUM_BBS
-    return random.randrange(1 << 14, 1 << LOG2_MEMSIZE_UPPERBOUND), design_name, randseed, n_bbs, can_authorize_privileges and random.random() < PROBA_AUTHORIZE_PRIVILEGES
+    return random.randrange(1 << LOG2_MEMSIZE_LOWERBOUND, 1 << LOG2_MEMSIZE_UPPERBOUND), design_name, randseed, n_bbs, can_authorize_privileges and random.random() < PROBA_AUTHORIZE_PRIVILEGES
 
 # The main function for a single fuzzer run. It creates a new fuzzer state, populates it with basic blocks, and then runs the spike resolution. It does not run the RTL simulation.
 # @return (fuzzerstate, rtl_elfpath, expected_regvals: list) where expected_regval is a list of num_pickable_regs-1 expected reg values (we ignore x0)

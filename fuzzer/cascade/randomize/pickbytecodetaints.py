@@ -6,12 +6,22 @@ CFINSTRCLASS_TAINT_ONLY_ONE = True
 
 # If CFINSTRCLASS_TAINT_ONLY_ONE is true, the probabilities must sum up to 1. Otherwise each probability individually determines the likelyhoold that the resp. bits get tainted.
 CFINSTRCLASS_TAINT_PROBS = { 
-    CFInstructionClass.REGIMM: {"rd": 0,"rs1": 0, "imm": 1},
-    CFInstructionClass.IMMRD: {"rd": 0,"imm": 1},
-    CFInstructionClass.R12D: {"rd": 0,"rs1": 0.5, "rs2":0.5},
+    CFInstructionClass.REGIMM: {"rd": 0.2,"rs1": 0.4, "imm": 0.4},
+    CFInstructionClass.IMMRD: {"rd": 0.2,"imm": 0.8},
+    CFInstructionClass.R12D: {"rd": 1,"rs1": 0, "rs2":0},
     CFInstructionClass.F2I: {"rd": 0.4,"frs1": 0.4, "rm":0.2},
-    CFInstructionClass.I2F: {"frd": 0.4,"rs1": 0.4, "rm":0.2}
-
+    CFInstructionClass.I2F: {"frd": 0.4,"rs1": 0.4, "rm":0.2},
+    CFInstructionClass.F4: {"frd": 0.2,"frs1": 0.2,"frs2":0.2,"frs3":0.2,"rm":0.2},
+    CFInstructionClass.F3: {"frd": 0.2,"frs1": 0.3,"frs2":0.3, "rm":0.2},
+    CFInstructionClass.F3NORM: {"frd": 0.2,"frs1": 0.4,"frs2":0.4},
+    CFInstructionClass.F2: {"frd": 0.5,"frs1": 0.5},
+    CFInstructionClass.FIRD2: {"rd": 0.2,"frs1": 0.4,"frs2":0.4},
+    CFInstructionClass.FIRD1: {"rd": 0.3,"frs1": 0.7},
+    CFInstructionClass.FIRS1: {"frd": 0.3,"rs1": 0.7},
+    CFInstructionClass.INTLOAD: {"rd": 1},
+    CFInstructionClass.INTSTORE: {"rs": 1},
+    CFInstructionClass.FLOATLOAD: {"frd": 1},
+    CFInstructionClass.FLOATSTORE: {"frs": 1}
 }
 
 # Max number of instructions to be injected within a basic block.
@@ -23,9 +33,26 @@ CFINSTRCLASS_INJECT_PROBS = {
     CFInstructionClass.NONE: 0,
     CFInstructionClass.REGIMM: 0,
     CFInstructionClass.IMMRD: 0,
-    CFInstructionClass.R12D: 0,
-    CFInstructionClass.F2I: 1,
-    CFInstructionClass.I2F: 1,
+    CFInstructionClass.R12D: 1,
+    CFInstructionClass.F2I: 0,
+    CFInstructionClass.I2F: 0,
+    CFInstructionClass.F4: 0,
+    CFInstructionClass.F3: 0,
+    CFInstructionClass.F3NORM: 0,
+    CFInstructionClass.F2: 0,
+    CFInstructionClass.FIRD2: 0,
+    CFInstructionClass.FIRD1: 0,
+    CFInstructionClass.FIRS1: 0,
+    CFInstructionClass.BRANCH: 0,
+    CFInstructionClass.JAL: 0,
+    CFInstructionClass.JALR: 0,
+    CFInstructionClass.SPECIAL: 0,
+    CFInstructionClass.ECALL: 0,
+    CFInstructionClass.INTLOAD: 0,
+    CFInstructionClass.INTSTORE: 0,
+    CFInstructionClass.FLOATLOAD: 0,
+    CFInstructionClass.FLOATSTORE: 0,
+    CFInstructionClass.CSR: 0
 }
 
 
@@ -64,53 +91,17 @@ class IntegerRegisterClass(enum.IntEnum):
     t6 = 31
 
 
-#  # use this to mask out any destination regs from being tainted in the bytecode
-# RD_INT_TAINT_PROBS_MASK = {
-#     IntegerRegisterClass.zero : 0,
-#     IntegerRegisterClass.ra: 1,
-#     IntegerRegisterClass.sp : 0,
-#     IntegerRegisterClass.gp: 0,
-#     IntegerRegisterClass.tp: 0,
-#     IntegerRegisterClass.t0 : 1,
-#     IntegerRegisterClass.t1: 1,
-#     IntegerRegisterClass.t2: 1,
-#     IntegerRegisterClass.s0: 0,
-#     IntegerRegisterClass.s1: 1,
-#     IntegerRegisterClass.a0: 1,
-#     IntegerRegisterClass.a1: 1,
-#     IntegerRegisterClass.a2: 1,
-#     IntegerRegisterClass.a3: 1,
-#     IntegerRegisterClass.a4: 1,
-#     IntegerRegisterClass.a5: 1,
-#     IntegerRegisterClass.a6: 1,
-#     IntegerRegisterClass.a7: 1,
-#     IntegerRegisterClass.s2: 1,
-#     IntegerRegisterClass.s3: 1,
-#     IntegerRegisterClass.s4: 1,
-#     IntegerRegisterClass.s5: 1,
-#     IntegerRegisterClass.s6: 1,
-#     IntegerRegisterClass.s7: 1,
-#     IntegerRegisterClass.s8: 1,
-#     IntegerRegisterClass.s9: 1,
-#     IntegerRegisterClass.s10: 1,
-#     IntegerRegisterClass.s11: 1,
-#     IntegerRegisterClass.t3: 1,
-#     IntegerRegisterClass.t4: 1,
-#     IntegerRegisterClass.t5: 1,
-#     IntegerRegisterClass.t6: 1
-# }
-
  # use this to mask out any destination regs from being tainted in the bytecode
 RD_INT_TAINT_PROBS_MASK = {
-    IntegerRegisterClass.zero : 1,
+    IntegerRegisterClass.zero : 0,
     IntegerRegisterClass.ra: 1,
-    IntegerRegisterClass.sp : 1,
-    IntegerRegisterClass.gp: 1,
-    IntegerRegisterClass.tp: 1,
+    IntegerRegisterClass.sp : 1, #0
+    IntegerRegisterClass.gp: 1, #0
+    IntegerRegisterClass.tp: 1, #0
     IntegerRegisterClass.t0 : 1,
     IntegerRegisterClass.t1: 1,
     IntegerRegisterClass.t2: 1,
-    IntegerRegisterClass.s0: 1,
+    IntegerRegisterClass.s0: 1, #0
     IntegerRegisterClass.s1: 1,
     IntegerRegisterClass.a0: 1,
     IntegerRegisterClass.a1: 1,
@@ -137,51 +128,16 @@ RD_INT_TAINT_PROBS_MASK = {
 }
 
  # use this to mask out any destination regs from being tainted in the bytecode
-# RS_INT_TAINT_PROBS_MASK = {
-#     IntegerRegisterClass.zero : 0,
-#     IntegerRegisterClass.ra: 1,
-#     IntegerRegisterClass.sp : 0,
-#     IntegerRegisterClass.gp: 0,
-#     IntegerRegisterClass.tp: 0,
-#     IntegerRegisterClass.t0 : 1,
-#     IntegerRegisterClass.t1: 1,
-#     IntegerRegisterClass.t2: 1,
-#     IntegerRegisterClass.s0: 0,
-#     IntegerRegisterClass.s1: 1,
-#     IntegerRegisterClass.a0: 1,
-#     IntegerRegisterClass.a1: 1,
-#     IntegerRegisterClass.a2: 1,
-#     IntegerRegisterClass.a3: 1,
-#     IntegerRegisterClass.a4: 1,
-#     IntegerRegisterClass.a5: 1,
-#     IntegerRegisterClass.a6: 1,
-#     IntegerRegisterClass.a7: 1,
-#     IntegerRegisterClass.s2: 1,
-#     IntegerRegisterClass.s3: 1,
-#     IntegerRegisterClass.s4: 1,
-#     IntegerRegisterClass.s5: 1,
-#     IntegerRegisterClass.s6: 1,
-#     IntegerRegisterClass.s7: 1,
-#     IntegerRegisterClass.s8: 1,
-#     IntegerRegisterClass.s9: 1,
-#     IntegerRegisterClass.s10: 1,
-#     IntegerRegisterClass.s11: 1,
-#     IntegerRegisterClass.t3: 1,
-#     IntegerRegisterClass.t4: 1,
-#     IntegerRegisterClass.t5: 1,
-#     IntegerRegisterClass.t6: 1
-# }
-
 RS_INT_TAINT_PROBS_MASK = {
     IntegerRegisterClass.zero : 1,
     IntegerRegisterClass.ra: 1,
-    IntegerRegisterClass.sp : 1,
-    IntegerRegisterClass.gp: 1,
-    IntegerRegisterClass.tp: 1,
+    IntegerRegisterClass.sp : 1,#0
+    IntegerRegisterClass.gp: 1,#0
+    IntegerRegisterClass.tp: 1,#0
     IntegerRegisterClass.t0 : 1,
     IntegerRegisterClass.t1: 1,
     IntegerRegisterClass.t2: 1,
-    IntegerRegisterClass.s0: 1,
+    IntegerRegisterClass.s0: 1, #0
     IntegerRegisterClass.s1: 1,
     IntegerRegisterClass.a0: 1,
     IntegerRegisterClass.a1: 1,
@@ -313,14 +269,46 @@ RS_FLOAT_TAINT_PROBS_MASK = {
     FloatRegisterClass.ft11: 1
 }
 
-SHAMT_INSTRUCTIONS = {
-    "srl",
-    "sra",
-    "sll",
-    "sllw",
-    "srlw",
-    "sraw"
+# SHAMT_INSTRUCTIONS = {
+#     "srl",
+#     "sra",
+#     "sll",
+#     "sllw",
+#     "srlw",
+#     "sraw"
+# }
+
+
+CFINSTRCLASS_TAINT_INJECT_MASKS = {
+    "rd": 0x1F,
+    "rs": 0x1F,
+    "immi": 0xFFF,
+    "shamt": 0x1F,
+    "immu": 0xFFFFF,
+    "immj": 0xFFFFF,
+    "rm": 0x7
 }
+
+DONT_TAINT_REGS = [
+    # IntegerRegisterClass.zero
+    # IntegerRegisterClass.sp, # stack pointer r2
+    # IntegerRegisterClass.gp, #global pointer r3
+    # IntegerRegisterClass.tp, # thread pointer r4
+    # IntegerRegisterClass.s0, # frame pointer r8
+    # IntegerRegisterClass.s1 # , saved register r9
+]
+
+CFINSTRCLASS_TAINT_INJECT_BITS = {
+    "rd": 7,
+    "rs1": 15,
+    "rs2": 20,
+    "rs3": 27,
+    "immi": 20,
+    "immu": 12,
+    "immj": 12,
+    "rm": 12
+}
+
 
 
 
