@@ -31,7 +31,6 @@ export LM_LICENSE_FILE=8161@lic-mentor.ethz.ch
 source /cellift-meta/env.sh
 fi
 
-export COVDUMP_DIR=$LOCAL_MNT/cov_dump
 # Where are the design submodules located
 export CASCADE_DESIGN_PROCESSING_ROOT=$CASCADE_META_ROOT/design-processing
 
@@ -187,3 +186,6 @@ export CASCADE_PATH_TO_FIGURES=$CASCADE_META_ROOT/figures
 
 export CASCADE_PATH_TO_DIFUZZRTL_ELFS=/cascade-difuzzrtl/docker/shareddir/savedockerdifuzzrtl/Fuzzer/outdir/illegal/elf/
 # export CASCADE_PATH_TO_DIFUZZRTL_ELFS=/scratch/flsolt/shareddir/Fuzzer/outdir1000/illegal/elf
+
+
+export COVDUMP_DIR=$LOCAL_MNT/cov_dump
