@@ -83,7 +83,7 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     # return ImmRdInstruction(instr_str, rd, imm, fuzzerstate.is_design_64bit, iscompressed)
 
     if instr_str == "lui":
-        return cfi.LuiInstruction(rd, imm, iscompressed,fuzzerstate)
+        return cfi.LuiInstruction(rd, imm, iscompressed, fuzzerstate)
     elif instr_str == "auipc":
         return cfi.AuipcInstruction(rd, imm, iscompressed, fuzzerstate)
     else:

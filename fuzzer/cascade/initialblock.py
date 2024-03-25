@@ -142,14 +142,14 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     curr_addr += 4
 
     if fuzzerstate.design_has_fpu:
-        expect_padding = bool((curr_addr + (4*(fuzzerstate.num_pickable_regs+fuzzerstate.num_pickable_floating_regs))) & 0x7 == 4) # Says whether there will be a padding required to align the random data
+        expect_padding = bool((curr_addr + (4*(fuzzerstate.num_pickable_regs+fuzzerstate.num_pickable_floating_regs-1))) & 0x7 == 4) # Says whether there will be a padding required to align the random data
         bytes_until_random_vals = 8 + 4*(fuzzerstate.num_pickable_regs+fuzzerstate.num_pickable_floating_regs-1) + int(expect_padding) * 4 # NO_COMPRESSED
     else:
-        expect_padding = bool((curr_addr + (4*fuzzerstate.num_pickable_regs)) & 0x7 == 4) # Says whether there will be a padding required to align the random data
+        expect_padding = bool((curr_addr + (4*(fuzzerstate.num_pickable_regs-1))) & 0x7 == 4) # Says whether there will be a padding required to align the random data
         bytes_until_random_vals = 8 + 4*(fuzzerstate.num_pickable_regs-1) + int(expect_padding) * 4 # NO_COMPRESSED
 
     bytes_until_random_vals_base_for_debug = curr_addr
-    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_regs-1, bytes_until_random_vals, fuzzerstate.is_design_64bit))
+    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_regs-1, bytes_until_random_vals + curr_addr, fuzzerstate.is_design_64bit))
     curr_addr += 4
     # Floating loads must be done before int loads, because the last pickable int register will be overwritten.
     if fuzzerstate.design_has_fpu:
@@ -170,14 +170,10 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     if fuzzerstate.design_has_fpu:
         num_reginit_vals += fuzzerstate.num_pickable_floating_regs
     for _ in range(num_reginit_vals):
-        regval = 0 if random.random() < fuzzerstate.proba_reg_starts_with_zero else random.randrange(1 << 64)
-        fuzzerstate.initial_reg_data_content.append(regval)
-        
-    for i in range(fuzzerstate.num_pickable_regs-1):
-        fuzzerstate.intregpickstate.regs[i].set_val(fuzzerstate.initial_reg_data_content[i])
+        fuzzerstate.initial_reg_data_content.append(0 if random.random() < fuzzerstate.proba_reg_starts_with_zero else random.randrange(1 << 64))
 
     # If there will be padding between the instructions and data, to ensure proper alignment of doubleword load and store ops for 64-bit CPUs 
-    has_padding = bool((curr_addr+4) & 0x7) == 0
+    has_padding = bool((curr_addr+4) & 0x7) != 0
     if DO_ASSERT:
         assert expect_padding == has_padding, f"{expect_padding} != {has_padding}"
     # Allocate the initial block before choosing an address for the next bb.

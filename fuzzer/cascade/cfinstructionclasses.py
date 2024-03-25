@@ -22,9 +22,11 @@ from rv.rv64f import *
 from rv.rv64d import *
 from rv.rv64m import *
 from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, CFINSTRCLASS_TAINT_INJECT_MASKS, CFINSTRCLASS_TAINT_INJECT_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
+from common.spike import SPIKE_STARTADDR
 
 import random
 import numpy as np
+
 
 # Ensures that the register and its taint mask excludes some registers we don't want to get tainted
 def clean_reg_taint(reg, reg_t0, skip_regs):
@@ -50,6 +52,7 @@ class CFInstruction:
     instr_type = CFInstructionClass.NONE
     injectable = False
     fuzzerstate = None
+    addr = None
     # Check that it's not a wrong instruction id.
     def assert_authorized_instr_strs(self):
         if DO_ASSERT:
@@ -59,6 +62,8 @@ class CFInstruction:
         self.instr_str = instr_str
         self.iscompressed = iscompressed
         self.fuzzerstate = fuzzerstate
+        if fuzzerstate is not None:
+            self.addr = fuzzerstate.curr_addr + SPIKE_STARTADDR
         assert not iscompressed, "Compressed instructions are not yet supported."
         self.assert_authorized_instr_strs()
 
@@ -67,7 +72,17 @@ class CFInstruction:
         raise ValueError('Cannot generate bytecode in the abstract instruction classes.')
 
     def execute(self):
+        # raise Exception(f"{hex(curr_addr)}: Function execute() called on abstract class CFInstruction {self.instr_str}: {type(self)}.")
         pass
+
+    def check_regs(self,cmp_regs,pc):
+        pass
+    
+    def log(self,curr_addr):
+        if self.fuzzerstate is not None:
+            print(f"{hex(curr_addr)}: {self.instr_str}: {self.fuzzerstate.intregpickstate.regs[self.rd].abi_name}:{hex(self.fuzzerstate.intregpickstate.regs[self.rd].get_val_bk())} <- {hex(self.fuzzerstate.intregpickstate.regs[self.rd].get_val())}")
+        else:
+            print(f"{hex(curr_addr)}: {self.instr_str}: (not tracked)")
 
 # Any instruction with an immediate
 class ImmInstruction(CFInstruction):
@@ -261,6 +276,13 @@ class R12DInstruction(CFInstruction):
         assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, rs2_t0: {hex(self.rs2_t0)},  this should not happen."
         return masked_taint
 
+    def check_regs(self,reg_cmp,pc):
+        if self.fuzzerstate is None:
+            return
+        self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[1],pc)
+        self.fuzzerstate.intregpickstate.regs[self.rs2].check(reg_cmp[2],pc)
+
 
 
 # Instructions with imm and rd
@@ -337,6 +359,13 @@ class ImmRdInstruction(ImmInstruction_t0):
         masked_taint = taint_bytecode ^ taint_bytecode_mask
         assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
         return masked_taint
+
+    def check_regs(self,reg_cmp,pc):
+        if self.fuzzerstate is None:
+            return
+        self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+
+
         
 
 
@@ -451,6 +480,14 @@ class RegImmInstruction(ImmInstruction_t0):
         masked_taint = taint_bytecode ^ taint_bytecode_mask
         assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
         return masked_taint
+
+    def check_regs(self,reg_cmp,pc):
+        if self.fuzzerstate is None:
+            return
+        self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[1],pc)
+
+
 
 # Branch instructions: with rs1, rs2 and an immediate
 BranchInstructions = ("beq", "bne", "blt", "bge", "bltu", "bgeu")

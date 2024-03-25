@@ -1,0 +1,68 @@
+import os, random, numpy as np
+import shutil
+import glob
+import json
+
+from params.runparams import PATH_TO_TMP, PATH_TO_COV
+from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_new_test_instance
+from cascade.cfinstructionclasses import RegImmInstruction,R12DInstruction,ImmRdInstruction
+import subprocess, itertools
+from common import designcfgs
+from common.spike import SPIKE_STARTADDR
+from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
+CHECKABLE_INSTRUCTION_CLASSES = [R12DInstruction,RegImmInstruction,ImmRdInstruction]
+
+
+MAX_CYCLES_PER_INSTR = 30
+SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
+def check_isa_sim(design_name: str,seed: int):    
+    fuzzerstate, interm_elfpath, expected_regvals  = gen_fuzzerstate_elf_expectedvals_interm(*gen_new_test_instance(design_name, seed, True), True)
+    ID = fuzzerstate.instance_to_str()
+    ## temp dirs below
+    env_dir = os.path.join(PATH_TO_TMP, 'envs')
+    env_path = os.path.join(env_dir,f'{ID}.env.sh')
+
+    env = os.environ.copy()
+    env["SIMSRAMELF"] = interm_elfpath
+    env["ID"] = str(ID)
+    env["DESIGN"] = design_name
+    env["SEED"] = str(seed)
+
+    print(f"source {env_path}")
+    with open(env_path, "w") as f:
+        f.write(f"export SIMSRAMELF={env['SIMSRAMELF']}\n")
+        f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF']}.dump\n")
+        f.write(f"export SEED={env['SEED']}\n")
+        f.write(f"export ID={env['ID']}\n")
+
+    pc_rd_pairs = {req[0]:[] for req in expected_regvals[2]}
+    for req, regval in zip(expected_regvals[2],expected_regvals[3]):
+        pc_rd_pairs[req[0]].append(regval)
+
+    for i,reg_data_content in enumerate(fuzzerstate.initial_reg_data_content):
+        fuzzerstate.intregpickstate.regs[i+1].set_val(reg_data_content) # skip reg 0
+        # print(f"{fuzzerstate.intregpickstate.regs[i+1].abi_name}:{hex(fuzzerstate.intregpickstate.regs[i+1].get_val())}")
+    try:
+        insts = {}
+        for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq[:-1], fuzzerstate.instr_objs_seq[:-1])): # skip first and last bb
+            for inst_idx,next_instr in enumerate(bb_instrs):
+                curr_addr = bb_start_addr + 4*inst_idx
+                if not any([isinstance(next_instr,inst_type) for inst_type in CHECKABLE_INSTRUCTION_CLASSES]): continue
+                next_instr.check_regs(pc_rd_pairs[curr_addr],SPIKE_STARTADDR+curr_addr) # check value before executing instruction
+                next_instr.execute()
+                # next_instr.log(SPIKE_STARTADDR+curr_addr)
+
+        expected_intregvals = expected_regvals[0]
+        print("cascade sim:")
+        for i,reg in enumerate(fuzzerstate.intregpickstate.regs[1:]): # skip reg 0
+            reg.check(expected_intregvals[i],fuzzerstate.curr_addr)
+            
+    except Exception as e:
+        # os.removedirs(trace_dir)
+        # if os.path.isfile(env_path): os.remove(env_path)
+        # if os.path.isfile(interm_elfpath): os.remove(interm_elfpath)
+        print(f"Failed for env: {env_path}")
+        raise e
+
+
+

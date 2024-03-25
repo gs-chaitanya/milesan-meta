@@ -13,6 +13,7 @@ MAX_CYCLES_PER_INSTR = 30
 SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
 def gen_elf_and_inject_instructions(design_name: str, max_n_insts_per_bb: int, en_taint: bool,seed: int, fuzz_only_this_inst_type: int = None):    
     fuzzerstate, interm_elfpath  = gen_fuzzerstate_elf_expectedvals_interm(*gen_new_test_instance(design_name, seed, True), True)
+    fuzzerstate.intregpickstate.print()
     ID = fuzzerstate.instance_to_str()
     root_dir = os.path.join(PATH_TO_COV,fuzzerstate.design_name,"drfuzz" if en_taint else "rfuzz", ID)
     cov_dir = os.path.join(root_dir,"cov")

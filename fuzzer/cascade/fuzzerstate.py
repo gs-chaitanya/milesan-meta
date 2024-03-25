@@ -95,6 +95,8 @@ class FuzzerState:
         # Coordinates of the FPU enable/disable instructions. Only used in program reduction.
         self.fpuendis_coords = []
 
+        self.curr_addr = -1 # keep track of current address during program generation
+
     def init_new_bb(self):
         self.instr_objs_seq.append([])
 

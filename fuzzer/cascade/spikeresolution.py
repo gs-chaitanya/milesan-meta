@@ -6,7 +6,7 @@ from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
 from common.designcfgs import get_design_march_flags_nocompressed
 from common.spike import run_trace_all_pcs, run_trace_regs_at_pc_locs, SPIKE_STARTADDR, FPREG_ABINAMES
 
-from cascade.cfinstructionclasses import PlaceholderConsumerInstr, BranchInstruction, PlaceholderProducerInstr0, PlaceholderProducerInstr1, JALRInstruction, PlaceholderPreConsumerInstr, IntStoreInstruction, FloatStoreInstruction
+from cascade.cfinstructionclasses import PlaceholderConsumerInstr, BranchInstruction, PlaceholderProducerInstr0, PlaceholderProducerInstr1, JALRInstruction, PlaceholderPreConsumerInstr, IntStoreInstruction, FloatStoreInstruction,CFInstruction, R12DInstruction, RegImmInstruction, ImmRdInstruction
 from cascade.genelf import gen_elf_from_bbs
 from cascade.util import IntRegIndivState
 
@@ -37,6 +37,30 @@ def gen_regdump_reqs(fuzzerstate):
                 # if not bb_instr.plan_taken:
                 ret.append((curr_addr, False, bb_instr.rs1)) # rs1 is the first  dependent register.
                 ret.append((curr_addr, False, bb_instr.rs2)) # rs2 is the second dependent register.
+            
+    return ret
+
+# @brief generates the register dump requests made to spike
+# @return the register dump requests: an iterable of pairs (pc, reg to dump) in program order
+def gen_regdump_reqs_all_rds(fuzzerstate):
+    if DO_ASSERT:
+        assert len(fuzzerstate.instr_objs_seq) == len(fuzzerstate.bb_start_addr_seq)
+
+    ret = []
+    for bb_start_addr, bb_instrs in zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq):
+        for bb_instr_id, bb_instr in enumerate(bb_instrs):
+            curr_addr = bb_start_addr + 4*bb_instr_id # NO_COMPRESSED
+
+            # All we need is the value of the dependent register at consumption time.
+            if isinstance(bb_instr, R12DInstruction):
+                ret.append((curr_addr, False, bb_instr.rd))
+                ret.append((curr_addr, False, bb_instr.rs1))
+                ret.append((curr_addr, False, bb_instr.rs2))
+            elif isinstance(bb_instr, RegImmInstruction):
+                ret.append((curr_addr, False, bb_instr.rd))
+                ret.append((curr_addr, False, bb_instr.rs1))
+            elif isinstance(bb_instr, ImmRdInstruction):
+                ret.append((curr_addr, False, bb_instr.rd))
     return ret
 
 # @brief generates the register dump requests made to spike for pruning.
@@ -249,6 +273,7 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False):
     flat_instr_objs = list(itertools.chain.from_iterable(fuzzerstate.instr_objs_seq))
     # len(flat_instr_objs)+1: the +1 is to reach the final basic block and thereby overwrite the potential destination register of a jal/jalr
     regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags_nocompressed(design_name), SPIKE_STARTADDR, regdump_reqs, True, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
+
     if not NO_REMOVE_TMPFILES:
         os.remove(spike_resolution_elfpath)
         del spike_resolution_elfpath
@@ -294,6 +319,10 @@ def spike_resolution_return_interm(fuzzerstate, check_pc_spike_again: bool = Fal
     flat_instr_objs = list(itertools.chain.from_iterable(fuzzerstate.instr_objs_seq))
     # len(flat_instr_objs)+1: the +1 is to reach the final basic block and thereby overwrite the potential destination register of a jal/jalr
     regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags_nocompressed(design_name), SPIKE_STARTADDR, regdump_reqs, True, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
+    
+    # retrieves the rd stream throughout execution to compare to cascade sim
+    rd_regdump_reqs = gen_regdump_reqs_all_rds(fuzzerstate)
+    rd_regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags_nocompressed(design_name), SPIKE_STARTADDR, rd_regdump_reqs, True, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
     # IMPORTANT: We reset the randomness here to have deterministic branch instructions.
     # (Rare) example where it matters: assume we need to pop the last bb, say with id 20. Then we could have a bug with request size 19 but not with request size 20, or vice versa.
@@ -322,5 +351,5 @@ def spike_resolution_return_interm(fuzzerstate, check_pc_spike_again: bool = Fal
             for reg_id in range(fuzzerstate.num_pickable_floating_regs):
                 assert finalfpuregvals_spikeresol[reg_id] == finalfpuregvals_spikecheck[reg_id], f"Mismatch in f{reg_id} value. Resolution: `{hex(finalfpuregvals_spikeresol[reg_id])}`, check: `{hex(finalintregvals_spikecheck[reg_id])}`."
 
-    return (finalintregvals_spikeresol[1:], finalfpuregvals_spikeresol), spike_resolution_elfpath
+    return (finalintregvals_spikeresol[1:], finalfpuregvals_spikeresol, rd_regdump_reqs, rd_regvals), spike_resolution_elfpath
 
