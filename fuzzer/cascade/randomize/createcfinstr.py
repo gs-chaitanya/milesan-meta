@@ -147,7 +147,9 @@ def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompre
     imm = fuzzerstate.next_bb_addr-curr_addr
     if rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
-    return JALInstruction(instr_str, rd, imm, iscompressed)
+    # return JALInstruction(instr_str, rd, imm, iscompressed)
+    return cfi.JalInstruction(rd,imm,iscompressed,fuzzerstate)
+
 def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
@@ -158,7 +160,9 @@ def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
-    return JALRInstruction(instr_str, rd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
+    # return JALRInstruction(instr_str, rd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
+    return cfi.JalrInstruction(instr_str, rd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed, fuzzerstate)
+
 def _create_SpecialInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
@@ -304,12 +308,16 @@ def create_targeted_producer0_instrobj(fuzzerstate):
     fuzzerstate.intregpickstate.set_producer_id(rd, fuzzerstate.next_producer_id)
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED0)
-    return [PlaceholderProducerInstr0(rd, fuzzerstate.next_producer_id, fuzzerstate.is_design_64bit)]
+    # return [PlaceholderProducerInstr0(rd, fuzzerstate.next_producer_id, fuzzerstate.is_design_64bit)]
+    return [cfi.ExtPlaceholderProducerInstr0(rd, fuzzerstate.next_producer_id, fuzzerstate.is_design_64bit, fuzzerstate)]
+
 def create_targeted_producer1_instrobj(fuzzerstate):
     rd = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PRODUCED0)
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED1)
-    return [PlaceholderProducerInstr1(rd, fuzzerstate.intregpickstate.get_producer_id(rd), fuzzerstate.is_design_64bit)]
+    # return [PlaceholderProducerInstr1(rd, fuzzerstate.intregpickstate.get_producer_id(rd), fuzzerstate.is_design_64bit)]
+    return [cfi.ExtPlaceholderProducerInstr1(rd, fuzzerstate.intregpickstate.get_producer_id(rd), fuzzerstate.is_design_64bit, fuzzerstate)]
+
 def create_targeted_consumer_instrobj(fuzzerstate):
     rdep = fuzzerstate.intregpickstate.pick_int_inputreg_nonzero(False) # We want to create dependencies, therefore we choose not to accept x0
     rprod = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PRODUCED1)
@@ -317,9 +325,12 @@ def create_targeted_consumer_instrobj(fuzzerstate):
     rd = rprod
     fuzzerstate.intregpickstate.set_regstate(rprod, IntRegIndivState.CONSUMED)
     if fuzzerstate.is_design_64bit:
-        return [PlaceholderPreConsumerInstr(rprod), PlaceholderPreConsumerInstr(rdep), PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
+        # return [PlaceholderPreConsumerInstr(rprod), PlaceholderPreConsumerInstr(rdep), PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
+        return [cfi.ExtPlaceholderPreConsumerInstr(rprod), cfi.ExtPlaceholderPreConsumerInstr(rdep), cfi.ExtPlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod), fuzzerstate)]
+
     else:
-        return [PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
+        # return [PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
+        return [cfi.ExtPlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod), fuzzerstate)]
 
 # The reservation in the MemoryView is already done ahead and should not be reiterated here.
 # @param jalr_addr_reg: only meaningful if a jalr is present (in the latter case, it should be the next instruction)

@@ -3,6 +3,8 @@ import ctypes
 from abc import ABC
 ABI_INAMES = ["zero","ra","sp","gp","tp","t0","t1","t2","s0/fp","s1","a0","a1","a2","a3","a4","a5","a6","a7"]
 ABI_INAMES += [f"s{i}" for i in range(2,12)] + [f"t{i}" for i in range(3,7)]
+MAX_32b = 0xFFFFFFFF
+MAX_64b = 0xFFFFFFFFFFFFFFFF
 
 class __RegState(ABC): # Abstract base class cannot be instantiated.
     def __init__(self,id):
@@ -28,7 +30,7 @@ class __32RegState(__RegState):
         self.val_t0 = val_t0
 
     def print(self):
-        print(f"i{self.id}: {hex(self.val.value)}")
+        print(f"{ABI_INAMES[self.id]}: {hex(self.val.value)}")
 
     def set_val(self, val):
         if(self.id != 0):
@@ -57,7 +59,10 @@ class Int32RegState(__32RegState):
         mismatch = self.val.value != cmp_val_uint32.value # check the value that 
 
         # print(f"{hex(pc)}: Value {'mismatch' if  mismatch else 'match'} for {self.abi_name}: {hex(self.val.value)}" + f" != {hex(cmp_val_uint32.value)}" if mismatch else "")
-        assert not mismatch, f"{hex(pc)}: Value mismatch for {self.abi_name}: {hex(self.val.value)} != {hex(cmp_val_uint32.value)}"
-
+        # assert not mismatch, f"{hex(pc)}: Value mismatch for {self.abi_name}: {hex(self.val.value)} != {hex(cmp_val_uint32.value)}"
+        if not mismatch:
+            return False
+        else:
+            return pc,ABI_INAMES[self.id],self.val.value,cmp_val_uint32.value
 
 

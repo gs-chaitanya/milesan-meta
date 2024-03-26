@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT
-from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO, NUM_MIN_FREE_INTREGS
+from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO, NUM_MIN_FREE_INTREGS, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
 from cascade.util import IntRegIndivState
 from cascade.registers import Int32RegState
@@ -18,7 +18,9 @@ class IntRegPickState:
         self.__reg_weights  = np.ones(self.num_pickable_regs)
         self.__reg_weights /= np.sum(self.__reg_weights)
         # self.regs   = [IntRegIndivState.FREE for _ in range(self.num_pickable_regs)]
-        self.regs = [Int32RegState(id) for id in range(num_pickable_regs)] # id is internal id
+        self.regs = {id:Int32RegState(id) for id in range(num_pickable_regs)}
+        self.regs[RELOCATOR_REGISTER_ID] = Int32RegState(RELOCATOR_REGISTER_ID)
+        self.regs[RDEP_MASK_REGISTER_ID] = Int32RegState(RDEP_MASK_REGISTER_ID)
         # Permits matching sensitive instructions with the producers
         self.__last_producer_ids = np.zeros(self.num_pickable_regs)
         # For each register, a pair of (basic block id, instr in basic block) that produced the register
@@ -197,7 +199,7 @@ class IntRegPickState:
         print('pickreg', self.__regs_in_state_onehot)
 
     def print(self):
-        for reg in self.regs:
+        for _,reg in self.regs.items():
             reg.print()
 
 # Float registers are never forbidden, therefore this is simpler than integer registers.

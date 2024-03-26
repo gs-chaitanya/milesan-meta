@@ -52,8 +52,8 @@ def gen_basicblock(fuzzerstate):
         # Allocate the next 4 bytes
         fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+4)
         curr_alloc_cursor += 4
-        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
-        fuzzerstate.curr_addr = curr_addr
+        fuzzerstate.curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+
 
         # Get the next instruction class
         curr_isa_class = gen_next_isainstrclass(fuzzerstate)
@@ -91,7 +91,7 @@ def gen_basicblock(fuzzerstate):
             # print('  New privstate', fuzzerstate.privilegestate.privstate)
 
             # Create space for the next basic block.
-            if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
+            if not gen_next_bb_addr(fuzzerstate, curr_isa_class, fuzzerstate.curr_addr):
                 # Abort the bb
                 fuzzerstate.instr_objs_seq.pop()
                 fuzzerstate.bb_start_addr_seq.pop()
@@ -114,7 +114,7 @@ def gen_basicblock(fuzzerstate):
 
         elif curr_isa_class == ISAInstrClass.EXCEPTION:
             # Create space for the next basic block.
-            if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
+            if not gen_next_bb_addr(fuzzerstate, curr_isa_class, fuzzerstate.curr_addr):
                 # Abort the bb
                 fuzzerstate.instr_objs_seq.pop()
                 fuzzerstate.bb_start_addr_seq.pop()
@@ -135,7 +135,7 @@ def gen_basicblock(fuzzerstate):
         # Compute the address of the next basic block if we are exiting the current
         if curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.JALR) or fuzzerstate.curr_branch_taken:
             # Gen the next bb addr
-            if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
+            if not gen_next_bb_addr(fuzzerstate, curr_isa_class, fuzzerstate.curr_addr):
                 # Abort the bb
                 fuzzerstate.instr_objs_seq.pop()
                 fuzzerstate.bb_start_addr_seq.pop()
@@ -159,7 +159,7 @@ def gen_basicblock(fuzzerstate):
 
         else:
             instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
-            next_instr = create_instr(instr_str, fuzzerstate, curr_addr)
+            next_instr = create_instr(instr_str, fuzzerstate, fuzzerstate.curr_addr)
         # next_instr.execute()
         # next_instr.log(SPIKE_STARTADDR+curr_addr)
         fuzzerstate.instr_objs_seq[-1].append(next_instr)
@@ -172,23 +172,23 @@ def gen_basicblock(fuzzerstate):
     # The algorithm is the following: if there is a possibility to jump immediately, then do so. Else, prepare the registers as fast as possible.
 
     curr_isa_class = random.choices([ISAInstrClass.JAL, ISAInstrClass.JALR, ISAInstrClass.BRANCH], [1, 1, 1], k=1)[0]
-    curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+    fuzzerstate.curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
 
     # No need for any preparation if jal, because it has no true dependency
     if curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.BRANCH):
         # Gen the next bb addr
-        if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
+        if not gen_next_bb_addr(fuzzerstate, curr_isa_class, fuzzerstate.curr_addr):
             # Abort the bb
             fuzzerstate.instr_objs_seq.pop()
             fuzzerstate.bb_start_addr_seq.pop()
             fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
             return False
         if curr_isa_class == ISAInstrClass.JAL:
-            fuzzerstate.instr_objs_seq[-1].append(create_instr("jal", fuzzerstate, curr_addr))
+            fuzzerstate.instr_objs_seq[-1].append(create_instr("jal", fuzzerstate, fuzzerstate.curr_addr))
         elif curr_isa_class == ISAInstrClass.BRANCH:
             fuzzerstate.curr_branch_taken = True
             # The branch type does not batter because it will be re-determined once the operand values are known
-            fuzzerstate.instr_objs_seq[-1].append(create_instr("bne", fuzzerstate, curr_addr))
+            fuzzerstate.instr_objs_seq[-1].append(create_instr("bne", fuzzerstate, fuzzerstate.curr_addr))
         else:
             raise ValueError(f"Unexpected isa class `{curr_isa_class}`")
 
@@ -198,16 +198,16 @@ def gen_basicblock(fuzzerstate):
             assert curr_isa_class == ISAInstrClass.JALR
 
         fuzzerstate.intregpickstate.bring_some_reg_to_state(IntRegIndivState.CONSUMED, fuzzerstate)
-        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1]) # NO_COMPRESSED
+        fuzzerstate.curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1]) # NO_COMPRESSED
 
         # Gen the next bb addr
-        if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
+        if not gen_next_bb_addr(fuzzerstate, curr_isa_class, fuzzerstate.curr_addr):
             # Abort the bb
             fuzzerstate.instr_objs_seq.pop()
             fuzzerstate.bb_start_addr_seq.pop()
             fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
             return False
-        fuzzerstate.instr_objs_seq[-1].append(create_instr('jalr', fuzzerstate, curr_addr))
+        fuzzerstate.instr_objs_seq[-1].append(create_instr('jalr', fuzzerstate, fuzzerstate.curr_addr))
 
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
 def gen_random_data_block(fuzzerstate):
@@ -442,8 +442,8 @@ def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
                 if index_in_bb_start_addr_seq == len(fuzzerstate.bb_start_addr_seq):
                     if DO_ASSERT:
                         assert fuzzerstate.final_bb_base_addr is not None and fuzzerstate.final_bb_base_addr >= 0
-                    curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + bb_instr_id * 4 # NO_COMPRESSED
-                    bb_instr.imm = fuzzerstate.final_bb_base_addr - curr_addr
+                    fuzzerstate.curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + bb_instr_id * 4 # NO_COMPRESSED
+                    bb_instr.imm = fuzzerstate.final_bb_base_addr - fuzzerstate.curr_addr
                 index_in_bb_start_addr_seq += 1
 
             elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.SPECIAL]:

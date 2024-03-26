@@ -23,9 +23,10 @@ from rv.rv64d import *
 from rv.rv64m import *
 from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, CFINSTRCLASS_TAINT_INJECT_MASKS, CFINSTRCLASS_TAINT_INJECT_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
 from common.spike import SPIKE_STARTADDR
-
+from cascade.registers import ABI_INAMES
 import random
 import numpy as np
+import ctypes
 
 
 # Ensures that the register and its taint mask excludes some registers we don't want to get tainted
@@ -40,13 +41,58 @@ def clean_reg_taint(reg, reg_t0, skip_regs):
                     break
     return reg_t0
 
+def compute_reg_traceback(reg_id, addr, fuzzerstate):
+    last_instr = None
+    for bb_instrs in fuzzerstate.instr_objs_seq:
+        for instr_obj in bb_instrs:
+            if not any([isinstance(instr_obj,inst_type) for inst_type in CHECKABLE_INSTRUCTION_CLASSES]): continue
+            if instr_obj.addr == addr: # reached this instruction
+                assert last_instr is not None, f"Traceback computation for instruction at {hex(addr)} failed: No previous instruction modifying register {ABI_INAMES[reg_id]} found."
+                return last_instr # reached address of calling instruction
+            elif hasattr(instr_obj, "rd") and instr_obj.rd == reg_id:
+                last_instr = instr_obj
+            elif hasattr(instr_obj, "rdep") and instr_obj.rdep == reg_id:
+                last_instr = instr_obj
+
+    
+    assert False, f"Traceback computation for instruction at {hex(addr)} failed, this should not happen."
+
 # These classes are here for generating multi-instruction fuzzing programs.
 
+class BaseInstruction:
+    fuzzerstate = None
+    addr = None
+    instr_str = None
+
+    def __init__(self, fuzzerstate, instr_str):
+        if fuzzerstate is not None:
+            self.addr = fuzzerstate.curr_addr + SPIKE_STARTADDR
+        else:
+            self.addr = -1
+        self.fuzzerstate = fuzzerstate
+        self.instr_str = instr_str
+
+    def print(self):
+        print(self.get_str())
+
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str}"
+
+    def execute(self):
+        # raise Exception(f"{hex(curr_addr)}: Function execute() called on abstract class CFInstruction {self.instr_str}: {type(self)}.")
+        # print(f"Skipped execution of instruction: {self.instr_str} ({hex(self.addr)})")
+        assert self.addr == -1, f"Skipped execution of executable instruction at addr: {hex(self.addr)}"
+        pass
+    def check_regs(self,cmp_regs,pc):
+        # print(f"Skipped check of instruction: {self.instr_str} ({hex(self.addr)})")
+        assert self.addr == -1, f"Skipped check of executable instruction at addr: {hex(self.addr)}"
+        pass
+        
 ###
 # Abstract classes
 ###
 
-class CFInstruction:
+class CFInstruction(BaseInstruction):
     # Could be any instruction
     authorized_instr_strs = range(len(INSTRUCTION_IDS))
     instr_type = CFInstructionClass.NONE
@@ -59,24 +105,14 @@ class CFInstruction:
             assert self.instr_str in self.__class__.authorized_instr_strs
 
     def __init__(self, instr_str: str, iscompressed: bool = False, fuzzerstate = None):
-        self.instr_str = instr_str
+        super().__init__(fuzzerstate,instr_str)
         self.iscompressed = iscompressed
-        self.fuzzerstate = fuzzerstate
-        if fuzzerstate is not None:
-            self.addr = fuzzerstate.curr_addr + SPIKE_STARTADDR
         assert not iscompressed, "Compressed instructions are not yet supported."
         self.assert_authorized_instr_strs()
 
     # @param is_spike_resolution: some rare instructions (typically offset management placeholders) are treated differently between spike resolution and the subsequent actual simulation.
     def gen_bytecode_int(self, is_spike_resolution: bool):
         raise ValueError('Cannot generate bytecode in the abstract instruction classes.')
-
-    def execute(self):
-        # raise Exception(f"{hex(curr_addr)}: Function execute() called on abstract class CFInstruction {self.instr_str}: {type(self)}.")
-        pass
-
-    def check_regs(self,cmp_regs,pc):
-        pass
     
     def log(self,curr_addr):
         if self.fuzzerstate is not None:
@@ -279,9 +315,12 @@ class R12DInstruction(CFInstruction):
     def check_regs(self,reg_cmp,pc):
         if self.fuzzerstate is None:
             return
-        self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
-        self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[1],pc)
-        self.fuzzerstate.intregpickstate.regs[self.rs2].check(reg_cmp[2],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[1],pc)
+        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rs1,self.addr,self.fuzzerstate).get_str()}"
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check(reg_cmp[2],pc)
+        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rs2,self.addr,self.fuzzerstate).get_str()}"
 
 
 
@@ -363,7 +402,8 @@ class ImmRdInstruction(ImmInstruction_t0):
     def check_regs(self,reg_cmp,pc):
         if self.fuzzerstate is None:
             return
-        self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
 
 
         
@@ -484,8 +524,10 @@ class RegImmInstruction(ImmInstruction_t0):
     def check_regs(self,reg_cmp,pc):
         if self.fuzzerstate is None:
             return
-        self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
-        self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[1],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[1],pc)
+        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rs1,self.addr,self.fuzzerstate).get_str()}"
 
 
 
@@ -558,9 +600,9 @@ JALInstructions = ("jal",)
 class JALInstruction(ImmInstruction):
     authorized_instr_strs = JALInstructions
 
-    def __init__(self, instr_str: str, rd: int, imm: int, iscompressed: bool = False):
+    def __init__(self, instr_str: str, rd: int, imm: int, iscompressed: bool = False, fuzzerstate = None):
         # 32 or 64 bit does not matter for JAL
-        super().__init__(instr_str, imm, False, iscompressed)
+        super().__init__(instr_str, imm, False, iscompressed, fuzzerstate)
         self.instr_type = CFInstructionClass.JAL
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -572,13 +614,20 @@ class JALInstruction(ImmInstruction):
         # rv32i
         return rv32i_jal(self.rd, self.imm)
 
+    def check_regs(self,reg_cmp,pc):
+        if self.fuzzerstate is None:
+            return
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
+
+
 # The jalr instruction
 JALRInstructions = ("jalr",)
 class JALRInstruction(ImmInstruction):
     authorized_instr_strs = JALRInstructions
 
-    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed)
+    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, is_design_64bit: bool, iscompressed: bool = False, fuzzerstate = None):
+        super().__init__(instr_str, imm, is_design_64bit, iscompressed, fuzzerstate)
         self.instr_type = CFInstructionClass.JALR
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -593,6 +642,13 @@ class JALRInstruction(ImmInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
         return rv32i_jalr(self.rd, self.rs1, self.imm)
+
+    def check_regs(self,reg_cmp,pc):
+        if self.fuzzerstate is None:
+            return
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
+
 
 # Instructions that create no information flow
 SpecialInstructions = ("fence", "fence.i")
@@ -1720,10 +1776,12 @@ class CSRImmInstruction(CSRInstruction):
 #   a. The offset producer computes an offset dependent on the resolution.
 #   b. The offset consumer computes the generated, target address, by making the difference between the dependent register and the offset. This instruction does not require the spike resolution to be known, but still is different between the two scenari.
 
+
 # Does not inherit from CFInstruction.
-class PlaceholderProducerInstr0:
+class PlaceholderProducerInstr0(BaseInstruction):
     # When it is instantiated, the producer instructions do not know the offset yet, just the target address.
-    def __init__(self, rd: int, producer_id: int, is_design_64bit: bool):
+    def __init__(self, rd: int, producer_id: int, is_design_64bit: bool, fuzzerstate = None):
+        super().__init__(fuzzerstate,"lui (PlaceholderProducerInstr0)")
         self.rd = rd
         self.producer_id = producer_id
         self.relocation_offset = 0
@@ -1732,6 +1790,8 @@ class PlaceholderProducerInstr0:
         self.is_design_64bit = is_design_64bit
         self.instr_type = CFInstructionClass.NONE
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+
+
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using lui
@@ -1744,10 +1804,12 @@ class PlaceholderProducerInstr0:
                 assert self.rtl_offset is not None, "Producer0 cannot produce final bytecode because it does not yet know the final offset."
             return rv32i_lui(self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.is_design_64bit), False)[0])
 
+
 # Does not inherit from CFInstruction.
-class PlaceholderProducerInstr1:
+class PlaceholderProducerInstr1(BaseInstruction):
     # When it is instantiated, the producer instructions do not know the offset yet, just the target address.
-    def __init__(self, rd: int, producer_id: int, is_design_64bit: bool):
+    def __init__(self, rd: int, producer_id: int, is_design_64bit: bool, fuzzerstate = None):
+        super().__init__(fuzzerstate,"addi (PlaceholderProducerInstr1)")
         self.rd = rd
         self.producer_id = producer_id
         self.relocation_offset = 0
@@ -1768,10 +1830,12 @@ class PlaceholderProducerInstr1:
                 assert self.rtl_offset is not None, "Producer1 cannot produce final bytecode because it does not yet know the final rtl_offset."
             return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.is_design_64bit), False)[1])
 
+
 # Does not inherit from CFInstruction.
-class PlaceholderPreConsumerInstr:
+class PlaceholderPreConsumerInstr(BaseInstruction):
     # @param rdep: the register that creates the dependency
-    def __init__(self, rdep: int):
+    def __init__(self, rdep: int, fuzzerstate = None):
+        super().__init__(fuzzerstate,"and (PlaceholderPreConsumerInstr)")
         self.rdep = rdep
         self.instr_type = CFInstructionClass.NONE
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
@@ -1780,13 +1844,15 @@ class PlaceholderPreConsumerInstr:
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # Reduce the size of the rdep id to 30 bits
         return rv32i_and(self.rdep, self.rdep, RDEP_MASK_REGISTER_ID)
+    
 
 # Does not inherit from CFInstruction.
-class PlaceholderConsumerInstr:
+class PlaceholderConsumerInstr(BaseInstruction):
     # @param rd: the generated register, i.e., the target address for example
     # @param rdep: the register that creates the dependency
     # @param producer_id: is required to feed spike's feedback
-    def __init__(self, rd: int, rdep: int, rprod: int, producer_id: int):
+    def __init__(self, rd: int, rdep: int, rprod: int, producer_id: int, fuzzerstate = None):
+        super().__init__(fuzzerstate,"xor (PlaceholderConsumerInstr)")
         self.rd = rd
         self.rdep = rdep
         self.rprod = rprod
@@ -1804,6 +1870,8 @@ class PlaceholderConsumerInstr:
             return rv32i_xor(self.rd, self.rprod, RELOCATOR_REGISTER_ID) # self.rprod - 0
         else:
             return rv32i_xor(self.rd, self.rdep, self.rprod) # self.rdep - self.rprod
+
+
 
 def is_placeholder(obj):
     return isinstance(obj, PlaceholderProducerInstr0) or isinstance(obj, PlaceholderProducerInstr1) or isinstance(obj, PlaceholderPreConsumerInstr) or isinstance(obj, PlaceholderConsumerInstr)
@@ -2049,3 +2117,6 @@ class PrivilegeDescentInstruction():
             return rvprivileged_mret()
         else:
             return rvprivileged_sret()
+
+
+CHECKABLE_INSTRUCTION_CLASSES = [R12DInstruction,RegImmInstruction,ImmRdInstruction,JALInstruction,JALRInstruction,PlaceholderProducerInstr0,PlaceholderProducerInstr1,PlaceholderPreConsumerInstr,PlaceholderConsumerInstr]

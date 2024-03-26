@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
+from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID
 from common.designcfgs import get_design_march_flags_nocompressed
 from common.spike import run_trace_all_pcs, run_trace_regs_at_pc_locs, SPIKE_STARTADDR, FPREG_ABINAMES
 
-from cascade.cfinstructionclasses import PlaceholderConsumerInstr, BranchInstruction, PlaceholderProducerInstr0, PlaceholderProducerInstr1, JALRInstruction, PlaceholderPreConsumerInstr, IntStoreInstruction, FloatStoreInstruction,CFInstruction, R12DInstruction, RegImmInstruction, ImmRdInstruction
+from cascade.cfinstructionclasses import PlaceholderConsumerInstr, BranchInstruction, PlaceholderProducerInstr0, PlaceholderProducerInstr1, JALRInstruction, PlaceholderPreConsumerInstr, IntStoreInstruction, FloatStoreInstruction,CFInstruction, R12DInstruction, RegImmInstruction, ImmRdInstruction, JALInstruction
 from cascade.genelf import gen_elf_from_bbs
 from cascade.util import IntRegIndivState
 
@@ -61,6 +62,26 @@ def gen_regdump_reqs_all_rds(fuzzerstate):
                 ret.append((curr_addr, False, bb_instr.rs1))
             elif isinstance(bb_instr, ImmRdInstruction):
                 ret.append((curr_addr, False, bb_instr.rd))
+            elif isinstance(bb_instr, JALInstruction):
+                ret.append((curr_addr, False, bb_instr.rd))
+            elif isinstance(bb_instr, JALRInstruction):
+                ret.append((curr_addr, False, bb_instr.rd))
+            elif isinstance(bb_instr, PlaceholderProducerInstr0):
+                ret.append((curr_addr, False, bb_instr.rd))
+            elif isinstance(bb_instr, PlaceholderProducerInstr1):
+                ret.append((curr_addr, False, bb_instr.rd))
+            elif isinstance(bb_instr, PlaceholderPreConsumerInstr):
+                ret.append((curr_addr, False, bb_instr.rdep))
+                ret.append((curr_addr, False, RDEP_MASK_REGISTER_ID))
+            elif isinstance(bb_instr, PlaceholderConsumerInstr):
+                ret.append((curr_addr, False, bb_instr.rd))
+                ret.append((curr_addr, False, bb_instr.rprod))
+                ret.append((curr_addr, False, RELOCATOR_REGISTER_ID))
+
+
+
+
+
     return ret
 
 # @brief generates the register dump requests made to spike for pruning.
@@ -319,7 +340,7 @@ def spike_resolution_return_interm(fuzzerstate, check_pc_spike_again: bool = Fal
     flat_instr_objs = list(itertools.chain.from_iterable(fuzzerstate.instr_objs_seq))
     # len(flat_instr_objs)+1: the +1 is to reach the final basic block and thereby overwrite the potential destination register of a jal/jalr
     regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags_nocompressed(design_name), SPIKE_STARTADDR, regdump_reqs, True, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
-    
+
     # retrieves the rd stream throughout execution to compare to cascade sim
     rd_regdump_reqs = gen_regdump_reqs_all_rds(fuzzerstate)
     rd_regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags_nocompressed(design_name), SPIKE_STARTADDR, rd_regdump_reqs, True, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
