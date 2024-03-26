@@ -10,7 +10,7 @@
 # sys.argv[4]: number of total tests that should be completed successfully
 # sys.argv[5]: authorize privileges (by default 1)
 
-from drfuzz_mem.check_isa_sim import check_isa_sim
+from drfuzz_mem.check_isa_sim_worker import check_isa_sims
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
 
@@ -22,27 +22,20 @@ if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
-    # if len(sys.argv) < 4:
-    #     raise Exception("Usage: python3 do_observe_taint_injection.py <design_name> <num_cores> <n_total_tests> [<enable_taint> <seed_offset>] [<authorize_privileges>]")
+    if len(sys.argv) < 4:
+        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <num_cores> <n_total_tests> [seed_offset]")
 
-
-    # if len(sys.argv) > 4:
-    #     en_taint = sys.argv[4]=="1"
-    # else:
-    #     en_taint = True
-    # if len(sys.argv) > 5:
-    #     seed_offset = int(sys.argv[5])
-    # else:
-    #     seed_offset = 0
-    # if len(sys.argv) > 6:
-    #     authorize_privileges = int(sys.argv[6])
-    # else:
-    #     authorize_privileges = 1
 
     design_name = sys.argv[1]
+    n_cores = int(sys.argv[2])
+    n_total_tests = int(sys.argv[3])
+
+    seed_offset = 0
+    if len(sys.argv) > 4:
+        seed_offset = int(sys.argv[4])
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
-    check_isa_sim(design_name,1)
+    check_isa_sims(design_name,n_cores,n_total_tests,seed_offset)
     
 else:
     raise Exception("This module must be at the toplevel.")

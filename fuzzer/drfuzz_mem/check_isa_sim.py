@@ -27,7 +27,7 @@ def check_isa_sim(design_name: str,seed: int):
     env["DESIGN"] = design_name
     env["SEED"] = str(seed)
 
-    print(f"source {env_path}")
+    # print(f"source {env_path}")
     with open(env_path, "w") as f:
         f.write(f"export SIMSRAMELF={env['SIMSRAMELF']}\n")
         f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF']}.dump\n")
@@ -73,8 +73,10 @@ def check_isa_sim(design_name: str,seed: int):
         # os.removedirs(trace_dir)
         # if os.path.isfile(env_path): os.remove(env_path)
         # if os.path.isfile(interm_elfpath): os.remove(interm_elfpath)
-        print(f"Failed for env: {env_path}")
+        print(f"Failed for seed {seed}")
         raise e
+
+    return True
 
 
 

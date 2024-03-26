@@ -160,7 +160,7 @@ class IntRegPickState:
 
     # Save at the end of basic blocks, and restore if popping basic blocks from the end.
     def save_curr_state(self):
-        return copy(self.__reg_weights), copy(self.regs), copy(self.__last_producer_ids), deepcopy(self.__last_producer_coords)
+        return copy(self.__reg_weights), copy([reg.fsm_state for _,reg in self.regs.items()]), copy(self.__last_producer_ids), deepcopy(self.__last_producer_coords)
     # Rarely called.
     def restore_state(self, saved_state: tuple):
         if DO_ASSERT:
