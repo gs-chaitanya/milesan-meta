@@ -1,4 +1,5 @@
 from drfuzz_mem.check_isa_sim import check_isa_sim
+from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint
 import multiprocessing as mp
 import time
 import threading
@@ -56,7 +57,7 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offs
     print(f"Starting parallel ISA sim validation on {total_tests} total tests of `{design_name}` on {num_workers} processes.")
     pool = mp.Pool(processes=num_workers)
     for _ in range(num_workers):
-        print(f"Starting thread {process_instance_id}")
+        print(f"Starting thread {process_instance_id}.")
         pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id,),callback=test_done_callback)
         process_instance_id += 1
 
@@ -66,7 +67,7 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offs
         with callback_lock:
             if newly_finished_tests > 0:
                 for _ in range(newly_finished_tests):
-                    print(f"Starting thread {process_instance_id}")
+                    print(f"Starting thread {process_instance_id}.")
                     pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id,),callback=test_done_callback)
                     process_instance_id += 1
                 newly_finished_tests = 0
