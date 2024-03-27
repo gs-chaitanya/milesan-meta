@@ -312,15 +312,22 @@ class R12DInstruction(CFInstruction):
         assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, rs2_t0: {hex(self.rs2_t0)},  this should not happen."
         return masked_taint
 
+
+    def set_bytecode(self, bytecode):
+        self.rs1 = (bytecode>>CFINSTRCLASS_TAINT_INJECT_BITS["rs1"])&CFINSTRCLASS_TAINT_INJECT_MASKS["rs"]
+        self.rs2 = (bytecode>>CFINSTRCLASS_TAINT_INJECT_BITS["rs2"])&CFINSTRCLASS_TAINT_INJECT_MASKS["rs"]
+        self.rd =  (bytecode>>CFINSTRCLASS_TAINT_INJECT_BITS["rd"])&CFINSTRCLASS_TAINT_INJECT_MASKS["rd"]
+
     def check_regs(self,reg_cmp,pc):
         if self.fuzzerstate is None:
             return
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
-        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[1],pc)
-        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rs1,self.addr,self.fuzzerstate).get_str()}"
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check(reg_cmp[2],pc)
-        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rs2,self.addr,self.fuzzerstate).get_str()}"
+        for reg_id,reg_val in reg_cmp.items():
+            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val,pc)
+            assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
+        # mismatch = self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[self.rs1],pc)
+        # assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rs1,self.addr,self.fuzzerstate).get_str()}"
+        # mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check(reg_cmp[self.rs2],pc)
+        # assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rs2,self.addr,self.fuzzerstate).get_str()}"
 
 
 
@@ -402,7 +409,7 @@ class ImmRdInstruction(ImmInstruction_t0):
     def check_regs(self,reg_cmp,pc):
         if self.fuzzerstate is None:
             return
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
 
 
@@ -524,9 +531,9 @@ class RegImmInstruction(ImmInstruction_t0):
     def check_regs(self,reg_cmp,pc):
         if self.fuzzerstate is None:
             return
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[1],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[self.rs1],pc)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rs1,self.addr,self.fuzzerstate).get_str()}"
 
 
@@ -617,7 +624,7 @@ class JALInstruction(ImmInstruction):
     def check_regs(self,reg_cmp,pc):
         if self.fuzzerstate is None:
             return
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
 
 
@@ -646,7 +653,7 @@ class JALRInstruction(ImmInstruction):
     def check_regs(self,reg_cmp,pc):
         if self.fuzzerstate is None:
             return
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
 
 

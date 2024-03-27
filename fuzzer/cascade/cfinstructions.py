@@ -261,7 +261,7 @@ class ExtPlaceholderProducerInstr0(PlaceholderProducerInstr0):
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
     def check_regs(self,reg_cmp,pc): # TODO: check rdep, rprod for spike_resolution or final elf
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
 
 class ExtPlaceholderProducerInstr1(PlaceholderProducerInstr1):
@@ -275,7 +275,7 @@ class ExtPlaceholderProducerInstr1(PlaceholderProducerInstr1):
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
     def check_regs(self,reg_cmp,pc):
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[0],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
 
 class ExtPlaceholderPreConsumerInstr(PlaceholderPreConsumerInstr):
@@ -288,9 +288,9 @@ class ExtPlaceholderPreConsumerInstr(PlaceholderPreConsumerInstr):
         self.fuzzerstate.intregpickstate.regs[self.rdep].set_val(res)
 
     def check_regs(self,reg_cmp,pc): # rdep and rs1 should be the same register
-        assert len(reg_cmp) == 2, f"Missing registers for check_regs: got{len(reg_cmp)}, require 2."
-        for i,reg in enumerate([self.rdep, RDEP_MASK_REGISTER_ID]):
-            mismatch = self.fuzzerstate.intregpickstate.regs[reg].check(reg_cmp[i],pc)
+        assert len(reg_cmp) == len(set([self.rdep, RDEP_MASK_REGISTER_ID])), f"Missing registers for check_regs: got {len(reg_cmp)}, require {len(set([self.rdep, RDEP_MASK_REGISTER_ID]))}."
+        for reg in [self.rdep, RDEP_MASK_REGISTER_ID]:
+            mismatch = self.fuzzerstate.intregpickstate.regs[reg].check(reg_cmp[reg],pc)
             assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg,self.addr,self.fuzzerstate).get_str()}"
 
 class ExtPlaceholderConsumerInstr(PlaceholderConsumerInstr):
@@ -303,7 +303,7 @@ class ExtPlaceholderConsumerInstr(PlaceholderConsumerInstr):
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
     def check_regs(self,reg_cmp,pc): # TODO: check rdep, rprod for spike_resolution or final elf
-        assert len(reg_cmp) == 3, f"Missing registers for check_regs: got{len(reg_cmp)}, require 3."
-        for i,reg in enumerate([self.rd, self.rprod, RELOCATOR_REGISTER_ID]):
-            mismatch = self.fuzzerstate.intregpickstate.regs[reg].check(reg_cmp[i],pc)
+        assert len(reg_cmp) == len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID])), f"Missing registers for check_regs: got {len(reg_cmp)}, require {len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID]))}."
+        for reg in [self.rd, self.rprod, RELOCATOR_REGISTER_ID]:
+            mismatch = self.fuzzerstate.intregpickstate.regs[reg].check(reg_cmp[reg],pc)
             assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg,self.addr,self.fuzzerstate).get_str()}"
