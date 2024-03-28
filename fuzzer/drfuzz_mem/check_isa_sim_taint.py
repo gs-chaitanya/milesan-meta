@@ -18,10 +18,8 @@ def check_isa_sim_taint(design_name: str,seed: int):
     # get fuzzerstate and expected regvals from program
     fuzzerstate, interm_elfpath, expected_regvals  = gen_fuzzerstate_elf_expectedvals_interm(*gen_new_test_instance(design_name, seed, True), True)
     print(f"export SIMSRAMELF={interm_elfpath}")
-    taint_bit_idx = 0x7
-    inject_addr = 0x800ec620
     # expected regvals of the program where the bit was flipped, which is the one that will be executed
-    pc_reg_taint_pairs, pc_reg_pairs = spike_sim_taint(fuzzerstate, expected_regvals, taint_bit_idx, inject_addr)
+    pc_reg_taint_pairs, pc_reg_pairs = spike_sim_taint(fuzzerstate, expected_regvals)
 
 
     ID = fuzzerstate.instance_to_str()
@@ -55,7 +53,8 @@ def check_isa_sim_taint(design_name: str,seed: int):
                 curr_addr = bb_start_addr + 4*inst_idx
                 if not any([isinstance(next_instr,inst_type) for inst_type in CHECKABLE_INSTRUCTION_CLASSES]): continue
                 next_instr.check_regs(pc_reg_pairs[curr_addr],SPIKE_STARTADDR+curr_addr) # check value before executing instruction
-                next_instr.execute()
+                next_instr.check_regs_t0(pc_reg_taint_pairs[curr_addr],SPIKE_STARTADDR+curr_addr) # check value before executing instruction
+                next_instr.execute(taint_en = True)
                 # next_instr.log(SPIKE_STARTADDR+curr_addr)
 
         expected_intregvals = expected_regvals[0]
@@ -66,13 +65,13 @@ def check_isa_sim_taint(design_name: str,seed: int):
         # for i,reg in enumerate(expected_intregvals): # skip reg 0
         #     print(f"{ABI_INAMES[i+1]}:{hex(reg)}")
 
-        # print("*** VALIDATION ***:")
+        print("*** VALIDATION ***:")
         for i,reg in fuzzerstate.intregpickstate.regs.items():
             if i == 0: continue  # skip reg 0
             if i == RELOCATOR_REGISTER_ID: continue
             if i == RDEP_MASK_REGISTER_ID: continue # is overwritten in final BB
             reg.check(expected_intregvals[i],fuzzerstate.curr_addr)
-
+        print("Ok.")
     except Exception as e:
         # os.removedirs(trace_dir)
         # if os.path.isfile(env_path): os.remove(env_path)

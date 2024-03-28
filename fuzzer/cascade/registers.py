@@ -26,8 +26,9 @@ class __32RegState(__RegState):
     def __init__(self,id: int = None, val: ctypes.c_uint32 = ctypes.c_uint32(0), val_t0: ctypes.c_uint32 = ctypes.c_uint32(0)):
         self.id = id
         self.val = val
-        self.val_bk = val_t0
+        self.val_bk = val
         self.val_t0 = val_t0
+        self.val_t0_bk = val_t0
 
     def print(self):
         print(f"{ABI_INAMES[self.id]}: {hex(self.val.value)}")
@@ -37,11 +38,23 @@ class __32RegState(__RegState):
             self.val_bk = self.val
             self.val = ctypes.c_uint32(val)
 
+    def set_val_t0(self, val_t0):
+        if(self.id != 0):
+            self.val_t0_bk = self.val_t0
+            self.val_t0 = ctypes.c_uint32(val_t0)
+
+
     def get_val(self):
         return self.val.value
 
     def get_val_bk(self):
         return self.val_bk.value
+
+    def get_val_t0(self):
+        return self.val.value
+
+    def get_val_t0_bk(self):
+        return self.val_t0_bk.value
 
 
 class Int32RegState(__32RegState):
@@ -64,5 +77,16 @@ class Int32RegState(__32RegState):
             return False
         else:
             return pc,ABI_INAMES[self.id],self.val.value,cmp_val_uint32.value
+
+    def check_t0(self, cmp_val, pc):
+        cmp_val_uint32 = ctypes.c_uint32(cmp_val)
+        mismatch = self.val_t0.value != cmp_val_uint32.value # check the value that 
+
+        # print(f"{hex(pc)}: Value {'mismatch' if  mismatch else 'match'} for {self.abi_name}: {hex(self.val.value)}" + f" != {hex(cmp_val_uint32.value)}" if mismatch else "")
+        # assert not mismatch, f"{hex(pc)}: Value mismatch for {self.abi_name}: {hex(self.val.value)} != {hex(cmp_val_uint32.value)}"
+        if not mismatch:
+            return False
+        else:
+            return pc,ABI_INAMES[self.id],self.val_t0.value,cmp_val_uint32.value
 
 

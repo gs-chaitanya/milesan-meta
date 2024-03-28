@@ -279,7 +279,7 @@ RS_FLOAT_TAINT_PROBS_MASK = {
 # }
 
 
-CFINSTRCLASS_TAINT_INJECT_MASKS = {
+OPCODE_FIELD_MASKS = {
     "rd": 0x1F,
     "rs": 0x1F,
     "immi": 0xFFF,
@@ -298,7 +298,7 @@ DONT_TAINT_REGS = [
     # IntegerRegisterClass.s1 # , saved register r9
 ]
 
-CFINSTRCLASS_TAINT_INJECT_BITS = {
+OPCODE_FIELD_BITS = {
     "rd": 7,
     "rs1": 15,
     "rs2": 20,

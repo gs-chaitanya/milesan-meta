@@ -27,7 +27,7 @@ def check_isa_sim(design_name: str,seed: int):
     env["DESIGN"] = design_name
     env["SEED"] = str(seed)
 
-    # print(f"source {env_path}")
+    print(f"source {env_path}")
     with open(env_path, "w") as f:
         f.write(f"export SIMSRAMELF={env['SIMSRAMELF']}\n")
         f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF']}.dump\n")
@@ -51,24 +51,24 @@ def check_isa_sim(design_name: str,seed: int):
                 curr_addr = bb_start_addr + 4*inst_idx
                 if not any([isinstance(next_instr,inst_type) for inst_type in CHECKABLE_INSTRUCTION_CLASSES]): continue
                 next_instr.check_regs(pc_rd_pairs[curr_addr],SPIKE_STARTADDR+curr_addr) # check value before executing instruction
-                next_instr.execute()
+                next_instr.execute(False)
                 # next_instr.log(SPIKE_STARTADDR+curr_addr)
 
         expected_intregvals = expected_regvals[0]
-        print("*** CASCADE ***:")
-        fuzzerstate.intregpickstate.print()
+        # print("*** CASCADE ***:")
+        # fuzzerstate.intregpickstate.print()
 
-        print("*** SPIKE ***:")
-        for i,reg in enumerate(expected_intregvals): # skip reg 0
-            print(f"{ABI_INAMES[i+1]}: {hex(reg)}")
+        # print("*** SPIKE ***:")
+        # for i,reg in enumerate(expected_intregvals): # skip reg 0
+        #     print(f"{ABI_INAMES[i+1]}: {hex(reg)}")
 
-        print("*** VALIDATION ***:")
+        # print("*** VALIDATION ***:")
         for i,reg in fuzzerstate.intregpickstate.regs.items():
             if i == 0: continue  # skip reg 0
             if i == RELOCATOR_REGISTER_ID: continue
             if i == RDEP_MASK_REGISTER_ID: continue # is overwritten in final BB
             reg.check(expected_intregvals[i],fuzzerstate.curr_addr)
-        print("Ok.")
+        # print("Ok.")
     except Exception as e:
         # os.removedirs(trace_dir)
         # if os.path.isfile(env_path): os.remove(env_path)
