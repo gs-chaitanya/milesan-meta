@@ -102,14 +102,14 @@ class SltInstruction(R12DInstruction):
     def __init__(self, rd: int, rs1: int, rs2: int, iscompressed: bool = False, fuzzerstate = None):
         super().__init__("slt", rd, rs1, rs2, iscompressed, fuzzerstate)   
 
-    def execute(self, taint_en: bool = False):
+    def execute(self, taint_en: bool = False): # convert unsigned to signed
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = ctypes.c_int32(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()).value < ctypes.c_int32(self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()).value
+        res = twos_complement(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val(),self.fuzzerstate.is_design_64bit) < twos_complement(self.fuzzerstate.intregpickstate.regs[self.rs2].get_val(), self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
     def execute_t0(self,res):#TODO: 
-        signed_rs1 = ctypes.c_int32(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()).value
-        signed_rs2 = ctypes.c_int32(self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()).value
+        signed_rs1 = twos_complement(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val(), self.fuzzerstate.is_design_64bit)
+        signed_rs2 = twos_complement(self.fuzzerstate.intregpickstate.regs[self.rs2].get_val(), self.fuzzerstate.is_design_64bit)
         rs1_and_not_rs1_taint = signed_rs1 & (~self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0())
         rs2_and_not_rs2_taint = signed_rs2 & (~self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0())
 
@@ -192,7 +192,7 @@ class AddiInstruction(RegImmInstruction):
 
     def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() + ctypes.c_uint32(self.imm).value
+        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() + to_unsigned(self.imm, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 class SlliInstruction(RegImmInstruction):
@@ -201,7 +201,7 @@ class SlliInstruction(RegImmInstruction):
 
     def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() << ctypes.c_uint32(self.imm).value
+        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() << to_unsigned(self.imm, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 class SltiInstruction(RegImmInstruction):
@@ -210,7 +210,7 @@ class SltiInstruction(RegImmInstruction):
 
     def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = ctypes.c_int32(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()).value < ctypes.c_int32(ctypes.c_uint32(self.imm).value).value
+        res = twos_complement(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val(), self.fuzzerstate.is_design_64bit) < self.imm # signed comparison
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 class SltiuInstruction(RegImmInstruction):
@@ -219,7 +219,7 @@ class SltiuInstruction(RegImmInstruction):
 
     def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() < ctypes.c_uint32(self.imm).value
+        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() < to_unsigned(self.imm, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 class XoriInstruction(RegImmInstruction):
@@ -228,7 +228,7 @@ class XoriInstruction(RegImmInstruction):
 
     def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() ^ ctypes.c_uint32(self.imm).value
+        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() ^ to_unsigned(self.imm, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 class SrliInstruction(RegImmInstruction):
@@ -237,7 +237,7 @@ class SrliInstruction(RegImmInstruction):
 
     def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() >> ctypes.c_uint32(self.imm).value
+        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() >> to_unsigned(self.imm, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 class SraiInstruction(RegImmInstruction):
@@ -246,7 +246,7 @@ class SraiInstruction(RegImmInstruction):
 
     def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        imm_val = ctypes.c_uint64(self.imm).value if self.is_design_64bit else ctypes.c_uint32(self.imm).value
+        imm_val = to_unsigned(self.imm, self.fuzzerstate.is_design_64bit)
         n_bits = 63 if self.is_design_64bit else 31
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         msb = (rs1_val>>n_bits)&1
@@ -264,7 +264,7 @@ class OriInstruction(RegImmInstruction):
 
     def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() | ctypes.c_uint32(self.imm).value
+        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() | to_unsigned(self.imm, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 class AndiInstruction(RegImmInstruction):
@@ -273,7 +273,7 @@ class AndiInstruction(RegImmInstruction):
 
     def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() & ctypes.c_uint32(self.imm).value
+        res = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() & to_unsigned(self.imm, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 
@@ -284,7 +284,7 @@ class LuiInstruction(ImmRdInstruction):
         super().__init__("lui", rd, imm, fuzzerstate.is_design_64bit, iscompressed, False, fuzzerstate)   
 
     def execute(self, taint_en: bool = False):
-        res = ctypes.c_uint32(self.imm).value<<12 # TODO: sign-extend to 64 bits
+        res = to_unsigned(self.imm, self.fuzzerstate.is_design_64bit)<<12 # TODO: sign-extend to 64 bits
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 class AuipcInstruction(ImmRdInstruction):
@@ -293,14 +293,14 @@ class AuipcInstruction(ImmRdInstruction):
 
     def execute(self, taint_en: bool = False): # TODO: sign extension not right I think
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        imm_val = ctypes.c_uint32(self.imm).value & 0xFFFFF # 20 bit immediate
+        imm_val = to_unsigned(self.imm, self.fuzzerstate.is_design_64bit) & 0xFFFFF # 20 bit immediate
         # msb = (imm_val>>19)&1
         mask = (MAX_64b<<32)&MAX_64b # extend to 64 bits
         uimm = (imm_val & 0xFFFFF) << 12
         res = self.addr+uimm
         msb = (res>>31)&1
         res |= (mask*msb)
-        # print(f"msb:{msb}: uimm: {hex(uimm)}, pc: {hex(self.addr)}, imm: {hex(ctypes.c_uint32(self.imm).value)} res: {hex(res)}")
+        # print(f"msb:{msb}: uimm: {hex(uimm)}, pc: {hex(self.addr)}, imm: {hex(to_unsigned(self.imm, self.fuzzerstate.is_design_64bit))} res: {hex(res)}")
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 
@@ -331,12 +331,8 @@ class ExtPlaceholderProducerInstr0(PlaceholderProducerInstr0):
     def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         imm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.is_design_64bit), False)[0]
-        res = ctypes.c_uint32(imm).value<<12 # TODO: sign-extend to 64 bits
+        res = to_unsigned(imm, self.fuzzerstate.is_design_64bit)<<12 # TODO: sign-extend to 64 bits
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
-
-    def check_regs(self,reg_cmp,pc): # TODO: check rdep, rprod for spike_resolution or final elf
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
-        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
 
 class ExtPlaceholderProducerInstr1(PlaceholderProducerInstr1):
     def __init__(self, rd: int, producer_id: int, is_design_64bit: bool, fuzzerstate = None):
@@ -344,13 +340,10 @@ class ExtPlaceholderProducerInstr1(PlaceholderProducerInstr1):
 
     def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        imm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.is_design_64bit), False)[1]
-        res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val() + ctypes.c_uint32(imm).value
+        uimm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.is_design_64bit), False)[1]
+        res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val() + uimm
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
-    def check_regs(self,reg_cmp,pc):
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
-        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate).get_str()}"
 
 class ExtPlaceholderPreConsumerInstr(PlaceholderPreConsumerInstr):
     def __init__(self,rdep: int,fuzzerstate = None):
@@ -361,12 +354,6 @@ class ExtPlaceholderPreConsumerInstr(PlaceholderPreConsumerInstr):
         res = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val() & self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
         self.fuzzerstate.intregpickstate.regs[self.rdep].set_val(res)
 
-    def check_regs(self,reg_cmp,pc): # rdep and rs1 should be the same register
-        assert len(reg_cmp) == len(set([self.rdep, RDEP_MASK_REGISTER_ID])), f"Missing registers for check_regs: got {len(reg_cmp)}, require {len(set([self.rdep, RDEP_MASK_REGISTER_ID]))}."
-        for reg in [self.rdep, RDEP_MASK_REGISTER_ID]:
-            mismatch = self.fuzzerstate.intregpickstate.regs[reg].check(reg_cmp[reg],pc)
-            assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg,self.addr,self.fuzzerstate).get_str()}"
-
 class ExtPlaceholderConsumerInstr(PlaceholderConsumerInstr):
     def __init__(self, rd: int, rdep: int, rprod: int, producer_id: int, fuzzerstate = None):
         super().__init__(rd, rdep, rprod, producer_id, fuzzerstate)   
@@ -376,8 +363,3 @@ class ExtPlaceholderConsumerInstr(PlaceholderConsumerInstr):
         res = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val() ^ self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val()
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
-    def check_regs(self,reg_cmp,pc): # TODO: check rdep, rprod for spike_resolution or final elf
-        assert len(reg_cmp) == len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID])), f"Missing registers for check_regs: got {len(reg_cmp)}, require {len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID]))}."
-        for reg in [self.rd, self.rprod, RELOCATOR_REGISTER_ID]:
-            mismatch = self.fuzzerstate.intregpickstate.regs[reg].check(reg_cmp[reg],pc)
-            assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg,self.addr,self.fuzzerstate).get_str()}"

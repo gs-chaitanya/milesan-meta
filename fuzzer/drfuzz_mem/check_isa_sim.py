@@ -49,7 +49,7 @@ def check_isa_sim(design_name: str,seed: int):
         for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)): # skip first and last bb
             for inst_idx,next_instr in enumerate(bb_instrs):
                 curr_addr = bb_start_addr + 4*inst_idx
-                if not any([isinstance(next_instr,inst_type) for inst_type in CHECKABLE_INSTRUCTION_CLASSES]): continue
+                if not isinstance(next_instr, CHECKABLE_INSTRUCTION_CLASSES): continue
                 next_instr.check_regs(pc_rd_pairs[curr_addr],SPIKE_STARTADDR+curr_addr) # check value before executing instruction
                 next_instr.execute(False)
                 # next_instr.log(SPIKE_STARTADDR+curr_addr)

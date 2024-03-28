@@ -43,16 +43,18 @@ def clean_reg_taint(reg, reg_t0, skip_regs):
 
 def compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val):
     last_instr = None
+    print(f"looking for {ABI_INAMES[reg_id]}")
     for bb_instrs in fuzzerstate.instr_objs_seq:
         for instr_obj in bb_instrs:
-            if not any([isinstance(instr_obj,inst_type) for inst_type in CHECKABLE_INSTRUCTION_CLASSES]): continue
+            # if not isinstance(instr_obj,CHECKABLE_INSTRUCTION_CLASSES): continue
             if instr_obj.addr == addr: # reached this instruction
                 assert last_instr is not None, f"Traceback computation for instruction at {hex(addr)} failed: No previous instruction modifying register {ABI_INAMES[reg_id]} with mismatch {hex(fuzzerstate.intregpickstate.regs[reg_id].get_val())} =! {hex(correct_val)} found."
                 return last_instr # reached address of calling instruction
             elif hasattr(instr_obj, "rd") and instr_obj.rd == reg_id:
                 last_instr = instr_obj
-            elif hasattr(instr_obj, "rdep") and instr_obj.rdep == reg_id:
+            elif isinstance(instr_obj, PlaceholderPreConsumerInstr) and instr_obj.rdep == reg_id:
                 last_instr = instr_obj
+
 
     
     assert False, f"Traceback computation for instruction at {hex(addr)} failed, this should not happen."
@@ -82,11 +84,10 @@ class BaseInstruction:
         # raise Exception(f"{hex(curr_addr)}: Function execute() called on abstract class CFInstruction {self.instr_str}: {type(self)}.")
         # print(f"Skipped execution of instruction: {self.instr_str} ({hex(self.addr)})")
         assert self.addr == -1, f"Skipped execution of executable instruction at addr: {hex(self.addr)}"
-        pass
+
     def check_regs(self, cmp_regs, pc):
         # print(f"Skipped check of instruction: {self.instr_str} ({hex(self.addr)})")
         assert self.addr == -1, f"Skipped check of executable instruction at addr: {hex(self.addr)}"
-        pass
 
     def execute_t0(self):
         pass
@@ -352,7 +353,7 @@ class R12DInstruction(CFInstruction):
         if self.fuzzerstate is None:
             return
         for reg_id,reg_val in reg_cmp.items():
-            print(f"{hex(pc)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
+            # print(f"{hex(pc)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check_t0(reg_val,pc)
             assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Taint mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
@@ -1864,6 +1865,10 @@ class PlaceholderProducerInstr0(BaseInstruction):
             return rv32i_lui(self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.is_design_64bit), False)[0])
 
 
+    def check_regs(self,reg_cmp,pc): # TODO: check rdep, rprod for spike_resolution or final elf
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
+        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
+
 # Does not inherit from CFInstruction.
 class PlaceholderProducerInstr1(BaseInstruction):
     # When it is instantiated, the producer instructions do not know the offset yet, just the target address.
@@ -1889,6 +1894,10 @@ class PlaceholderProducerInstr1(BaseInstruction):
                 assert self.rtl_offset is not None, "Producer1 cannot produce final bytecode because it does not yet know the final rtl_offset."
             return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.is_design_64bit), False)[1])
 
+    def check_regs(self,reg_cmp,pc):
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
+        assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
+
 
 # Does not inherit from CFInstruction.
 class PlaceholderPreConsumerInstr(BaseInstruction):
@@ -1904,6 +1913,12 @@ class PlaceholderPreConsumerInstr(BaseInstruction):
         # Reduce the size of the rdep id to 30 bits
         return rv32i_and(self.rdep, self.rdep, RDEP_MASK_REGISTER_ID)
     
+    def check_regs(self,reg_cmp,pc): # TODO: check rdep, rprod for spike_resolution or final elf
+        assert len(reg_cmp) == len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID])), f"Missing registers for check_regs: got {len(reg_cmp)}, require {len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID]))}."
+        for reg_id,reg_val in reg_cmp.items():
+            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val,pc)
+            assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
+
 
 # Does not inherit from CFInstruction.
 class PlaceholderConsumerInstr(BaseInstruction):
@@ -1935,9 +1950,16 @@ class PlaceholderConsumerInstr(BaseInstruction):
         if self.fuzzerstate is None:
             return
         for reg_id,reg_val in reg_cmp.items():
-            print(f"{hex(pc)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
+            # print(f"{hex(pc)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check_t0(reg_val,pc)
             assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Taint mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
+
+    def check_regs(self,reg_cmp,pc): # TODO: check rdep, rprod for spike_resolution or final elf
+        assert len(reg_cmp) == len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID])), f"Missing registers for check_regs: got {len(reg_cmp)}, require {len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID]))}."
+        for reg_id,reg_val in reg_cmp.items():
+            # print(f"{hex(pc)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
+            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val,pc)
+            assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
 def is_placeholder(obj):
     return isinstance(obj, PlaceholderProducerInstr0) or isinstance(obj, PlaceholderProducerInstr1) or isinstance(obj, PlaceholderPreConsumerInstr) or isinstance(obj, PlaceholderConsumerInstr)
@@ -2185,4 +2207,4 @@ class PrivilegeDescentInstruction():
             return rvprivileged_sret()
 
 
-CHECKABLE_INSTRUCTION_CLASSES = [R12DInstruction,RegImmInstruction,ImmRdInstruction,JALInstruction,JALRInstruction,PlaceholderProducerInstr0,PlaceholderProducerInstr1,PlaceholderPreConsumerInstr,PlaceholderConsumerInstr]
+CHECKABLE_INSTRUCTION_CLASSES = (R12DInstruction,RegImmInstruction,ImmRdInstruction,JALInstruction,JALRInstruction,PlaceholderProducerInstr0,PlaceholderProducerInstr1,PlaceholderPreConsumerInstr,PlaceholderConsumerInstr)
