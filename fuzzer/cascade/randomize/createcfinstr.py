@@ -48,30 +48,7 @@ def _create_R12DInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
         assert instr_str in R12DInstructions
     rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_int_inputregs(2))
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
-    # return R12DInstruction(instr_str, rd, rs1, rs2, iscompressed)
-    if instr_str == "add":
-        return cfi.AddInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
-    elif instr_str == "sub":
-        return cfi.SubInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
-    elif instr_str == "sll":
-        return cfi.SllInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
-    elif instr_str == "slt":
-        return cfi.SltInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
-    elif instr_str == "sltu":
-        return cfi.SltuInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
-    elif instr_str == "xor":
-        return cfi.XorInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
-    elif instr_str == "srl":
-        return cfi.SrlInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
-    elif instr_str == "sra":
-        return cfi.SraiInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
-    elif instr_str == "or":
-        return cfi.OrInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
-    elif instr_str == "and":
-        return cfi.AndInstruction(rd,rs1,rs2,iscompressed,fuzzerstate)
-    else:
-        assert(0), f"Instruction {instr_str} not implemented."
-
+    return R12DInstruction(fuzzerstate, instr_str, rd, rs1, rs2, iscompressed)
 
 def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
@@ -80,14 +57,7 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     if instr_str == "auipc" and rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
-    # return ImmRdInstruction(instr_str, rd, imm, fuzzerstate.is_design_64bit, iscompressed)
-
-    if instr_str == "lui":
-        return cfi.LuiInstruction(rd, imm, iscompressed, fuzzerstate)
-    elif instr_str == "auipc":
-        return cfi.AuipcInstruction(rd, imm, iscompressed, fuzzerstate)
-    else:
-        assert(0), f"Instruction {instr_str} not implemented."
+    return ImmRdInstruction(fuzzerstate,instr_str, rd, imm, iscompressed)
 
 def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
@@ -95,28 +65,7 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
-    # return RegImmInstruction(instr_str, rd, rs1, imm, fuzzerstate.is_design_64bit, iscompressed)
-    if instr_str == "addi":
-        return cfi.AddiInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
-    elif instr_str == "slli":
-        return cfi.SlliInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
-    elif instr_str == "slti":
-        return cfi.SltiInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
-    elif instr_str == "sltiu":
-        return cfi.SltiuInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
-    elif instr_str == "xori":
-        return cfi.XoriInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
-    elif instr_str == "srli":
-        return cfi.SrliInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
-    elif instr_str == "srai":
-        return cfi.SraiInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
-    elif instr_str == "ori":
-        return cfi.OriInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
-    elif instr_str == "andi":
-        return cfi.AndiInstruction(rd,rs1,imm,iscompressed,fuzzerstate)
-    else:
-        assert(0), f"Instruction {instr_str} not implemented."
-
+    return RegImmInstruction(fuzzerstate, instr_str, rd, rs1, imm, iscompressed)
 
 def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
     if DO_ASSERT:
@@ -140,15 +89,14 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
             imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     
     # print('New imm', hex(imm), flush=True)
-    return BranchInstruction(instr_str, rs1, rs2, imm, plan_taken, fuzzerstate.is_design_64bit, iscompressed)
+    return BranchInstruction(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
 
 def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     imm = fuzzerstate.next_bb_addr-curr_addr
     if rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
-    # return JALInstruction(instr_str, rd, imm, iscompressed)
-    return cfi.JalInstruction(rd,imm,iscompressed,fuzzerstate)
+    return JALInstruction(fuzzerstate, instr_str, rd, imm, iscompressed)
 
 def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
@@ -160,13 +108,12 @@ def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
-    # return JALRInstruction(instr_str, rd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
-    return cfi.JalrInstruction(rd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed, fuzzerstate)
+    return JALRInstruction(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
 
 def _create_SpecialInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
-    return SpecialInstruction(instr_str, rd, rs1, iscompressed)
+    return SpecialInstruction(fuzzerstate, instr_str, rd, rs1)
 
 def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
@@ -178,7 +125,7 @@ def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
-    return IntLoadInstruction(instr_str, rd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
+    return IntLoadInstruction(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
 
 def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
@@ -190,7 +137,7 @@ def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool)
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
-    return IntStoreInstruction(instr_str, rs1, rs2, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
+    return IntStoreInstruction(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, iscompressed)
 
 # Floating-point instructions
 
@@ -204,7 +151,7 @@ def _create_FloatLoadInstruction  (instr_str: str, fuzzerstate, iscompressed: bo
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
-    return FloatLoadInstruction(instr_str, frd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
+    return FloatLoadInstruction(fuzzerstate, instr_str, frd, rs1, imm, producer_id, iscompressed)
 def _create_FloatStoreInstruction (instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in FloatStoreInstructions
@@ -215,66 +162,66 @@ def _create_FloatStoreInstruction (instr_str: str, fuzzerstate, iscompressed: bo
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
-    return FloatStoreInstruction(instr_str, rs1, frs2, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
+    return FloatStoreInstruction(fuzzerstate, instr_str, rs1, frs2, imm, producer_id, iscompressed)
 def _create_FloatToIntInstruction (instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in FloatToIntInstructions
     rm = gen_random_rounding_mode()
     frs1 = fuzzerstate.floatregpickstate.pick_float_inputreg()
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
-    return FloatToIntInstruction(instr_str, rd, frs1, rm, iscompressed)
+    return FloatToIntInstruction(fuzzerstate, instr_str, rd, frs1, rm, iscompressed)
 def _create_IntToFloatInstruction (instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in IntToFloatInstructions
     rm = gen_random_rounding_mode()
     rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
     frd = fuzzerstate.floatregpickstate.pick_float_outputreg()
-    return IntToFloatInstruction(instr_str, frd, rs1, rm, iscompressed)
+    return IntToFloatInstruction(fuzzerstate, instr_str, frd, rs1, rm, iscompressed)
 def _create_Float4Instruction     (instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in Float4Instructions
     rm = gen_random_rounding_mode()
     frs1, frs2, frs3 = tuple(fuzzerstate.floatregpickstate.pick_float_inputregs(3))
     frd = fuzzerstate.floatregpickstate.pick_float_outputreg()
-    return Float4Instruction(instr_str, frd, frs1, frs2, frs3, rm, iscompressed)
+    return Float4Instruction(fuzzerstate, instr_str, frd, frs1, frs2, frs3, rm, iscompressed)
 def _create_Float3Instruction     (instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in Float3Instructions
     rm = gen_random_rounding_mode()
     frs1, frs2 = tuple(fuzzerstate.floatregpickstate.pick_float_inputregs(2))
     frd = fuzzerstate.floatregpickstate.pick_float_outputreg()
-    return Float3Instruction(instr_str, frd, frs1, frs2, rm, iscompressed)
+    return Float3Instruction(fuzzerstate, instr_str, frd, frs1, frs2, rm, iscompressed)
 def _create_Float3NoRmInstruction (instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in Float3NoRmInstructions
     frs1, frs2 = tuple(fuzzerstate.floatregpickstate.pick_float_inputregs(2))
     frd = fuzzerstate.floatregpickstate.pick_float_outputreg()
-    return Float3NoRmInstruction(instr_str, frd, frs1, frs2, iscompressed)
+    return Float3NoRmInstruction(fuzzerstate, instr_str, frd, frs1, frs2, iscompressed)
 def _create_Float2Instruction     (instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in Float2Instructions
     rm = gen_random_rounding_mode()
     frs1 = fuzzerstate.floatregpickstate.pick_float_inputreg()
     frd = fuzzerstate.floatregpickstate.pick_float_outputreg()
-    return Float2Instruction(instr_str, frd, frs1, rm, iscompressed)
+    return Float2Instruction(fuzzerstate, instr_str, frd, frs1, rm, iscompressed)
 def _create_FloatIntRd2Instruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in FloatIntRd2Instructions
     frs1, frs2 = tuple(fuzzerstate.floatregpickstate.pick_float_inputregs(2))
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
-    return FloatIntRd2Instruction(instr_str, rd, frs1, frs2, iscompressed)
+    return FloatIntRd2Instruction(fuzzerstate, instr_str, rd, frs1, frs2, iscompressed)
 def _create_FloatIntRd1Instruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in FloatIntRd1Instructions
     frs1 = fuzzerstate.floatregpickstate.pick_float_inputreg()
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
-    return FloatIntRd1Instruction(instr_str, rd, frs1, iscompressed)
+    return FloatIntRd1Instruction(fuzzerstate, instr_str, rd, frs1, iscompressed)
 def _create_FloatIntRs1Instruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in FloatIntRs1Instructions
     frd = fuzzerstate.floatregpickstate.pick_float_outputreg()
     rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
-    return FloatIntRs1Instruction(instr_str, frd, rs1, iscompressed)
+    return FloatIntRs1Instruction(fuzzerstate, instr_str, frd, rs1, iscompressed)
 
 ###
 # Exposed function
@@ -309,14 +256,14 @@ def create_targeted_producer0_instrobj(fuzzerstate):
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED0)
     # return [PlaceholderProducerInstr0(rd, fuzzerstate.next_producer_id, fuzzerstate.is_design_64bit)]
-    return [cfi.ExtPlaceholderProducerInstr0(rd, fuzzerstate.next_producer_id, fuzzerstate.is_design_64bit, fuzzerstate)]
+    return [PlaceholderProducerInstr0(fuzzerstate, rd, fuzzerstate.next_producer_id)]
 
 def create_targeted_producer1_instrobj(fuzzerstate):
     rd = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PRODUCED0)
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED1)
     # return [PlaceholderProducerInstr1(rd, fuzzerstate.intregpickstate.get_producer_id(rd), fuzzerstate.is_design_64bit)]
-    return [cfi.ExtPlaceholderProducerInstr1(rd, fuzzerstate.intregpickstate.get_producer_id(rd), fuzzerstate.is_design_64bit, fuzzerstate)]
+    return [PlaceholderProducerInstr1(fuzzerstate, rd, fuzzerstate.intregpickstate.get_producer_id(rd))]
 
 def create_targeted_consumer_instrobj(fuzzerstate):
     rdep = fuzzerstate.intregpickstate.pick_int_inputreg_nonzero(False) # We want to create dependencies, therefore we choose not to accept x0
@@ -326,11 +273,11 @@ def create_targeted_consumer_instrobj(fuzzerstate):
     fuzzerstate.intregpickstate.set_regstate(rprod, IntRegIndivState.CONSUMED)
     if fuzzerstate.is_design_64bit:
         # return [PlaceholderPreConsumerInstr(rprod), PlaceholderPreConsumerInstr(rdep), PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
-        return [cfi.ExtPlaceholderPreConsumerInstr(rprod), cfi.ExtPlaceholderPreConsumerInstr(rdep), cfi.ExtPlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod), fuzzerstate)]
+        return [PlaceholderPreConsumerInstr(fuzzerstate, rprod), PlaceholderPreConsumerInstr(fuzzerstate, rdep), PlaceholderConsumerInstr(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
 
     else:
         # return [PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
-        return [cfi.ExtPlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod), fuzzerstate)]
+        return [PlaceholderConsumerInstr(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
 
 # The reservation in the MemoryView is already done ahead and should not be reiterated here.
 # @param jalr_addr_reg: only meaningful if a jalr is present (in the latter case, it should be the next instruction)

@@ -45,15 +45,15 @@ def finalblock(fuzzerstate, design_name: str):
     # We re-purpose RDEP_MASK_REGISTER_ID, because we will not need it anymore.
     # Compute the register dump address
     ret += [
-        ImmRdInstruction("lui", RDEP_MASK_REGISTER_ID, lui_imm_regdump, is_design_64bit),
-        RegImmInstruction("addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm_regdump, is_design_64bit)
+        ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm_regdump, is_design_64bit),
+        RegImmInstruction(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm_regdump, is_design_64bit)
     ]
 
     # Store the register values to the register dump address
-    ret.append(SpecialInstruction("fence")) # Hopefully this prevents speculative execution of the stores
+    ret.append(SpecialInstruction(fuzzerstate,"fence")) # Hopefully this prevents speculative execution of the stores
     for reg_id in range(1, MAX_NUM_PICKABLE_REGS):
-        ret.append(IntStoreInstruction("sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, reg_id, 0, -1, is_design_64bit))
-        ret.append(SpecialInstruction("fence"))
+        ret.append(IntStoreInstruction(fuzzerstate,"sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, reg_id, 0, -1, is_design_64bit))
+        ret.append(SpecialInstruction(fuzzerstate,"fence"))
 
     # Store the floating values as well, if FPU is supported and if there is no risk of it being deactivated
     if design_has_fpu and not fuzzerstate.is_fpu_activated:
@@ -62,12 +62,12 @@ def finalblock(fuzzerstate, design_name: str):
             assert get_design_fpreg_dump_addr(design_name) == regdump_addr + 8, f"We make the assumption that the FP regdump addr is the int regdump address + 8. However, currently, they are respectively {hex(get_design_fpreg_dump_addr(design_name))} and regdump_addr={hex(regdump_addr)}"
         if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
             # Enable the FPU
-            ret.append(CSRRegInstruction("csrrw", 0, FPU_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+            ret.append(CSRRegInstruction(fuzzerstate,"csrrw", 0, FPU_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
             fuzzerstate.is_fpu_activated = True
         if fuzzerstate.is_fpu_activated:
             for reg_id in range(MAX_NUM_PICKABLE_FLOATING_REGS):
-                ret.append(FloatStoreInstruction("fsd" if design_has_fpud else "fsw", RDEP_MASK_REGISTER_ID, reg_id, 8, -1, is_design_64bit))
-                ret.append(SpecialInstruction("fence"))
+                ret.append(FloatStoreInstruction(fuzzerstate,"fsd" if design_has_fpud else "fsw", RDEP_MASK_REGISTER_ID, reg_id, 8, -1, is_design_64bit))
+                ret.append(SpecialInstruction(fuzzerstate,"fence"))
 
     ###
     # Stop request
@@ -78,16 +78,16 @@ def finalblock(fuzzerstate, design_name: str):
     # We re-purpose RDEP_MASK_REGISTER_ID, because we will not need it anymore.
     # Compute the stop request address
     ret += [
-        ImmRdInstruction("lui", RDEP_MASK_REGISTER_ID, lui_imm_stopreq, is_design_64bit),
-        RegImmInstruction("addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm_stopreq, is_design_64bit)
+        ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm_stopreq, is_design_64bit),
+        RegImmInstruction(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm_stopreq, is_design_64bit)
     ]
 
     # Store the register values to the register dump address
-    ret.append(IntStoreInstruction("sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, 0, 0 & 0xFFFF, -1, is_design_64bit))
-    ret.append(SpecialInstruction("fence"))
+    ret.append(IntStoreInstruction(fuzzerstate,"sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, 0, 0 & 0xFFFF, -1, is_design_64bit))
+    ret.append(SpecialInstruction(fuzzerstate,"fence"))
 
     # Infinite loop in the end of the simulation
-    ret.append(JALInstruction("jal", 0, 0))
+    ret.append(JALInstruction(fuzzerstate,"jal", 0, 0))
 
     if DO_ASSERT:
         assert len(ret) * 4 <= get_finalblock_max_size(), f"The final block is larger than expected: {len(ret) * 4} > {get_finalblock_max_size()}"
@@ -97,4 +97,4 @@ def finalblock(fuzzerstate, design_name: str):
 # Spike does not support writing to some signaling addresses, but at the same time, we do not need it for spike resolution anyway. So let's replace it with an infinite loop.
 def finalblock_spike_resolution():
     # Infinite loop in the end of the simulation
-    return [JALInstruction("jal", 0, 0)]
+    return [JALInstruction(fuzzerstate,"jal", 0, 0)]

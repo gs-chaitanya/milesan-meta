@@ -31,12 +31,12 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     fuzzerstate.curr_addr = fuzzerstate.curr_bb_start_addr
 
     lui_imm, addi_imm = li_into_reg(offset_addr, False)
-    fuzzerstate.instr_objs_seq[-1].append(ImmRdInstruction("lui", RELOCATOR_REGISTER_ID, lui_imm, fuzzerstate.is_design_64bit))
-    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, addi_imm, fuzzerstate.is_design_64bit))
+    fuzzerstate.instr_objs_seq[-1].append(ImmRdInstruction(fuzzerstate,"lui", RELOCATOR_REGISTER_ID, lui_imm))
+    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, addi_imm, fuzzerstate.is_design_64bit))
     if fuzzerstate.is_design_64bit:
         # Clear the top 32 bits
-        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("slli", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, 32, fuzzerstate))
-        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("srli", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, 32, fuzzerstate))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"slli", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, 32))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"srli", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, 32))
     fuzzerstate.curr_addr += 8 + 8*int(fuzzerstate.is_design_64bit)
     if DO_ASSERT:
         assert fuzzerstate.curr_addr == fuzzerstate.curr_bb_start_addr + len(fuzzerstate.instr_objs_seq[-1]) * 4 # NO_COMPRESSED
@@ -44,101 +44,101 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     if not ("vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs()):
         # Write 0 to medeleg to uniformize across designs. This must be done in initialblock to facilitate the analysis.
         if fuzzerstate.design_has_supervisor_mode:
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MEDELEG))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MEDELEG))
             fuzzerstate.curr_addr += 4
 
         # Write 0 to mtvec and stvec to uniformize across designs. This must be done in initialblock to facilitate the analysis.
         if fuzzerstate.design_name != 'picorv32':
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MTVEC))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MTVEC))
             fuzzerstate.curr_addr += 4
         if fuzzerstate.design_has_supervisor_mode:
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.STVEC))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.STVEC))
             fuzzerstate.curr_addr += 4
 
     # We authorize all accesses through the PMP registers
     if not ("vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs()):
         if fuzzerstate.design_has_pmp:
             # pmpcfg0
-            fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", 1, 0, 31, fuzzerstate.is_design_64bit))
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 1, CSR_IDS.PMPCFG0))
+            fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", 1, 0, 31, fuzzerstate.is_design_64bit))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 1, CSR_IDS.PMPCFG0))
             fuzzerstate.curr_addr += 8
             # pmpaddr0
             if fuzzerstate.is_design_64bit:
-                fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", 1, 0, 1, fuzzerstate.is_design_64bit))
-                fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("slli", 1, 0, 0x36, fuzzerstate.is_design_64bit))
-                fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", 1, 1, -1, fuzzerstate.is_design_64bit))
-                fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 1, CSR_IDS.PMPADDR0))          
+                fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", 1, 0, 1, fuzzerstate.is_design_64bit))
+                fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"slli", 1, 0, 0x36, fuzzerstate.is_design_64bit))
+                fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", 1, 1, -1, fuzzerstate.is_design_64bit))
+                fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 1, CSR_IDS.PMPADDR0))          
                 fuzzerstate.curr_addr += 16
             else:
-                fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", 1, 0, -1, fuzzerstate.is_design_64bit))
-                fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 1, CSR_IDS.PMPADDR0))
+                fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", 1, 0, -1, fuzzerstate.is_design_64bit))
+                fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 1, CSR_IDS.PMPADDR0))
                 fuzzerstate.curr_addr += 8
 
     # Write random values into the performance monitor CSRs (zeros for now)
     if not ("vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs()):
         if fuzzerstate.design_name != 'picorv32':
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MCYCLE))
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MINSTRET))
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MCAUSE))
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MTVAL))
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MSCRATCH))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MCYCLE))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MINSTRET))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MCAUSE))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MTVAL))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MSCRATCH))
             fuzzerstate.curr_addr += 20
         if fuzzerstate.design_has_supervisor_mode:
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.SCAUSE))
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.STVAL))
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.SSCRATCH))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.SCAUSE))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.STVAL))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.SSCRATCH))
             fuzzerstate.curr_addr += 12
 
         if not fuzzerstate.is_design_64bit and fuzzerstate.design_name != 'picorv32':
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MCYCLEH))
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 0, CSR_IDS.MINSTRETH))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MCYCLEH))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MINSTRETH))
             fuzzerstate.curr_addr += 8
 
     # Start with enabled FPU, if the FPU exists.
     if fuzzerstate.design_has_fpu:
         # FUTURE Create dependencies on FPU_ENDIS_REGISTER_ID
         # Prepare FPU_ENDIS_REGISTER_ID, which will be used across the program's execution
-        fuzzerstate.instr_objs_seq[-1].append(ImmRdInstruction("lui", FPU_ENDIS_REGISTER_ID, 0b10, fuzzerstate.is_design_64bit))
+        fuzzerstate.instr_objs_seq[-1].append(ImmRdInstruction(fuzzerstate,"lui", FPU_ENDIS_REGISTER_ID, 0b10, fuzzerstate.is_design_64bit))
         # Enable the FPU
-        fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, FPU_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+        fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, FPU_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
         # Set the initial rounding mode to zero initially, arbitrarily. We arbitrarily use the register x1 as an intermediate register
-        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", 1, 0, 0, fuzzerstate.is_design_64bit))
-        fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrw", 0, 1, CSR_IDS.FCSR))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", 1, 0, 0, fuzzerstate.is_design_64bit))
+        fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 1, CSR_IDS.FCSR))
         fuzzerstate.curr_addr += 16 # NO_COMPRESSED
 
     if fuzzerstate.design_has_supervisor_mode or fuzzerstate.design_has_user_mode:
-        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("srli", MPP_TOP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 1, fuzzerstate.is_design_64bit))
-        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("srli", MPP_BOTH_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 2, fuzzerstate.is_design_64bit))
-        fuzzerstate.instr_objs_seq[-1].append(R12DInstruction("or", MPP_BOTH_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"srli", MPP_TOP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 1, fuzzerstate.is_design_64bit))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"srli", MPP_BOTH_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 2, fuzzerstate.is_design_64bit))
+        fuzzerstate.instr_objs_seq[-1].append(R12DInstruction(fuzzerstate,"or", MPP_BOTH_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID))
         # Just for the alignment. Could be removed if we improved the alignment prediction. FUTURE.
-        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", 0, 0, 0, fuzzerstate.is_design_64bit))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", 0, 0, 0, fuzzerstate.is_design_64bit))
         fuzzerstate.curr_addr += 16 # NO_COMPRESSED
         # While it is not necesary to set the mpp initially, it is convenient to do so. If we don't, then we should adapt the initial values (typically to None) in privilegestate.py
-        fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrs", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
-        fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrs", 0, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+        fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrs", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+        fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrs", 0, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
         fuzzerstate.curr_addr += 8 # NO_COMPRESSED
 
     if not ("vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs()):
         if fuzzerstate.design_has_user_mode:
-            fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("srli", SPP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 5, fuzzerstate.is_design_64bit))
+            fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"srli", SPP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 5, fuzzerstate.is_design_64bit))
             fuzzerstate.curr_addr += 4 # NO_COMPRESSED
             # While it is not necesary to set the mpp initially, it is convenient to do so. If we don't, then we should adapt the initial values (typically to None) in privilegestate.py
-            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction("csrrs", 0, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+            fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrs", 0, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
             fuzzerstate.curr_addr += 4 # NO_COMPRESSED
 
     # Set the rdep mask to the correct value
 
     if fuzzerstate.is_design_64bit:
-        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", RDEP_MASK_REGISTER_ID, 0, -1, fuzzerstate.is_design_64bit))
-        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("slli", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, 32, fuzzerstate.is_design_64bit))
-        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("xori", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, -1, fuzzerstate.is_design_64bit))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, 0, -1, fuzzerstate.is_design_64bit))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"slli", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, 32, fuzzerstate.is_design_64bit))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"xori", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, -1, fuzzerstate.is_design_64bit))
         fuzzerstate.curr_addr += 12 # NO_COMPRESSED
         if DO_ASSERT:
             assert fuzzerstate.curr_addr == fuzzerstate.curr_bb_start_addr + len(fuzzerstate.instr_objs_seq[-1]) * 4 # NO_COMPRESSED
 
     # Set the pickable registers to random values. We use the last pickable register as an intermediate reg.
     # Relocate for the loads
-    fuzzerstate.instr_objs_seq[-1].append(R12DInstruction("add", fuzzerstate.num_pickable_regs-1, 0, RELOCATOR_REGISTER_ID))
+    fuzzerstate.instr_objs_seq[-1].append(R12DInstruction(fuzzerstate,"add", fuzzerstate.num_pickable_regs-1, 0, RELOCATOR_REGISTER_ID))
     fuzzerstate.curr_addr += 4
 
     if fuzzerstate.design_has_fpu:
@@ -149,17 +149,17 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         bytes_until_random_vals = 8 + 4*(fuzzerstate.num_pickable_regs-1) + int(expect_padding) * 4 # NO_COMPRESSED
 
     bytes_until_random_vals_base_for_debug = fuzzerstate.curr_addr
-    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction("addi", fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_regs-1, bytes_until_random_vals + fuzzerstate.curr_addr, fuzzerstate.is_design_64bit))
+    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_regs-1, bytes_until_random_vals + fuzzerstate.curr_addr, fuzzerstate.is_design_64bit))
     fuzzerstate.curr_addr += 4
     # Floating loads must be done before int loads, because the last pickable int register will be overwritten.
     if fuzzerstate.design_has_fpu:
         if DO_ASSERT:
             assert fuzzerstate.num_pickable_floating_regs <= fuzzerstate.num_pickable_regs, "For this param choice, we need to adapt slightly the initial block."
         for fp_reg_id in range(fuzzerstate.num_pickable_floating_regs):
-            fuzzerstate.instr_objs_seq[-1].append(FloatLoadInstruction("fld" if fuzzerstate.is_design_64bit else "flw", fp_reg_id, fuzzerstate.num_pickable_regs-1, 8*(fp_reg_id+fuzzerstate.num_pickable_regs-1), -1, fuzzerstate.is_design_64bit))
+            fuzzerstate.instr_objs_seq[-1].append(FloatLoadInstruction(fuzzerstate,"fld" if fuzzerstate.is_design_64bit else "flw", fp_reg_id, fuzzerstate.num_pickable_regs-1, 8*(fp_reg_id+fuzzerstate.num_pickable_regs-1), -1, fuzzerstate.is_design_64bit))
             fuzzerstate.curr_addr += 4
     for reg_id in range(1, fuzzerstate.num_pickable_regs):
-        fuzzerstate.instr_objs_seq[-1].append(IntLoadInstruction("ld" if fuzzerstate.is_design_64bit else "lw", reg_id, fuzzerstate.num_pickable_regs-1, 8*(reg_id-1), -1, fuzzerstate.is_design_64bit))
+        fuzzerstate.instr_objs_seq[-1].append(IntLoadInstruction(fuzzerstate,"ld" if fuzzerstate.is_design_64bit else "lw", reg_id, fuzzerstate.num_pickable_regs-1, 8*(reg_id-1), -1, fuzzerstate.is_design_64bit))
         fuzzerstate.curr_addr += 4
 
     if DO_ASSERT:

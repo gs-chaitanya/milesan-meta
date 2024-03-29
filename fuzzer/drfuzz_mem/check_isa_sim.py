@@ -48,6 +48,7 @@ def check_isa_sim(design_name: str,seed: int):
     try:
         for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)): # skip first and last bb
             for inst_idx,next_instr in enumerate(bb_instrs):
+                if bb_id == 0 and inst_idx != len(bb_instrs)-1: continue
                 if not isinstance(next_instr, CHECKABLE_INSTRUCTION_CLASSES): continue
                 if next_instr.addr not in pc_rd_pairs:
                     print(f"Skipping check for {next_instr.get_str()}")

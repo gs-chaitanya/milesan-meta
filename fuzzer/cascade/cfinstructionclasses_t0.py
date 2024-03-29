@@ -1,5 +1,5 @@
 from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
-from cfinstructionclasses import ImmInstruction, R12DInstruction, ImmRdInstruction, RegImmInstruction, RegImmShiftInstructions, JALInstruction, JALRInstruction
+from cfinstructionclasses import *
 from cascade.util import CFInstructionClass
 from rv.asmutil import INSTR_FUNCS_T0
 from cascade.registers import ABI_INAMES
@@ -346,4 +346,74 @@ class JALRInstruction_t0(JALRInstruction):
         
     def execute_t0(self, res):
         self.writeback_t0(0x0, res)
+
+## Extended Placeholder Instructions ##
+#TODO: all these need to be adjusted for non-spike resolution execution
+class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0):
+    def __init__(self, rd: int, producer_id: int, is_design_64bit: bool, fuzzerstate = None):
+        super().__init__(rd, producer_id, is_design_64bit, fuzzerstate)
+
+    def execute_t0(self, res):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        self.writeback_t0(0x0,res)
+
+        
+class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1):
+    def __init__(self, rd: int, producer_id: int, is_design_64bit: bool, fuzzerstate = None):
+        super().__init__(rd, producer_id, is_design_64bit, fuzzerstate)
+
+    def execute_t0(self, res):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        self.writeback_t0(0x0,res)
+
+    def execute(self):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        uimm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.is_design_64bit), False)[1]
+        res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val() + uimm
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
+
+class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr):
+    def __init__(self,rdep: int,fuzzerstate = None):
+        super().__init__(rdep, fuzzerstate)   
+
+    def execute_t0(self, res):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        rdep = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val()
+        rmask = self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
+
+        rdep_taint = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val_t0()
+        rmask_taint = self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val_t0()
+
+        rdep_and_rmask_taint= rdep & rmask_taint
+        rmask_and_rdep_taint = rmask & rdep_taint
+
+        rdep_and_rmask_taint = rdep_taint & rmask_taint
+        rdep_taint_and_rmask_or_reverse = rdep_and_rmask_taint | rmask_and_rdep_taint
+
+        res_t0 = rdep_and_rmask_taint | rdep_taint_and_rmask_or_reverse
+
+        self.writeback_t0(res_t0, res)
+
+    def execute(self):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        res = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val() & self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
+        self.execute_t0(res)
+        self.fuzzerstate.intregpickstate.regs[self.rdep].set_val(res)
+
+class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr):
+    def __init__(self, rd: int, rdep: int, rprod: int, producer_id: int, fuzzerstate = None):
+        super().__init__(rd, rdep, rprod, producer_id, fuzzerstate)   
+
+    def execute_t0(self, res):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        res_t0 = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val_t0() ^ self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val_t0()
+        self.writeback_t0(res_t0,res)
+
+    def execute(self):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        res = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val() ^ self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val()
+        self.execute_t0(res)
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
 

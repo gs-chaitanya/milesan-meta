@@ -91,7 +91,7 @@ class CFInstruction(BaseInstruction):
         if DO_ASSERT:
             assert self.instr_str in self.__class__.authorized_instr_strs
 
-    def __init__(self, instr_str: str, iscompressed: bool = False, fuzzerstate = None):
+    def __init__(self, fuzzerstate, instr_str: str, iscompressed: bool = False):
         super().__init__(fuzzerstate,instr_str)
         self.iscompressed = iscompressed
         assert not iscompressed, "Compressed instructions are not yet supported."
@@ -115,7 +115,7 @@ class ImmInstruction(CFInstruction):
     def assert_imm_size(self):
         if DO_ASSERT:
             assert hasattr(self, 'imm')
-            if self.is_design_64bit:
+            if self.fuzzerstate.is_design_64bit:
                 curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[self.instr_str]][-1]
             else:
                 curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[self.instr_str]][-1]
@@ -126,9 +126,8 @@ class ImmInstruction(CFInstruction):
                 assert self.imm >= 0
                 assert self.imm <  1<<curr_param_size
 
-    def __init__(self, instr_str: str, imm: int, is_design_64bit: bool, iscompressed: bool = False, fuzzerstate = None):
-        super().__init__(instr_str, iscompressed, fuzzerstate)
-        self.is_design_64bit = is_design_64bit
+    def __init__(self, fuzzerstate, instr_str: str, imm: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate,instr_str, iscompressed)
         self.imm = imm
         self.assert_imm_size()
 
@@ -142,8 +141,8 @@ R12DInstructions = ("add", "sub", "sll", "slt", "sltu", "xor", "srl", "sra", "or
 class R12DInstruction(CFInstruction):
     authorized_instr_strs = R12DInstructions
 
-    def __init__(self, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False, fuzzerstate = None):
-        super().__init__(instr_str, iscompressed, fuzzerstate)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.instr_type = CFInstructionClass.R12D
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -255,8 +254,8 @@ ImmRdInstructions = ("lui", "auipc")
 class ImmRdInstruction(ImmInstruction):
     authorized_instr_strs = ImmRdInstructions
 
-    def __init__(self, instr_str: str, rd: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False, fuzzerstate = None):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed, fuzzerstate)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
+        super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         self.instr_type = CFInstructionClass.IMMRD
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -300,8 +299,8 @@ RegImmShiftInstructions = ("slli", "srli", "srai", "slliw", "srliw", "sraiw")
 class RegImmInstruction(ImmInstruction):
     authorized_instr_strs = RegImmInstructions
 
-    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, fuzzerstate = None, is_rd_nonpickable_ok: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed, fuzzerstate) # for now fully taint 
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
+        super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         self.instr_type = CFInstructionClass.REGIMM
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -375,8 +374,8 @@ class BranchInstruction(ImmInstruction):
     authorized_instr_strs = BranchInstructions
 
     # @param plan_taken is True iff the branch instruction is planned to be taken.
-    def __init__(self, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, imm, iscompressed, fuzzerstate)
         self.instr_type = CFInstructionClass.BRANCH
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -398,9 +397,9 @@ class BranchInstruction(ImmInstruction):
             # bne
             int_plan_taken ^ int(rs1_content == rs2_content),
             # blt
-            int_plan_taken ^ int(twos_complement(rs1_content, self.is_design_64bit) >= twos_complement(rs2_content, self.is_design_64bit)),
+            int_plan_taken ^ int(twos_complement(rs1_content, self.fuzzerstate.is_design_64bit) >= twos_complement(rs2_content, self.fuzzerstate.is_design_64bit)),
             # bge
-            int_plan_taken ^ int(twos_complement(rs1_content, self.is_design_64bit) < twos_complement(rs2_content, self.is_design_64bit)),
+            int_plan_taken ^ int(twos_complement(rs1_content, self.fuzzerstate.is_design_64bit) < twos_complement(rs2_content, self.fuzzerstate.is_design_64bit)),
             # bltu
             int_plan_taken ^ int(rs1_content >= rs2_content),
             # bgeu
@@ -438,9 +437,8 @@ JALInstructions = ("jal",)
 class JALInstruction(ImmInstruction):
     authorized_instr_strs = JALInstructions
 
-    def __init__(self, instr_str: str, rd: int, imm: int, iscompressed: bool = False, fuzzerstate = None):
-        # 32 or 64 bit does not matter for JAL
-        super().__init__(instr_str, imm, False, iscompressed, fuzzerstate)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         self.instr_type = CFInstructionClass.JAL
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -472,8 +470,8 @@ JALRInstructions = ("jalr",)
 class JALRInstruction(ImmInstruction):
     authorized_instr_strs = JALRInstructions
 
-    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, is_design_64bit: bool, iscompressed: bool = False, fuzzerstate = None):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed, fuzzerstate)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         self.instr_type = CFInstructionClass.JALR
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -507,8 +505,8 @@ SpecialInstructions = ("fence", "fence.i")
 class SpecialInstruction(CFInstruction):
     authorized_instr_strs = SpecialInstructions
 
-    def __init__(self, instr_str: str, rd: int = 0, rs1: int = 0, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int = 0, rs1: int = 0, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.instr_type = CFInstructionClass.SPECIAL
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         self.rd = rd
@@ -529,8 +527,8 @@ EcallEbreakInstructions = ("ecall", "ebreak")
 class EcallEbreakInstruction(CFInstruction):
     authorized_instr_strs = EcallEbreakInstructions
 
-    def __init__(self, instr_str: str, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.instr_type = CFInstructionClass.ECALL
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -549,8 +547,8 @@ IntLoadInstructions = ("lb", "lh", "lw", "lbu", "lhu", "lwu", "ld")
 class IntLoadInstruction(ImmInstruction):
     authorized_instr_strs = IntLoadInstructions
 
-    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
+        super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         self.instr_type = CFInstructionClass.INTLOAD
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -589,8 +587,8 @@ IntStoreInstructions = ("sb", "sh", "sw", "sd")
 class IntStoreInstruction(ImmInstruction):
     authorized_instr_strs = IntStoreInstructions
 
-    def __init__(self, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         self.instr_type = CFInstructionClass.INTSTORE
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -627,8 +625,8 @@ FloatLoadInstructions = ("flw", "fld")
 class FloatLoadInstruction(ImmInstruction):
     authorized_instr_strs = FloatLoadInstructions
 
-    def __init__(self, instr_str: str, frd: int, rs1: int, imm: int, producer_id: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         self.instr_type = CFInstructionClass.FLOATLOAD
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -657,8 +655,8 @@ FloatStoreInstructions = ("fsw", "fsd")
 class FloatStoreInstruction(ImmInstruction):
     authorized_instr_strs = FloatStoreInstructions
 
-    def __init__(self, instr_str: str, rs1: int, frs2: int, imm: int, producer_id: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, imm, is_design_64bit, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, frs2: int, imm: int, producer_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         self.instr_type = CFInstructionClass.FLOATSTORE
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -687,8 +685,8 @@ FloatToIntInstructions = ("fcvt.w.s", "fcvt.wu.s", "fcvt.l.s", "fcvt.lu.s", "fcv
 class FloatToIntInstruction(CFInstruction):
     authorized_instr_strs = FloatToIntInstructions
 
-    def __init__(self, instr_str: str, rd: int, frs1: int, rm: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, frs1: int, rm: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.instr_type = CFInstructionClass.F2I
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -739,8 +737,8 @@ IntToFloatInstructions = ("fcvt.s.w", "fcvt.s.wu", "fcvt.s.l", "fcvt.s.lu", "fcv
 class IntToFloatInstruction(CFInstruction):
     authorized_instr_strs = IntToFloatInstructions
 
-    def __init__(self, instr_str: str, frd: int, rs1: int, rm: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, rm: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate,instr_str, iscompressed)
         self.instr_type = CFInstructionClass.I2F
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -790,8 +788,8 @@ Float4Instructions = ("fmadd.s", "fmsub.s", "fnmsub.s", "fnmadd.s", "fmadd.d", "
 class Float4Instruction(CFInstruction):
     authorized_instr_strs = Float4Instructions
 
-    def __init__(self, instr_str: str, frd: int, frs1: int, frs2: int, frs3: int, rm: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, frs2: int, frs3: int, rm: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.instr_type = CFInstructionClass.F4
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -848,8 +846,8 @@ Float3Instructions = ("fadd.s", "fsub.s", "fmul.s", "fdiv.s", "fadd.d", "fsub.d"
 class Float3Instruction(CFInstruction):
     authorized_instr_strs = Float3Instructions
 
-    def __init__(self, instr_str: str, frd: int, frs1: int, frs2: int, rm: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, frs2: int, rm: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.instr_type = CFInstructionClass.F3
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -902,8 +900,8 @@ Float3NoRmInstructions = ("fsgnj.s", "fsgnjn.s", "fsgnjx.s", "fmin.s", "fmax.s",
 class Float3NoRmInstruction(CFInstruction):
     authorized_instr_strs = Float3NoRmInstructions
 
-    def __init__(self, instr_str: str, frd: int, frs1: int, frs2: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, frs2: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.instr_type = CFInstructionClass.F3NORM
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -955,8 +953,8 @@ Float2Instructions = ("fsqrt.s", "fsqrt.d", "fcvt.d.s", "fcvt.s.d")
 class Float2Instruction(CFInstruction):
     authorized_instr_strs = Float2Instructions
 
-    def __init__(self, instr_str: str, frd: int, frs1: int, rm: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, rm: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.instr_type = CFInstructionClass.F2
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -997,8 +995,8 @@ FloatIntRd2Instructions = ("feq.s", "flt.s", "fle.s", "feq.d", "flt.d", "fle.d")
 class FloatIntRd2Instruction(CFInstruction):
     authorized_instr_strs = FloatIntRd2Instructions
 
-    def __init__(self, instr_str: str, rd: int, frs1: int, frs2: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, frs1: int, frs2: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.instr_type = CFInstructionClass.FIRD2
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -1041,8 +1039,8 @@ FloatIntRd1Instructions = ("fmv.x.w", "fclass.s", "fclass.d", "fmv.x.d")
 class FloatIntRd1Instruction(CFInstruction):
     authorized_instr_strs = FloatIntRd1Instructions
 
-    def __init__(self, instr_str: str, rd: int, frs1: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, frs1: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.instr_type = CFInstructionClass.FIRD1
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -1078,8 +1076,8 @@ FloatIntRs1Instructions = ("fmv.w.x", "fmv.d.x")
 class FloatIntRs1Instruction(CFInstruction):
     authorized_instr_strs = FloatIntRs1Instructions
 
-    def __init__(self, instr_str: str, frd: int, rs1: int, is_design_64bit: bool, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.instr_type = CFInstructionClass.FIRS1
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -1126,8 +1124,8 @@ class CSRInstruction(CFInstruction):
             assert self.csr_id >= 0
             assert self.csr_id <  1 << 12
 
-    def __init__(self, instr_str: str, csr_id: int, iscompressed: bool = False):
-        super().__init__(instr_str, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, csr_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.csr_id = csr_id
         self.assert_csr_size()
         self.instr_type = CFInstructionClass.CSR
@@ -1137,8 +1135,8 @@ class CSRInstruction(CFInstruction):
 CSRRegInstructions = "csrrw", "csrrs", "csrrc"
 class CSRRegInstruction(CSRInstruction):
     authorized_instr_strs = CSRRegInstructions
-    def __init__(self, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False):
-        super().__init__(instr_str, csr_id, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, csr_id, iscompressed)
         if DO_ASSERT:
             assert rd >= 0
             assert rd < MAX_NUM_PICKABLE_REGS, f"rd: {rd}, MAX_NUM_PICKABLE_REGS: {MAX_NUM_PICKABLE_REGS}"
@@ -1164,8 +1162,8 @@ CSRImmInstructions = "csrrwi", "csrrsi", "csrrci"
 class CSRImmInstruction(CSRInstruction):
     authorized_instr_strs = CSRImmInstructions
 
-    def __init__(self, instr_str: str, rd: int, uimm: int, csr_id: int, iscompressed: bool = False):
-        super().__init__(instr_str, csr_id, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, uimm: int, csr_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, csr_id, iscompressed)
         if DO_ASSERT:
             assert rd >= 0
             assert rd < MAX_NUM_PICKABLE_REGS
@@ -1204,14 +1202,13 @@ class CSRImmInstruction(CSRInstruction):
 # Does not inherit from CFInstruction.
 class PlaceholderProducerInstr0(BaseInstruction):
     # When it is instantiated, the producer instructions do not know the offset yet, just the target address.
-    def __init__(self, rd: int, producer_id: int, is_design_64bit: bool, fuzzerstate = None):
+    def __init__(self, fuzzerstate, rd: int, producer_id: int):
         super().__init__(fuzzerstate,"lui (PlaceholderProducerInstr0)")
         self.rd = rd
         self.producer_id = producer_id
         self.relocation_offset = 0
         self.spike_resolution_offset = None
         self.rtl_offset = None
-        self.is_design_64bit = is_design_64bit
         self.instr_type = CFInstructionClass.NONE
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -1220,27 +1217,32 @@ class PlaceholderProducerInstr0(BaseInstruction):
         if is_spike_resolution:
             if DO_ASSERT:
                 assert self.spike_resolution_offset < (1 << 32)
-            return rv32i_lui(self.rd, li_into_reg(to_unsigned(self.spike_resolution_offset, self.is_design_64bit), False)[0])
+            return rv32i_lui(self.rd, li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0])
         else:
             if DO_ASSERT:
                 assert self.rtl_offset is not None, "Producer0 cannot produce final bytecode because it does not yet know the final offset."
-            return rv32i_lui(self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.is_design_64bit), False)[0])
+            return rv32i_lui(self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0])
 
     def check_regs(self,reg_cmp): # TODO: check rdep, rprod for spike_resolution or final elf
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd])
         assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
 
+    def execute(self, taint_en: bool = False):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        imm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0]
+        res = to_unsigned(imm, self.fuzzerstate.is_design_64bit)<<12
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
 # Does not inherit from CFInstruction.
 class PlaceholderProducerInstr1(BaseInstruction):
     # When it is instantiated, the producer instructions do not know the offset yet, just the target address.
-    def __init__(self, rd: int, producer_id: int, is_design_64bit: bool, fuzzerstate = None):
+    def __init__(self, fuzzerstate, rd: int, producer_id: int):
         super().__init__(fuzzerstate,"addi (PlaceholderProducerInstr1)")
         self.rd = rd
         self.producer_id = producer_id
         self.relocation_offset = 0
         self.spike_resolution_offset = None # Is also the target address
         self.rtl_offset = None
-        self.is_design_64bit = is_design_64bit
         self.instr_type = CFInstructionClass.NONE
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
@@ -1249,21 +1251,27 @@ class PlaceholderProducerInstr1(BaseInstruction):
         if is_spike_resolution:
             if DO_ASSERT:
                 assert self.spike_resolution_offset < (1 << 32)
-            return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(self.spike_resolution_offset, self.is_design_64bit), False)[1])
+            return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1])
         else:
             if DO_ASSERT:
                 assert self.rtl_offset is not None, "Producer1 cannot produce final bytecode because it does not yet know the final rtl_offset."
-            return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.is_design_64bit), False)[1])
+            return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1])
 
     def check_regs(self,reg_cmp):
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd])
         assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
 
+    def execute(self, taint_en: bool = False):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        uimm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1]
+        res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val() + uimm
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
 
 # Does not inherit from CFInstruction.
 class PlaceholderPreConsumerInstr(BaseInstruction):
     # @param rdep: the register that creates the dependency
-    def __init__(self, rdep: int, fuzzerstate = None):
+    def __init__(self, fuzzerstate, rdep: int):
         super().__init__(fuzzerstate,"and (PlaceholderPreConsumerInstr)")
         self.rdep = rdep
         self.instr_type = CFInstructionClass.NONE
@@ -1279,13 +1287,18 @@ class PlaceholderPreConsumerInstr(BaseInstruction):
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
             assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
+    def execute(self, taint_en: bool = False):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        res = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val() & self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
+        self.fuzzerstate.intregpickstate.regs[self.rdep].set_val(res)
+
 
 # Does not inherit from CFInstruction.
 class PlaceholderConsumerInstr(BaseInstruction):
     # @param rd: the generated register, i.e., the target address for example
     # @param rdep: the register that creates the dependency
     # @param producer_id: is required to feed spike's feedback
-    def __init__(self, rd: int, rdep: int, rprod: int, producer_id: int, fuzzerstate = None):
+    def __init__(self, fuzzerstate, rd: int, rdep: int, rprod: int, producer_id: int):
         super().__init__(fuzzerstate,"xor (PlaceholderConsumerInstr)")
         self.rd = rd
         self.rdep = rdep
@@ -1319,6 +1332,11 @@ class PlaceholderConsumerInstr(BaseInstruction):
             # print(f"{hex(pc)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
             assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
+
+    def execute(self):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        res = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val() ^ self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val()
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 def is_placeholder(obj):
     return isinstance(obj, PlaceholderProducerInstr0) or isinstance(obj, PlaceholderProducerInstr1) or isinstance(obj, PlaceholderPreConsumerInstr) or isinstance(obj, PlaceholderConsumerInstr)
