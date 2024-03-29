@@ -416,8 +416,6 @@ def jalr_t0(pc: int, pc_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
 
 
 
-
-
 INSTR_FUNCS = {
     # register instructions
     "add": add,
@@ -457,7 +455,8 @@ INSTR_FUNCS = {
     "csrrs": None,
     "sw": None,
     "lw": None,
-    "fence": None
+    "fence": None,
+    "bne": None
 }
 
 INSTR_FUNCS_T0 = {
@@ -499,7 +498,8 @@ INSTR_FUNCS_T0 = {
     "csrrs": None,
     "sw": None,
     "lw": None,
-    "fence": None
+    "fence": None,
+    "bne": None
 }
 
 

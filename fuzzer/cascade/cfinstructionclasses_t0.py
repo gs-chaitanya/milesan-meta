@@ -1,5 +1,5 @@
 from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
-from cfinstructionclasses import *
+from cascade.cfinstructionclasses import *
 from cascade.util import CFInstructionClass
 from rv.asmutil import INSTR_FUNCS_T0
 from cascade.registers import ABI_INAMES
@@ -36,9 +36,9 @@ class ImmInstruction_t0(BaseInstruction_t0):
 # Concrete classes with taint: integers
 ###
 
-class R12Dinstrucion_t0(R12DInstruction, BaseInstruction_t0):
-    def __init__(self, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False, fuzzerstate=None):
-        super().__init__(instr_str, rd, rs1, rs2, iscompressed, fuzzerstate)
+class R12DInstruction_t0(R12DInstruction, BaseInstruction_t0):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, rs2, iscompressed)
         self.rs1_t0 = 0
         self.rs2_t0 = 0
         self.rd_t0 = 0
@@ -176,8 +176,8 @@ class R12Dinstrucion_t0(R12DInstruction, BaseInstruction_t0):
 
 
 class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0):
-    def __init__(self, instr_str: str, rd: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False, fuzzerstate=None):
-        super().__init__(instr_str, rd, imm, is_design_64bit, iscompressed, is_rd_nonpickable_ok, fuzzerstate)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, imm, iscompressed, is_rd_nonpickable_ok)
         self.rd_t0 = 0
 
     def compute_taints(self):
@@ -253,10 +253,11 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0):
 
     
 class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0):
-    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, is_design_64bit: bool, iscompressed: bool = False, fuzzerstate=None, is_rd_nonpickable_ok: bool = False):
-        super().__init__(instr_str, rd, rs1, imm, is_design_64bit, iscompressed, fuzzerstate, is_rd_nonpickable_ok)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, imm, iscompressed, is_rd_nonpickable_ok)
         self.rs1_t0 = 0
         self.rd_t0 = 0
+
     def copmute_taints(self):
         probs = CFINSTRCLASS_TAINT_PROBS[CFInstructionClass.REGIMM]
         p_rs1_t0 = probs["rs1"]*RS_INT_TAINT_PROBS_MASK[self.rs1]
@@ -332,50 +333,86 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0):
         # Writeback taints according to tainted bits in rd.
         self.writeback_t0(res_t0, res)
 
+    def execute(self, taint_en: bool = False):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
+        res = self.instr_func(rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
+        if taint_en:
+            self.execute_t0(res)
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
+
 class JALInstruction_t0(JALInstruction):
-    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, is_design_64bit: bool, iscompressed: bool = False, fuzzerstate=None):
-        super().__init__(instr_str, rd, rs1, imm, producer_id, is_design_64bit, iscompressed, fuzzerstate)
-        
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, imm, iscompressed)
+
     def execute_t0(self, res):
         self.writeback_t0(0x0, res)
+
+    def execute(self, taint_en: bool = False):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
+        if taint_en:
+            self.execute_t0(res)
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
 
 
 class JALRInstruction_t0(JALRInstruction):
-    def __init__(self, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, is_design_64bit: bool, iscompressed: bool = False, fuzzerstate=None):
-        super().__init__(instr_str, rd, rs1, imm, producer_id, is_design_64bit, iscompressed, fuzzerstate)
-        
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
+
     def execute_t0(self, res):
         self.writeback_t0(0x0, res)
+
+    def execute(self, taint_en: bool = False):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
+        if taint_en:
+            self.execute_t0(res)
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
+
 
 ## Extended Placeholder Instructions ##
 #TODO: all these need to be adjusted for non-spike resolution execution
 class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0):
-    def __init__(self, rd: int, producer_id: int, is_design_64bit: bool, fuzzerstate = None):
-        super().__init__(rd, producer_id, is_design_64bit, fuzzerstate)
+    def __init__(self, fuzzerstate, rd: int, producer_id: int):
+        super().__init__(fuzzerstate, rd, producer_id)
 
     def execute_t0(self, res):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         self.writeback_t0(0x0,res)
 
-        
+    def execute(self, taint_en: bool = False):
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        imm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0]
+        res = to_unsigned(imm, self.fuzzerstate.is_design_64bit)<<12
+        if taint_en:
+            self.execute_t0(res)
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
+   
 class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1):
-    def __init__(self, rd: int, producer_id: int, is_design_64bit: bool, fuzzerstate = None):
-        super().__init__(rd, producer_id, is_design_64bit, fuzzerstate)
+    def __init__(self, fuzzerstate, rd: int, producer_id: int):
+        super().__init__(fuzzerstate, rd, producer_id)
 
     def execute_t0(self, res):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         self.writeback_t0(0x0,res)
 
-    def execute(self):
+    def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
-        uimm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.is_design_64bit), False)[1]
+        uimm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1]
         res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val() + uimm
+        if taint_en:
+            self.execute_t0(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 
 class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr):
-    def __init__(self,rdep: int,fuzzerstate = None):
-        super().__init__(rdep, fuzzerstate)   
+    def __init__(self, fuzzerstate, rdep: int):
+         super().__init__(fuzzerstate, rdep)
 
     def execute_t0(self, res):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
@@ -395,25 +432,27 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr):
 
         self.writeback_t0(res_t0, res)
 
-    def execute(self):
+    def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val() & self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
-        self.execute_t0(res)
+        if taint_en:
+            self.execute_t0(res)
         self.fuzzerstate.intregpickstate.regs[self.rdep].set_val(res)
 
 class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr):
-    def __init__(self, rd: int, rdep: int, rprod: int, producer_id: int, fuzzerstate = None):
-        super().__init__(rd, rdep, rprod, producer_id, fuzzerstate)   
+    def __init__(self, fuzzerstate, rd: int, rdep: int, rprod: int, producer_id: int):
+        super().__init__(fuzzerstate, rd, rdep, rprod, producer_id)
 
     def execute_t0(self, res):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res_t0 = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val_t0() ^ self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val_t0()
         self.writeback_t0(res_t0,res)
 
-    def execute(self):
+    def execute(self, taint_en: bool = False):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val() ^ self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val()
-        self.execute_t0(res)
+        if taint_en:
+            self.execute_t0(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 

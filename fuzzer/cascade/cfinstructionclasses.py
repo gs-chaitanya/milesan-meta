@@ -127,7 +127,7 @@ class ImmInstruction(CFInstruction):
                 assert self.imm <  1<<curr_param_size
 
     def __init__(self, fuzzerstate, instr_str: str, imm: int, iscompressed: bool = False):
-        super().__init__(fuzzerstate,instr_str, iscompressed)
+        super().__init__(fuzzerstate, instr_str, iscompressed)
         self.imm = imm
         self.assert_imm_size()
 
@@ -237,10 +237,11 @@ class R12DInstruction(CFInstruction):
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
             assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
-    def execute(self):
+    def execute(self, taint_en: bool = False):
         if self.addr == -1:
             print(f"Skipping execution of {self.get_str()}")
             return
+        assert not taint_en, f"{self.get_str()} is not an IFT instruction."
         assert self.fuzzerstate is not None, f"fuzzerstate not set, cannot execute {self.get_str()}" 
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
@@ -288,7 +289,8 @@ class ImmRdInstruction(ImmInstruction):
     def compute_alt_res_t0(self, res, f):
         return 0x0 # skip possible immediates for now
 
-    def execute(self):
+    def execute(self, taint_en: bool = False):
+        assert not taint_en, f"{self.get_str()} is not an IFT instruction."
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.instr_func(self.addr, self.imm, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
@@ -363,6 +365,7 @@ class RegImmInstruction(ImmInstruction):
         assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(self.rs1,self.addr,self.fuzzerstate,reg_cmp[self.rs1]).get_str()}"
 
     def execute(self, taint_en: bool = False):
+        assert not taint_en, f"{self.get_str()} is not an IFT instruction."
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         res = self.instr_func(rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
@@ -375,7 +378,7 @@ class BranchInstruction(ImmInstruction):
 
     # @param plan_taken is True iff the branch instruction is planned to be taken.
     def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, iscompressed: bool = False):
-        super().__init__(fuzzerstate, instr_str, imm, iscompressed, fuzzerstate)
+        super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         self.instr_type = CFInstructionClass.BRANCH
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -457,10 +460,9 @@ class JALInstruction(ImmInstruction):
         assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
 
     def execute(self, taint_en: bool = False):
+        assert not taint_en, f"{self.get_str()} is not an IFT instruction."
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
-        if taint_en:
-            self.execute_t0(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 
@@ -494,10 +496,9 @@ class JALRInstruction(ImmInstruction):
         assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
 
     def execute(self, taint_en: bool = False):
+        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
-        if taint_en:
-            self.execute_t0(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 # Instructions that create no information flow
@@ -1228,6 +1229,7 @@ class PlaceholderProducerInstr0(BaseInstruction):
         assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
 
     def execute(self, taint_en: bool = False):
+        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         imm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0]
         res = to_unsigned(imm, self.fuzzerstate.is_design_64bit)<<12
@@ -1262,6 +1264,7 @@ class PlaceholderProducerInstr1(BaseInstruction):
         assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
 
     def execute(self, taint_en: bool = False):
+        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         uimm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1]
         res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val() + uimm
@@ -1288,6 +1291,7 @@ class PlaceholderPreConsumerInstr(BaseInstruction):
             assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
     def execute(self, taint_en: bool = False):
+        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val() & self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
         self.fuzzerstate.intregpickstate.regs[self.rdep].set_val(res)
@@ -1333,7 +1337,8 @@ class PlaceholderConsumerInstr(BaseInstruction):
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
             assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
-    def execute(self):
+    def execute(self, taint_en: bool = False):
+        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val() ^ self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val()
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
