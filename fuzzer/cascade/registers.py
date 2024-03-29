@@ -68,7 +68,7 @@ class Int32RegState(__32RegState):
     def set_fsm_sate(self,new_state: IntRegIndivState = None):
         self.fsm_state = new_state
     
-    def check(self, cmp_val, pc):
+    def check(self, cmp_val):
         cmp_val_uint32 = to_unsigned(cmp_val&MAX_32b,False)
         mismatch = to_unsigned(self.val, False) != cmp_val_uint32 # check the value that 
 
@@ -77,9 +77,9 @@ class Int32RegState(__32RegState):
         if not mismatch:
             return False
         else:
-            return pc,ABI_INAMES[self.id],to_unsigned(self.val,False),cmp_val_uint32
+            return ABI_INAMES[self.id],to_unsigned(self.val,False),cmp_val_uint32
 
-    def check_t0(self, cmp_val, pc):
+    def check_t0(self, cmp_val):
         cmp_val_uint32 = to_unsigned(cmp_val, False)
         mismatch = self.val_t0 != cmp_val_uint32 # check the value that 
 
@@ -88,6 +88,6 @@ class Int32RegState(__32RegState):
         if not mismatch:
             return False
         else:
-            return pc,ABI_INAMES[self.id],self.val_t0,cmp_val_uint32
+            return ABI_INAMES[self.id],self.val_t0,cmp_val_uint32
 
 

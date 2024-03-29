@@ -53,7 +53,7 @@ def check_isa_sim(design_name: str,seed: int):
                     print(f"Skipping check for {next_instr.get_str()}")
                     continue
                 next_instr.check_regs(pc_rd_pairs[next_instr.addr]) # check value before executing instruction
-                next_instr.execute(False)
+                next_instr.execute()
                 # next_instr.log(SPIKE_STARTADDR+curr_addr)
 
         expected_intregvals = expected_regvals[0]
@@ -69,7 +69,7 @@ def check_isa_sim(design_name: str,seed: int):
             if i == 0: continue  # skip reg 0
             if i == RELOCATOR_REGISTER_ID: continue
             if i == RDEP_MASK_REGISTER_ID: continue # is overwritten in final BB
-            reg.check(expected_intregvals[i],fuzzerstate.curr_addr)
+            reg.check(expected_intregvals[i])
         # print("Ok.")
     except Exception as e:
         # os.removedirs(trace_dir)
