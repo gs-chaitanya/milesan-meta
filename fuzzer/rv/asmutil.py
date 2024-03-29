@@ -5,6 +5,11 @@
 from params.runparams import DO_ASSERT
 import random
 
+MAX_32b = 0xFFFFFFFF
+MAX_64b = 0xFFFFFFFFFFFFFFFF
+
+
+
 def get_another_random_reg_id(forbidden_reg: int, x0_allowed: bool):
     if DO_ASSERT:
         assert 0 <= forbidden_reg
@@ -138,3 +143,283 @@ def to_unsigned(val_signed: int, is_design_64bit: bool):
         if DO_ASSERT:
             assert val_signed < 1 << 32
         return (((val_signed >> 31) & 1) << 32) + val_signed
+
+
+def add(a: int, b: int,  is_design_64bit: bool):
+    return a + b
+
+def add_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
+    # Compute the smallest possible result
+    a_and_not_a_t0 = a&~a_t0
+    b_and_not_b_t0 = b&~b_t0
+    a_plus_b_not_t0 = a_and_not_a_t0 + b_and_not_b_t0
+
+    # Compute the largest possible result
+    a_or_a_t0 = a | a_t0
+    b_or_b_t0 = b | b_t0
+    a_plus_b_or_t0 = a_or_a_t0 + b_or_b_t0
+
+    # Compute the polarization term.
+    polarization = a_plus_b_not_t0 ^ a_plus_b_or_t0
+
+    # Compute the transportability term.
+    transport = a_t0 | b_t0
+
+    return polarization | transport
+
+def sub(a: int, b: int,  is_design_64bit: bool):
+    return a - b
+
+def sub_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
+    a_and_not_a_t0 = a&~a_t0
+    b_and_not_b_t0 = b&~b_t0
+
+    a_or_a_t0 = a | a_t0
+    b_or_b_t0 = b | b_t0
+
+    # Compute the result where a is largets and b is smallest
+    a_max_minus_b_min = a_or_a_t0 - b_and_not_b_t0
+    # Compute the result where b is largets and a is smallest
+    a_min_minus_b_max = a_and_not_a_t0 - b_or_b_t0
+
+    # Compute the polarization term.
+    polarization = a_max_minus_b_min ^ a_min_minus_b_max
+
+    # Compute the transportability term.
+    transport = a_t0 | b_t0
+
+    return polarization | transport
+
+def sll(a: int, b: int,  is_design_64bit: bool):
+    shamt = b & 0x1F
+    return a<<shamt
+
+def sll_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    if b_t0:
+        return MAX_64b if is_design_64bit else MAX_32b
+    else:
+        return sll(a_t0, b, is_design_64bit)
+
+def slt(a: int, b: int, is_design_64bit: bool):
+    return twos_complement(a,is_design_64bit) < twos_complement(b, is_design_64bit)
+
+def slt_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    a_signed = twos_complement(a, is_design_64bit)
+    b_signed = twos_complement(b, is_design_64bit)
+    a_t0_signed = twos_complement(a_t0, is_design_64bit)
+    b_t0_signed = twos_complement(b_t0, is_design_64bit)
+    return sltu_t0(a_signed, a_t0_signed, b_signed, b_t0_signed, is_design_64bit)
+    
+def sltu(a: int, b: int,  is_design_64bit: bool):
+    return a < b
+
+def sltu_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    a_and_not_a_t0 = a&~a_t0
+    b_and_not_b_t0 = b&~b_t0
+
+    a_or_a_t0 = a | a_t0
+    b_or_b_t0 = b | b_t0
+
+    # Compute the result where a is largets and b is smallest
+    a_max_minus_b_min = a_or_a_t0 < b_and_not_b_t0
+    # Compute the result where b is largets and a is smallest
+    a_min_minus_b_max = a_and_not_a_t0 < b_or_b_t0
+
+    # Compute the polarization term.
+    polarization = a_max_minus_b_min ^ a_min_minus_b_max
+
+    # Compute the transportability term.
+    transport = a_t0 | b_t0
+
+    return polarization | transport
+
+def xor(a: int, b: int,  is_design_64bit: bool):
+    return a ^ b
+
+def xor_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    return a_t0 | b_t0
+
+def srl(a: int, b: int,  is_design_64bit: bool):
+    shamt = b & 0x1F
+    return a>>shamt
+
+def srl_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    if b_t0:
+        return MAX_64b if is_design_64bit else MAX_32b
+    else:
+        return srl(a_t0,b, is_design_64bit)
+
+def sra(a: int, b: int, is_design_64bit: bool):
+    n_bits = 64 if is_design_64bit else 32
+    msb = (a>>(n_bits-1))&1
+    shamt = b&0x1F
+    mask = MAX_32b<<(n_bits-shamt)
+    mask &= MAX_32b
+    return (a >> shamt) | (mask*msb)
+
+
+def sra_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    if b_t0:
+        return MAX_64b if is_design_64bit else MAX_32b
+    else:
+        return sra(a_t0, b, is_design_64bit)
+
+def or_(a: int, b: int, is_design_64bit: bool):
+    return a | b
+
+def or_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
+    a_and_b_t0 = a_t0 & b_t0 # Can change value since both sides tainted
+    
+    # Can change value since one side is zero while other is tainted.
+    a_t0_and_not_b = a_t0 & ~b
+    b_t0_and_not_a = b_t0 & ~a
+
+    a_t0_and_not_b_or_reverse = a_t0_and_not_b | b_t0_and_not_a
+
+    return a_and_b_t0 | a_t0_and_not_b_or_reverse
+
+def and_(a: int, b: int, is_design_64bit: bool):
+    return a & b
+
+def and_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    a_and_b_t0 = a_t0 & b_t0 # Can change value since both sides tainted
+    
+    # Can change value since one side is one while other is tainted.
+    a_t0_and_b = a_t0 & b
+    b_t0_and_a = b_t0 & a
+
+    a_t0_and_b_or_reverse = a_t0_and_b | b_t0_and_a
+
+    return a_and_b_t0 | a_t0_and_b_or_reverse
+
+## IMMEDIATE OPERATIONS ##
+def addi(a: int, imm: int, is_design_64bit: bool):
+    return a + to_unsigned(imm, is_design_64bit)
+
+def addi_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit):
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    return add_t0(a,a_t0,uimm,uimm_t0,is_design_64bit)
+
+def slli(a: int, imm: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    return sll(a,uimm,is_design_64bit)
+
+def slli_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    return sll_t0(a,a_t0,uimm,uimm_t0,is_design_64bit)
+
+def slti(a: int, imm: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit) # slt does twos_complement on b so we need to apply to_unsigned before to cancel it out
+    return slt(a,uimm,is_design_64bit)
+
+def slti_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    return slt_t0(a,a_t0,uimm,uimm_t0,is_design_64bit)
+
+def sltiu(a: int, imm: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    return sltu(a, uimm, is_design_64bit)
+
+def sltiu_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    return slti_t0(a,a_t0,uimm,uimm_t0,is_design_64bit)
+
+def xori(a: int, imm: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    return xor(a,uimm,is_design_64bit)
+
+def xori_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    return xor_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
+
+def srli(a: int, imm: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    return srl(a,uimm, is_design_64bit)
+
+def srli_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    return srl_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
+
+def srai(a: int, imm: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    return sra(a, uimm, is_design_64bit)
+
+def srai_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    return sra_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
+
+def ori(a: int, imm: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    return or_(a, uimm, is_design_64bit)
+
+def ori_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: int):
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    return or_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
+
+def andi(a: int, imm: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    return and_(a, uimm, is_design_64bit)
+
+def andi_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: int):
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    return and_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
+
+def lui(a: int, imm: int, is_design_64bit: bool):
+    return to_unsigned(imm, is_design_64bit)<<12
+
+def lui_t0(a: int, a_t0: int,  imm: int, imm_t0: int, is_design_64bit: bool):
+    return lui(imm_t0, is_design_64bit)
+
+def auipc(pc: int, imm: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit) & 0xFFFFF # 20 bit immediate
+    n_bits = 64 if is_design_64bit else 32
+    mask = (MAX_64b<<n_bits)&MAX_64b # extend to 64 bits
+    uimm = (uimm & 0xFFFFF) << 12
+    res = pc+uimm
+    msb = (res>>(n_bits-1))&1
+    return res | (mask*msb)
+
+def auipc_t0(pc: int, pc_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit) & 0xFFFFF # 20 bit immediate
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit) & 0xFFFFF # 20 bit immediate
+    n_bits = 64 if is_design_64bit else 32
+    mask = (MAX_64b<<n_bits)&MAX_64b # extend to 64 bits
+    uimm = (uimm & 0xFFFFF) << 12
+    uimm_t0 = (uimm_t0 & 0xFFFFF) << 12
+    res_t0 = add_t0(pc, pc_t0, uimm, uimm_t0, is_design_64bit)
+    msb = (res_t0>>(n_bits-1))&1
+    return res_t0 | (mask*msb)
+
+## JAL and JALR ##
+def jal(pc: int, imm: int, is_design_64bit: bool):
+    return pc+4
+
+def jal_t0(pc: int, pc_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    # return addi_t0(pc, 0x0, 0x0, 0x0, is_design_64bit)
+    return 0x0 # always returns 0 since pc is never tainted and jal computes pc+4
+
+def jalr(pc: int, imm: int, is_design_64bit: bool):
+    return pc+4
+
+def jalr_t0(pc: int, pc_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    # return addi_t0(pc, 0x0, 0x0, 0x0, is_design_64bit)
+    return 0x0 # always returns 0 since pc is never tainted and jalr computes pc+4
+
+
+
+
+
+
+
+
+
+

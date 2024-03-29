@@ -43,7 +43,6 @@ def clean_reg_taint(reg, reg_t0, skip_regs):
 
 def compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val):
     last_instr = None
-    print(f"looking for {ABI_INAMES[reg_id]}")
     for bb_instrs in fuzzerstate.instr_objs_seq:
         for instr_obj in bb_instrs:
             # if not isinstance(instr_obj,CHECKABLE_INSTRUCTION_CLASSES): continue
@@ -187,6 +186,9 @@ class R12DInstruction(CFInstruction):
         self.rs2_t0 = 0
         self.rd_t0 = 0
         # self.compute_taints()
+
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]} {ABI_INAMES[self.rs1]} {ABI_INAMES[self.rs2]}"
 
     def compute_taints(self):
         if self.rs1 in DONT_TAINT_REGS and self.rs2 in DONT_TAINT_REGS and self.rd in DONT_TAINT_REGS:
@@ -361,14 +363,6 @@ class R12DInstruction(CFInstruction):
     # could also be tainted, the alternative values for those executions (i.e. where the registers were chosen differently according to their taints)
     # are computed and written back to the set of registers derived from the taints in the rd field.
     def writeback_t0(self, res_t0, res):
-        # print(f"Actual result: {res}")
-        for alt_rs1_id, alt_rs1 in self.fuzzerstate.intregpickstate.regs.items():
-            for alt_rs2_id, alt_rs2 in self.fuzzerstate.intregpickstate.regs.items():
-                if ((alt_rs1_id^self.rs1)&(~self.rs1_t0) == 0 and self.rs1_t0 != 0) and ((alt_rs2_id^self.rs2)&(~self.rs2_t0) == 0 and self.rs2_t0 != 0) : # only differ in the tainted bits, therefore this register could have been used for addition instead and we need to derive the taints
-                    print(f"{ABI_INAMES[alt_rs1_id]} matches {ABI_INAMES[self.rs1]} and {ABI_INAMES[alt_rs2_id]} matches {ABI_INAMES[self.rs2]} in untainted bits")
-                    alt_res = alt_rs1.get_val() + alt_rs2.get_val()
-                    res_t0 |= alt_res^res
-
         for alt_rd_id, alt_rd in self.fuzzerstate.intregpickstate.regs.items():
             if alt_rd_id == self.rd: continue
             if (alt_rd_id^self.rd)&(~self.rd_t0) == 0 and self.rd_t0 != 0: # only differ in the tainted bits, therefore this register will get tainted
@@ -378,6 +372,14 @@ class R12DInstruction(CFInstruction):
                 print(f"writeback_t0: {ABI_INAMES[alt_rd_id]} <- {hex(taints | res_t0)} ({ABI_INAMES[alt_rd_id]} ^ {ABI_INAMES[self.rd]})")
 
 
+    def compute_alt_res_t0(self, res, f):
+        res_t0 = 0x0
+        for alt_rs1_id, alt_rs1 in self.fuzzerstate.intregpickstate.regs.items():
+            for alt_rs2_id, alt_rs2 in self.fuzzerstate.intregpickstate.regs.items():
+                if ((alt_rs1_id^self.rs1)&(~self.rs1_t0) == 0 and self.rs1_t0 != 0) and ((alt_rs2_id^self.rs2)&(~self.rs2_t0) == 0 and self.rs2_t0 != 0) : # only differ in the tainted bits, therefore this register could have been used for addition instead and we need to derive the taints
+                    print(f"{ABI_INAMES[alt_rs1_id]} matches {ABI_INAMES[self.rs1]} and {ABI_INAMES[alt_rs2_id]} matches {ABI_INAMES[self.rs2]} in untainted bits")
+                    alt_res = f(alt_rs1.get_val(),alt_rs2.get_val())
+                    res_t0 |= alt_res^res
 
 
 # Instructions with imm and rd
@@ -588,7 +590,6 @@ class RegImmInstruction(ImmInstruction_t0):
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[self.rs1],pc)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rs1,self.addr,self.fuzzerstate,reg_cmp[self.rs1]).get_str()}"
-
 
 
 # Branch instructions: with rs1, rs2 and an immediate
