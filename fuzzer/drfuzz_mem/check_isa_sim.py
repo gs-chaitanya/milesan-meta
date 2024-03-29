@@ -34,9 +34,9 @@ def check_isa_sim(design_name: str,seed: int):
         f.write(f"export SEED={env['SEED']}\n")
         f.write(f"export ID={env['ID']}\n")
 
-    pc_rd_pairs = {req[0]:{} for req in expected_regvals[2]}
+    pc_rd_pairs = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
     for req, regval in zip(expected_regvals[2],expected_regvals[3]):
-        pc_rd_pairs[req[0]][req[2]] = regval
+        pc_rd_pairs[req[0] + SPIKE_STARTADDR][req[2]] = regval
 
     for i,reg_data_content in enumerate(fuzzerstate.initial_reg_data_content):
         fuzzerstate.intregpickstate.regs[i+1].set_val(reg_data_content) # skip reg 0
@@ -48,9 +48,11 @@ def check_isa_sim(design_name: str,seed: int):
     try:
         for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)): # skip first and last bb
             for inst_idx,next_instr in enumerate(bb_instrs):
-                curr_addr = bb_start_addr + 4*inst_idx
                 if not isinstance(next_instr, CHECKABLE_INSTRUCTION_CLASSES): continue
-                next_instr.check_regs(pc_rd_pairs[curr_addr],SPIKE_STARTADDR+curr_addr) # check value before executing instruction
+                if next_instr.addr not in pc_rd_pairs:
+                    print(f"Skipping check for {next_instr.get_str()}")
+                    continue
+                next_instr.check_regs(pc_rd_pairs[next_instr.addr]) # check value before executing instruction
                 next_instr.execute(False)
                 # next_instr.log(SPIKE_STARTADDR+curr_addr)
 

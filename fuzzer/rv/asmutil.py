@@ -418,7 +418,89 @@ def jalr_t0(pc: int, pc_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
 
 
 
+INSTR_FUNCS = {
+    # register instructions
+    "add": add,
+    "sub": sub,
+    "sll": sll,
+    "slt": slt,
+    "sltu": sltu,
+    "xor": xor,
+    "srl": srl,
+    "sra": sra,
+    "or": or_,
+    "and": and_,
+    # immediate instructions
+    "addi": addi,
+    "slli": slli,
+    "slti": slti,
+    "sltiu": sltiu,
+    "xori": xori,
+    "srli": srli,
+    "srai": srai,
+    "ori": ori,
+    "andi": andi,
+    "lui": lui,
+    "auipc": auipc,
+    # jal and jalr
+    "jal": jal,
+    "jalr": jalr,
+    # placeholder instructions
+    "lui (PlaceholderProducerInstr0)": lui,
+    "addi (PlaceholderProducerInstr1)": addi,
+    "and (PlaceholderPreConsumerInstr)": and_,
+    "xor (PlaceholderConsumerInstr)": xor,
+    # unimplemented instructions
+    "csrw": None,
+    "csrrw": None,
+    "csrrwi": None,
+    "csrrs": None,
+    "sw": None,
+    "lw": None,
+    "fence": None
+}
 
+INSTR_FUNCS_T0 = {
+    # register instructions
+    "add": add_t0,
+    "sub": sub_t0,
+    "sll": sll_t0,
+    "slt": slt_t0,
+    "sltu": sltu_t0,
+    "xor": xor_t0,
+    "srl": srl_t0,
+    "sra": sra_t0,
+    "or": or_t0,
+    "and": and_t0,
+    # immediate instructions
+    "addi": addi_t0,
+    "slli": slli_t0,
+    "slti": slti_t0,
+    "sltiu": sltiu_t0,
+    "xori": xori_t0,
+    "srli": srli_t0,
+    "srai": srai_t0,
+    "ori": ori_t0,
+    "andi": andi_t0,
+    "lui": lui_t0,
+    "auipc": auipc_t0,
+    # jal and jalr
+    "jal": jal_t0,
+    "jalr": jalr_t0,
+    # placeholder instructions
+    "lui (PlaceholderProducerInstr0)": lui_t0,
+    "addi (PlaceholderProducerInstr1)": addi_t0,
+    "and (PlaceholderPreConsumerInstr)": and_t0,
+    "xor (PlaceholderConsumerInstr)": xor_t0,
+    # unimplemented instructions
+    "csrw": None,
+    "csrrw": None,
+    "csrrwi": None,
+    "csrrs": None,
+    "sw": None,
+    "lw": None,
+    "fence": None
+}
 
 
 

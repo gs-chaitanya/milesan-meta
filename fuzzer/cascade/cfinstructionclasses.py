@@ -9,7 +9,7 @@ from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
 from cascade.util import CFInstructionClass
-from rv.asmutil import li_into_reg, twos_complement, to_unsigned
+from rv.asmutil import li_into_reg, twos_complement, to_unsigned, INSTR_FUNCS, INSTR_FUNCS_T0
 from rv.rvprivileged import rvprivileged_mret, rvprivileged_sret
 from rv.zifencei import *
 from rv.zicsr import *
@@ -64,6 +64,10 @@ class BaseInstruction:
     fuzzerstate = None
     addr = None
     instr_str = None
+    instr_type = CFInstructionClass.NONE
+    instr_func = None
+    instr_func_t0 = None
+    injectable = False
 
     def __init__(self, fuzzerstate, instr_str):
         if fuzzerstate is not None:
@@ -72,6 +76,8 @@ class BaseInstruction:
             self.addr = -1
         self.fuzzerstate = fuzzerstate
         self.instr_str = instr_str
+        self.instr_func = INSTR_FUNCS[self.instr_str]
+        self.instr_func_t0 = INSTR_FUNCS_T0[self.instr_str]
 
     def print(self):
         print(self.get_str())
@@ -80,19 +86,17 @@ class BaseInstruction:
         return f"{hex(self.addr)}: {self.instr_str}"
 
     def execute(self, taint_en):
-        # raise Exception(f"{hex(curr_addr)}: Function execute() called on abstract class CFInstruction {self.instr_str}: {type(self)}.")
-        # print(f"Skipped execution of instruction: {self.instr_str} ({hex(self.addr)})")
-        assert self.addr == -1, f"Skipped execution of executable instruction at addr: {hex(self.addr)}"
+        raise Exception(f"Function execute() called on abstract class BaseInstruction {self.get_str()}.")
 
-    def check_regs(self, cmp_regs, pc):
-        # print(f"Skipped check of instruction: {self.instr_str} ({hex(self.addr)})")
-        assert self.addr == -1, f"Skipped check of executable instruction at addr: {hex(self.addr)}"
+    def check_regs(self, cmp_regs):
+        raise Exception(f"Function check_regs() called on abstract class BaseInstruction {self.get_str()}.")
 
-    def execute_t0(self):
-        pass
+    def execute_t0(self, taint_en):
+        raise Exception(f"Function execute() called on abstract class BaseInstruction {self.get_str()}.")
 
-    def check_regs_t0(self, cmp_regs, pc):
-        pass
+    def check_regs_t0(self, cmp_regs):
+        raise Exception(f"Function check_regs() called on abstract class BaseInstruction {self.get_str()}.")
+
         
 ###
 # Abstract classes
@@ -101,10 +105,6 @@ class BaseInstruction:
 class CFInstruction(BaseInstruction):
     # Could be any instruction
     authorized_instr_strs = range(len(INSTRUCTION_IDS))
-    instr_type = CFInstructionClass.NONE
-    injectable = False
-    fuzzerstate = None
-    addr = None
     # Check that it's not a wrong instruction id.
     def assert_authorized_instr_strs(self):
         if DO_ASSERT:
@@ -169,7 +169,7 @@ class R12DInstruction(CFInstruction):
     authorized_instr_strs = R12DInstructions
 
     def __init__(self, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False, fuzzerstate = None):
-        super().__init__(instr_str, iscompressed,fuzzerstate)
+        super().__init__(instr_str, iscompressed, fuzzerstate)
         self.instr_type = CFInstructionClass.R12D
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         if DO_ASSERT:
@@ -188,7 +188,7 @@ class R12DInstruction(CFInstruction):
         # self.compute_taints()
 
     def get_str(self):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]} {ABI_INAMES[self.rs1]} {ABI_INAMES[self.rs2]}"
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}"
 
     def compute_taints(self):
         if self.rs1 in DONT_TAINT_REGS and self.rs2 in DONT_TAINT_REGS and self.rd in DONT_TAINT_REGS:
@@ -226,22 +226,12 @@ class R12DInstruction(CFInstruction):
             bytecode_t0 = np.random.choice([rs1_rand_val<<OPCODE_FIELD_BITS["rs1"],rs2_rand_val<<OPCODE_FIELD_BITS["rs2"],rsd_rand_val<<OPCODE_FIELD_BITS["rd"]], 1, p=ps_t0)[0].item()
             
             self.set_bytecode_t0(bytecode_t0)
-        # print(f"{self.instr_str}:rd: {self.rd} {hex(self.rd_t0)} {p_rd_t0}, rs1: {self.rs1} {hex(self.rs1_t0)} {p_rs1_t0}, rs2: {self.rs2} {hex(self.rs2_t0)} {p_rs2_t0}")
-        # self.rd_t0 = clean_reg_taint(self.rd, self.rd_t0, DONT_TAINT_REGS+[self.rs1,self.rs2])
-        # self.rs1_t0 = clean_reg_taint(self.rs1, self.rs1_t0, [self.rd,self.rs2])
-        # self.rs2_t0 = clean_reg_taint(self.rs2, self.rs2_t0, [self.rd,self.rs1])
-        # print(f"{self.instr_str}:rd: {self.rd} {hex(self.rd_t0)} {p_rd_t0}, rs1: {self.rs1} {hex(self.rs1_t0)} {p_rs1_t0}, rs2: {self.rs2} {hex(self.rs2_t0)} {p_rs2_t0}")
 
-        # assert(self.rs1_t0 or self.rs2_t0 or self.rd_t0), "Did not taint anything, this should not happen."
         if self.rs1_t0 | self.rs2_t0 | self.rd_t0 == 0:
             self.injectable = False
 
         return self.injectable
 
-        # for skip in DONT_TAINT_REGS:
-        #     if (self.rd^skip)&~self.rd_t0 != 0:
-        #         # print(f"Some untainted bits match, would taint r{skip}: r{self.rd} with t0 {self.rd_t0}") # untainted bits dont match
-        #         self.injectable = False
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -343,22 +333,52 @@ class R12DInstruction(CFInstruction):
         self.rs2_t0 = (bytecode_t0>>OPCODE_FIELD_BITS["rs2"])&OPCODE_FIELD_MASKS["rs"]
         self.rd_t0 =  (bytecode_t0>>OPCODE_FIELD_BITS["rd"])&OPCODE_FIELD_MASKS["rd"]
 
-    def check_regs(self,reg_cmp,pc):
+    def check_regs(self,reg_cmp):
         if self.fuzzerstate is None:
             return
         for reg_id,reg_val in reg_cmp.items():
             # print(f"{hex(pc)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
-            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val,pc)
+            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val,self.addr)
             assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
-    def check_regs_t0(self,reg_cmp,pc):
+    def check_regs_t0(self,reg_cmp):
         if self.fuzzerstate is None:
             return
         for reg_id,reg_val in reg_cmp.items():
             # print(f"{hex(pc)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
-            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check_t0(reg_val,pc)
+            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check_t0(reg_val,self.addr)
             assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Taint mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
+    def execute(self, taint_en: bool = False):
+        if self.addr == -1:
+            print(f"Skipping execution of {self.get_str()}")
+            return
+        assert self.fuzzerstate is not None, f"fuzzerstate not set, cannot execute {self.get_str()}" 
+        rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
+        rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
+        res = self.instr_func(rs1_val,rs2_val, self.fuzzerstate.is_design_64bit)
+        # Compute taint propagation before writing back result
+        if taint_en:
+            self.execute_t0(res)
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
+    def execute_t0(self, res):
+        if self.addr == -1:
+            print(f"Skipping execution of {self.get_str()}")
+            return
+        assert self.fuzzerstate is not None, f"fuzzerstate not set, cannot execute {self.get_str()}" 
+        rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
+        rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
+        rs1_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
+        rs2_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
+        # Compute the taint results of the operation.
+        res_t0 = self.instr_func_t0(rs1_val, rs1_val_t0, rs2_val, rs2_val_t0)
+        # Compute alternative results if other soruce registers had been choosen.
+        res_t0 |= self.compute_alt_res_t0(res)
+        # Writeback taints according to tainted bits in rd.
+        self.writeback_t0(res_t0, res)
+
+    
     # This function writes back the tainted value to the destination register. Since the fields for the source and destination registers
     # could also be tainted, the alternative values for those executions (i.e. where the registers were chosen differently according to their taints)
     # are computed and written back to the set of registers derived from the taints in the rd field.
@@ -378,7 +398,7 @@ class R12DInstruction(CFInstruction):
             for alt_rs2_id, alt_rs2 in self.fuzzerstate.intregpickstate.regs.items():
                 if ((alt_rs1_id^self.rs1)&(~self.rs1_t0) == 0 and self.rs1_t0 != 0) and ((alt_rs2_id^self.rs2)&(~self.rs2_t0) == 0 and self.rs2_t0 != 0) : # only differ in the tainted bits, therefore this register could have been used for addition instead and we need to derive the taints
                     print(f"{ABI_INAMES[alt_rs1_id]} matches {ABI_INAMES[self.rs1]} and {ABI_INAMES[alt_rs2_id]} matches {ABI_INAMES[self.rs2]} in untainted bits")
-                    alt_res = f(alt_rs1.get_val(),alt_rs2.get_val())
+                    alt_res = self.inst_func(alt_rs1.get_val(),alt_rs2.get_val())
                     res_t0 |= alt_res^res
 
 
@@ -458,10 +478,10 @@ class ImmRdInstruction(ImmInstruction_t0):
         assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
         return masked_taint
 
-    def check_regs(self,reg_cmp,pc):
+    def check_regs(self,reg_cmp):
         if self.fuzzerstate is None:
             return
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],self.addr)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
 
 
@@ -583,12 +603,12 @@ class RegImmInstruction(ImmInstruction_t0):
         assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
         return masked_taint
 
-    def check_regs(self,reg_cmp,pc):
+    def check_regs(self,reg_cmp):
         if self.fuzzerstate is None:
             return
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],self.addr)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[self.rs1],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rs1].check(reg_cmp[self.rs1],self.addr)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rs1,self.addr,self.fuzzerstate,reg_cmp[self.rs1]).get_str()}"
 
 
@@ -675,10 +695,10 @@ class JALInstruction(ImmInstruction):
         # rv32i
         return rv32i_jal(self.rd, self.imm)
 
-    def check_regs(self,reg_cmp,pc):
+    def check_regs(self,reg_cmp):
         if self.fuzzerstate is None:
             return
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],self.addr)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
 
 
@@ -704,10 +724,10 @@ class JALRInstruction(ImmInstruction):
         # rv32i
         return rv32i_jalr(self.rd, self.rs1, self.imm)
 
-    def check_regs(self,reg_cmp,pc):
+    def check_regs(self,reg_cmp):
         if self.fuzzerstate is None:
             return
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],self.addr)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
 
 
@@ -1866,8 +1886,8 @@ class PlaceholderProducerInstr0(BaseInstruction):
             return rv32i_lui(self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.is_design_64bit), False)[0])
 
 
-    def check_regs(self,reg_cmp,pc): # TODO: check rdep, rprod for spike_resolution or final elf
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
+    def check_regs(self,reg_cmp): # TODO: check rdep, rprod for spike_resolution or final elf
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],self.addr)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
 
 # Does not inherit from CFInstruction.
@@ -1895,8 +1915,8 @@ class PlaceholderProducerInstr1(BaseInstruction):
                 assert self.rtl_offset is not None, "Producer1 cannot produce final bytecode because it does not yet know the final rtl_offset."
             return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.is_design_64bit), False)[1])
 
-    def check_regs(self,reg_cmp,pc):
-        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],pc)
+    def check_regs(self,reg_cmp):
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rd].check(reg_cmp[self.rd],self.addr)
         assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(self.rd,self.addr,self.fuzzerstate,reg_cmp[self.rd]).get_str()}"
 
 
@@ -1914,10 +1934,10 @@ class PlaceholderPreConsumerInstr(BaseInstruction):
         # Reduce the size of the rdep id to 30 bits
         return rv32i_and(self.rdep, self.rdep, RDEP_MASK_REGISTER_ID)
     
-    def check_regs(self,reg_cmp,pc): # TODO: check rdep, rprod for spike_resolution or final elf
+    def check_regs(self,reg_cmp): # TODO: check rdep, rprod for spike_resolution or final elf
         assert len(reg_cmp) == len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID])), f"Missing registers for check_regs: got {len(reg_cmp)}, require {len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID]))}."
         for reg_id,reg_val in reg_cmp.items():
-            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val,pc)
+            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val,self.addr)
             assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
 
@@ -1947,19 +1967,19 @@ class PlaceholderConsumerInstr(BaseInstruction):
             return rv32i_xor(self.rd, self.rdep, self.rprod) # self.rdep - self.rprod
 
 
-    def check_regs_t0(self,reg_cmp,pc):
+    def check_regs_t0(self,reg_cmp):
         if self.fuzzerstate is None:
             return
         for reg_id,reg_val in reg_cmp.items():
             # print(f"{hex(pc)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
-            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check_t0(reg_val,pc)
+            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check_t0(reg_val,self.addr)
             assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Taint mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
-    def check_regs(self,reg_cmp,pc): # TODO: check rdep, rprod for spike_resolution or final elf
+    def check_regs(self,reg_cmp): # TODO: check rdep, rprod for spike_resolution or final elf
         assert len(reg_cmp) == len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID])), f"Missing registers for check_regs: got {len(reg_cmp)}, require {len(set([self.rd, self.rprod, RELOCATOR_REGISTER_ID]))}."
         for reg_id,reg_val in reg_cmp.items():
             # print(f"{hex(pc)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
-            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val,pc)
+            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val,self.addr)
             assert not mismatch, f"{hex(mismatch[0])}: {self.instr_str}: Value mismatch for {mismatch[1]}: {hex(mismatch[2])} != {hex(mismatch[3])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
 def is_placeholder(obj):

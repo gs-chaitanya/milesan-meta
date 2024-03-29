@@ -51,7 +51,7 @@ def check_isa_sim_taint(design_name: str,seed: int):
         for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)): # skip first and last bb
             for inst_idx,next_instr in enumerate(bb_instrs):
                 curr_addr = bb_start_addr + 4*inst_idx
-                if not any([isinstance(next_instr,inst_type) for inst_type in CHECKABLE_INSTRUCTION_CLASSES]): continue
+                if not isinstance(next_instr, CHECKABLE_INSTRUCTION_CLASSES): continue
                 next_instr.check_regs(pc_reg_pairs[curr_addr],SPIKE_STARTADDR+curr_addr) # check value before executing instruction
                 next_instr.check_regs_t0(pc_reg_taint_pairs[curr_addr],SPIKE_STARTADDR+curr_addr) # check value before executing instruction
                 next_instr.execute(taint_en = True)

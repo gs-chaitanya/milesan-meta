@@ -33,9 +33,10 @@ def spike_sim_taint(fuzzerstate, expected_regvals):
             if instr_obj.injectable:
                 injected_taint = instr_obj.compute_taints()
                 if injected_taint:
+                    print(f"Injecting taint into instruction {instr_obj.get_str()}: {hex(instr_obj.gen_bytecode_int_t0(True))}")
                     instr_obj.set_bytecode(instr_obj.gen_bytecode_int(True) ^ instr_obj.gen_bytecode_int_t0(True))
                     inject_addr = curr_addr
-                    print(f"Injected taint into instruction {instr_obj.get_str()}: {hex(instr_obj.gen_bytecode_int_t0(True))}")
+                    print(f"Taint modifies to {instr_obj.get_str()}")
                     break    
         if injected_taint:
             break

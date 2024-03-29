@@ -161,7 +161,7 @@ def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert producer_id > 0
     # return JALRInstruction(instr_str, rd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed)
-    return cfi.JalrInstruction(instr_str, rd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed, fuzzerstate)
+    return cfi.JalrInstruction(rd, rs1, imm, producer_id, fuzzerstate.is_design_64bit, iscompressed, fuzzerstate)
 
 def _create_SpecialInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
