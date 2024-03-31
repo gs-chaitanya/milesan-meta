@@ -123,13 +123,13 @@ def li_into_reg(val_unsigned: int, do_check_bounds: bool = True):
 def twos_complement(val_unsigned: int, is_design_64bit: bool):
     if is_design_64bit:
         if DO_ASSERT:
-            assert val_unsigned >= 0
-            assert val_unsigned < 1 << 64
+            assert val_unsigned >= 0, f"{hex(val_unsigned)} < 0"
+            assert val_unsigned < 1 << 64,  f"{hex(val_unsigned)} >= 2**64"
         return val_unsigned - (((val_unsigned >> 63) & 1) << 64)
     else:
         if DO_ASSERT:
-            assert val_unsigned >= 0
-            assert val_unsigned < 1 << 32
+            assert val_unsigned >= 0, f"{hex(val_unsigned)} < 0"
+            assert val_unsigned < 1 << 32,  f"{hex(val_unsigned)} >= 2**32"
         return val_unsigned - (((val_unsigned >> 31) & 1) << 32)
 
 # From a signed int, returns an unsigned version.
@@ -165,7 +165,7 @@ def add_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
     # Compute the transportability term.
     transport = a_t0 | b_t0
 
-    return polarization | transport
+    return (polarization | transport)
 
 def sub(a: int, b: int,  is_design_64bit: bool):
     return a - b
@@ -188,7 +188,7 @@ def sub_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
     # Compute the transportability term.
     transport = a_t0 | b_t0
 
-    return polarization | transport
+    return (polarization | transport)
 
 def sll(a: int, b: int,  is_design_64bit: bool):
     shamt = b & 0x1F
@@ -231,7 +231,7 @@ def sltu_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     # Compute the transportability term.
     transport = a_t0 | b_t0
 
-    return polarization | transport
+    return (polarization | transport)
 
 def xor(a: int, b: int,  is_design_64bit: bool):
     return a ^ b
@@ -290,7 +290,7 @@ def and_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
 
     a_t0_and_b_or_reverse = a_t0_and_b | b_t0_and_a
 
-    return a_and_b_t0 | a_t0_and_b_or_reverse
+    return (a_and_b_t0 | a_t0_and_b_or_reverse)
 
 ## IMMEDIATE OPERATIONS ##
 def addi(a: int, imm: int, is_design_64bit: bool):
@@ -311,13 +311,12 @@ def slli_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     return sll_t0(a,a_t0,uimm,uimm_t0,is_design_64bit)
 
 def slti(a: int, imm: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit) # slt does twos_complement on b so we need to apply to_unsigned before to cancel it out
-    return slt(a,uimm,is_design_64bit)
+    return twos_complement(a,is_design_64bit) < imm
 
 def slti_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return slt_t0(a,a_t0,uimm,uimm_t0,is_design_64bit)
+    a_signed = twos_complement(a, is_design_64bit)
+    a_t0_signed = twos_complement(a_t0, is_design_64bit)
+    return sltu_t0(a_signed, a_t0_signed, imm, imm_t0, is_design_64bit)
 
 def sltiu(a: int, imm: int, is_design_64bit: bool):
     uimm = to_unsigned(imm, is_design_64bit)
@@ -373,11 +372,11 @@ def andi_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: int):
     uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
     return and_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
 
-def lui(a: int, imm: int, is_design_64bit: bool):
+def lui(pc: int, imm: int, is_design_64bit: bool):
     return to_unsigned(imm, is_design_64bit)<<12
 
-def lui_t0(a: int, a_t0: int,  imm: int, imm_t0: int, is_design_64bit: bool):
-    return lui(imm_t0, is_design_64bit)
+def lui_t0(pc: int, pc_t0: int,  imm: int, imm_t0: int, is_design_64bit: bool):
+    return lui(0x0, imm_t0, is_design_64bit)
 
 def auipc(pc: int, imm: int, is_design_64bit: bool):
     uimm = to_unsigned(imm, is_design_64bit) & 0xFFFFF # 20 bit immediate
@@ -397,7 +396,7 @@ def auipc_t0(pc: int, pc_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     uimm_t0 = (uimm_t0 & 0xFFFFF) << 12
     res_t0 = add_t0(pc, pc_t0, uimm, uimm_t0, is_design_64bit)
     msb = (res_t0>>(n_bits-1))&1
-    return res_t0 | (mask*msb)
+    return (res_t0 | (mask*msb))
 
 ## JAL and JALR ##
 def jal(pc: int, imm: int, is_design_64bit: bool):

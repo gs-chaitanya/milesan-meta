@@ -3,10 +3,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT
-from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO, NUM_MIN_FREE_INTREGS, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID
+from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO, NUM_MIN_FREE_INTREGS, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID,  MAX_NUM_PICKABLE_REGS
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
 from cascade.util import IntRegIndivState
-from cascade.registers import Int32RegState
+from cascade.registers import Int32RegState, ABI_INAMES
 from copy import copy, deepcopy
 import math
 import numpy as np
@@ -18,7 +18,7 @@ class IntRegPickState:
         self.__reg_weights  = np.ones(self.num_pickable_regs)
         self.__reg_weights /= np.sum(self.__reg_weights)
         # self.regs   = [IntRegIndivState.FREE for _ in range(self.num_pickable_regs)]
-        self.regs = {id:Int32RegState(id) for id in range(num_pickable_regs)}
+        self.regs = {id:Int32RegState(id) for id in range(self.num_pickable_regs)}
         self.regs[RELOCATOR_REGISTER_ID] = Int32RegState(RELOCATOR_REGISTER_ID)
         self.regs[RDEP_MASK_REGISTER_ID] = Int32RegState(RDEP_MASK_REGISTER_ID)
         # Permits matching sensitive instructions with the producers

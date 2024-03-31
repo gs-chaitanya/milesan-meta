@@ -21,7 +21,7 @@ from rv.rv64d import *
 from rv.rv64m import *
 from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
 from common.spike import SPIKE_STARTADDR
-from cascade.registers import ABI_INAMES
+from cascade.registers import ABI_INAMES, MAX_32b, MAX_64b, MAX_20b
 import random
 import numpy as np
 import ctypes
@@ -30,6 +30,7 @@ def compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val):
     last_instr = None
     for bb_instrs in fuzzerstate.instr_objs_seq:
         for instr_obj in bb_instrs:
+            instr_obj.print()
             # if not isinstance(instr_obj,CHECKABLE_INSTRUCTION_CLASSES): continue
             if instr_obj.addr == addr: # reached this instruction
                 assert last_instr is not None, f"Traceback computation for instruction at {hex(addr)} failed: No previous instruction modifying register {ABI_INAMES[reg_id]} with mismatch {hex(fuzzerstate.intregpickstate.regs[reg_id].get_val())} =! {hex(correct_val)} found."
@@ -76,7 +77,10 @@ class BaseInstruction:
 
     def check_regs(self,reg_cmp):
         for reg_id,reg_val in reg_cmp.items():
-            # print(f"{hex(pc)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
+            if reg_id not in self.fuzzerstate.intregpickstate.regs:
+                # print(f"{hex(self.addr)}: Ignoring register value: {ABI_INAMES[reg_id]}")
+                continue
+            # print(f"{hex(self.addr)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
             assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
@@ -125,6 +129,7 @@ class ImmInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, imm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
+        assert imm <= MAX_20b, "Immediate exceeds 20 bits."
         self.imm = imm
         self.assert_imm_size()
 
@@ -251,9 +256,11 @@ class ImmRdInstruction(ImmInstruction):
         if DO_ASSERT:
             assert rd >= 0
             assert is_rd_nonpickable_ok or rd < MAX_NUM_PICKABLE_REGS or rd in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID)
-        self.imm = imm
         self.rd =  rd
         # self.compute_taints()
+
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -274,6 +281,7 @@ class ImmRdInstruction(ImmInstruction):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.instr_func(self.addr, self.imm, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
 
 # Instructions with rs1, imm and rd
 RegImmInstructions = ("addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai", "addiw", "slliw", "srliw", "sraiw")
@@ -296,6 +304,9 @@ class RegImmInstruction(ImmInstruction):
 
         if self.instr_str == "sraiw" and self.imm < 0:
             assert False
+        
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def set_bytecode(self,bytecode):
         has_shamt = self.instr_str in RegImmShiftInstructions
@@ -363,6 +374,9 @@ class BranchInstruction(ImmInstruction):
         self.plan_taken = plan_taken
         # self.producer_id = producer_id We do not use producers anymore for branches
 
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, {hex(self.imm)}"
+
     # Choose an opcode that, given the values of rs1 and rs2, will comply with the required takenness
     def select_suitable_opcode(self, rs1_content: int, rs2_content: int):
         int_plan_taken = int(self.plan_taken)
@@ -420,6 +434,9 @@ class JALInstruction(ImmInstruction):
             assert rd >= 0
             assert rd < MAX_NUM_PICKABLE_REGS
         self.rd  = rd
+        
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -430,6 +447,8 @@ class JALInstruction(ImmInstruction):
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
+
 
 
 
@@ -450,6 +469,9 @@ class JALRInstruction(ImmInstruction):
         self.rd  = rd
         self.rs1 = rs1
         self.producer_id = producer_id
+
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -472,6 +494,9 @@ class SpecialInstruction(CFInstruction):
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
         self.rd = rd
         self.rs1 = rs1
+
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -522,6 +547,9 @@ class IntLoadInstruction(ImmInstruction):
         self.rs1 =  rs1
         self.producer_id = producer_id
 
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
+
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
         if self.instr_str == "lb":
@@ -561,6 +589,9 @@ class IntStoreInstruction(ImmInstruction):
         self.rs1 =  rs1
         self.rs2  = rs2
         self.producer_id = producer_id
+
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -1173,6 +1204,9 @@ class PlaceholderProducerInstr0(BaseInstruction):
         self.instr_type = CFInstructionClass.NONE
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}"
+
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using lui
         if is_spike_resolution:
@@ -1204,6 +1238,9 @@ class PlaceholderProducerInstr1(BaseInstruction):
         self.instr_type = CFInstructionClass.NONE
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}"
+
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using addi
         if is_spike_resolution:
@@ -1232,6 +1269,9 @@ class PlaceholderPreConsumerInstr(BaseInstruction):
         self.instr_type = CFInstructionClass.NONE
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rdep]}, {ABI_INAMES[RDEP_MASK_REGISTER_ID]}"
+
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # Reduce the size of the rdep id to 30 bits
         return rv32i_and(self.rdep, self.rdep, RDEP_MASK_REGISTER_ID)
@@ -1258,6 +1298,9 @@ class PlaceholderConsumerInstr(BaseInstruction):
         # self.target_val = None
         self.instr_type = CFInstructionClass.NONE
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+
+    def get_str(self):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[RELOCATOR_REGISTER_ID]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         if DO_ASSERT:

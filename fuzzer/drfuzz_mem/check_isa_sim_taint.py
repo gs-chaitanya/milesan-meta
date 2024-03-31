@@ -17,7 +17,6 @@ from drfuzz_mem.spike_sim_taint import spike_sim_taint
 def check_isa_sim_taint(design_name: str,seed: int):    
     # get fuzzerstate and expected regvals from program
     fuzzerstate, interm_elfpath, expected_regvals  = gen_fuzzerstate_elf_expectedvals_interm(*gen_new_test_instance(design_name, seed, True), True)
-    print(f"export SIMSRAMELF={interm_elfpath}")
     # expected regvals of the program where the bit was flipped, which is the one that will be executed
     pc_reg_taint_pairs, pc_reg_pairs = spike_sim_taint(fuzzerstate, expected_regvals)
 
@@ -33,7 +32,7 @@ def check_isa_sim_taint(design_name: str,seed: int):
     env["DESIGN"] = design_name
     env["SEED"] = str(seed)
 
-    # print(f"source {env_path}")
+    print(f"source {env_path}")
     with open(env_path, "w") as f:
         f.write(f"export SIMSRAMELF={env['SIMSRAMELF']}\n")
         f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF']}.dump\n")
@@ -46,14 +45,16 @@ def check_isa_sim_taint(design_name: str,seed: int):
     
     fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].set_val(SPIKE_STARTADDR)
     fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].set_val(MAX_32b)
+    # fuzzerstate.intregpickstate.regs[ABI_INAMES.index("t0")].set_val(SPIKE_STARTADDR) # because of spike boot sequence
 
+    # fuzzerstate.intregpickstate.print()
     try:
         for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)): # skip first and last bb
             for inst_idx,next_instr in enumerate(bb_instrs):
-                curr_addr = bb_start_addr + 4*inst_idx
+                if bb_id == 0 and inst_idx != len(bb_instrs)-1: continue
                 if not isinstance(next_instr, CHECKABLE_INSTRUCTION_CLASSES): continue
-                next_instr.check_regs(pc_reg_pairs[curr_addr],SPIKE_STARTADDR+curr_addr) # check value before executing instruction
-                next_instr.check_regs_t0(pc_reg_taint_pairs[curr_addr],SPIKE_STARTADDR+curr_addr) # check value before executing instruction
+                next_instr.check_regs(pc_reg_pairs[next_instr.addr]) # check value before executing instruction
+                next_instr.check_regs_t0(pc_reg_taint_pairs[next_instr.addr]) # check value before executing instruction
                 next_instr.execute(taint_en = True)
                 # next_instr.log(SPIKE_STARTADDR+curr_addr)
 
@@ -70,7 +71,7 @@ def check_isa_sim_taint(design_name: str,seed: int):
             if i == 0: continue  # skip reg 0
             if i == RELOCATOR_REGISTER_ID: continue
             if i == RDEP_MASK_REGISTER_ID: continue # is overwritten in final BB
-            reg.check(expected_intregvals[i],fuzzerstate.curr_addr)
+            reg.check(expected_intregvals[i])
         print("Ok.")
     except Exception as e:
         # os.removedirs(trace_dir)

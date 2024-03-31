@@ -22,21 +22,59 @@ def clean_reg_taint(reg, reg_t0, skip_regs):
 # Abstract classes with taint
 ###
 # does not inhereit from BaseInstruction
-class BaseInstruction_t0:
-    def __init__(self):
+class BaseInstruction_t0(BaseInstruction):
+    instr_func_t0 = None
+    
+    def __init__(self, fuzzerstate, instr_str):
+        super().__init__(fuzzerstate, instr_str)
         self.instr_func_t0 = INSTR_FUNCS_T0[self.instr_str]
 
+    def check_regs_t0(self,reg_cmp):
+        for reg_id,reg_val in reg_cmp.items():
+            if reg_id not in self.fuzzerstate.intregpickstate.regs:
+                # print(f"{hex(self.addr)}: Ignoring register taint: {ABI_INAMES[reg_id]}")
+                continue
+            # print(f"{hex(self.addr)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
+            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check_t0(reg_val)
+            assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
+
+    def execute_t0(self, taint_en):
+        raise Exception(f"Function execute_t0() called on abstract class BaseInstruction_t0 {self.get_str()}.")
+
+    def inject_taint(self, is_spike_resolution: bool = True):
+        self.set_bytecode(self.gen_bytecode_int(is_spike_resolution) ^ self.gen_bytecode_int_t0(is_spike_resolution))
+
+class CFInstruction_t0(BaseInstruction_t0):
+    def __init__(self, fuzzerstate, instr_str):
+        super().__init__(fuzzerstate, instr_str)
+
+class RDInstruction_t0(CFInstruction_t0):
+    # This function writes back the tainted value to the destination register. Since the fields for the source and destination registers
+    # could also be tainted, the alternative values for those executions (i.e. where the registers were chosen differently according to their taints)
+    # are computed and written back to the set of registers derived from the taints in the rd field.
+    def writeback_t0(self, res_t0, res):
+        if self.rd_t0 == 0:
+            self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(res_t0)
+            print(f"writeback_t0: {self.get_str()}: {ABI_INAMES[self.rd]} <- {hex(res_t0)}")
+            return
+
+        for alt_rd_id, alt_rd in self.fuzzerstate.intregpickstate.regs.items():
+            if (alt_rd_id^self.rd)&(~self.rd_t0) == 0: # only differ in the tainted bits, therefore this register will get tainted
+                taints = alt_rd.get_val()^res # the taint vector is one in the bits that differ
+                alt_rd.set_val_t0(taints | res_t0) # or with taint result from addition
+                print(f"writeback_t0: {self.get_str()}: {ABI_INAMES[alt_rd_id]} <- {hex(taints | res_t0)} (= {hex(res_t0)} | ({hex(alt_rd.get_val())} ^ {hex(res)}) )")
+
 # does not inherit from ImmInstruction
-class ImmInstruction_t0(BaseInstruction_t0):
-    def __init__(self):
-        super().__init__()
+class ImmInstruction_t0(CFInstruction_t0):
+    def __init__(self, fuzzerstate, instr_str):
+        super().__init__(fuzzerstate, instr_str)
         self.imm_t0 = 0x00
 
 ###
 # Concrete classes with taint: integers
 ###
 
-class R12DInstruction_t0(R12DInstruction, BaseInstruction_t0):
+class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, rd, rs1, rs2, iscompressed)
         self.rs1_t0 = 0
@@ -71,16 +109,21 @@ class R12DInstruction_t0(R12DInstruction, BaseInstruction_t0):
                 self.injectable = False
                 return
             ps_t0 = ps_t0/ps_t0.sum()
+            skip_regs = set(range(len(ABI_INAMES))) - set(self.fuzzerstate.intregpickstate.regs.keys())
             rs1_rand_val = (1<<random.randint(0,4))&OPCODE_FIELD_MASKS["rs"]
+            rs1_rand_val = clean_reg_taint(self.rs1, rs1_rand_val, skip_regs)
             rs2_rand_val = (1<<random.randint(0,4))&OPCODE_FIELD_MASKS["rs"]
-            rsd_rand_val = (1<<random.randint(0,4))&OPCODE_FIELD_MASKS["rs"]
+            rs2_rand_val = clean_reg_taint(self.rs2, rs2_rand_val, skip_regs)
+            rd_rand_val = (1<<random.randint(0,4))&OPCODE_FIELD_MASKS["rd"]
+            rd_rand_val = clean_reg_taint(self.rd, rd_rand_val, skip_regs)
 
-            bytecode_t0 = np.random.choice([rs1_rand_val<<OPCODE_FIELD_BITS["rs1"],rs2_rand_val<<OPCODE_FIELD_BITS["rs2"],rsd_rand_val<<OPCODE_FIELD_BITS["rd"]], 1, p=ps_t0)[0].item()
+            bytecode_t0 = np.random.choice([rs1_rand_val<<OPCODE_FIELD_BITS["rs1"],rs2_rand_val<<OPCODE_FIELD_BITS["rs2"],rd_rand_val<<OPCODE_FIELD_BITS["rd"]], 1, p=ps_t0)[0].item()
             
             self.set_bytecode_t0(bytecode_t0)
 
         if self.rs1_t0 | self.rs2_t0 | self.rd_t0 == 0:
             self.injectable = False
+    
 
         return self.injectable
 
@@ -113,25 +156,18 @@ class R12DInstruction_t0(R12DInstruction, BaseInstruction_t0):
         self.rs2_t0 = (bytecode_t0>>OPCODE_FIELD_BITS["rs2"])&OPCODE_FIELD_MASKS["rs"]
         self.rd_t0 =  (bytecode_t0>>OPCODE_FIELD_BITS["rd"])&OPCODE_FIELD_MASKS["rd"]
 
-    def check_regs_t0(self,reg_cmp):
-        if self.fuzzerstate is None:
-            return
-        for reg_id,reg_val in reg_cmp.items():
-            # print(f"{hex(pc)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
-            mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check_t0(reg_val)
-            assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
-
     def execute_t0(self, res):
         if self.addr == -1:
             print(f"Skipping execution of {self.get_str()}")
             return
+        assert self.instr_func_t0 is not None, f"Cannot execute {self.get_str()}: no instr_func_t0 found."
         assert self.fuzzerstate is not None, f"fuzzerstate not set, cannot execute {self.get_str()}" 
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
         rs1_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
         rs2_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
         # Compute the taint results of the operation.
-        res_t0 = self.instr_func_t0(rs1_val, rs1_val_t0, rs2_val, rs2_val_t0)
+        res_t0 = self.instr_func_t0(rs1_val, rs1_val_t0, rs2_val, rs2_val_t0, self.fuzzerstate.is_design_64bit)
         # Compute alternative results if other soruce registers had been choosen.
         res_t0 |= self.compute_alt_res_t0(res)
         # Writeback taints according to tainted bits in rd.
@@ -142,6 +178,7 @@ class R12DInstruction_t0(R12DInstruction, BaseInstruction_t0):
         if self.addr == -1:
             print(f"Skipping execution of {self.get_str()}")
             return
+        assert self.instr_func is not None, f"Cannot execute {self.get_str()}: no instr_func found."
         assert self.fuzzerstate is not None, f"fuzzerstate not set, cannot execute {self.get_str()}" 
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
@@ -151,21 +188,7 @@ class R12DInstruction_t0(R12DInstruction, BaseInstruction_t0):
             self.execute_t0(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
-
-    # This function writes back the tainted value to the destination register. Since the fields for the source and destination registers
-    # could also be tainted, the alternative values for those executions (i.e. where the registers were chosen differently according to their taints)
-    # are computed and written back to the set of registers derived from the taints in the rd field.
-    def writeback_t0(self, res_t0, res):
-        for alt_rd_id, alt_rd in self.fuzzerstate.intregpickstate.regs.items():
-            if alt_rd_id == self.rd: continue
-            if (alt_rd_id^self.rd)&(~self.rd_t0) == 0 and self.rd_t0 != 0: # only differ in the tainted bits, therefore this register will get tainted
-                taints = alt_rd.get_val()^self.fuzzerstate.intregpickstate.regs[self.rd].get_val() # the taint vector is one in the bits that difer and 0 elsewhere
-                alt_rd.set_val_t0(taints | res_t0) # or with taint result from addition
-                self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(taints | res_t0)
-                print(f"writeback_t0: {ABI_INAMES[alt_rd_id]} <- {hex(taints | res_t0)} ({ABI_INAMES[alt_rd_id]} ^ {ABI_INAMES[self.rd]})")
-
-
-    def compute_alt_res_t0(self, res, f):
+    def compute_alt_res_t0(self, res):
         res_t0 = 0x0
         for alt_rs1_id, alt_rs1 in self.fuzzerstate.intregpickstate.regs.items():
             for alt_rs2_id, alt_rs2 in self.fuzzerstate.intregpickstate.regs.items():
@@ -173,9 +196,10 @@ class R12DInstruction_t0(R12DInstruction, BaseInstruction_t0):
                     print(f"{ABI_INAMES[alt_rs1_id]} matches {ABI_INAMES[self.rs1]} and {ABI_INAMES[alt_rs2_id]} matches {ABI_INAMES[self.rs2]} in untainted bits")
                     alt_res = self.inst_func(alt_rs1.get_val(),alt_rs2.get_val())
                     res_t0 |= alt_res^res
+        return res_t0
 
 
-class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0):
+class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(fuzzerstate, instr_str, rd, imm, iscompressed, is_rd_nonpickable_ok)
         self.rd_t0 = 0
@@ -224,35 +248,30 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0):
         assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
         return masked_taint
 
-    def writeback_t0(self, res_t0, res):
-        for alt_rd_id, alt_rd in self.fuzzerstate.intregpickstate.regs.items():
-            if alt_rd_id == self.rd: continue
-            if (alt_rd_id^self.rd)&(~self.rd_t0) == 0 and self.rd_t0 != 0: # only differ in the tainted bits, therefore this register will get tainted
-                taints = alt_rd.get_val()^self.fuzzerstate.intregpickstate.regs[self.rd].get_val() # the taint vector is one in the bits that difer and 0 elsewhere
-                alt_rd.set_val_t0(taints | res_t0) # or with taint result from addition
-                self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(taints | res_t0)
-                print(f"writeback_t0: {ABI_INAMES[alt_rd_id]} <- {hex(taints | res_t0)} ({ABI_INAMES[alt_rd_id]} ^ {ABI_INAMES[self.rd]})")
-    
+    def set_bytecode_t0(self, bytecode_t0):
+        self.rs1_t0 = (bytecode_t0>>OPCODE_FIELD_BITS["rs1"])&OPCODE_FIELD_MASKS["rs"]
+        self.imm_t0 = (bytecode_t0>>OPCODE_FIELD_BITS["immi"])&OPCODE_FIELD_MASKS["immi"]
+        self.rd_t0 =  (bytecode_t0>>OPCODE_FIELD_BITS["rd"])&OPCODE_FIELD_MASKS["rd"]
+ 
+    def compute_alt_res_t0(self, res):
+        return 0x0 # skip possible immediates for now
+
     def execute_t0(self,res):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         # Compute the taint results of the operation. The address is never tainted.
         res_t0 = self.instr_func_t0(self.addr, 0x0, self.imm, self.imm_t0, self.fuzzerstate.is_design_64bit)
         # Compute alternative results if other soruce registers had been choosen.
-        res_t0 |= self.compute_alt_res_t0(res,self.instr_func)
+        res_t0 |= self.compute_alt_res_t0(res)
         # Writeback taints according to tainted bits in rd.
         self.writeback_t0(res_t0, res)
 
     # Overrides function in ImmRdInstructionClass
     def execute(self, taint_en: bool = False):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.instr_func(self.addr, self.imm, self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
-
-    
-class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0):
+class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(fuzzerstate, instr_str, rd, rs1, imm, iscompressed, is_rd_nonpickable_ok)
         self.rs1_t0 = 0
@@ -310,20 +329,10 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0):
         assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
         return masked_taint
 
-    def writeback_t0(self, res_t0, res):
-        for alt_rd_id, alt_rd in self.fuzzerstate.intregpickstate.regs.items():
-            if alt_rd_id == self.rd: continue
-            if (alt_rd_id^self.rd)&(~self.rd_t0) == 0 and self.rd_t0 != 0: # only differ in the tainted bits, therefore this register will get tainted
-                taints = alt_rd.get_val()^self.fuzzerstate.intregpickstate.regs[self.rd].get_val() # the taint vector is one in the bits that difer and 0 elsewhere
-                alt_rd.set_val_t0(taints | res_t0) # or with taint result from addition
-                self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(taints | res_t0)
-                print(f"writeback_t0: {ABI_INAMES[alt_rd_id]} <- {hex(taints | res_t0)} ({ABI_INAMES[alt_rd_id]} ^ {ABI_INAMES[self.rd]})")
-
-    def compute_alt_res_t0(self, res, f):
+    def compute_alt_res_t0(self, res):
         return 0x0 # skip possible immediates for now
 
     def execute_t0(self,res):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         rs1_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
         # Compute the taint results of the operation.
@@ -334,7 +343,6 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0):
         self.writeback_t0(res_t0, res)
 
     def execute(self, taint_en: bool = False):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         res = self.instr_func(rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
         if taint_en:
@@ -342,31 +350,33 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0):
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 
-class JALInstruction_t0(JALInstruction):
+class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, rd, imm, iscompressed)
+        self.rd_t0 = 0
 
     def execute_t0(self, res):
+        # We assume the PC does not get tainted, therefore the result of JAL is never either.
         self.writeback_t0(0x0, res)
 
     def execute(self, taint_en: bool = False):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 
-
-class JALRInstruction_t0(JALRInstruction):
+class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
+        self.rd_t0 = 0
+        self.rs1_t0 = 0
 
     def execute_t0(self, res):
+        # We assume the PC does not get tainted, therefore the result of JAL is never either.
         self.writeback_t0(0x0, res)
 
     def execute(self, taint_en: bool = False):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res)
@@ -376,16 +386,15 @@ class JALRInstruction_t0(JALRInstruction):
 
 ## Extended Placeholder Instructions ##
 #TODO: all these need to be adjusted for non-spike resolution execution
-class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0):
+class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0, RDInstruction_t0):
     def __init__(self, fuzzerstate, rd: int, producer_id: int):
         super().__init__(fuzzerstate, rd, producer_id)
+        self.rd_t0 = 0
 
     def execute_t0(self, res):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         self.writeback_t0(0x0,res)
 
     def execute(self, taint_en: bool = False):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         imm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0]
         res = to_unsigned(imm, self.fuzzerstate.is_design_64bit)<<12
         if taint_en:
@@ -393,29 +402,28 @@ class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0):
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
    
-class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1):
+class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1, RDInstruction_t0):
     def __init__(self, fuzzerstate, rd: int, producer_id: int):
         super().__init__(fuzzerstate, rd, producer_id)
+        self.rd_t0 = 0
 
     def execute_t0(self, res):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         self.writeback_t0(0x0,res)
 
     def execute(self, taint_en: bool = False):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         uimm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1]
         res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val() + uimm
         if taint_en:
             self.execute_t0(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
-
-class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr):
+# Does not inherit from RDInstruction_t0 since it writes to rdep
+class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstruction_t0):
     def __init__(self, fuzzerstate, rdep: int):
-         super().__init__(fuzzerstate, rdep)
+        super().__init__(fuzzerstate, rdep)
+        self.rdep_t0 = 0
 
     def execute_t0(self, res):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         rdep = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val()
         rmask = self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
 
@@ -433,23 +441,35 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr):
         self.writeback_t0(res_t0, res)
 
     def execute(self, taint_en: bool = False):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val() & self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
         if taint_en:
             self.execute_t0(res)
         self.fuzzerstate.intregpickstate.regs[self.rdep].set_val(res)
 
-class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr):
+    # This function writes back the tainted value to the destination register which is the rdep for this class.
+    # Since the fields for the source and destination registers could also be tainted, the alternative values for 
+    # those executions (i.e. where the registers were chosen differently according to their taints)
+    # are computed and written back to the set of registers derived from the taints in the rdep field.
+    def writeback_t0(self, res_t0, res):
+        for alt_rdep_id, alt_rdep in self.fuzzerstate.intregpickstate.regs.items():
+            if (alt_rdep_id^self.rdep)&(~self.rd_t0) == 0 and self.rd_t0 != 0: # only differ in the tainted bits, therefore this register will get tainted
+                taints = alt_rdep.get_val()^res # the taint vector is one in the bits that differ
+                alt_rdep.set_val_t0(taints | res_t0) # or with taint result from addition
+                print(f"writeback_t0: {ABI_INAMES[alt_rdep_id]} <- {hex(taints | res_t0)} ({ABI_INAMES[alt_rdep_id]} ^ {ABI_INAMES[self.rdep]})")
+
+
+class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
     def __init__(self, fuzzerstate, rd: int, rdep: int, rprod: int, producer_id: int):
         super().__init__(fuzzerstate, rd, rdep, rprod, producer_id)
+        self.rd_t0 = 0
+        self.rdep_t0 = 0
+        self.rprod_t0 = 0
 
     def execute_t0(self, res):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         res_t0 = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val_t0() ^ self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val_t0()
         self.writeback_t0(res_t0,res)
 
     def execute(self, taint_en: bool = False):
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val() ^ self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val()
         if taint_en:
             self.execute_t0(res)
