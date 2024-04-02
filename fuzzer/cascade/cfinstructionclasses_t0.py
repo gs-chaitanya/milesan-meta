@@ -34,7 +34,8 @@ class BaseInstruction_t0(BaseInstruction):
             if reg_id not in self.fuzzerstate.intregpickstate.regs:
                 # print(f"{hex(self.addr)}: Ignoring register taint: {ABI_INAMES[reg_id]}")
                 continue
-            # print(f"{hex(self.addr)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
+            if reg_val:
+                print(f"{hex(self.addr)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check_t0(reg_val)
             assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
@@ -55,14 +56,16 @@ class RDInstruction_t0(CFInstruction_t0):
     def writeback_t0(self, res_t0, res):
         if self.rd_t0 == 0:
             self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(res_t0)
-            print(f"writeback_t0: {self.get_str()}: {ABI_INAMES[self.rd]} <- {hex(res_t0)}")
+            if res_t0: 
+                print(f"writeback_t0: {self.get_str()}: {ABI_INAMES[self.rd]} <- {hex(res_t0)}")
             return
 
         for alt_rd_id, alt_rd in self.fuzzerstate.intregpickstate.regs.items():
             if (alt_rd_id^self.rd)&(~self.rd_t0) == 0: # only differ in the tainted bits, therefore this register will get tainted
                 taints = alt_rd.get_val()^res # the taint vector is one in the bits that differ
                 alt_rd.set_val_t0(taints | res_t0) # or with taint result from addition
-                print(f"writeback_t0: {self.get_str()}: {ABI_INAMES[alt_rd_id]} <- {hex(taints | res_t0)} (= {hex(res_t0)} | ({hex(alt_rd.get_val())} ^ {hex(res)}) )")
+                if taints | res_t0:
+                    print(f"writeback_t0: {self.get_str()}: {ABI_INAMES[alt_rd_id]} <- {hex(taints | res_t0)} (= {hex(res_t0)} | ({hex(alt_rd.get_val())} ^ {hex(res)}) )")
 
 # does not inherit from ImmInstruction
 class ImmInstruction_t0(CFInstruction_t0):
@@ -82,14 +85,6 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
         self.rd_t0 = 0
         
     def compute_taints(self):
-        if self.rs1 in DONT_TAINT_REGS and self.rs2 in DONT_TAINT_REGS and self.rd in DONT_TAINT_REGS:
-            self.injectable = False
-            return
-
-        if self.rd in [self.rs1, self.rs2]:
-            self.injectable = False
-            return
-
         probs = CFINSTRCLASS_TAINT_PROBS[CFInstructionClass.R12D]
         p_rs1_t0 = probs["rs1"]*RS_INT_TAINT_PROBS_MASK[self.rs1]
         p_rs2_t0 = probs["rs2"]*RS_INT_TAINT_PROBS_MASK[self.rs2]
@@ -107,7 +102,7 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
             ps_t0 = np.asarray([p_rs1_t0,p_rs2_t0,p_rd_t0]).astype("float64")
             if ps_t0.sum() == 0:
                 self.injectable = False
-                return
+                return False
             ps_t0 = ps_t0/ps_t0.sum()
             skip_regs = set(range(len(ABI_INAMES))) - set(self.fuzzerstate.intregpickstate.regs.keys())
             rs1_rand_val = (1<<random.randint(0,4))&OPCODE_FIELD_MASKS["rs"]
@@ -121,7 +116,7 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
             
             self.set_bytecode_t0(bytecode_t0)
 
-        if self.rs1_t0 | self.rs2_t0 | self.rd_t0 == 0:
+        if (self.rs1_t0 | self.rs2_t0 | self.rd_t0) == 0:
             self.injectable = False
     
 
@@ -209,28 +204,35 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         p_imm_t0 = probs["imm"]
         p_rd_t0 = probs["rd"]*RD_INT_TAINT_PROBS_MASK[self.rd]
 
-        if self.rd in DONT_TAINT_REGS:
-            self.injectable = False
-            return
+        if self.instr_str == "auipc":
+            return False
 
         if not CFINSTRCLASS_TAINT_ONLY_ONE: # several bytecode fields can be tainted
             self.imm_t0 = 0
             self.rd_t0 = 0
             while self.imm_t0 == 0 and self.rd_t0 == 0:
-                self.imm_t0 = np.random.choice([OPCODE_FIELD_MASKS["immi"],0], 1, p=[p_imm_t0, 1-p_imm_t0])[0].item()
+                self.imm_t0 = np.random.choice([OPCODE_FIELD_MASKS["immu"],0], 1, p=[p_imm_t0, 1-p_imm_t0])[0].item()
                 self.rd_t0 = np.random.choice([OPCODE_FIELD_MASKS["rd"],0], 1, p=[p_rd_t0, 1-p_rd_t0])[0].item()
         else:
             ps_t0 = np.asarray([p_imm_t0,p_rd_t0]).astype("float64")
+            if ps_t0.sum() == 0:
+                return False
             ps_t0 = ps_t0/ps_t0.sum()
-            bytecode_t0 = np.random.choice([OPCODE_FIELD_MASKS["immi"]<<OPCODE_FIELD_BITS["immi"],OPCODE_FIELD_MASKS["rd"]<<OPCODE_FIELD_BITS["rd"]],1, p=ps_t0)[0].item()
-            self.imm_t0 = (bytecode_t0>>OPCODE_FIELD_BITS["immi"])&OPCODE_FIELD_MASKS["immi"]
-            self.rd_t0 =  (bytecode_t0>>OPCODE_FIELD_BITS["rd"])&OPCODE_FIELD_MASKS["rd"]
+            skip_regs = set(range(len(ABI_INAMES))) - set(self.fuzzerstate.intregpickstate.regs.keys())
+            rd_rand_val = (1<<random.randint(0,4))&OPCODE_FIELD_MASKS["rd"]
+            rd_rand_val = clean_reg_taint(self.rd, rd_rand_val, skip_regs)
+            imm_rand_val = (1<<random.randint(0,19))&OPCODE_FIELD_MASKS["immu"]
+            
+            bytecode_t0 = np.random.choice([imm_rand_val<<OPCODE_FIELD_BITS["immu"],rd_rand_val<<OPCODE_FIELD_BITS["rd"]],1, p=ps_t0)[0].item()
 
-        self.rd_t0 = clean_reg_taint(self.rd,self.rd_t0,DONT_TAINT_REGS)
+            self.set_bytecode_t0(bytecode_t0)
+
         # print(f"rd: {self.rd_t0} {p_rd_t0}, rs1: {self.rs1_t0} {p_rs1_t0}, imm: {self.imm_t0} {p_imm_t0}")
         # assert(self.imm_t0 or self.rd_t0), "Did not taint anything, this should not happen."
-        if self.imm_t0 | self.rd_t0 == 0:
+        if (self.imm_t0 | self.rd_t0) == 0:
             self.injectable = False
+
+        return self.injectable
 
     def gen_bytecode_int_t0(self, is_spike_resolution: bool):
         assert(self.injectable), "Generating bytecode_t0 for non-injectable instruction. This should not happen."
@@ -249,8 +251,7 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         return masked_taint
 
     def set_bytecode_t0(self, bytecode_t0):
-        self.rs1_t0 = (bytecode_t0>>OPCODE_FIELD_BITS["rs1"])&OPCODE_FIELD_MASKS["rs"]
-        self.imm_t0 = (bytecode_t0>>OPCODE_FIELD_BITS["immi"])&OPCODE_FIELD_MASKS["immi"]
+        self.imm_t0 = (bytecode_t0>>OPCODE_FIELD_BITS["immu"])&OPCODE_FIELD_MASKS["immu"]
         self.rd_t0 =  (bytecode_t0>>OPCODE_FIELD_BITS["rd"])&OPCODE_FIELD_MASKS["rd"]
  
     def compute_alt_res_t0(self, res):

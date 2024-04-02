@@ -6,8 +6,8 @@ CFINSTRCLASS_TAINT_ONLY_ONE = True
 
 # If CFINSTRCLASS_TAINT_ONLY_ONE is true, the probabilities must sum up to 1. Otherwise each probability individually determines the likelyhoold that the resp. bits get tainted.
 CFINSTRCLASS_TAINT_PROBS = { 
-    CFInstructionClass.REGIMM: {"rd": 0.2,"rs1": 0.4, "imm": 0.4},
-    CFInstructionClass.IMMRD: {"rd": 0.2,"imm": 0.8},
+    CFInstructionClass.REGIMM: {"rd": 0,"rs1": 0, "imm": 1},
+    CFInstructionClass.IMMRD: {"rd": 0,"imm": 1},
     CFInstructionClass.R12D: {"rd": 1,"rs1": 0, "rs2":0},
     CFInstructionClass.F2I: {"rd": 0.4,"frs1": 0.4, "rm":0.2},
     CFInstructionClass.I2F: {"frd": 0.4,"rs1": 0.4, "rm":0.2},
@@ -32,8 +32,8 @@ MAX_N_INJECT_PER_BB = 1
 CFINSTRCLASS_INJECT_PROBS = {
     CFInstructionClass.NONE: 0,
     CFInstructionClass.REGIMM: 0,
-    CFInstructionClass.IMMRD: 0,
-    CFInstructionClass.R12D: 1,
+    CFInstructionClass.IMMRD: 1,
+    CFInstructionClass.R12D: 0,
     CFInstructionClass.F2I: 0,
     CFInstructionClass.I2F: 0,
     CFInstructionClass.F4: 0,

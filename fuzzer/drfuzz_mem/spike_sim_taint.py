@@ -62,7 +62,7 @@ def spike_sim_taint(fuzzerstate, expected_regvals):
         for (reg0_id, reg0_val),(reg1_id,reg1_val) in zip(rd0.items(),rd1.items()):
             assert pc0 == inject_addr or reg0_id == reg1_id, f"mismatch in reg ids at {pc0}: {ABI_INAMES[reg0_id]}, {ABI_INAMES[reg1_id]}"
             if reg0_val^reg1_val and pc0 != inject_addr:
-                print(f"(spike) Taint vector at pc {hex(pc0)} for reg(s) {set([ABI_INAMES[reg_id] for reg_id in [reg0_id,reg1_id]])}: {hex(reg0_val^reg1_val)}")
+                print(f"(spike) Taint vector at pc {hex(pc0)} for reg(s) {set([ABI_INAMES[reg_id] for reg_id in [reg0_id,reg1_id]])}: {hex(reg0_val^reg1_val)} ({hex(reg0_val)} ^ {hex(reg1_val)})")
             # zero wont get tainted and at inject_addr the xor comes from the different registers being dumped, not taint
             pc_reg_taint_pairs[pc0][reg0_id] = reg0_val^reg1_val if reg0_id and pc0 != inject_addr else 0
         # if len(pc_reg_taint_pairs[pc0+SPIKE_STARTADDR]) == 0:

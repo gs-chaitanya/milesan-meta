@@ -4,6 +4,7 @@
 
 from params.runparams import DO_ASSERT
 import random
+import numpy as np
 
 MAX_32b = 0xFFFFFFFF
 MAX_64b = 0xFFFFFFFFFFFFFFFF
@@ -165,7 +166,7 @@ def add_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
     # Compute the transportability term.
     transport = a_t0 | b_t0
 
-    return (polarization | transport)
+    return polarization | transport
 
 def sub(a: int, b: int,  is_design_64bit: bool):
     return a - b
@@ -194,11 +195,31 @@ def sll(a: int, b: int,  is_design_64bit: bool):
     shamt = b & 0x1F
     return a<<shamt
 
-def sll_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
-    if b_t0:
+def sll_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    if b_t0 and (a or a_t0):
         return MAX_64b if is_design_64bit else MAX_32b
+    elif b_t0 and not (a or a_t0):
+        return 0x0
     else:
         return sll(a_t0, b, is_design_64bit)
+
+def sll_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    # The first cell of the decomposition shifts a and a_t0 by b_0 (i.e. b&~b_t0)
+    a_p = a<<(b&~b_t0)
+    a_p_t0 = a_t0<<(b&~b_t0)
+
+    # The second cell of the decomposition inputs a_p and b_p = b&b_t0 .
+    b_p = b&b_t0
+    y_t0 = a_p_t0
+    for k in range((b_p &~b_t0) & (2**5-1), (b_p | b_t0) & (2**5-1)):
+        left_side = b_t0 | ~(k ^ b_p) # k is a reachable by modifying tainted bits in b_p
+        left_side &= MAX_64b if is_design_64bit else MAX_32b
+        right_side = (a_p_t0 << k) | (a_p ^ (a_p<<k)) # Bit i can either be tainted by a of a tainted bit in a by k or by a difference in the bit value between shamts b and k
+        y_t0 |= left_side&right_side
+    
+    y_t0 &= MAX_64b if is_design_64bit else MAX_32b
+
+    return y_t0
 
 def slt(a: int, b: int, is_design_64bit: bool):
     return twos_complement(a,is_design_64bit) < twos_complement(b, is_design_64bit)
@@ -221,17 +242,14 @@ def sltu_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     b_or_b_t0 = b | b_t0
 
     # Compute the result where a is largets and b is smallest
-    a_max_minus_b_min = a_or_a_t0 < b_and_not_b_t0
+    a_max_lt_b_min = a_or_a_t0 < b_and_not_b_t0
     # Compute the result where b is largets and a is smallest
-    a_min_minus_b_max = a_and_not_a_t0 < b_or_b_t0
+    a_min_lt_b_max = a_and_not_a_t0 < b_or_b_t0
 
     # Compute the polarization term.
-    polarization = a_max_minus_b_min ^ a_min_minus_b_max
+    polarization = a_max_lt_b_min ^ a_min_lt_b_max
 
-    # Compute the transportability term.
-    transport = a_t0 | b_t0
-
-    return (polarization | transport)
+    return polarization
 
 def xor(a: int, b: int,  is_design_64bit: bool):
     return a ^ b
@@ -243,11 +261,31 @@ def srl(a: int, b: int,  is_design_64bit: bool):
     shamt = b & 0x1F
     return a>>shamt
 
-def srl_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
-    if b_t0:
+def srl_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    if b_t0 and (a or a_t0):
         return MAX_64b if is_design_64bit else MAX_32b
+    elif b_t0 and not (a or a_t0):
+        return 0x0
     else:
         return srl(a_t0,b, is_design_64bit)
+
+def srl_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    # The first cell of the decomposition shifts the a_t0 by b_0 (i.e. b&~b_t0)
+    a_p = a>>(b&~b_t0)
+    a_p_t0 = a_t0>>(b&~b_t0)
+
+    # The second cell of the decomposition inputs a_p and b_p = b&b_t0 .
+    b_p = b&b_t0
+    y_t0 = a_p_t0
+    for k in range((b_p &~b_t0) & (2**5-1), (b_p | b_t0) & (2**5-1)):
+        left_side = b_t0 | ~(k ^ b_p) # k is a reachable by modifying tainted bits in b_p
+        right_side = (a_p_t0 >> k) | (a_p ^ (a_p>>k)) # Bit i can either be tainted by a of a tainted bit in a by k or by a difference in the bit value between shamts b and k
+        y_t0 |= left_side&right_side
+
+    # print(f"a: {a}, a_t0: {a_t0}, b: {b}, b_t0: {b_t0}, y_t0: {y_t0}")
+    y_t0 &= MAX_64b if is_design_64bit else MAX_32b
+    return y_t0
+
 
 def sra(a: int, b: int, is_design_64bit: bool):
     n_bits = 64 if is_design_64bit else 32
@@ -305,10 +343,16 @@ def slli(a: int, imm: int, is_design_64bit: bool):
     uimm = to_unsigned(imm, is_design_64bit)
     return sll(a,uimm,is_design_64bit)
 
-def slli_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+def slli_t0_precise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     uimm = to_unsigned(imm, is_design_64bit)
     uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return sll_t0(a,a_t0,uimm,uimm_t0,is_design_64bit)
+    return sll_t0_precise(a,a_t0,uimm,uimm_t0,is_design_64bit)
+
+
+def slli_t0_imprecise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    return sll_t0_imprecise(a,a_t0,uimm,uimm_t0,is_design_64bit)
 
 def slti(a: int, imm: int, is_design_64bit: bool):
     return twos_complement(a,is_design_64bit) < imm
@@ -340,10 +384,15 @@ def srli(a: int, imm: int, is_design_64bit: bool):
     uimm = to_unsigned(imm, is_design_64bit)
     return srl(a,uimm, is_design_64bit)
 
-def srli_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+def srli_t0_precise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     uimm = to_unsigned(imm, is_design_64bit)
     uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return srl_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
+    return srl_t0_precise(a, a_t0, uimm, uimm_t0, is_design_64bit)
+
+def srli_t0_imprecise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    return srl_t0_imprecise(a, a_t0, uimm, uimm_t0, is_design_64bit)
 
 def srai(a: int, imm: int, is_design_64bit: bool):
     uimm = to_unsigned(imm, is_design_64bit)
@@ -462,21 +511,21 @@ INSTR_FUNCS_T0 = {
     # register instructions
     "add": add_t0,
     "sub": sub_t0,
-    "sll": sll_t0,
+    "sll": sll_t0_precise,
     "slt": slt_t0,
     "sltu": sltu_t0,
     "xor": xor_t0,
-    "srl": srl_t0,
+    "srl": srl_t0_precise,
     "sra": sra_t0,
     "or": or_t0,
     "and": and_t0,
     # immediate instructions
     "addi": addi_t0,
-    "slli": slli_t0,
+    "slli": slli_t0_precise,
     "slti": slti_t0,
     "sltiu": sltiu_t0,
     "xori": xori_t0,
-    "srli": srli_t0,
+    "srli": srli_t0_precise,
     "srai": srai_t0,
     "ori": ori_t0,
     "andi": andi_t0,

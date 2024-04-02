@@ -71,21 +71,23 @@ class Int32RegState(__32RegState):
     
     def check(self, cmp_val):
         cmp_val_uint32 = cmp_val&MAX_32b
-        mismatch = self.val != cmp_val_uint32 # check the value that 
+        mismatch = self.val != cmp_val_uint32
 
-        # print(f"{hex(pc)}: Value {'mismatch' if  mismatch else 'match'} for {self.abi_name}: {hex(self.val)}" + f" != {hex(cmp_val_uint32.value)}" if mismatch else "")
-        # assert not mismatch, f"{hex(pc)}: Value mismatch for {self.abi_name}: {hex(self.val)} != {hex(cmp_val_uint32.value)}"
         if not mismatch:
             return False
         else:
             return ABI_INAMES[self.id],self.val,cmp_val_uint32
 
-    def check_t0(self, cmp_val):
+    def check_t0(self, cmp_val, precise = False):
         cmp_val_uint32 = cmp_val&MAX_32b
-        mismatch = self.val_t0 != cmp_val_uint32 # check the value that 
+        mismatch = self.val_t0 != cmp_val_uint32
+        if not precise:
+            cover = ~self.val_t0&cmp_val_uint32 == 0 # overapproximates, check if spike taint is covered by cascade sim taint
+            if cover:
+                if mismatch:
+                    print(f"\tTaint mismatch OK: {hex(self.val_t0)} covers spike {hex(cmp_val_uint32)}.")
+                return False
 
-        # print(f"{hex(pc)}: Value {'mismatch' if  mismatch else 'match'} for {self.abi_name}: {hex(self.val)}" + f" != {hex(cmp_val_uint32.value)}" if mismatch else "")
-        # assert not mismatch, f"{hex(pc)}: Value mismatch for {self.abi_name}: {hex(self.val)} != {hex(cmp_val_uint32.value)}"
         if not mismatch:
             return False
         else:
