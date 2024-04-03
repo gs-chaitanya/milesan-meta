@@ -62,8 +62,15 @@ LIMIT_MEM_SATURATION_RATIO = 0.8
 # When a register is produced, it gets this probability to be picked next. What is nice is that it immediately saturates: producing it twice does not increase picking proba.
 REGPICK_PROTUBERANCE_RATIO = 0.2 
 
+REGPICK_PROTUBERANCE_RATIO_T0_POS = 0.2
+REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.2
 # There should always be at least this number of free registers
 NUM_MIN_FREE_INTREGS = 2
+
+# There should be at least this number of untainted regs
+NUM_MIN_UNTAINTED_INTREGS = 2
+MIN_WEIGHT_T0 = 0.01
+MAX_WEIGHT_T0 = 1
 
 # Reduce the registers that we allow ourselves to pick randomly
 MIN_NUM_PICKABLE_REGS = 4

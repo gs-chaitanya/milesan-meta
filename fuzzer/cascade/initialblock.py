@@ -172,6 +172,9 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     for _ in range(num_reginit_vals):
         fuzzerstate.initial_reg_data_content.append(0 if random.random() < fuzzerstate.proba_reg_starts_with_zero else random.randrange(1 << 64))
 
+    # Initial values for pickable registers are determined, so load them s.t. ISA simulation executes on correct initial arch. state.
+    fuzzerstate.intregpickstate.set_initial_values(fuzzerstate)
+
     # If there will be padding between the instructions and data, to ensure proper alignment of doubleword load and store ops for 64-bit CPUs 
     has_padding = bool((fuzzerstate.curr_addr+4) & 0x7) != 0
     if DO_ASSERT:
@@ -185,7 +188,11 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     fuzzerstate.next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, fuzzerstate.curr_addr - (1 << range_bits_each_direction), fuzzerstate.curr_addr + (1 << range_bits_each_direction))
     if fuzzerstate.next_bb_addr is None:
         return False
-    fuzzerstate.instr_objs_seq[-1].append(create_instr("jal", fuzzerstate, fuzzerstate.curr_addr)) # first instruction that is considered for ISA cascade simulation crosscheck
+    
+    # JAL at end of initial block is the first to modify the architectural state of the pickable registers, so execute it.
+    next_instr = create_instr("jal", fuzzerstate, fuzzerstate.curr_addr)
+    # fuzzerstate.instr_objs_seq[-1].append(next_instr) # first instruction that is considered for ISA cascade simulation crosscheck
+    fuzzerstate.append_and_execute_instr(next_instr, True)
     fuzzerstate.curr_addr += 4 # NO_COMPRESSED
 
     # Add a potential nop to align the ld that load the random vals into the registers

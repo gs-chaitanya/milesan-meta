@@ -47,14 +47,14 @@ def gen_random_rounding_mode():
 def _create_R12DInstruction(instr_str: str, fuzzerstate, iscompressed: bool, en_taint: bool = False):
     if DO_ASSERT:
         assert instr_str in R12DInstructions
-    rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_int_inputregs(2))
-    rd = fuzzerstate.intregpickstate.pick_int_outputreg()
+    rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_tainted_int_inputregs(2))
+    rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
     return R12DInstruction_t0(fuzzerstate, instr_str, rd, rs1, rs2, iscompressed)
 
 def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool, en_taint: bool = False):
     if DO_ASSERT:
         assert instr_str in ImmRdInstructions
-    rd = fuzzerstate.intregpickstate.pick_int_outputreg()
+    rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     if instr_str == "auipc" and rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
@@ -63,16 +63,16 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool, en
 def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool, en_taint: bool = False):
     if DO_ASSERT:
         assert instr_str in RegImmInstructions
-    rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
-    rd = fuzzerstate.intregpickstate.pick_int_outputreg()
+    rs1 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg()
+    rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
+
     return RegImmInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, iscompressed)
 
 def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool, en_taint: bool = False):
     if DO_ASSERT:
         assert instr_str in BranchInstructions
-    rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
-    rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
+    rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputreg(2))
     plan_taken = fuzzerstate.curr_branch_taken
     if plan_taken:
         # print('A', flush=True)
@@ -93,15 +93,16 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
     return BranchInstruction(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
 
 def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool, en_taint: bool = False):
-    rd = fuzzerstate.intregpickstate.pick_int_outputreg()
+    rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg()
     imm = fuzzerstate.next_bb_addr-curr_addr
     if rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     return JALInstruction_t0(fuzzerstate, instr_str, rd, imm, iscompressed)
 
 def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool, en_taint: bool = False):
-    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
-    rd = fuzzerstate.intregpickstate.pick_int_outputreg()
+    rs1 = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.CONSUMED, force = True)
+    assert not fuzzerstate.intregpickstate.regs[rs1].get_val_t0(), f"rs1 {ABI_INAMES[rs1]} for JALR is tainted!"
+    rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg()
     imm = 0
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
@@ -236,7 +237,9 @@ def create_regfsm_instrobjs(fuzzerstate, en_taint: bool = False):
     doable_fsm_ops[2] = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED1)
 
     effective_weights = doable_fsm_ops * REG_FSM_WEIGHTS
-
+    if not np.any(effective_weights):
+        fuzzerstate.intregpickstate.print()
+    assert np.any(effective_weights), f"No FSM operation possible! {doable_fsm_ops}"
     choice = None
     while choice is None or not doable_fsm_ops[choice]:
         choice = random.choices(range(3), effective_weights, k=1)[0]
@@ -252,7 +255,8 @@ def create_regfsm_instrobjs(fuzzerstate, en_taint: bool = False):
 
 def create_targeted_producer0_instrobj(fuzzerstate, en_taint: bool = False):
     fuzzerstate.next_producer_id += 1
-    rd = fuzzerstate.intregpickstate.pick_int_outputreg_nonzero(False)
+    rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(False, force = True)
+    print(f"Setting {ABI_INAMES[rd]} to PRODUCED0")
     fuzzerstate.intregpickstate.set_producer_id(rd, fuzzerstate.next_producer_id)
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED0)
@@ -260,17 +264,23 @@ def create_targeted_producer0_instrobj(fuzzerstate, en_taint: bool = False):
     return [PlaceholderProducerInstr0_t0(fuzzerstate, rd, fuzzerstate.next_producer_id)]
 
 def create_targeted_producer1_instrobj(fuzzerstate, en_taint: bool = False):
-    rd = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PRODUCED0)
+    rd = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.PRODUCED0, force = True)  # rd should not be tainted
+    # assert fuzzerstate.intregpickstate.regs[rd].get_val_t0() == 0, f"Register {ABI_INAMES[rd]} in produced0 state is tainted!"
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
+    print(f"Setting {ABI_INAMES[rd]} to PRODUCED1")
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED1)
     # return [PlaceholderProducerInstr1(rd, fuzzerstate.intregpickstate.get_producer_id(rd), fuzzerstate.is_design_64bit)]
     return [PlaceholderProducerInstr1_t0(fuzzerstate, rd, fuzzerstate.intregpickstate.get_producer_id(rd))]
 
 def create_targeted_consumer_instrobj(fuzzerstate, en_taint: bool = False):
-    rdep = fuzzerstate.intregpickstate.pick_int_inputreg_nonzero(False) # We want to create dependencies, therefore we choose not to accept x0
-    rprod = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PRODUCED1)
+    rdep = fuzzerstate.intregpickstate.pick_untainted_int_inputreg_nonzero(False, force = True) # We want to create dependencies, therefore we choose not to accept x0. Also it should not be tainted to avoid tainting the PC.
+    rprod = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.PRODUCED1)
+    # assert fuzzerstate.intregpickstate.regs[rdep].get_val_t0() == 0, f"Dependent register {ABI_INAMES[rdep]} is tainted!"
+    # assert fuzzerstate.intregpickstate.regs[rprod].get_val_t0() == 0, f"Register {ABI_INAMES[rd]} in produced1 state is tainted!"
+
     # WARNING: We CANNOT throw a PRODUCEDX into the nature because its value will change between spike and RTL.
     rd = rprod
+    print(f"Setting {ABI_INAMES[rd]} to CONSUMED")
     fuzzerstate.intregpickstate.set_regstate(rprod, IntRegIndivState.CONSUMED)
     if fuzzerstate.is_design_64bit:
         # return [PlaceholderPreConsumerInstr(rprod), PlaceholderPreConsumerInstr(rdep), PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]

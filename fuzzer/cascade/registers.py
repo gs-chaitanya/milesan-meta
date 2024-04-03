@@ -23,6 +23,7 @@ class __64RegState(__RegState):
         self.val = val
         self.val_bk = val_t0
         self.val_t0 = val_t0
+        self.n_bits = 64
 
 
 class __32RegState(__RegState):
@@ -32,9 +33,11 @@ class __32RegState(__RegState):
         self.val_bk = val&MAX_32b
         self.val_t0 = val_t0&MAX_32b
         self.val_t0_bk = val_t0&MAX_32b
+        self.n_bits = 32
 
     def print(self):
-        print(f"{ABI_INAMES[self.id]}: {hex(self.val)}")
+        row = [ABI_INAMES[self.id],hex(self.val),hex(self.val_t0), self.fsm_state.name]
+        print("{: >20} {: >20} {: >20} {: >20}".format(*row))
 
     def set_val(self, val):
         if(self.id != 0):

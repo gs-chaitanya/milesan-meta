@@ -7,6 +7,9 @@ from cascade.registers import ABI_INAMES
 import random
 import numpy as np
 
+PRINT_CHECK_REGS_T0 = False
+PRINT_WRITEBACK_T0 = True
+
 # Ensures that the register and its taint mask excludes some registers we don't want to get tainted
 def clean_reg_taint(reg, reg_t0, skip_regs):
     for skip in skip_regs:
@@ -34,7 +37,7 @@ class BaseInstruction_t0(BaseInstruction):
             if reg_id not in self.fuzzerstate.intregpickstate.regs:
                 # print(f"{hex(self.addr)}: Ignoring register taint: {ABI_INAMES[reg_id]}")
                 continue
-            if reg_val:
+            if reg_val and PRINT_CHECK_REGS_T0:
                 print(f"{hex(self.addr)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check_t0(reg_val)
             assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
@@ -56,7 +59,7 @@ class RDInstruction_t0(CFInstruction_t0):
     def writeback_t0(self, res_t0, res):
         if self.rd_t0 == 0:
             self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(res_t0)
-            if res_t0: 
+            if res_t0 and PRINT_WRITEBACK_T0: 
                 print(f"writeback_t0: {self.get_str()}: {ABI_INAMES[self.rd]} <- {hex(res_t0)}")
             return
 
@@ -64,8 +67,9 @@ class RDInstruction_t0(CFInstruction_t0):
             if (alt_rd_id^self.rd)&(~self.rd_t0) == 0: # only differ in the tainted bits, therefore this register will get tainted
                 taints = alt_rd.get_val()^res # the taint vector is one in the bits that differ
                 alt_rd.set_val_t0(taints | res_t0) # or with taint result from addition
-                if taints | res_t0:
-                    print(f"writeback_t0: {self.get_str()}: {ABI_INAMES[alt_rd_id]} <- {hex(taints | res_t0)} (= {hex(res_t0)} | ({hex(alt_rd.get_val())} ^ {hex(res)}) )")
+                if PRINT_WRITEBACK_T0: 
+                    if taints | res_t0:
+                        print(f"writeback_t0: {self.get_str()}: {ABI_INAMES[alt_rd_id]} <- {hex(taints | res_t0)} (= {hex(res_t0)} | ({hex(alt_rd.get_val())} ^ {hex(res)}) )")
 
 # does not inherit from ImmInstruction
 class ImmInstruction_t0(CFInstruction_t0):
@@ -205,6 +209,7 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         p_rd_t0 = probs["rd"]*RD_INT_TAINT_PROBS_MASK[self.rd]
 
         if self.instr_str == "auipc":
+            self.injectable = False
             return False
 
         if not CFINSTRCLASS_TAINT_ONLY_ONE: # several bytecode fields can be tainted
@@ -216,12 +221,17 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         else:
             ps_t0 = np.asarray([p_imm_t0,p_rd_t0]).astype("float64")
             if ps_t0.sum() == 0:
+                self.injectable = False
                 return False
             ps_t0 = ps_t0/ps_t0.sum()
             skip_regs = set(range(len(ABI_INAMES))) - set(self.fuzzerstate.intregpickstate.regs.keys())
             rd_rand_val = (1<<random.randint(0,4))&OPCODE_FIELD_MASKS["rd"]
             rd_rand_val = clean_reg_taint(self.rd, rd_rand_val, skip_regs)
-            imm_rand_val = (1<<random.randint(0,19))&OPCODE_FIELD_MASKS["immu"]
+            # imm_rand_val = (1<<random.randint(0,19))&OPCODE_FIELD_MASKS["immu"]
+            imm_rand_val = random.randint(0, OPCODE_FIELD_MASKS["immu"])
+            if p_imm_t0 and not p_rd_t0 and self.rd == 0:
+                self.injectable = False
+                return False
             
             bytecode_t0 = np.random.choice([imm_rand_val<<OPCODE_FIELD_BITS["immu"],rd_rand_val<<OPCODE_FIELD_BITS["rd"]],1, p=ps_t0)[0].item()
 
@@ -452,6 +462,12 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
     # those executions (i.e. where the registers were chosen differently according to their taints)
     # are computed and written back to the set of registers derived from the taints in the rdep field.
     def writeback_t0(self, res_t0, res):
+        if self.rd_t0 == 0:
+            self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(res_t0)
+            if res_t0 and PRINT_WRITEBACK_T0: 
+                print(f"writeback_t0: {self.get_str()}: {ABI_INAMES[self.rd]} <- {hex(res_t0)}")
+            return
+
         for alt_rdep_id, alt_rdep in self.fuzzerstate.intregpickstate.regs.items():
             if (alt_rdep_id^self.rdep)&(~self.rd_t0) == 0 and self.rd_t0 != 0: # only differ in the tainted bits, therefore this register will get tainted
                 taints = alt_rdep.get_val()^res # the taint vector is one in the bits that differ

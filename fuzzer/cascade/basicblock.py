@@ -17,6 +17,7 @@ from cascade.randomize.pickexceptionop import gen_exception_instr, gen_tvecfill_
 from cascade.randomize.pickrandomcsrop import gen_random_csr_op
 from cascade.randomize.pickprivilegedescentop import gen_priv_descent_instr
 from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, EcallEbreakInstruction, SimpleExceptionEncapsulator, CSRRegInstruction
+from cascade.cfinstructionclasses import CHECKABLE_INSTRUCTION_CLASSES
 from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS
 from cascade.finalblock import get_finalblock_max_size,finalblock
 from cascade.initialblock import gen_initial_basic_block
@@ -61,13 +62,15 @@ def gen_basicblock(fuzzerstate):
         # If this is an instruction that influences offset register states
         if curr_isa_class == ISAInstrClass.REGFSM:
             new_instrobjs = create_regfsm_instrobjs(fuzzerstate)
-            fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[0])
+            # fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[0])
+            fuzzerstate.append_and_execute_instr(new_instrobjs[0], False) # Dont execute the FSM instructions
 
             # For consumers, we may need to insert one more instruction
             for next_instrobj_id in range(1, len(new_instrobjs)):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+4)
                 curr_alloc_cursor += 4
-                fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[next_instrobj_id])
+                # fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[next_instrobj_id])
+                fuzzerstate.append_and_execute_instr(new_instrobjs[next_instrobj_id], False) # Dont execute the FSM instructions
             del new_instrobjs # For safety, we prevent accidental reuse of this variable
             continue
         # If this is an FPU enable-disable instruction or a rounding mode change
@@ -93,11 +96,16 @@ def gen_basicblock(fuzzerstate):
             # Create space for the next basic block.
             if not gen_next_bb_addr(fuzzerstate, curr_isa_class, fuzzerstate.curr_addr):
                 # Abort the bb
+                # The injected instruction is in aborted bb, so unset the inject_taint_addr as this block will be removed
+                if fuzzerstate.inject_taint_addr in range(fuzzerstate.curr_bb_start_addr, fuzzerstate.curr_addr, 4):
+                    fuzzerstate.inject_taint_addr = None
+                    print("BB aborted, reinject in next.")
                 fuzzerstate.instr_objs_seq.pop()
                 fuzzerstate.bb_start_addr_seq.pop()
                 fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
                 return False
-            fuzzerstate.instr_objs_seq[-1].append(new_instrobj)
+            # fuzzerstate.instr_objs_seq[-1].append(new_instrobj)
+            fuzzerstate.append_and_execute_instr(new_instrobj, True)
             del new_instrobj
             return True
 
@@ -105,7 +113,9 @@ def gen_basicblock(fuzzerstate):
             new_instrobjs = gen_ppfill_instrs(fuzzerstate)
             if DO_ASSERT:
                 assert len(new_instrobjs) * 4 < BASIC_BLOCK_MIN_SPACE # NO_COMPRESSED
-            fuzzerstate.instr_objs_seq[-1] += new_instrobjs
+            # fuzzerstate.instr_objs_seq[-1] += new_instrobjs
+            for new_instr in new_instrobjs:
+                fuzzerstate.append_and_execute_instr(new_instr, True)
             if len(new_instrobjs) > 1:
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+4*(len(new_instrobjs)-1)) # NO_COMPRESSED
                 curr_alloc_cursor += 4*(len(new_instrobjs)-1) # NO_COMPRESSED
@@ -116,6 +126,11 @@ def gen_basicblock(fuzzerstate):
             # Create space for the next basic block.
             if not gen_next_bb_addr(fuzzerstate, curr_isa_class, fuzzerstate.curr_addr):
                 # Abort the bb
+                # Abort the bb
+                # The injected instruction is in aborted bb, so unset the inject_taint_addr as this block will be removed
+                if fuzzerstate.inject_taint_addr in range(fuzzerstate.curr_bb_start_addr, fuzzerstate.curr_addr, 4):
+                    fuzzerstate.inject_taint_addr = None
+                    print("BB aborted, reinject in next.")
                 fuzzerstate.instr_objs_seq.pop()
                 fuzzerstate.bb_start_addr_seq.pop()
                 fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
@@ -123,7 +138,8 @@ def gen_basicblock(fuzzerstate):
             # print('exception at addr', hex(curr_addr), 'privstate', fuzzerstate.privilegestate.privstate)
             new_instrobj = gen_exception_instr(fuzzerstate)
             # print('  New priv:', fuzzerstate.privilegestate.privstate)
-            fuzzerstate.instr_objs_seq[-1].append(new_instrobj)
+            # fuzzerstate.instr_objs_seq[-1].append(new_instrobj)
+            fuzzerstate.append_and_execute_instr(new_instrobj, True)
             del new_instrobj # For safety, we prevent accidental reuse of this variable
             return True
 
@@ -137,6 +153,10 @@ def gen_basicblock(fuzzerstate):
             # Gen the next bb addr
             if not gen_next_bb_addr(fuzzerstate, curr_isa_class, fuzzerstate.curr_addr):
                 # Abort the bb
+                # The injected instruction is in aborted bb, so unset the inject_taint_addr as this block will be removed
+                if fuzzerstate.inject_taint_addr in range(fuzzerstate.curr_bb_start_addr, fuzzerstate.curr_addr, 4):
+                    fuzzerstate.inject_taint_addr = None
+                    print("BB aborted, reinject in next.")
                 fuzzerstate.instr_objs_seq.pop()
                 fuzzerstate.bb_start_addr_seq.pop()
                 fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
@@ -162,7 +182,14 @@ def gen_basicblock(fuzzerstate):
             next_instr = create_instr(instr_str, fuzzerstate, fuzzerstate.curr_addr)
         # next_instr.execute()
         # next_instr.log(SPIKE_STARTADDR+curr_addr)
-        fuzzerstate.instr_objs_seq[-1].append(next_instr)
+
+        if next_instr.injectable and fuzzerstate.inject_taint_addr is None:
+            injected_taint = next_instr.compute_taints()
+            if injected_taint:
+                print(f"Injecting taint into instruction {next_instr.get_str()}: {hex(next_instr.gen_bytecode_int_t0(True))}")
+                fuzzerstate.inject_taint_addr = fuzzerstate.curr_addr
+
+        fuzzerstate.append_and_execute_instr(next_instr, True)
 
         if curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.JALR) or fuzzerstate.curr_branch_taken:
             return True
@@ -179,16 +206,22 @@ def gen_basicblock(fuzzerstate):
         # Gen the next bb addr
         if not gen_next_bb_addr(fuzzerstate, curr_isa_class, fuzzerstate.curr_addr):
             # Abort the bb
+            # The injected instruction is in aborted bb, so unset the inject_taint_addr as this block will be removed
+            if fuzzerstate.inject_taint_addr in range(fuzzerstate.curr_bb_start_addr, fuzzerstate.curr_addr, 4):
+                fuzzerstate.inject_taint_addr = None
+                print("BB aborted, reinject in next.")
             fuzzerstate.instr_objs_seq.pop()
             fuzzerstate.bb_start_addr_seq.pop()
             fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
             return False
         if curr_isa_class == ISAInstrClass.JAL:
-            fuzzerstate.instr_objs_seq[-1].append(create_instr("jal", fuzzerstate, fuzzerstate.curr_addr))
+            next_instr = create_instr('jal', fuzzerstate, fuzzerstate.curr_addr)
+            fuzzerstate.append_and_execute_instr(next_instr, True)
         elif curr_isa_class == ISAInstrClass.BRANCH:
             fuzzerstate.curr_branch_taken = True
             # The branch type does not batter because it will be re-determined once the operand values are known
-            fuzzerstate.instr_objs_seq[-1].append(create_instr("bne", fuzzerstate, fuzzerstate.curr_addr))
+            next_instr = create_instr('bne', fuzzerstate, fuzzerstate.curr_addr)
+            fuzzerstate.append_and_execute_instr(next_instr, False) # BNEs not executed
         else:
             raise ValueError(f"Unexpected isa class `{curr_isa_class}`")
 
@@ -203,11 +236,18 @@ def gen_basicblock(fuzzerstate):
         # Gen the next bb addr
         if not gen_next_bb_addr(fuzzerstate, curr_isa_class, fuzzerstate.curr_addr):
             # Abort the bb
+            # The injected instruction is in aborted bb, so unset the inject_taint_addr as this block will be removed
+            if fuzzerstate.inject_taint_addr in range(fuzzerstate.curr_bb_start_addr, fuzzerstate.curr_addr, 4):
+                fuzzerstate.inject_taint_addr = None
+                print("BB aborted, reinject in next.")
             fuzzerstate.instr_objs_seq.pop()
             fuzzerstate.bb_start_addr_seq.pop()
             fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
             return False
-        fuzzerstate.instr_objs_seq[-1].append(create_instr('jalr', fuzzerstate, fuzzerstate.curr_addr))
+
+        next_instr = create_instr('jalr', fuzzerstate, fuzzerstate.curr_addr)
+        fuzzerstate.append_and_execute_instr(next_instr, True)
+
 
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
 def gen_random_data_block(fuzzerstate):

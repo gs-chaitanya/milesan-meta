@@ -44,6 +44,8 @@ class FuzzerState:
         self.reset()
         self.init_design_state()
 
+        self.inject_taint_addr = None
+
     # @brief cleans up the fuzzerstate. Used in case of failed input generation.
     def reset(self):
         self.initial_block_data_start, self.initial_block_data_end = None, None
@@ -96,6 +98,7 @@ class FuzzerState:
         self.fpuendis_coords = []
 
         self.curr_addr = -1 # keep track of current address during program generation
+        self.inject_taint_addr = None # Has taint been injected yet?
 
     def init_new_bb(self):
         self.instr_objs_seq.append([])
@@ -187,3 +190,8 @@ class FuzzerState:
         return f"{self.memview.memsize}_{self.design_name}_{self.randseed}_{self.nmax_bbs}"
 
         
+    def append_and_execute_instr(self, instr, execute: bool= False):
+        if execute:
+            instr.execute(taint_en=True)
+        instr.print()
+        self.instr_objs_seq[-1].append(instr)

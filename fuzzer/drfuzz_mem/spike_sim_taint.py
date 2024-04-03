@@ -29,20 +29,16 @@ def spike_sim_taint(fuzzerstate, expected_regvals):
     for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq[:-1], fuzzerstate.instr_objs_seq[:-1])): # skip first and last bb
         if bb_id == 0: continue
         for instr_id_in_bb, instr_obj in enumerate(bb_instrs):
-            curr_addr = SPIKE_STARTADDR+bb_start_addr+4*instr_id_in_bb
-            if instr_obj.injectable:
-                injected_taint = instr_obj.compute_taints()
-                if injected_taint:
-                    print(f"Injecting taint into instruction {instr_obj.get_str()}: {hex(instr_obj.gen_bytecode_int_t0(True))}")
-                    # instr_obj.set_bytecode(instr_obj.gen_bytecode_int(True) ^ instr_obj.gen_bytecode_int_t0(True))
-                    instr_obj.inject_taint()
-                    inject_addr = curr_addr
-                    print(f"Taint modifies to {instr_obj.get_str()}")
-                    break    
+            if instr_obj.addr == fuzzerstate.inject_taint_addr + SPIKE_STARTADDR:
+                print(f"Flipping taint bit in {instr_obj.get_str()}: {hex(instr_obj.gen_bytecode_int_t0(True))}")
+                instr_obj.inject_taint() # This flips the bit and changes the program.
+                print(f"Taint modifies to {instr_obj.get_str()}")
+                injected_taint = True
+                break    
         if injected_taint:
             break
 
-    assert inject_addr,  "Did not inject taint."
+    assert injected_taint,  "Did not inject taint."
 
 
     # Run spike with the modified cascade program and obtaint the register dumps
@@ -68,5 +64,5 @@ def spike_sim_taint(fuzzerstate, expected_regvals):
         # if len(pc_reg_taint_pairs[pc0+SPIKE_STARTADDR]) == 0:
         #     del pc_reg_taint_pairs[pc0+SPIKE_STARTADDR]
 
-    return pc_reg_taint_pairs, pc_reg_pairs_1
+    return pc_reg_taint_pairs, pc_reg_pairs_0, pc_reg_pairs_1
 

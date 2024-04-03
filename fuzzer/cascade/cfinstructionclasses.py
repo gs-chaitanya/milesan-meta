@@ -1205,7 +1205,9 @@ class PlaceholderProducerInstr0(BaseInstruction):
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
     def get_str(self):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
+        if self.spike_resolution_offset is not None:
+            return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using lui
@@ -1239,7 +1241,9 @@ class PlaceholderProducerInstr1(BaseInstruction):
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
     def get_str(self):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex( li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
+        if self.spike_resolution_offset is not None:
+            return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using addi
