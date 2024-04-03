@@ -43,11 +43,7 @@ def check_isa_sim_taint(design_name: str,seed: int):
     print(f"source {env_path}")
 
     print("*** REGISTER STATES ***:")
-    for i,reg in fuzzerstate.intregpickstate.regs.items():
-        if i == 0: continue  # skip reg 0
-        if i == RELOCATOR_REGISTER_ID: continue
-        if i == RDEP_MASK_REGISTER_ID: continue # is overwritten in final BB
-        reg.print()
+    fuzzerstate.intregpickstate.print()
 
 
 

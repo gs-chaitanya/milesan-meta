@@ -23,7 +23,7 @@ LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
 NUM_MAX_BBS_UPPERBOUND = 100
 NUM_MIN_BBS_LOWERBOUND = 10
-NUM_BBS = 3
+NUM_BBS = 0
 
 # Creates a new program descriptor.
 def gen_new_test_instance(design_name: str, randseed: int, can_authorize_privileges: bool):

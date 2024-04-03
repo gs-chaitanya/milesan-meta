@@ -371,6 +371,8 @@ class IntRegPickState:
     def print(self):
         row = ["ID","VALUE","VALUE_T0", "STATE"]
         print("{: >20} {: >20} {: >20} {: >20}".format(*row))
+        row = ["*"*20,"*"*20,"*"*20, "*"*20]
+        print("{: >20} {: >20} {: >20} {: >20}".format(*row))
 
         for _,reg in self.regs.items():
             reg.print()
