@@ -3,12 +3,11 @@ from cascade.cfinstructionclasses import *
 from cascade.util import CFInstructionClass
 from rv.asmutil import INSTR_FUNCS_T0
 from cascade.registers import ABI_INAMES
-
+from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0
 import random
 import numpy as np
 
-PRINT_CHECK_REGS_T0 = False
-PRINT_WRITEBACK_T0 = True
+
 
 # Ensures that the register and its taint mask excludes some registers we don't want to get tainted
 def clean_reg_taint(reg, reg_t0, skip_regs):
@@ -493,3 +492,96 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 
+
+class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed, is_rd_nonpickable_ok)
+        self.rd_t0 = 0
+        self.imm_t0 = 0
+        self.rs1_t0 = 0
+
+    def execute(self, taint_en: bool = False):
+        addr = self.instr_func(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
+        res = self.fuzzerstate.memview.read(addr)
+        if taint_en:
+            self.execute_t0(res)
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
+    def execute_t0(self, res):
+        rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
+        rs1_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
+        assert rs1_val_t0 == 0, f"Source register {ABI_INAMES[self.rs1]} is tainted ({hex(rs1_val_t0)}), this is not allowed."
+        assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
+        addr = self.instr_func(rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
+        res_t0 = self.fuzzerstate.memview.read_t0(addr)
+        self.writeback_t0(res_t0,res) # We allow rd to be tainted, thus taint could be propagated to several destination registers.
+
+    def gen_bytecode_int_t0(self, is_spike_resolution: bool):
+        assert(self.injectable), "Generating bytecode_t0 for non-injectable instruction. This should not happen."
+        rd = self.rd
+        rs1 = self.rs1
+        imm = self.imm
+        assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
+        assert self.rs1_t0 == 0, f"Source register field is tainted ({hex(self.rs1_t0)}), this is not allowed."
+        self.rd = self.rd_t0 # set regs to taints to get taint bytecode
+        self.rs1 = self.rs1_t0
+        self.imm = self.imm_t0
+        taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = 0x00 # set regs to 0 to get taint bytecode mask to remove func and opcode fields
+        self.rs1 = 0x00
+        self.imm = 0x00
+        taint_bytecode_mask = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = rd
+        self.rs1 = rs1
+        self.imm = imm
+        masked_taint = taint_bytecode ^ taint_bytecode_mask
+        assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
+        return masked_taint
+        
+
+class IntStoreInstruction_t0(IntStoreInstruction):
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, iscompressed)
+        self.imm_t0 = 0
+        self.rs1_t0 = 0
+        self.rs2_t0 = 0
+    
+    def execute(self, taint_en: bool = False):
+        addr = self.instr_func(self.fuzzerstate.intregpickstate.regs[self.rs2].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
+        res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val()
+        if taint_en:
+            self.execute_t0()
+        self.fuzzerstate.memview.write(addr, res)
+
+    def execute_t0(self):
+        rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
+        rs2_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
+        assert rs2_val_t0 == 0, f"Source register {ABI_INAMES[self.rs2]} is tainted ({hex(rs2_val_t0)}), this is not allowed."
+        assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
+        addr = self.instr_func(rs2_val,self.imm, self.fuzzerstate.is_design_64bit)
+        rs1_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
+        self.fuzzerstate.memview.write_t0(addr,rs1_val_t0) # We don't allow addresses to be tainted, thus we don't need a writeback here.
+
+    def gen_bytecode_int_t0(self, is_spike_resolution: bool):
+        assert(self.injectable), "Generating bytecode_t0 for non-injectable instruction. This should not happen."
+        rs1 = self.rs1
+        rs2 = self.rs2
+        imm = self.imm
+        assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
+        assert self.rs2_t0 == 0, f"Source register field is tainted ({hex(self.rs2_t0)}), this is not allowed."
+        self.rs1 = self.rs1_t0
+        self.rs2 = self.rs2_t0
+        self.imm = self.imm_t0
+        taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = 0x00 # set regs to 0 to get taint bytecode mask to remove func and opcode fields
+        self.rs1 = 0x00
+        self.imm = 0x00
+        taint_bytecode_mask = self.gen_bytecode_int(is_spike_resolution)
+        self.rs1 = rs1
+        self.rs2 = rs2
+        self.imm = imm
+        masked_taint = taint_bytecode ^ taint_bytecode_mask
+        assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
+        return masked_taint
+
+    

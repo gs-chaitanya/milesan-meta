@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID
-from params.runparams import DO_ASSERT
+from params.runparams import DO_ASSERT, PRINT_CHECK_REGS
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
 from cascade.util import CFInstructionClass
@@ -31,7 +31,6 @@ def compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val):
     for bb_instrs in fuzzerstate.instr_objs_seq:
         for instr_obj in bb_instrs:
             instr_obj.print()
-            # if not isinstance(instr_obj,CHECKABLE_INSTRUCTION_CLASSES): continue
             if instr_obj.addr == addr: # reached this instruction
                 assert last_instr is not None, f"Traceback computation for instruction at {hex(addr)} failed: No previous instruction modifying register {ABI_INAMES[reg_id]} with mismatch {hex(fuzzerstate.intregpickstate.regs[reg_id].get_val())} =! {hex(correct_val)} found."
                 return last_instr # reached address of calling instruction
@@ -59,8 +58,9 @@ class BaseInstruction:
 
     def __init__(self, fuzzerstate, instr_str):
         if fuzzerstate is not None:
-            self.addr = fuzzerstate.curr_addr + SPIKE_STARTADDR
+            self.addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1]) + SPIKE_STARTADDR
         else:
+            print(f"Fuzzerstate is None. Setting addr to -1: {self.get_str()}")
             self.addr = -1
         self.fuzzerstate = fuzzerstate
         self.instr_str = instr_str
@@ -78,9 +78,11 @@ class BaseInstruction:
     def check_regs(self,reg_cmp):
         for reg_id,reg_val in reg_cmp.items():
             if reg_id not in self.fuzzerstate.intregpickstate.regs:
-                # print(f"{hex(self.addr)}: Ignoring register value: {ABI_INAMES[reg_id]}")
+                if PRINT_CHECK_REGS:
+                    print(f"{hex(self.addr)}: Ignoring register value: {ABI_INAMES[reg_id]}")
                 continue
-            # print(f"{hex(self.addr)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
+            if PRINT_CHECK_REGS:
+                print(f"{hex(self.addr)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
             assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
@@ -548,7 +550,7 @@ class IntLoadInstruction(ImmInstruction):
         self.producer_id = producer_id
 
     def get_str(self):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.imm}({ABI_INAMES[self.rs1]}) "
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -591,7 +593,7 @@ class IntStoreInstruction(ImmInstruction):
         self.producer_id = producer_id
 
     def get_str(self):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {self.imm}({ABI_INAMES[self.rs1]})"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i

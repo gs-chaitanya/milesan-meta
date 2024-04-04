@@ -19,3 +19,12 @@ DO_EXPENSIVE_ASSERT = False # More expensive assertions
 NO_REMOVE_TMPFILES = True # Used for debugging purposes.
 
 RUN_TIMEOUT_SECONDS = 60*60*2 # A program is not supposed to run longer than this in RTL simulation.
+
+PRINT_FSM_TRANSITIONS = False # Print transitions between states for register FSM instructions.
+
+PRINT_CHECK_REGS_T0 = False # Print taint propagation checks.
+PRINT_WRITEBACK_T0 = False # Print taint writeback of instructions.
+
+PRINT_CHECK_REGS = False
+
+PRINT_INSTRUCTION_EXECUTION = False

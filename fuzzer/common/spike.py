@@ -12,6 +12,8 @@ from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES
 from functools import cache
 
 SPIKE_STARTADDR = 0x80000000
+SPIKE_BOOTVAL_A1 = 0x00001020
+
 SPIKE_MEDELEG_MASK = 0xb3ff
 
 ###

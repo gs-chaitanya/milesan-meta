@@ -5,7 +5,7 @@
 import random
 import numpy as np
 
-from params.runparams import DO_ASSERT
+from params.runparams import DO_ASSERT, PRINT_FSM_TRANSITIONS
 
 from params.fuzzparams import NUM_MIN_FREE_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA
 from cascade.util import IntRegIndivState
@@ -72,7 +72,7 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool, e
 def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool, en_taint: bool = False):
     if DO_ASSERT:
         assert instr_str in BranchInstructions
-    rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputreg(2))
+    rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputregs(2))
     plan_taken = fuzzerstate.curr_branch_taken
     if plan_taken:
         # print('A', flush=True)
@@ -127,7 +127,7 @@ def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool, 
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
-    return IntLoadInstruction(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
+    return IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
 
 def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool, en_taint: bool = False):
     if DO_ASSERT:
@@ -139,7 +139,7 @@ def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool,
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
-    return IntStoreInstruction(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, iscompressed)
+    return IntStoreInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, iscompressed)
 
 # Floating-point instructions
 
@@ -256,7 +256,8 @@ def create_regfsm_instrobjs(fuzzerstate, en_taint: bool = False):
 def create_targeted_producer0_instrobj(fuzzerstate, en_taint: bool = False):
     fuzzerstate.next_producer_id += 1
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(False, force = True)
-    print(f"Setting {ABI_INAMES[rd]} to PRODUCED0")
+    if PRINT_FSM_TRANSITIONS:
+        print(f"Setting {ABI_INAMES[rd]} to PRODUCED0")
     fuzzerstate.intregpickstate.set_producer_id(rd, fuzzerstate.next_producer_id)
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED0)
@@ -267,7 +268,8 @@ def create_targeted_producer1_instrobj(fuzzerstate, en_taint: bool = False):
     rd = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.PRODUCED0, force = True)  # rd should not be tainted
     # assert fuzzerstate.intregpickstate.regs[rd].get_val_t0() == 0, f"Register {ABI_INAMES[rd]} in produced0 state is tainted!"
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
-    print(f"Setting {ABI_INAMES[rd]} to PRODUCED1")
+    if PRINT_FSM_TRANSITIONS:
+        print(f"Setting {ABI_INAMES[rd]} to PRODUCED1")
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED1)
     # return [PlaceholderProducerInstr1(rd, fuzzerstate.intregpickstate.get_producer_id(rd), fuzzerstate.is_design_64bit)]
     return [PlaceholderProducerInstr1_t0(fuzzerstate, rd, fuzzerstate.intregpickstate.get_producer_id(rd))]
@@ -280,7 +282,8 @@ def create_targeted_consumer_instrobj(fuzzerstate, en_taint: bool = False):
 
     # WARNING: We CANNOT throw a PRODUCEDX into the nature because its value will change between spike and RTL.
     rd = rprod
-    print(f"Setting {ABI_INAMES[rd]} to CONSUMED")
+    if PRINT_FSM_TRANSITIONS:
+        print(f"Setting {ABI_INAMES[rd]} to CONSUMED")
     fuzzerstate.intregpickstate.set_regstate(rprod, IntRegIndivState.CONSUMED)
     if fuzzerstate.is_design_64bit:
         # return [PlaceholderPreConsumerInstr(rprod), PlaceholderPreConsumerInstr(rdep), PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]

@@ -496,13 +496,14 @@ INSTR_FUNCS = {
     "addi (PlaceholderProducerInstr1)": addi,
     "and (PlaceholderPreConsumerInstr)": and_,
     "xor (PlaceholderConsumerInstr)": xor,
+    # load and store instructions
+    "sw": addi, # to compute the address
+    "lw": addi, # to compute the address
     # unimplemented instructions
     "csrw": None,
     "csrrw": None,
     "csrrwi": None,
     "csrrs": None,
-    "sw": None,
-    "lw": None,
     "fence": None,
     "bne": None
 }
@@ -539,13 +540,14 @@ INSTR_FUNCS_T0 = {
     "addi (PlaceholderProducerInstr1)": addi_t0,
     "and (PlaceholderPreConsumerInstr)": and_t0,
     "xor (PlaceholderConsumerInstr)": xor_t0,
+    # load and store instructions
+    "sw": None, # we don't allow tainted addresses
+    "lw": None, # we don't allow tainted addresses
     # unimplemented instructions
     "csrw": None,
     "csrrw": None,
     "csrrwi": None,
     "csrrs": None,
-    "sw": None,
-    "lw": None,
     "fence": None,
     "bne": None
 }

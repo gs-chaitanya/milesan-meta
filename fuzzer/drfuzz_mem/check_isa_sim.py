@@ -4,6 +4,7 @@ import glob
 import json
 
 from params.runparams import PATH_TO_TMP, PATH_TO_COV
+from params.fuzzparams import TAINT_EN
 from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_new_test_instance
 from cascade.cfinstructionclasses import *
 import subprocess, itertools
@@ -38,23 +39,19 @@ def check_isa_sim(design_name: str,seed: int):
     for req, regval in zip(expected_regvals[2],expected_regvals[3]):
         pc_rd_pairs[req[0] + SPIKE_STARTADDR][req[2]] = regval
 
-    for i,reg_data_content in enumerate(fuzzerstate.initial_reg_data_content):
-        fuzzerstate.intregpickstate.regs[i+1].set_val(reg_data_content) # skip reg 0
+    fuzzerstate.intregpickstate.reset()
+    fuzzerstate.intregpickstate.set_spike_boot_values()
+    # fuzzerstate.intregpickstate.print()
         # print(f"{fuzzerstate.intregpickstate.regs[i+1].abi_name}:{hex(fuzzerstate.intregpickstate.regs[i+1].get_val())}")
-    
-    fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].set_val(SPIKE_STARTADDR)
-    fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].set_val(MAX_32b)
 
     try:
         for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)): # skip first and last bb
             for inst_idx,next_instr in enumerate(bb_instrs):
-                if bb_id == 0 and inst_idx != len(bb_instrs)-1: continue
-                if not isinstance(next_instr, CHECKABLE_INSTRUCTION_CLASSES): continue
                 if next_instr.addr not in pc_rd_pairs:
-                    print(f"Skipping check for {next_instr.get_str()}")
+                    # print(f"Skipping check for {next_instr.get_str()}")
                     continue
                 next_instr.check_regs(pc_rd_pairs[next_instr.addr]) # check value before executing instruction
-                next_instr.execute()
+                next_instr.execute(TAINT_EN)
                 # next_instr.log(SPIKE_STARTADDR+curr_addr)
 
         expected_intregvals = expected_regvals[0]

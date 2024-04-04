@@ -2,8 +2,9 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS
+from params.fuzzparams import TAINT_EN
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp
 from common.spike import SPIKE_STARTADDR
 
@@ -188,10 +189,10 @@ class FuzzerState:
 
     def instance_to_str(self):
         return f"{self.memview.memsize}_{self.design_name}_{self.randseed}_{self.nmax_bbs}"
-
         
     def append_and_execute_instr(self, instr, execute: bool= False):
         if execute:
-            instr.execute(taint_en=True)
-        instr.print()
+            instr.execute(taint_en=TAINT_EN)
+        if PRINT_INSTRUCTION_EXECUTION: 
+            instr.print()
         self.instr_objs_seq[-1].append(instr)

@@ -3,11 +3,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT
-from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG
+from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG
+from params.fuzzparams import RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
 from cascade.util import IntRegIndivState
 from cascade.registers import Int32RegState, ABI_INAMES
-from common.spike import SPIKE_STARTADDR
+from common.spike import SPIKE_STARTADDR, SPIKE_BOOTVAL_A1
 from cascade.registers import ABI_INAMES,MAX_32b
 from copy import copy, deepcopy
 import math
@@ -24,9 +25,7 @@ class IntRegPickState:
         self.__reg_weights_t0 /= np.sum(self.__reg_weights_t0)
 
         # self.regs   = [IntRegIndivState.FREE for _ in range(self.num_pickable_regs)]
-        self.regs = {id:Int32RegState(id) for id in range(self.num_pickable_regs)}
-        self.regs[RELOCATOR_REGISTER_ID] = Int32RegState(RELOCATOR_REGISTER_ID)
-        self.regs[RDEP_MASK_REGISTER_ID] = Int32RegState(RDEP_MASK_REGISTER_ID)
+        self.setup_registers()
         # Permits matching sensitive instructions with the producers
         self.__last_producer_ids = np.zeros(self.num_pickable_regs)
         # For each register, a pair of (basic block id, instr in basic block) that produced the register
@@ -37,6 +36,16 @@ class IntRegPickState:
         self.__regs_in_state_onehot = {curr_indiv_state: np.ones(self.num_pickable_regs, np.int8) if (curr_indiv_state == IntRegIndivState.FREE) else np.zeros(self.num_pickable_regs, np.int8) for curr_indiv_state in IntRegIndivState}
         # Will ignore x0 if line below is uncommented. This is a design decision.
         # self.__reg_weights[0] = 0
+
+    def setup_registers(self):
+        self.regs = {id:Int32RegState(id) for id in range(self.num_pickable_regs)} # pickable registers
+        self.regs[RELOCATOR_REGISTER_ID] = Int32RegState(RELOCATOR_REGISTER_ID)
+        self.regs[RDEP_MASK_REGISTER_ID] = Int32RegState(RDEP_MASK_REGISTER_ID)
+        self.regs[FPU_ENDIS_REGISTER_ID] = Int32RegState(FPU_ENDIS_REGISTER_ID)
+        self.regs[MPP_BOTH_ENDIS_REGISTER_ID] = Int32RegState(MPP_BOTH_ENDIS_REGISTER_ID)
+        self.regs[MPP_TOP_ENDIS_REGISTER_ID] = Int32RegState(MPP_TOP_ENDIS_REGISTER_ID)
+        self.regs[SPP_ENDIS_REGISTER_ID] = Int32RegState(SPP_ENDIS_REGISTER_ID)
+        self.set_spike_boot_values()
 
     def set_initial_values(self, fuzzerstate): # Reset seed to starting value to ensure random values match if this function is called twice.
         random.seed(fuzzerstate.randseed)
@@ -51,6 +60,16 @@ class IntRegPickState:
         self.regs[RELOCATOR_REGISTER_ID].set_val_t0(0x0)
         self.regs[RDEP_MASK_REGISTER_ID].set_val(MAX_32b)
         self.regs[RDEP_MASK_REGISTER_ID].set_val_t0(0x0)
+
+    def set_spike_boot_values(self): # Spike implicitly executes a couple of boot instructions that change the register values.
+        if ABI_INAMES.index("t0") in range(self.num_pickable_regs):
+            self.regs[ABI_INAMES.index("t0")].set_val(SPIKE_STARTADDR) # The provided SPIKE_STARTADDR is loaded into t0 during boot.
+        if ABI_INAMES.index("a1") in range(self.num_pickable_regs):
+            self.regs[ABI_INAMES.index("a1")].set_val(SPIKE_BOOTVAL_A1)
+
+    def reset(self):
+        for reg in self.regs.values():
+            reg.reset()
 
     def get_free_regs_onehot(self):
         ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
@@ -97,7 +116,7 @@ class IntRegPickState:
     # Weights after deducting the forbidden registers
     def get_effective_weights_t0(self, authorized_regs_onehot, inverse = False, force = False):
         if not force:
-            taint_hws = np.asarray([reg.get_val_t0().bit_count()/reg.n_bits for reg in self.regs.values() if reg.id != RELOCATOR_REGISTER_ID and reg.id != RDEP_MASK_REGISTER_ID])
+            taint_hws = np.asarray([self.regs[reg_id].get_val_t0().bit_count()/self.regs[reg_id].n_bits for reg_id in range(self.num_pickable_regs)])
             if not inverse:
                 taint_ps = self.__reg_weights + taint_hws*REGPICK_PROTUBERANCE_RATIO_T0_POS # Add pertubation to drive probability up for registers with higher taint hamming weight.
                 taint_ps = np.asarray([i if i<MAX_WEIGHT_T0 else MAX_WEIGHT_T0 for i in taint_ps]) # upper bound with MAX_WEIGHT_T0
@@ -291,21 +310,20 @@ class IntRegPickState:
         if req_state == IntRegIndivState.CONSUMED:
             if self.exists_reg_in_state(IntRegIndivState.CONSUMED):
                 return # self.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
-            if self.exists_reg_in_state(IntRegIndivState.PRODUCED1):
-                fuzzerstate.append_and_execute_instr(create_targeted_consumer_instrobj(fuzzerstate), False)
-                return # self.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
-            if self.exists_reg_in_state(IntRegIndivState.PRODUCED0):
-                fuzzerstate.append_and_execute_instr(create_targeted_producer1_instrobj(fuzzerstate), False)
-                # Consumer also includes preconsumer
-                fuzzerstate.append_and_execute_isntr(create_targeted_consumer_instrobj(fuzzerstate), False)
-                return # self.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
-            if self.exists_reg_in_state(IntRegIndivState.FREE):
-                fuzzerstate.append_and_execute(create_targeted_producer0_instrobj(fuzzerstate), False)
-                fuzzerstate.append_and_execute(create_targeted_producer1_instrobj(fuzzerstate), False)
-                # Consumer also includes preconsumer
-                fuzzerstate.append_and_execute(create_targeted_consumer_instrobj(fuzzerstate), False)
-                return # self.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
-            raise ValueError('Unexpected state.')
+            elif self.exists_reg_in_state(IntRegIndivState.PRODUCED1):
+                inst_to_create = [create_targeted_consumer_instrobj] # Collect function pointers and call later.
+            elif self.exists_reg_in_state(IntRegIndivState.PRODUCED0):
+                inst_to_create = [create_targeted_producer1_instrobj, create_targeted_consumer_instrobj]  # Collect function pointers and call later.
+            elif self.exists_reg_in_state(IntRegIndivState.FREE):
+                inst_to_create = [create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj]  # Collect function pointers and call later.
+            else: 
+                raise ValueError('Unexpected state.')
+
+            for create_insts in inst_to_create:
+                insts = create_insts(fuzzerstate)
+                for inst in insts:
+                    fuzzerstate.append_and_execute_instr(inst, False)
+
 
     # Save at the end of basic blocks, and restore if popping basic blocks from the end.
     def save_curr_state(self):

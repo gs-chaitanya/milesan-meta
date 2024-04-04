@@ -61,6 +61,12 @@ class __32RegState(__RegState):
     def get_val_t0_bk(self):
         return self.val_t0_bk
 
+    def reset(self):
+        self.val = 0
+        self.val_t0 = 0
+        self.val_bk = 0
+        self.val_t0_bk = 0
+
 
 class Int32RegState(__32RegState):
     def __init__(self, id: int = None, val: int = 0, val_t0: int = 0):
@@ -68,7 +74,6 @@ class Int32RegState(__32RegState):
         self.fsm_state = IntRegIndivState.FREE
         self.abi_name = ABI_INAMES[self.id]
 
-    
     def set_fsm_sate(self,new_state: IntRegIndivState = None):
         self.fsm_state = new_state
     
@@ -95,5 +100,9 @@ class Int32RegState(__32RegState):
             return False
         else:
             return ABI_INAMES[self.id],self.val_t0,cmp_val_uint32
+
+    def reset(self):
+        super().reset()
+        self.fsm_state = IntRegIndivState.FREE
 
 

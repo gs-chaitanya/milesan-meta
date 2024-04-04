@@ -7,7 +7,7 @@ from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID
 from common.designcfgs import get_design_march_flags_nocompressed
 from common.spike import run_trace_all_pcs, run_trace_regs_at_pc_locs, SPIKE_STARTADDR, FPREG_ABINAMES
 
-from cascade.cfinstructionclasses import PlaceholderConsumerInstr, BranchInstruction, PlaceholderProducerInstr0, PlaceholderProducerInstr1, JALRInstruction, PlaceholderPreConsumerInstr, IntStoreInstruction, FloatStoreInstruction,CFInstruction, R12DInstruction, RegImmInstruction, ImmRdInstruction, JALInstruction
+from cascade.cfinstructionclasses import *
 from cascade.genelf import gen_elf_from_bbs
 from cascade.util import IntRegIndivState
 
@@ -52,6 +52,8 @@ def gen_regdump_reqs_all_rds(fuzzerstate):
         for bb_instr_id, bb_instr in enumerate(bb_instrs):
             curr_addr = bb_start_addr + 4*bb_instr_id # NO_COMPRESSED
 
+            assert curr_addr not in ret
+            assert bb_instr.addr == curr_addr + SPIKE_STARTADDR, f"Address mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}"
             # All we need is the value of the dependent register at consumption time.
             if isinstance(bb_instr, R12DInstruction):
                 ret.append((curr_addr, False, bb_instr.rd))
@@ -77,10 +79,12 @@ def gen_regdump_reqs_all_rds(fuzzerstate):
                 ret.append((curr_addr, False, bb_instr.rd))
                 ret.append((curr_addr, False, bb_instr.rprod))
                 ret.append((curr_addr, False, RELOCATOR_REGISTER_ID))
-
-
-
-
+            elif isinstance(bb_instr, IntLoadInstruction):
+                ret.append((curr_addr, False, bb_instr.rd))
+                ret.append((curr_addr, False, bb_instr.rs1))
+            elif isinstance(bb_instr, IntStoreInstruction):
+                ret.append((curr_addr, False, bb_instr.rs1))
+                ret.append((curr_addr, False, bb_instr.rs2))
 
     return ret
 
