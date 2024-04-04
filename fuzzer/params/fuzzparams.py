@@ -64,6 +64,8 @@ REGPICK_PROTUBERANCE_RATIO = 0.2
 
 REGPICK_PROTUBERANCE_RATIO_T0_POS = 0.2
 REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.2
+
+P_TAINT_REG = 0.2
 # There should always be at least this number of free registers
 NUM_MIN_FREE_INTREGS = 2
 

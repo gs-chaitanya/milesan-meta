@@ -46,23 +46,31 @@ def check_isa_sim_taint(design_name: str,seed: int):
     fuzzerstate.intregpickstate.print()
 
 
-
-    print("*** TAINT PROPAGATION CHECK ***")
-    pc_reg_taint_pairs, pc_reg_pairs0, pc_reg_pairs1 = spike_sim_taint(fuzzerstate, expected_regvals)
-
-
-    for i,reg_data_content in enumerate(fuzzerstate.initial_reg_data_content):
-        fuzzerstate.intregpickstate.regs[i+1].set_val(reg_data_content) # skip reg 0
-
-    fuzzerstate.intregpickstate.set_initial_values(fuzzerstate)
     
     try:
+        if fuzzerstate.inject_taint_addr == -1:
+            print("Register taint injection cannot yet be simulated with spike. Only checking values.")
+            pc_reg_pairs1 = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
+            for req, regval in zip(expected_regvals[2],expected_regvals[3]):
+                pc_reg_pairs1[req[0] + SPIKE_STARTADDR][req[2]] = regval
+
+        else:
+            print("*** TAINT PROPAGATION CHECK ***")
+            pc_reg_taint_pairs, pc_reg_pairs0, pc_reg_pairs1 = spike_sim_taint(fuzzerstate, expected_regvals)
+
+
+        for i,reg_data_content in enumerate(fuzzerstate.initial_reg_data_content):
+            fuzzerstate.intregpickstate.regs[i+1].set_val(reg_data_content) # skip reg 0
+
+        fuzzerstate.intregpickstate.set_initial_values(fuzzerstate)
+
         for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)): # skip first and last bb
             for inst_idx,next_instr in enumerate(bb_instrs):
                 if bb_id == 0 and inst_idx != len(bb_instrs)-1: continue
                 if not isinstance(next_instr, CHECKABLE_INSTRUCTION_CLASSES): continue
                 next_instr.check_regs(pc_reg_pairs1[next_instr.addr]) # check value before executing instruction
-                next_instr.check_regs_t0(pc_reg_taint_pairs[next_instr.addr]) # check value before executing instruction
+                if fuzzerstate.inject_taint_addr != -1:
+                    next_instr.check_regs_t0(pc_reg_taint_pairs[next_instr.addr]) # check value before executing instruction
                 next_instr.execute(taint_en = True)
                 # next_instr.log(SPIKE_STARTADDR+curr_addr)
 
