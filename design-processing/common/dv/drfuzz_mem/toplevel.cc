@@ -76,6 +76,11 @@ void fuzz_once(Testbench *tb, int simlen, bool reset = false) {
 			tb->meta_reset_t0();
 			// tb->meta_reset_pc_t0();
 			#endif
+			// tb->module_->block_fadein_t0 = 1;
+				// break;
+
+			// tb->tick(1,false);
+			// tb->module_->block_fadein_t0 = 0;
 		}
 		#endif // TAINT_EN
 
@@ -83,6 +88,7 @@ void fuzz_once(Testbench *tb, int simlen, bool reset = false) {
 		if(tb->intercepted){
 			q->push_tb_outputs(tb->pop_outputs());
 			q->dump_acc(tb);
+
 		}
 		#endif // DUMP_COV_OVER_TICKS
 	}	

@@ -50,15 +50,6 @@ if {[string equal $INSTRUMENTATION "drfuzz"]} {
 
     yosys opt -purge
     yosys cellift -exclude-signals $EXCLUDE_SIGNALS -imprecise-shl-sshl -verbose
-    yosys opt -purge
-    if {[string equal $FUZZTYPE "bin"]} {
-        yosys port_cellift_input_probes $VERBOSE
-    }
-    # yosys port_cellift_output_probes $VERBOSE
-    # if {$ADD_SHADOW_PC_RESET == 1} { 
-    #     yosys meta_reset_pc_t0 $VERBOSE $PC_TARGET_MODULE $PC_TARGET_T0
-    # }
-    # yosys block_signal_t0 $VERBOSE $BLOCK_MODULE_SIGNAL_T0_PAIRS
     yosys meta_reset_t0 $VERBOSE
 
 }
