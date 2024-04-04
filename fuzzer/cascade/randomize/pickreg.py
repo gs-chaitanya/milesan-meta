@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT
-from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0
+from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
 from cascade.util import IntRegIndivState
 from cascade.registers import Int32RegState, ABI_INAMES
@@ -38,10 +38,15 @@ class IntRegPickState:
         # Will ignore x0 if line below is uncommented. This is a design decision.
         # self.__reg_weights[0] = 0
 
-    def set_initial_values(self, fuzzerstate):
+    def set_initial_values(self, fuzzerstate): # Reset seed to starting value to ensure random values match if this function is called twice.
+        random.seed(fuzzerstate.randseed)
         for i,reg_data_content in enumerate(fuzzerstate.initial_reg_data_content):
             self.regs[i+1].set_val(reg_data_content) # skip reg 0
-            self.regs[i+1].set_val_t0(0x0)
+            if random.choices([0,1],[1-P_TAINT_REG,P_TAINT_REG],k=1)[0]:
+                self.regs[i+1].set_val_t0(random.randint(1,MAX_32b))
+            else:
+                self.regs[i+1].set_val_t0(0x0)
+        fuzzerstate.inject_taint_addr = -1
         self.regs[RELOCATOR_REGISTER_ID].set_val(SPIKE_STARTADDR)
         self.regs[RELOCATOR_REGISTER_ID].set_val_t0(0x0)
         self.regs[RDEP_MASK_REGISTER_ID].set_val(MAX_32b)
@@ -117,7 +122,8 @@ class IntRegPickState:
             assert math.isclose(sum(taint_ps), 1, abs_tol=0.001), f"{sum(taint_ps)} {str(taint_ps)}"
 
         if DO_ASSERT:
-            assert np.sum(taint_ps * authorized_regs_onehot) > 0, f"No register fulfills requested requirements! {self.__reg_weights}, {taint_ps}, {authorized_regs_onehot}"
+            states = {ABI_INAMES[i]:[j,k,l] for i,(j,k,l) in enumerate(zip(self.__reg_weights,taint_ps,authorized_regs_onehot))}
+            assert np.sum(taint_ps * authorized_regs_onehot) > 0, f"No register fulfills requested requirements! {states}"
 
 
         return  taint_ps * authorized_regs_onehot
