@@ -21,6 +21,7 @@
 #define Q_DIR SEED_DIR "/queue/"
 #define EXPECTED_REGVALS SEED_DIR "/expected_regvals/0.regs.json"
 #define MUT_INST_PATH SEED_DIR "/mut_instructions/0.inst.json"
+#define REGDUMP_PATH SEED_DIR "/regdump.json"
 #define DEFAULT_ID 0
 
 // #define EN_COV_QUANTIZATION

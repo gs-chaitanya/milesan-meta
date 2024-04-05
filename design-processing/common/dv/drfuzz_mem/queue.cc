@@ -462,6 +462,20 @@ void Queue::dump_acc(Testbench *tb){
     ofstream.close();
 }
 
+void Queue::dump_tick_reqs(){
+    std::string path = get_regdump_path();
+    std::ofstream ofstream;
+    ofstream.open(path);
+    ofstream << "[\n";
+    for(auto &req: this->tick_reqs){
+        ofstream << "\t" << req->get_json();
+        if(req != this->tick_reqs.back()) ofstream << ",\n";
+        else  ofstream << "\n";
+    }
+    ofstream << "]";
+
+}
+
 void Queue::accumulate(Queue *other){
     this->acc_output->add_or(other->get_accumulated_output());
     for(auto &inst: other->instructions){

@@ -3,7 +3,7 @@
 #include <cassert>
 #include <map>
 #include <sstream>  
-#include  <iomanip>
+#include <iomanip>
 
 #include "dtypes.h"
 #include "macros.h"
@@ -11,12 +11,17 @@
 #include "def_tb.h"
 #include "log.h"
 #include "helperfuncs.h"
+std::string abi_names[] = {"zero","ra","sp","gp","tp","t0","t1","t2","s0/fp","s1","a0","a1","a2","a3","a4","a5","a6","a7"};
 
 void tick_req_t::print(){
     if(this->type == REQ_INTREGDUMP){
-        printf("Dump of reg i%02d: 0x%016lx: ", this->id, this->content);
+        std::string abi_name = "";
+        if(this->id<18) abi_name = abi_names[this->id];
+        else if(this->id<28) abi_name =  "s" + std::to_string(this->id);
+        else if (this->id<32) abi_name =  "t" + std::to_string(this->id);
+        printf("Dump of reg %5s: 0x%016lx: 0x%016lx: ", abi_name.c_str(), this->content, this->content_t0);
     }
-    else printf("Dump of reg f%02d: 0x%016lx: ", this->id, this->content);
+    else printf("Dump of reg f%5lu: 0x%016lx: 0x%016lx:", this->id, this->content, this->content_t0);
     #ifdef ARCH_32b
     int n_bits = 32;
     #else
@@ -24,7 +29,7 @@ void tick_req_t::print(){
     #endif // ARCH_32b
     for(int i=n_bits-1; i>=0; i--){
         #ifdef TAINT_EN
-        if(((content_t0 & (1ul<<i))>>i)){
+                    if(((content_t0 & (1ul<<i))>>i)){
             std::cout << "\033[1;31m" << ((content & (1ul<<i))>>i) << "\033[1;0m";
         }
         else{
@@ -35,8 +40,20 @@ void tick_req_t::print(){
         #endif // TAINT_EN
     }
     std::cout << std::endl;
-
 }
+
+std::string tick_req_t::get_json(){
+    std::stringstream out;
+    if(this->type == REQ_INTREGDUMP){
+        out << "{\"id\": \"i" << this->id << "\", \"value\": \"0x" << std::hex << this->content  << "\", \"value_t0\": \"0x" << std::hex << this->content_t0 << "\"}";
+    }
+    else{
+        out << "{\"id\": \"f" << this->id << "\", \"value\": \"0x" << std::hex << this->content  << "\", \"value_t0\": \"0x" << std::hex << this->content_t0 << "\"}";
+    }
+    return out.str();
+}
+
+
 #ifdef TAINT_EN
 void doutput_t::print_taint_map(){
     for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){

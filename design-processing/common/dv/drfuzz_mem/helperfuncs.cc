@@ -79,6 +79,16 @@ std::string get_q_dir(){
   return Q_DIR;
 }
 
+std::string get_regdump_path(){
+  const static char* p = std::getenv("REGDUMP_PATH");
+  static bool printed = false;
+  if(p) return std::string(p);
+  else if(!printed) std::cout << "REDDUMP_PATH not set, defaulting to" << REGDUMP_PATH << std::endl; 
+  printed = true;
+  return REGDUMP_PATH;
+
+}
+
 std::string get_id(){
   const static char* id = std::getenv("ID");
   static bool printed = false;

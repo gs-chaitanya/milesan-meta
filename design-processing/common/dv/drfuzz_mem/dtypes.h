@@ -21,6 +21,7 @@ typedef struct {
 	uint64_t content_t0;
 	uint32_t id;
 	void print();
+	std::string get_json();
 } tick_req_t;
 
 typedef struct {
