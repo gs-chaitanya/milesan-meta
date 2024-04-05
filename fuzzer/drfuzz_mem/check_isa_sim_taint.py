@@ -16,11 +16,11 @@ from drfuzz_mem.spike_sim_taint import spike_sim_taint
 
 def check_isa_sim_taint(design_name: str,seed: int):    
     # get fuzzerstate and expected regvals from program
+    print(f"Starting program generation and ad-hoc simulation. FSM instructions are ignored.")
     fuzzerstate, interm_elfpath, expected_regvals  = gen_fuzzerstate_elf_expectedvals_interm(*gen_new_test_instance(design_name, seed, True), True)
     # Expected regvals of the program where bit was flipped are in in pc_reg_pairs1, which is the one that will be executed in the crossvalidation.
     # Initial program register dumps are in pc_reg_pairs_0, TODO: should this also be executed and checked?
     
-    assert fuzzerstate.inject_taint_addr is not None, "Did not inject taint."
 
     ID = fuzzerstate.instance_to_str()
     ## temp dirs below
@@ -45,33 +45,34 @@ def check_isa_sim_taint(design_name: str,seed: int):
     print("*** REGISTER STATES ***:")
     fuzzerstate.intregpickstate.print()
 
-
+    check_taint =  fuzzerstate.inject_taint_addr != None
     
     try:
-        if fuzzerstate.inject_taint_addr == -1:
+        if check_taint:
+            print("*** TAINT PROPAGATION CHECK ***")
+            pc_reg_taint_pairs, pc_reg_pairs0, pc_reg_pairs1 = spike_sim_taint(fuzzerstate, expected_regvals)
+
+        else:
             print("Register taint injection cannot yet be simulated with spike. Only checking values.")
             pc_reg_pairs1 = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
             for req, regval in zip(expected_regvals[2],expected_regvals[3]):
                 pc_reg_pairs1[req[0] + SPIKE_STARTADDR][req[2]] = regval
 
-        else:
-            print("*** TAINT PROPAGATION CHECK ***")
-            pc_reg_taint_pairs, pc_reg_pairs0, pc_reg_pairs1 = spike_sim_taint(fuzzerstate, expected_regvals)
-
-
-        for i,reg_data_content in enumerate(fuzzerstate.initial_reg_data_content):
-            fuzzerstate.intregpickstate.regs[i+1].set_val(reg_data_content) # skip reg 0
-
-        fuzzerstate.intregpickstate.set_initial_values(fuzzerstate)
-
+        # fuzzerstate.intregpickstate.set_initial_values(fuzzerstate)
+        fuzzerstate.intregpickstate.reset()
+        fuzzerstate.intregpickstate.set_spike_boot_values()
+        fuzzerstate.memview.restore()
+        print(f"Starting spike cross-validation. FSM instructions are accounted for.")
         for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)): # skip first and last bb
             for inst_idx,next_instr in enumerate(bb_instrs):
-                if bb_id == 0 and inst_idx != len(bb_instrs)-1: continue
-                if not isinstance(next_instr, CHECKABLE_INSTRUCTION_CLASSES): continue
+                if next_instr.addr not in pc_reg_pairs1:
+                    print(f"Skipping check for {next_instr.get_str()}")
+                    continue
                 next_instr.check_regs(pc_reg_pairs1[next_instr.addr]) # check value before executing instruction
-                if fuzzerstate.inject_taint_addr != -1:
+                if check_taint:
                     next_instr.check_regs_t0(pc_reg_taint_pairs[next_instr.addr]) # check value before executing instruction
-                next_instr.execute(taint_en = True)
+                next_instr.execute(fuzzerstate.taint_en)
+                # next_instr.print()
                 # next_instr.log(SPIKE_STARTADDR+curr_addr)
 
         expected_intregvals = expected_regvals[0]
@@ -88,6 +89,8 @@ def check_isa_sim_taint(design_name: str,seed: int):
             if i == RELOCATOR_REGISTER_ID: continue
             if i == RDEP_MASK_REGISTER_ID: continue # is overwritten in final BB
             reg.check(expected_intregvals[i])
+
+        fuzzerstate.intregpickstate.print()
         print("Ok.")
     except Exception as e:
         # os.removedirs(trace_dir)

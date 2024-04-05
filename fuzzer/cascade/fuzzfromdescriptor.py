@@ -7,7 +7,7 @@
 from common.timeout import timeout
 from common.designcfgs import get_design_boot_addr
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
-from params.fuzzparams import PROBA_AUTHORIZE_PRIVILEGES
+from params.fuzzparams import PROBA_AUTHORIZE_PRIVILEGES, TAINT_EN
 from cascade.basicblock import gen_basicblocks
 from cascade.fuzzsim import SimulatorEnum, runtest_simulator
 from cascade.genelf import gen_elf_from_bbs
@@ -56,14 +56,14 @@ def gen_fuzzerstate_elf_expectedvals(memsize: int, design_name: str, randseed: i
     time_seconds_spent_in_gen_elf = time.time() - start
     return fuzzerstate, rtl_elfpath, expected_regvals, time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf
 
-def gen_fuzzerstate_elf_expectedvals_interm(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, check_pc_spike_again: bool):
+def gen_fuzzerstate_elf_expectedvals_interm(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, check_pc_spike_again: bool, en_taint: bool = TAINT_EN):
     from cascade.fuzzerstate import FuzzerState
     if DO_ASSERT:
         assert nmax_bbs is None or nmax_bbs > 0
 
     start = time.time()
     random.seed(randseed)
-    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges)
+    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges, en_taint)
     gen_basicblocks(fuzzerstate)
     time_seconds_spent_in_gen_bbs = time.time() - start
 

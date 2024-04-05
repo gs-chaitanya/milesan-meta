@@ -16,7 +16,7 @@ from cascade.registers import ABI_INAMES,MAX_32b
 MAX_CYCLES_PER_INSTR = 30
 SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
 def check_isa_sim(design_name: str,seed: int):    
-    fuzzerstate, interm_elfpath, expected_regvals  = gen_fuzzerstate_elf_expectedvals_interm(*gen_new_test_instance(design_name, seed, True), True)
+    fuzzerstate, interm_elfpath, expected_regvals  = gen_fuzzerstate_elf_expectedvals_interm(*gen_new_test_instance(design_name, seed, True), True,en_taint=False)
     ID = fuzzerstate.instance_to_str()
     ## temp dirs below
     env_dir = os.path.join(PATH_TO_TMP, 'envs')
@@ -51,7 +51,7 @@ def check_isa_sim(design_name: str,seed: int):
                     # print(f"Skipping check for {next_instr.get_str()}")
                     continue
                 next_instr.check_regs(pc_rd_pairs[next_instr.addr]) # check value before executing instruction
-                next_instr.execute(TAINT_EN)
+                next_instr.execute(fuzzerstate.taint_en)
                 # next_instr.log(SPIKE_STARTADDR+curr_addr)
 
         expected_intregvals = expected_regvals[0]
@@ -62,13 +62,14 @@ def check_isa_sim(design_name: str,seed: int):
         # for i,reg in enumerate(expected_intregvals): # skip reg 0
         #     print(f"{ABI_INAMES[i+1]}: {hex(reg)}")
 
-        # print("*** VALIDATION ***:")
+        print("*** VALIDATION ***:")
         for i,reg in fuzzerstate.intregpickstate.regs.items():
             if i == 0: continue  # skip reg 0
             if i == RELOCATOR_REGISTER_ID: continue
             if i == RDEP_MASK_REGISTER_ID: continue # is overwritten in final BB
             reg.check(expected_intregvals[i])
-        # print("Ok.")
+        fuzzerstate.intregpickstate.print()
+        print("Ok.")
     except Exception as e:
         # os.removedirs(trace_dir)
         # if os.path.isfile(env_path): os.remove(env_path)

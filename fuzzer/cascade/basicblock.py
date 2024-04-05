@@ -181,11 +181,11 @@ def gen_basicblock(fuzzerstate):
             instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
             next_instr = create_instr(instr_str, fuzzerstate, curr_addr)
 
-        if  TAINT_EN and next_instr.injectable and fuzzerstate.inject_taint_addr is None:
-            injected_taint = next_instr.compute_taints()
-            if injected_taint:
-                print(f"Injecting taint into instruction {next_instr.get_str()}: {hex(next_instr.gen_bytecode_int_t0(True))}")
-                fuzzerstate.inject_taint_addr = curr_addr
+        # if  TAINT_EN and next_instr.injectable and fuzzerstate.inject_taint_addr is None:
+        #     injected_taint = next_instr.compute_taints()
+        #     if injected_taint:
+        #         print(f"Injecting taint into instruction {next_instr.get_str()}: {hex(next_instr.gen_bytecode_int_t0(True))}")
+        #         fuzzerstate.inject_taint_addr = curr_addr
 
         fuzzerstate.append_and_execute_instr(next_instr, True)
 

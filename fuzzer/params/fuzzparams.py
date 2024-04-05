@@ -128,4 +128,6 @@ PROBA_PICK_WRONG_FPU = 0.0 # Having this being zero eases the analysis of the pr
 PROBA_AUTHORIZE_PRIVILEGES = 0.05
 
 
-TAINT_EN = False
+TAINT_EN = True
+MAX_NUM_INIT_TAINTED_REGS = 5
+MAX_NUM_TAINTED_BITS_PER_REG = 2

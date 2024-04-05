@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID
+from params.fuzzparams import TAINT_EN
 from params.runparams import DO_ASSERT, PRINT_CHECK_REGS
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
@@ -25,6 +26,7 @@ from cascade.registers import ABI_INAMES, MAX_32b, MAX_64b, MAX_20b
 import random
 import numpy as np
 import ctypes
+
 
 def compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val):
     last_instr = None
@@ -233,7 +235,7 @@ class R12DInstruction(CFInstruction):
         self.rs2 = (bytecode>>OPCODE_FIELD_BITS["rs2"])&OPCODE_FIELD_MASKS["rs"]
         self.rd =  (bytecode>>OPCODE_FIELD_BITS["rd"])&OPCODE_FIELD_MASKS["rd"]
 
-    def execute(self, taint_en: bool = False):
+    def execute(self, taint_en: bool = TAINT_EN):
         if self.addr == -1:
             print(f"Skipping execution of {self.get_str()}")
             return
@@ -278,7 +280,7 @@ class ImmRdInstruction(ImmInstruction):
         self.imm = (bytecode>>OPCODE_FIELD_BITS["immu"])&OPCODE_FIELD_MASKS["immu"]
         self.rd =  (bytecode>>OPCODE_FIELD_BITS["rd"])&OPCODE_FIELD_MASKS["rd"]
 
-    def execute(self, taint_en: bool = False):
+    def execute(self, taint_en: bool = TAINT_EN):
         assert not taint_en, f"{self.get_str()} is not an IFT instruction."
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.instr_func(self.addr, self.imm, self.fuzzerstate.is_design_64bit)
@@ -349,7 +351,7 @@ class RegImmInstruction(ImmInstruction):
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
-    def execute(self, taint_en: bool = False):
+    def execute(self, taint_en: bool = TAINT_EN):
         assert not taint_en, f"{self.get_str()} is not an IFT instruction."
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
@@ -444,7 +446,7 @@ class JALInstruction(ImmInstruction):
         # rv32i
         return rv32i_jal(self.rd, self.imm)
 
-    def execute(self, taint_en: bool = False):
+    def execute(self, taint_en: bool = TAINT_EN):
         assert not taint_en, f"{self.get_str()} is not an IFT instruction."
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
@@ -479,7 +481,7 @@ class JALRInstruction(ImmInstruction):
         # rv32i
         return rv32i_jalr(self.rd, self.rs1, self.imm)
 
-    def execute(self, taint_en: bool = False):
+    def execute(self, taint_en: bool = TAINT_EN):
         assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
         assert self.fuzzerstate is not None, "fuzzerstate not set."
         res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
@@ -573,6 +575,14 @@ class IntLoadInstruction(ImmInstruction):
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
+    def execute(self, taint_en: bool = TAINT_EN):
+        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        addr = self.instr_func(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
+        res = self.fuzzerstate.memview.read(addr)
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+
+
 # Integer store instructions
 IntStoreInstructions = ("sb", "sh", "sw", "sd")
 class IntStoreInstruction(ImmInstruction):
@@ -609,6 +619,13 @@ class IntStoreInstruction(ImmInstruction):
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
+
+    def execute(self, taint_en: bool = TAINT_EN):
+        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
+        assert self.fuzzerstate is not None, "fuzzerstate not set."
+        addr = self.instr_func(self.fuzzerstate.intregpickstate.regs[self.rs2].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
+        res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val()
+
 
 ###
 # Floating-point

@@ -28,3 +28,5 @@ PRINT_WRITEBACK_T0 = False # Print taint writeback of instructions.
 PRINT_CHECK_REGS = False
 
 PRINT_INSTRUCTION_EXECUTION = False
+
+PRINT_DBUS_TAINT = True

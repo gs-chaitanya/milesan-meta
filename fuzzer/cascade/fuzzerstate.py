@@ -21,7 +21,7 @@ import random
 
 class FuzzerState:
     # @param randseed for identification purposes only.
-    def __init__(self, design_base_addr: int, design_name: str, memsize: int, randseed: int, nmax_bbs: int, authorize_privileges: bool):
+    def __init__(self, design_base_addr: int, design_name: str, memsize: int, randseed: int, nmax_bbs: int, authorize_privileges: bool, taint_en: bool = TAINT_EN):
         # For identification
         self.randseed = randseed
         self.nmax_bbs = nmax_bbs
@@ -46,6 +46,7 @@ class FuzzerState:
         self.init_design_state()
 
         self.inject_taint_addr = None
+        self.taint_en = taint_en
 
     # @brief cleans up the fuzzerstate. Used in case of failed input generation.
     def reset(self):
@@ -192,7 +193,7 @@ class FuzzerState:
         
     def append_and_execute_instr(self, instr, execute: bool= False):
         if execute:
-            instr.execute(taint_en=TAINT_EN)
+            instr.execute(taint_en=self.taint_en)
         if PRINT_INSTRUCTION_EXECUTION: 
             instr.print()
         self.instr_objs_seq[-1].append(instr)

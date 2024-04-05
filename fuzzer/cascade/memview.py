@@ -15,7 +15,8 @@
 
 import random
 # from params.runparams import DO_ASSERT
-from params.fuzzparams import P_TAINT_REG, TAINT_EN
+from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS
+from params.runparams import PRINT_DBUS_TAINT
 from cascade.registers import MAX_32b, MAX_64b
 DO_ASSERT = True
 
@@ -29,6 +30,8 @@ class MemoryView:
         self.occupied_addrs = 0 # Follow the number of occupied addresses.
         self.data = {} # Keep track of load/store operations
         self.data_t0 = {} # Keep track of load/store operations' taints
+        self.initial_data = {}
+        self.initial_data_t0 = {}
 
     # In particular, returns False if it goes beyond the memory boundaries.
     def is_mem_free(self, addr: int):
@@ -154,26 +157,43 @@ class MemoryView:
         return self.data[addr]
 
     def read_t0(self, addr):
-        return self.data_t0[addr]
+        assert addr in self.data_t0, f"Read request from invalid address {hex(addr)}."
+        val_t0 = self.data_t0[addr]
+        if val_t0 and PRINT_DBUS_TAINT: 
+            print(f"read_t0: Taint on data bus detected: {hex(addr)} : {hex(val_t0)}")
+        return val_t0
 
     def write(self, addr, val):
         # print(f"Writing to {hex(addr)}: {hex(val)}")
         self.data[addr] = val
+        if addr not in self.data_t0:
+            self.data_t0[addr] = 0
 
     def write_t0(self, addr, val_t0):
+        if val_t0 and PRINT_DBUS_TAINT: 
+            print(f"write_t0: Taint on data bus detected: {hex(addr)} : {hex(val_t0)}")
         self.data_t0[addr] = val_t0
 
     def set_initial_register_values(self,fuzzerstate, start_addr):
         # random.seed(fuzzerstate.randseed)
+        n_tainted_regs = 0
         for i,reg_data_content in enumerate(fuzzerstate.initial_reg_data_content):
             addr = start_addr + i*8 # Stride for double is used even if design is 32bit.
             self.write(addr, reg_data_content)
-            if TAINT_EN:
+            if fuzzerstate.taint_en and n_tainted_regs < MAX_NUM_INIT_TAINTED_REGS:
                 if random.choices([0,1],[1-P_TAINT_REG,P_TAINT_REG],k=1)[0]:
                     rand_val = random.randint(1,MAX_64b if fuzzerstate.is_design_64bit else MAX_32b)
+                    n_tainted_regs += 1
                     self.write_t0(addr, rand_val)
-                else:
-                    self.write_t0(addr, 0)
+            else:
+                self.write_t0(addr, 0)
 
+        self.initial_data = self.data
+        self.initial_data_t0 = self.data_t0
+
+
+    def restore(self):
+        self.data = self.initial_data
+        self.data_t0 = self.initial_data_t0
 
 
