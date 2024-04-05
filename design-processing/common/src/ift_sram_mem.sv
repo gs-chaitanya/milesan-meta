@@ -65,9 +65,7 @@ module ift_sram_mem #(
     end
 
     // Taint the read data if the addr was tainted.
-    // assign rdata_o_taint[taint_id] = rdata_o_taint_before_conservative[taint_id] | {(Width){was_req_addr_tainted_q | is_mem_fully_tainted_q}};
-    assign rdata_o_taint[taint_id] = rdata_o_taint_before_conservative[taint_id];
-
+    assign rdata_o_taint[taint_id] = rdata_o_taint_before_conservative[taint_id] | {(Width){was_req_addr_tainted_q | is_mem_fully_tainted_q}};
   end
 
   logic [Width-1:0]    mem [bit [31:0]];
@@ -82,128 +80,31 @@ module ift_sram_mem #(
   import "DPI-C" context function byte read_section(input longint address, inout byte buffer[]);
 
   import "DPI-C" function init_taint_vectors(input longint num_taints);
-  import "DPI-C" function init_taint_data_vectors(input longint num_taints);
   import "DPI-C" function read_taints(input string filename, input int word_width_bytes);
-  import "DPI-C" function read_taints_and_data(input string filename, input int word_width_bytes);
   import "DPI-C" context function byte get_next_taint_word(input longint taint_id, output longint word_address, output byte buffer[]);
-  import "DPI-C" context function byte get_next_taint_and_data_word(input longint taint_id, output longint word_address, output byte tbuffer[], output byte dbuffer[]);
   import "DPI-C" function string Get_SRAM_ELF_object_filename();
   import "DPI-C" function string Get_SRAM_TaintsPath();
-  import "DPI-C" function void reset_section_index();
-
-  export "DPI-C" function _reset_memory;
-  export "DPI-C" function _reset_memory_t;
-  export "DPI-C" function _dump_mem;
-
-
 
   localparam int unsigned PreloadBufferSize = 100000000;
-  byte preload_buffer[PreloadBufferSize];
-
-  function void _reset_memory();
-    begin
-      string binary = Get_SRAM_ELF_object_filename();
-      longint section_addr, section_len;
-      reset_section_index();
-      // $display("MEMORY RESET");
-      mem.delete();
-      preload_buffer = '{default: '0};
-      void'(read_elf(binary));
-      while (get_section(section_addr, section_len)) begin
-        automatic int num_words = (section_len+(WidthBytes-1))/WidthBytes;
-
-        assert(num_words*WidthBytes <= PreloadBufferSize);
-        void'(read_section(section_addr, preload_buffer));
-
-        for (int i = 0; i < num_words; i++) begin
-          automatic logic [WidthBytes-1:0][7:0] word = '0;
-          for (int j = 0; j < WidthBytes; j++) begin
-            word[j] = preload_buffer[i*WidthBytes+j];
-          end
-          if (|word)
-            // $display("Writing ELF word to SRAM addr %x: %x", (AddrMask&section_addr)/WidthBytes+i, word);
-          mem[(AddrMask&section_addr)/WidthBytes+i] = word;
-        end
-      end
-    end  
-  endfunction : _reset_memory
-
-  function void _reset_memory_t(); // resets only taints
-    begin
-      string binary = Get_SRAM_TaintsPath();
-      longint word_addr;
-      byte unsigned tbuffer[Width >> 3]; // The unsigned is important, else sign extension expands to the whole word
-      byte unsigned dbuffer[Width >> 3]; // The unsigned is important, else sign extension expands to the whole word
-      void'(init_taint_data_vectors(NumTaints));
-      void'(read_taints_and_data(binary, Width >> 3));
-      mem_taints.delete();
-      assert(mem_taints.size() == 0);
-
-      for (int taint_id = 0; taint_id < NumTaints; taint_id++) begin 
-        while (get_next_taint_and_data_word(taint_id, word_addr, tbuffer, dbuffer)) begin
-          mem_taints[(AddrMask >> $clog2(WidthBytes))&word_addr] = {WidthBytes{1'h0}};
-
-          // if(mem[(AddrMask >> $clog2(WidthBytes))&word_addr][31:0] != 'hDEADBEEF) begin
-          //   $error("Overwriting wrong region: Holds 0x%x instead of 0xdeadbeef at 0x%x", mem[(AddrMask >> $clog2(WidthBytes))&word_addr][31:0], (AddrMask >> $clog2(WidthBytes))&word_addr);
-          // end
-
-          // $display("Overwriting %x at %x", mem[(AddrMask >> $clog2(WidthBytes))&word_addr], (AddrMask >> $clog2(WidthBytes))&word_addr);
-
-          // mem[(AddrMask >> $clog2(WidthBytes))&word_addr] = {WidthBytes{1'h0}};
-          // assert(mem[(AddrMask >> $clog2(WidthBytes))&word_addr] == {WidthBytes{1'h0}});
-
-
-          // $display("WidthByte %x", WidthBytes);
-
-          for (int byte_id_in_word = 0; byte_id_in_word < WidthBytes; byte_id_in_word++) begin
-            automatic bit [Width-1:0] interm_taint_word = tbuffer[byte_id_in_word] << (byte_id_in_word << 3);
-            // automatic bit [Width-1:0] interm_data_word = dbuffer[byte_id_in_word] << (byte_id_in_word << 3);
-            mem_taints[(AddrMask >> $clog2(WidthBytes))&word_addr] |= interm_taint_word;
-            // mem[(AddrMask >> $clog2(WidthBytes))&word_addr] |= interm_data_word;
-            // $display("Tainting %x with %x", (AddrMask >> $clog2(WidthBytes))&word_addr, interm_taint_word);
-          end
-          // $display("Adding taint word SRAM addr %x (filtered: %x): %x, storing %x", word_addr, (AddrMask >> $clog2(WidthBytes))&word_addr, mem_taints[(AddrMask >> $clog2(WidthBytes))&word_addr], mem[(AddrMask >> $clog2(WidthBytes))&word_addr]);
-
-        end
-      end
-    end
-  endfunction : _reset_memory_t
-
-
-  function void _dump_mem();
-    begin
-      longint section_addr, section_len;
-      reset_section_index();
-      $display("MEMORY DUMP");
-      while (get_section(section_addr, section_len)) begin
-        automatic int num_words = (section_len+(WidthBytes-1))/WidthBytes;
-        for (int i = 0; i < num_words; i++) begin
-          $display("Memory dump at %x: %x", AddrMask&section_addr/WidthBytes+i, mem[(AddrMask&section_addr)/WidthBytes+i]);
-        end
-      end
-    end  
-  endfunction : _dump_mem
-
-
   initial begin // Load the binary into memory.
     if (PreloadELF) begin
       string binary = Get_SRAM_ELF_object_filename();
       longint section_addr, section_len;
+      byte buffer[PreloadBufferSize];
       void'(read_elf(binary));
       while (get_section(section_addr, section_len)) begin
         automatic int num_words = (section_len+(WidthBytes-1))/WidthBytes;
-
         // buffer = new [num_words*WidthBytes];
         assert(num_words*WidthBytes <= PreloadBufferSize);
-        void'(read_section(section_addr, preload_buffer));
+        void'(read_section(section_addr, buffer));
 
         for (int i = 0; i < num_words; i++) begin
           automatic logic [WidthBytes-1:0][7:0] word = '0;
           for (int j = 0; j < WidthBytes; j++) begin
-            word[j] = preload_buffer[i*WidthBytes+j];
+            word[j] = buffer[i*WidthBytes+j];
           end
           if (|word)
-            // $display("Writing ELF word to SRAM addr %x: %x", (AddrMask&section_addr)/WidthBytes+i, word);
+            $display("Writing ELF word to SRAM addr %x: %x", (AddrMask&section_addr)/WidthBytes+i, word);
           mem[(AddrMask&section_addr)/WidthBytes+i] = word;
         end
       end
@@ -214,16 +115,16 @@ module ift_sram_mem #(
     if (PreloadTaints) begin
       string binary = Get_SRAM_TaintsPath();
       longint word_addr;
-      byte unsigned tbuffer[Width >> 3]; // The unsigned is important, else sign extension expands to the whole word
-      byte unsigned dbuffer[Width >> 3]; // The unsigned is important, else sign extension expands to the whole word
-      void'(init_taint_data_vectors(NumTaints));
-      void'(read_taints_and_data(binary, Width >> 3));
+      byte unsigned buffer[Width >> 3]; // The unsigned is important, else sign extension expands to the whole word
+      void'(init_taint_vectors(NumTaints));
+      void'(read_taints(binary, Width >> 3));
       for (int taint_id = 0; taint_id < NumTaints; taint_id++) begin
-        while (get_next_taint_and_data_word(taint_id, word_addr, tbuffer, dbuffer)) begin
+
+        while (get_next_taint_word(taint_id, word_addr, buffer)) begin
           if (!mem_taints.exists((AddrMask >> $clog2(WidthBytes))&word_addr))
             mem_taints[(AddrMask >> $clog2(WidthBytes))&word_addr] = '0;
           for (int byte_id_in_word = 0; byte_id_in_word < WidthBytes; byte_id_in_word++) begin
-            automatic bit [Width-1:0] interm_taint_word = tbuffer[byte_id_in_word] << (byte_id_in_word << 3);
+            automatic bit [Width-1:0] interm_taint_word = buffer[byte_id_in_word] << (byte_id_in_word << 3);
             mem_taints[(AddrMask >> $clog2(WidthBytes))&word_addr] |= interm_taint_word;
             // Write zeros to the corresponding memory
 `ifdef MODELSIM
@@ -231,7 +132,7 @@ module ift_sram_mem #(
               mem[(AddrMask >> $clog2(WidthBytes))&word_addr] = '0;
 `endif
           end
-          $display("Adding taint word SRAM addr %x (filtered: %x): %x, storing %x", word_addr, (AddrMask >> $clog2(WidthBytes))&word_addr, mem_taints[(AddrMask >> $clog2(WidthBytes))&word_addr], mem[word_addr]);
+          $display("Adding taint word SRAM addr %x (filtered: %x): %x", word_addr, (AddrMask >> $clog2(WidthBytes))&word_addr, mem_taints[(AddrMask >> $clog2(WidthBytes))&word_addr]);
         end
       end
     end
@@ -252,10 +153,7 @@ module ift_sram_mem #(
       else begin
           if (mem.exists(AddrMask & (RelocateRequestUp | addr_i))) begin
             rdata_o <= mem[AddrMask & (RelocateRequestUp | addr_i)];
-            // $display("INFO: Memory known at address %h: %x", AddrMask & (RelocateRequestUp | addr_i), mem[AddrMask & (RelocateRequestUp | addr_i)]);
-            if(mem_taints[AddrMask & (RelocateRequestUp | addr_i)]) begin
-              // $display("INFO: Memory at address %h is tainted: %x", AddrMask & (RelocateRequestUp | addr_i), mem_taints[AddrMask & (RelocateRequestUp | addr_i)]);
-            end
+            // $display("INFO: Memory known at address %h.", AddrMask & (RelocateRequestUp | addr_i));
           end
           else begin
             rdata_o <= 0;
@@ -277,9 +175,7 @@ module ift_sram_mem #(
             if (wmask_i[i]) begin
               if (!mem_taints.exists(AddrMask & (RelocateRequestUp | addr_i)))
                 mem_taints[AddrMask & (RelocateRequestUp | addr_i)] = '0;
-              // mem_taints[AddrMask & (RelocateRequestUp | addr_i)][i] = wdata_i_taint[taint_id][i] | wdata_i_taint[taint_id][i];
-              mem_taints[AddrMask & (RelocateRequestUp | addr_i)][i] |= wdata_i_taint[taint_id][i]; // add taint to memory with possibly existing taint mask at address
-
+              mem_taints[AddrMask & (RelocateRequestUp | addr_i)][i] = wdata_i_taint[taint_id][i] | wdata_i_taint[taint_id][i];
             end
         end
         else
