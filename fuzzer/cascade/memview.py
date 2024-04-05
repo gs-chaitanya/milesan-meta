@@ -201,7 +201,12 @@ class MemoryView:
         with open(path, "w") as f:
             # f.write("[\n")
             for addr, val_t0 in self.data_t0.items():
-                f.write("0 {:x} 4 {:08x}\n".format(addr, val_t0))
+                # f.write("0 {:x} 4 {:08x}\n".format(addr, val_t0))
+                f.write("0 {:x} 4 ".format(addr))
+                for i in range(4): #TODO: Adapt for 64bit
+                    # Switch endianness.
+                    f.write("{:02x}".format((val_t0&(0xFF<<(i*8)))>>(i*8)))
+                f.write("\n")
             #     f.write(f"\t{{\"addr\":\"{hex(addr)}\", \"val_t0\":\"{hex(val_t0)}\"}},\n")
             # f.write("]")
 
