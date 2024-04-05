@@ -191,9 +191,17 @@ class MemoryView:
         self.initial_data = self.data
         self.initial_data_t0 = self.data_t0
 
-
     def restore(self):
         self.data = self.initial_data
         self.data_t0 = self.initial_data_t0
 
+    def dump_taint(self, path: str = None):
+        assert path is not None, "No path provided."
+        print(f"Dumping memview taints to {path}")
+        with open(path, "w") as f:
+            f.write("[\n")
+            for addr, val_t0 in self.data_t0.items():
+                # f.write(f"0 {hex(addr)} 4 {hex(val_t0)}")
+                f.write(f"\t{{\"addr\":\"{hex(addr)}\", \"val_t0\":\"{hex(val_t0)}\"}},\n")
+            f.write("]")
 

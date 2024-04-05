@@ -49,6 +49,7 @@ class BaseInstruction_t0(BaseInstruction):
 
     def inject_taint(self, is_spike_resolution: bool = True):
         self.set_bytecode(self.gen_bytecode_int(is_spike_resolution) ^ self.gen_bytecode_int_t0(is_spike_resolution))
+        
 
 class CFInstruction_t0(BaseInstruction_t0):
     def __init__(self, fuzzerstate, instr_str):

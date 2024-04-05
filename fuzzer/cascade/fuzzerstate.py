@@ -2,7 +2,7 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION, PATH_TO_TMP
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS
 from params.fuzzparams import TAINT_EN
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp
@@ -18,6 +18,7 @@ from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
 
 import random
+import os
 
 class FuzzerState:
     # @param randseed for identification purposes only.
@@ -197,3 +198,22 @@ class FuzzerState:
         if PRINT_INSTRUCTION_EXECUTION: 
             instr.print()
         self.instr_objs_seq[-1].append(instr)
+
+    def dump_instructions_t0(self):
+        insts = {}
+        for bb_id ,bb_instrs in enumerate(self.instr_objs_seq): # skip first and last bb
+            insts[bb_id] = []
+            for instr_obj in bb_instrs:
+                if instr_obj.injectable:
+                    insts[bb_id] += [{"bytecode": instr_obj.gen_bytecode_int(is_spike_resolution=True),
+                                    "bytecode_t0": instr_obj.gen_bytecode_int_t0(is_spike_resolution=True),
+                                    "addr": instr_obj.addr,
+                                    "type": instr_obj.instr_type.name, 
+                                    "str": instr_obj.instr_str,
+                                    "bb_id": bb_id}]
+    
+    def dump_memview_t0(self):
+        id = self.instance_to_str()
+        path = os.path.join(PATH_TO_TMP, f"{id}.memview.t0.json")
+        self.memview.dump_taint(path)
+

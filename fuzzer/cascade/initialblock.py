@@ -185,7 +185,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
 
     # Initial values for pickable registers are determined, so load them s.t. ISA simulation executes on correct initial arch. state.
     fuzzerstate.memview.set_initial_register_values(fuzzerstate, SPIKE_STARTADDR + bytes_until_random_vals_base_for_debug+bytes_until_random_vals)
-
+    fuzzerstate.dump_memview_t0()
     next_instr = RegImmInstruction_t0(fuzzerstate,"addi", fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_regs-1, bytes_until_random_vals + curr_addr, fuzzerstate.is_design_64bit)
     fuzzerstate.append_and_execute_instr(next_instr, True)
     curr_addr += 4
