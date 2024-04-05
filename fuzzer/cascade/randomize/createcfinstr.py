@@ -235,6 +235,7 @@ def create_regfsm_instrobjs(fuzzerstate, en_taint: bool = False):
     doable_fsm_ops[0] = fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) > NUM_MIN_FREE_INTREGS
     doable_fsm_ops[1] = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED0)
     doable_fsm_ops[2] = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED1)
+    doable_fsm_ops[2] &= fuzzerstate.intregpickstate.exists_untainted_reg_in_state(IntRegIndivState.FREE)
 
     effective_weights = doable_fsm_ops * REG_FSM_WEIGHTS
     if not np.any(effective_weights):
@@ -255,7 +256,7 @@ def create_regfsm_instrobjs(fuzzerstate, en_taint: bool = False):
 
 def create_targeted_producer0_instrobj(fuzzerstate, en_taint: bool = False):
     fuzzerstate.next_producer_id += 1
-    rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(False, force = True)
+    rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(authorize_sideeffects=False, force = False) # Rd will be untainted after execution.
     if PRINT_FSM_TRANSITIONS:
         print(f"Setting {ABI_INAMES[rd]} to PRODUCED0")
     fuzzerstate.intregpickstate.set_producer_id(rd, fuzzerstate.next_producer_id)
@@ -275,10 +276,8 @@ def create_targeted_producer1_instrobj(fuzzerstate, en_taint: bool = False):
     return [PlaceholderProducerInstr1_t0(fuzzerstate, rd, fuzzerstate.intregpickstate.get_producer_id(rd))]
 
 def create_targeted_consumer_instrobj(fuzzerstate, en_taint: bool = False):
-    rdep = fuzzerstate.intregpickstate.pick_untainted_int_inputreg_nonzero(False, force = True) # We want to create dependencies, therefore we choose not to accept x0. Also it should not be tainted to avoid tainting the PC.
-    rprod = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.PRODUCED1)
-    # assert fuzzerstate.intregpickstate.regs[rdep].get_val_t0() == 0, f"Dependent register {ABI_INAMES[rdep]} is tainted!"
-    # assert fuzzerstate.intregpickstate.regs[rprod].get_val_t0() == 0, f"Register {ABI_INAMES[rd]} in produced1 state is tainted!"
+    rdep = fuzzerstate.intregpickstate.pick_untainted_int_inputreg_nonzero(force = True) # We want to create dependencies, therefore we choose not to accept x0. Also it should not be tainted to avoid tainting the PC.
+    rprod = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.PRODUCED1, force = True) # Produced registers should always be untainted by construction.
 
     # WARNING: We CANNOT throw a PRODUCEDX into the nature because its value will change between spike and RTL.
     rd = rprod

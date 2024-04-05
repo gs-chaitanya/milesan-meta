@@ -38,7 +38,7 @@ class IntRegPickState:
         # self.__reg_weights[0] = 0
 
     def setup_registers(self):
-        self.regs = {id:Int32RegState(id) for id in range(self.num_pickable_regs)} # pickable registers
+        self.regs = {id:Int32RegState(id,pickable=True) for id in range(self.num_pickable_regs)} # pickable registers
         self.regs[RELOCATOR_REGISTER_ID] = Int32RegState(RELOCATOR_REGISTER_ID)
         self.regs[RDEP_MASK_REGISTER_ID] = Int32RegState(RDEP_MASK_REGISTER_ID)
         self.regs[FPU_ENDIS_REGISTER_ID] = Int32RegState(FPU_ENDIS_REGISTER_ID)
@@ -75,7 +75,7 @@ class IntRegPickState:
         ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
             assert sum(ret) >= NUM_MIN_FREE_INTREGS
-        return ret
+        return np.asarray(ret)
 
     def get_untainted_regs_onehot(self):
         ret = [int(self.regs[reg_id].get_val_t0() == 0) for reg_id in range(self.num_pickable_regs)]
@@ -133,17 +133,19 @@ class IntRegPickState:
             # If we force the register to be tainted or untainted, prefer the most recently used one that fulfulls the criteria.
             taint_ps = taint_ps * self.__reg_weights
 
+        if DO_ASSERT:
+            if not force:
+                states = {ABI_INAMES[i]:[j,k,l] for i,(j,k,l) in enumerate(zip(self.__reg_weights,taint_ps,authorized_regs_onehot))}
+            else:
+                states = {ABI_INAMES[i]:[j,k] for i,(j,k) in enumerate(zip(taint_ps,authorized_regs_onehot))}
+            assert np.sum(taint_ps * authorized_regs_onehot) > 0, f"No register fulfills requested requirements! {states}"
+
+
         taint_ps_sum = np.sum(taint_ps)
         taint_ps /= taint_ps_sum if taint_ps_sum else 1
 
         if DO_ASSERT:
-            # self.print()
             assert math.isclose(sum(taint_ps), 1, abs_tol=0.001), f"{sum(taint_ps)} {str(taint_ps)}"
-
-        if DO_ASSERT:
-            states = {ABI_INAMES[i]:[j,k,l] for i,(j,k,l) in enumerate(zip(self.__reg_weights,taint_ps,authorized_regs_onehot))}
-            assert np.sum(taint_ps * authorized_regs_onehot) > 0, f"No register fulfills requested requirements! {states}"
-
 
         return  taint_ps * authorized_regs_onehot
 
@@ -165,7 +167,7 @@ class IntRegPickState:
         return id
 
     # Excludes the zero register
-    def pick_tainted_int_inputreg_nonzero(self, authorize_sideeffects: bool = True, force: bool = False):
+    def pick_tainted_int_inputreg_nonzero(self, force: bool = False):
         authorized_regs_onehot = self.get_free_regs_onehot()
         was_zero_authorized = authorized_regs_onehot[0]
         authorized_regs_onehot[0] = 0
@@ -174,7 +176,7 @@ class IntRegPickState:
         return id
 
     # Excludes the zero register. When force is enabled, will either throw an exception or return an untainted register.
-    def pick_untainted_int_inputreg_nonzero(self, authorize_sideeffects: bool = True, force: bool = False):
+    def pick_untainted_int_inputreg_nonzero(self, force: bool = False):
         authorized_regs_onehot = self.get_free_regs_onehot()
         was_zero_authorized = authorized_regs_onehot[0]
         authorized_regs_onehot[0] = 0
@@ -355,13 +357,20 @@ class IntRegPickState:
     # Getters for registers in a certain state
     def exists_reg_in_state(self, req_state: IntRegIndivState) -> bool:
         return np.any(self.__regs_in_state_onehot[req_state])
-    def exists_untainted_reg_in_state(self, req_state: IntRegIndivState) -> bool:
-        regs_in_state = self.__regs_in_state_onehot[req_state]
-        untainted_regs = [int(reg.get_val_t0() == 0) for reg in self.regs.values()]
-        untainted_regs_in_state = [int(i&j) for i,j in zip(regs_in_state,untainted_regs)]
-        return np.any(untainted_regs_in_state)
+
+    def exists_untainted_reg_in_state(self, req_state: IntRegIndivState, allow_zero = False) -> bool:
+        untainted_regs_oneshot = self.get_untainted_regs_onehot()
+        if not allow_zero: 
+            untainted_regs_oneshot[0] = 0
+        regs_ins_state_oneshot = self.__regs_in_state_onehot[req_state]
+        return np.any(untainted_regs_oneshot * regs_ins_state_oneshot)
+
     def get_num_regs_in_state(self, req_state: IntRegIndivState) -> bool:
         return np.sum(self.__regs_in_state_onehot[req_state])
+
+    def get_num_untainted_regs_in_state(self, req_state: IntRegIndivState) -> bool:
+        return np.sum(self.__regs_in_state_onehot[req_state] * self.get_untainted_regs_onehot())
+
     def pick_int_reg_in_state(self, req_state: IntRegIndivState):
         if DO_ASSERT:
             assert self.exists_reg_in_state(req_state), f"No reg in state `{req_state}`"
@@ -377,29 +386,40 @@ class IntRegPickState:
                 assert self.exists_untainted_reg_in_state(req_state), f"No untainted reg in state `{req_state.name}`."
             else:
                 assert self.exists_reg_in_state(req_state), f"No reg in state `{req_state.name}`."
-        regs_in_state = self.__regs_in_state_onehot[req_state]
-        regs_in_state = regs_in_state * self.get_effective_weights_t0(regs_in_state, True, force)
+
+        untainted_regs_in_state = self.get_effective_weights_t0(self.__regs_in_state_onehot[req_state], True, force)
 
         ret = None
-        while ret is None or not regs_in_state[ret]:
-            ret = random.choices(range(self.num_pickable_regs), regs_in_state, k=1)[0]
-        assert regs_in_state[ret]
+        while ret is None or not untainted_regs_in_state[ret]:
+            ret = random.choices(range(self.num_pickable_regs), untainted_regs_in_state, k=1)[0]
+        assert untainted_regs_in_state[ret]
         if force:
             # self.print()
-            assert self.regs[ret].get_val_t0() == 0, f"Chosen register {ABI_INAMES[ret]} is tainted! {regs_in_state}"
+            assert self.regs[ret].get_val_t0() == 0, f"Chosen register {ABI_INAMES[ret]} is tainted! {untainted_regs_in_state}"
         return ret
     
     def display(self):
         print('pickreg', self.__regs_in_state_onehot)
 
     def print(self):
-        row = ["ID","VALUE","VALUE_T0", "STATE"]
-        print("{: >20} {: >20} {: >20} {: >20}".format(*row))
-        row = ["*"*20,"*"*20,"*"*20, "*"*20]
-        print("{: >20} {: >20} {: >20} {: >20}".format(*row))
+        row = ["ID","VALUE","VALUE_T0","STATE","PICKABLE"]
+        print("{: >20} {: >20} {: >20} {: >20} {: >20}".format(*row))
+        row = ["*"*20,"*"*20,"*"*20, "*"*20, "*"*20]
+        print("{: >20} {: >20} {: >20} {: >20} {: >20}".format(*row))
 
         for _,reg in self.regs.items():
             reg.print()
+
+    def print_and_compare(self,regdumps_rtl):
+        row = ["ID","VALUE (sim/rtl)","VALUE_T0 (sim/rtl)"]
+        print("{: >30} {: >30} {: >30}".format(*row))
+        row = ["*"*30,"*"*30,"*"*30]
+        print("{: >30} {: >30} {: >30}".format(*row))
+
+        for reg_id in range(self.num_pickable_regs-1):
+            value = int(regdumps_rtl[reg_id]["value"],16)
+            value_t0 = int(regdumps_rtl[reg_id]["value_t0"],16)
+            self.regs[reg_id+1].print_and_compare(value,value_t0)
 
 # Float registers are never forbidden, therefore this is simpler than integer registers.
 class FloatRegPickState:

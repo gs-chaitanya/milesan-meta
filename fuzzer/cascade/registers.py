@@ -27,17 +27,34 @@ class __64RegState(__RegState):
 
 
 class __32RegState(__RegState):
-    def __init__(self,id: int = None, val: int = 0, val_t0: int = 0):
+    def __init__(self,id: int = None, val: int = 0, val_t0: int = 0, pickable: bool = False):
         self.id = id
         self.val = val&MAX_32b
         self.val_bk = val&MAX_32b
         self.val_t0 = val_t0&MAX_32b
         self.val_t0_bk = val_t0&MAX_32b
         self.n_bits = 32
+        self.pickable = pickable
 
     def print(self):
-        row = [ABI_INAMES[self.id],hex(self.val),hex(self.val_t0), self.fsm_state.name]
-        print("{: >20} {: >20} {: >20} {: >20}".format(*row))
+        row = [ABI_INAMES[self.id],hex(self.val),hex(self.val_t0), self.fsm_state.name, "True" if self.pickable else "False"]
+        print("{: >20} {: >20} {: >20} {: >20} {: >20}".format(*row))
+
+    def print_and_compare(self,rtl_val,rtl_val_t0):
+        if rtl_val == self.val:
+            val_str = hex(self.val)
+        else:
+            val_str = "0x{:08x} != 0x{:08x}".format(self.val,rtl_val)
+
+        if rtl_val_t0 == self.val_t0:
+            val_t0_str = hex(self.val_t0)
+        elif rtl_val_t0&~self.val_t0 == 0:
+            val_t0_str = "0x{:08x} >= 0x{:08x}".format(self.val_t0,rtl_val_t0)
+        else:
+            val_t0_str = "0x{:08x} != 0x{:08x}".format(self.val_t0,rtl_val_t0)
+        
+        row = [ABI_INAMES[self.id],val_str,val_t0_str]
+        print("{: >30} {: >30} {: >30}".format(*row))
 
     def set_val(self, val):
         if(self.id != 0):
@@ -69,8 +86,8 @@ class __32RegState(__RegState):
 
 
 class Int32RegState(__32RegState):
-    def __init__(self, id: int = None, val: int = 0, val_t0: int = 0):
-        super().__init__(id, val, val_t0)
+    def __init__(self, id: int = None, val: int = 0, val_t0: int = 0, pickable: bool = False):
+        super().__init__(id, val, val_t0, pickable)
         self.fsm_state = IntRegIndivState.FREE
         self.abi_name = ABI_INAMES[self.id]
 
@@ -84,6 +101,7 @@ class Int32RegState(__32RegState):
         if not mismatch:
             return False
         else:
+            print(f"\t Mismatch for {ABI_INAMES[self.id]}: {hex(self.val)} != {hex(cmp_val_uint32)}.")
             return ABI_INAMES[self.id],self.val,cmp_val_uint32
 
     def check_t0(self, cmp_val, precise = False):
@@ -93,7 +111,7 @@ class Int32RegState(__32RegState):
             cover = ~self.val_t0&cmp_val_uint32 == 0 # overapproximates, check if spike taint is covered by cascade sim taint
             if cover:
                 if mismatch:
-                    print(f"\tTaint mismatch OK: {hex(self.val_t0)} covers spike {hex(cmp_val_uint32)}.")
+                    print(f"\tTaint mismatch OK: {hex(self.val_t0)} covers {hex(cmp_val_uint32)}.")
                 return False
 
         if not mismatch:

@@ -199,9 +199,9 @@ class MemoryView:
         assert path is not None, "No path provided."
         print(f"Dumping memview taints to {path}")
         with open(path, "w") as f:
-            f.write("[\n")
+            # f.write("[\n")
             for addr, val_t0 in self.data_t0.items():
-                # f.write(f"0 {hex(addr)} 4 {hex(val_t0)}")
-                f.write(f"\t{{\"addr\":\"{hex(addr)}\", \"val_t0\":\"{hex(val_t0)}\"}},\n")
-            f.write("]")
+                f.write("0 {:x} 4 {:08x}\n".format(addr, val_t0))
+            #     f.write(f"\t{{\"addr\":\"{hex(addr)}\", \"val_t0\":\"{hex(val_t0)}\"}},\n")
+            # f.write("]")
 

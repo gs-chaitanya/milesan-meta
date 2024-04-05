@@ -63,14 +63,14 @@ def gen_basicblock(fuzzerstate):
         if curr_isa_class == ISAInstrClass.REGFSM:
             new_instrobjs = create_regfsm_instrobjs(fuzzerstate)
             # fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[0])
-            fuzzerstate.append_and_execute_instr(new_instrobjs[0], False) # Dont execute the FSM instructions
+            fuzzerstate.append_and_execute_instr(new_instrobjs[0], True)
 
             # For consumers, we may need to insert one more instruction
             for next_instrobj_id in range(1, len(new_instrobjs)):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+4)
                 curr_alloc_cursor += 4
                 # fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[next_instrobj_id])
-                fuzzerstate.append_and_execute_instr(new_instrobjs[next_instrobj_id], False) # Dont execute the FSM instructions
+                fuzzerstate.append_and_execute_instr(new_instrobjs[next_instrobj_id], True)
             del new_instrobjs # For safety, we prevent accidental reuse of this variable
             continue
         # If this is an FPU enable-disable instruction or a rounding mode change

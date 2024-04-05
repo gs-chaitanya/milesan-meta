@@ -16,6 +16,7 @@ from cascade.randomize.pickstoreaddr import MemStoreState
 from cascade.randomize.pickreg import IntRegPickState, FloatRegPickState
 from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
+from cascade.cfinstructionclasses import is_placeholder
 
 import random
 import os
@@ -194,7 +195,11 @@ class FuzzerState:
         
     def append_and_execute_instr(self, instr, execute: bool= False):
         if execute:
-            instr.execute(taint_en=self.taint_en)
+            if is_placeholder(instr):
+                if self.taint_en:
+                    instr.execute_t0(0) # sets taints of rd to 0
+            else:
+                instr.execute(taint_en=self.taint_en)
         if PRINT_INSTRUCTION_EXECUTION: 
             instr.print()
         self.instr_objs_seq[-1].append(instr)
