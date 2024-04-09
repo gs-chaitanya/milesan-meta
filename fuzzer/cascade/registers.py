@@ -1,10 +1,11 @@
+from abc import ABC
+
 from cascade.util import IntRegIndivState
 from rv.asmutil import twos_complement,to_unsigned
-# import ctypes
-from abc import ABC
+from params.runparams import PRINT_CHECK_REGS_T0
+
 ABI_INAMES = ["zero","ra","sp","gp","tp","t0","t1","t2","s0/fp","s1","a0","a1","a2","a3","a4","a5","a6","a7"]
 ABI_INAMES += [f"s{i}" for i in range(2,12)] + [f"t{i}" for i in range(3,7)]
-ABI_CSRNAMES = []
 MAX_32b = 0xFFFFFFFF
 MAX_64b = 0xFFFFFFFFFFFFFFFF
 MAX_20b = 0xFFFFF
@@ -42,12 +43,12 @@ class __32RegState(__RegState):
 
     def print_and_compare(self,rtl_val,rtl_val_t0):
         if rtl_val == self.val:
-            val_str = hex(self.val)
+            val_str =  "0x{:08x}".format(self.val)
         else:
-            val_str = "0x{:08x} != 0x{:08x}".format(self.val,rtl_val)
+            val_str = "\0330x{:08x} != 0x{:08x}".format(self.val,rtl_val)
 
         if rtl_val_t0 == self.val_t0:
-            val_t0_str = hex(self.val_t0)
+            val_t0_str = "0x{:08x}".format(self.val_t0)
         elif rtl_val_t0&~self.val_t0 == 0:
             val_t0_str = "0x{:08x} >= 0x{:08x}".format(self.val_t0,rtl_val_t0)
         else:
@@ -69,14 +70,8 @@ class __32RegState(__RegState):
     def get_val(self):
         return self.val
 
-    def get_val_bk(self):
-        return self.val_bk
-
     def get_val_t0(self):
         return self.val_t0
-
-    def get_val_t0_bk(self):
-        return self.val_t0_bk
 
     def reset(self):
         self.val = 0
@@ -101,7 +96,6 @@ class Int32RegState(__32RegState):
         if not mismatch:
             return False
         else:
-            print(f"\t Mismatch for {ABI_INAMES[self.id]}: {hex(self.val)} != {hex(cmp_val_uint32)}.")
             return ABI_INAMES[self.id],self.val,cmp_val_uint32
 
     def check_t0(self, cmp_val, precise = False):
@@ -110,7 +104,7 @@ class Int32RegState(__32RegState):
         if not precise:
             cover = ~self.val_t0&cmp_val_uint32 == 0 # overapproximates, check if spike taint is covered by cascade sim taint
             if cover:
-                if mismatch:
+                if mismatch and PRINT_CHECK_REGS_T0:
                     print(f"\tTaint mismatch OK: {hex(self.val_t0)} covers {hex(cmp_val_uint32)}.")
                 return False
 
