@@ -229,26 +229,80 @@ def slt_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     b_signed = twos_complement(b, is_design_64bit)
     a_t0_signed = twos_complement(a_t0, is_design_64bit)
     b_t0_signed = twos_complement(b_t0, is_design_64bit)
-    return sltu_t0(a_signed, a_t0_signed, b_signed, b_t0_signed, is_design_64bit)
+    return slt_t0(a_signed, a_t0_signed, b_signed, b_t0_signed, is_design_64bit)
     
 def sltu(a: int, b: int,  is_design_64bit: bool):
     return a < b
 
 def sltu_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    # print(f"a: {hex(a)}, a_t0: {hex(a_t0)}, b: {hex(b)}, b_t0: {hex(b_t0)}")
+
+    a_and_not_a_t0 = a&~a_t0
+    b_and_not_b_t0 = b&~b_t0
+
+    assert a_and_not_a_t0 >= 0
+    assert b_and_not_b_t0 >= 0
+
+    a_or_a_t0 = a | a_t0
+    b_or_b_t0 = b | b_t0
+
+    assert a_or_a_t0 >= 0
+    assert b_or_b_t0 >= 0
+    # Compute the result where a is largest and b is smallest
+    a_max_lt_b_min = a_or_a_t0 < b_and_not_b_t0
+    # Compute the result where b is largest and a is smallest
+    a_min_lt_b_max = a_and_not_a_t0 < b_or_b_t0
+
+    # print(f"a_max_lt_b_min: {hex(a_max_lt_b_min)}, a_min_lt_b_max: {hex(a_min_lt_b_max)}")
+
+    # Compute the polarization term.
+    polarization = a_max_lt_b_min ^ a_min_lt_b_max
+
+    # print(f"pol: {hex(polarization)}")
+
+    return polarization
+
+
+def slt_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    # print(f"a: {hex(a)}, a_t0: {hex(a_t0)}, b: {hex(b)}, b_t0: {hex(b_t0)}")
+
     a_and_not_a_t0 = a&~a_t0
     b_and_not_b_t0 = b&~b_t0
 
     a_or_a_t0 = a | a_t0
     b_or_b_t0 = b | b_t0
 
-    # Compute the result where a is largets and b is smallest
-    a_max_lt_b_min = a_or_a_t0 < b_and_not_b_t0
-    # Compute the result where b is largets and a is smallest
-    a_min_lt_b_max = a_and_not_a_t0 < b_or_b_t0
+    msb_mask = 1<<63 if is_design_64bit else 1<<31
+    exclude_msb_mask = MAX_64b^msb_mask if is_design_64bit else MAX_32b^msb_mask
+
+    # For maximal value set msb to 0, for minimal set msb to 1 it bit tainted. 
+    min_a_msb = a_or_a_t0&msb_mask
+    min_b_msb = b_or_b_t0&msb_mask
+    max_a_msb = a_and_not_a_t0&msb_mask
+    max_b_msb = b_and_not_b_t0&msb_mask
+    
+    # Compute the result where a is largest and b is smallest
+    a_min = (a_and_not_a_t0&exclude_msb_mask)|min_a_msb
+    b_min = (b_and_not_b_t0&exclude_msb_mask)|min_b_msb
+    a_max = (a_or_a_t0&exclude_msb_mask)|max_a_msb
+    b_max = (b_or_b_t0&exclude_msb_mask)|max_b_msb
+
+    a_min = twos_complement(a_min,is_design_64bit)
+    a_max = twos_complement(a_max,is_design_64bit)
+    b_max = twos_complement(b_max,is_design_64bit)
+    b_min = twos_complement(b_min,is_design_64bit)
+
+    # print(f"a_min: {a_min}, a_max: {a_max}, b_min: {b_min}, b_max: {b_max}")
+    
+    # Compute the result where b is largest and a is smallest
+    a_min_lt_b_max = a_min < b_max
+    a_max_lt_b_min = a_max < b_min
+
+    # print(f"a_max_lt_b_min: {hex(a_max_lt_b_min)}, a_min_lt_b_max: {hex(a_min_lt_b_max)}")
 
     # Compute the polarization term.
     polarization = a_max_lt_b_min ^ a_min_lt_b_max
-
+    # print(f"pol: {hex(polarization)}")
     return polarization
 
 def xor(a: int, b: int,  is_design_64bit: bool):
@@ -360,7 +414,7 @@ def slti(a: int, imm: int, is_design_64bit: bool):
 def slti_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     a_signed = twos_complement(a, is_design_64bit)
     a_t0_signed = twos_complement(a_t0, is_design_64bit)
-    return sltu_t0(a_signed, a_t0_signed, imm, imm_t0, is_design_64bit)
+    return slt_t0(a_signed, a_t0_signed, imm, imm_t0, is_design_64bit)
 
 def sltiu(a: int, imm: int, is_design_64bit: bool):
     uimm = to_unsigned(imm, is_design_64bit)
