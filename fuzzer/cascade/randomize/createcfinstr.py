@@ -96,6 +96,8 @@ def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompre
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg()
     imm = fuzzerstate.next_bb_addr-curr_addr
     if rd > 0:
+        if PRINT_FSM_TRANSITIONS:
+            print(f"Setting {ABI_INAMES[rd]} to FREE")
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     return JALInstruction_t0(fuzzerstate, instr_str, rd, imm, iscompressed)
 
@@ -105,8 +107,12 @@ def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool, en_
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg()
     imm = 0
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+    if PRINT_FSM_TRANSITIONS:
+        print(f"Setting {ABI_INAMES[rs1]} to RELOCUSED")
+    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCUSED)
     if rd > 0:
+        if PRINT_FSM_TRANSITIONS:
+            print(f"Setting {ABI_INAMES[rd]} to FREE")
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
@@ -278,7 +284,7 @@ def create_targeted_producer1_instrobj(fuzzerstate, en_taint: bool = False):
 def create_targeted_consumer_instrobj(fuzzerstate, en_taint: bool = False):
     rdep = fuzzerstate.intregpickstate.pick_untainted_int_inputreg_nonzero(force = True) # We want to create dependencies, therefore we choose not to accept x0. Also it should not be tainted to avoid tainting the PC.
     rprod = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.PRODUCED1, force = True) # Produced registers should always be untainted by construction.
-
+    assert fuzzerstate.intregpickstate.regs[rdep].get_val_t0() == 0
     # WARNING: We CANNOT throw a PRODUCEDX into the nature because its value will change between spike and RTL.
     rd = rprod
     if PRINT_FSM_TRANSITIONS:
