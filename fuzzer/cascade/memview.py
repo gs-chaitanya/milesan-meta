@@ -14,6 +14,7 @@
 # Internally, it offers the guarantee that if (a, b) and (c, d) are in the iterable in this order, then b < c (i.e., no superposition and no juxtaposition)
 
 import random
+from copy import deepcopy
 # from params.runparams import DO_ASSERT
 from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS
 from params.runparams import PRINT_DBUS_TAINT
@@ -30,8 +31,7 @@ class MemoryView:
         self.occupied_addrs = 0 # Follow the number of occupied addresses.
         self.data = {} # Keep track of load/store operations
         self.data_t0 = {} # Keep track of load/store operations' taints
-        self.initial_data = {}
-        self.initial_data_t0 = {}
+        self.states = []
 
     # In particular, returns False if it goes beyond the memory boundaries.
     def is_mem_free(self, addr: int):
@@ -175,7 +175,6 @@ class MemoryView:
         self.data_t0[addr] = val_t0
 
     def set_initial_register_values(self,fuzzerstate, start_addr):
-        # random.seed(fuzzerstate.randseed)
         n_tainted_regs = 0
         for i,reg_data_content in enumerate(fuzzerstate.initial_reg_data_content):
             addr = start_addr + i*8 # Stride for double is used even if design is 32bit.
@@ -190,14 +189,52 @@ class MemoryView:
 
         self.initial_data = self.data
         self.initial_data_t0 = self.data_t0
+        self.states = [(deepcopy(self.data), deepcopy(self.data_t0))]
+
+    def restore_and_reduce_taint(self, mismatch):
+        # print([hash(frozenset(state[1].items())) for state in self.states])
+        if mismatch:
+            h = hash(frozenset(self.states[-1][1].items()))
+            h_ = hash(frozenset(self.data_t0.items()))
+            print(f"Mismatch still there for {h_}, continue reducing from {h}.")
+            self.restore()
+        else:
+            h = hash(frozenset(self.states[-2][1].items()))
+            h_ = hash(frozenset(self.data_t0.items()))
+            print(f"No mismatch detected for {h_}, restoring to {h}.")
+            del self.states[-1]
+            self.restore()
+
+        # n_tainted_regs = sum([1 for i in self.data_t0.items() if i != 0])
+
+        # for addr, val_t0 in sorted(self.data_t0.items(), key=lambda _: random.random()):
+        #     if val_t0:
+        #         self.data_t0[addr] = 0  # untaint whole reg
+        #         break
+        # else:
+        for addr, val_t0 in self.data.items():
+            if val_t0:
+                highest_tainted_bit = 0
+                for i in range(32):
+                    if (self.data_t0[addr]>>i)&1:
+                        highest_tainted_bit = i
+                self.data_t0[addr] &= ~(1<<highest_tainted_bit) # untained single bits
+                # break
+
+        self.states.append((deepcopy(self.data), deepcopy(self.data_t0)))
+        # print([hash(frozenset(state[1].items())) for state in self.states])
+
 
     def restore(self):
-        self.data = self.initial_data
-        self.data_t0 = self.initial_data_t0
+        self.data = deepcopy(self.states[-1][0])
+        self.data_t0 = deepcopy(self.states[-1][1])
+        # print(f"Restored to {hash(frozenset(self.data_t0.items()))}")
+
+
 
     def dump_taint(self, path: str = None):
         assert path is not None, "No path provided."
-        print(f"Dumping memview taints to {path}")
+        # print(f"Dumping memview taints to {path}")
         with open(path, "w") as f:
             # f.write("[\n")
             for addr, val_t0 in self.data_t0.items():
@@ -210,3 +247,11 @@ class MemoryView:
             #     f.write(f"\t{{\"addr\":\"{hex(addr)}\", \"val_t0\":\"{hex(val_t0)}\"}},\n")
             # f.write("]")
 
+    def print(self):
+        for addr, val_t0 in self.data_t0.items():
+            print(f"{hex(addr)}: {hex(self.data[addr])}: {hex(val_t0)}")
+
+    def flip_tainted_bits(self):
+        for addr,val_t0 in self.data_t0.items():
+            if val_t0:
+                self.data[addr] ^= val_t0
