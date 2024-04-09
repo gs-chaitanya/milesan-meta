@@ -37,6 +37,9 @@ class IntRegPickState:
         # Will ignore x0 if line below is uncommented. This is a design decision.
         # self.__reg_weights[0] = 0
 
+        self.writeback_trace_spikeresol = {}
+        self.writeback_trace_final = {}
+
     def setup_registers(self):
         self.regs = {id:Int32RegState(id,pickable=True) for id in range(self.num_pickable_regs)} # pickable registers
         self.regs[RELOCATOR_REGISTER_ID] = Int32RegState(RELOCATOR_REGISTER_ID)
@@ -70,6 +73,7 @@ class IntRegPickState:
     def reset(self):
         for reg in self.regs.values():
             reg.reset()
+        # self.writeback_trace = {}
 
     def get_free_regs_onehot(self):
         ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
@@ -89,23 +93,11 @@ class IntRegPickState:
         #     assert sum(ret) >= NUM_MIN_TAINTED_REGS
         return np.asarray(ret)
 
-    # def get_free_untainted_regs_onehot(self):
-    #     ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE and self.regs[reg_id].get_val_t0() == 0) for reg_id in range(self.num_pickable_regs)]
-    #     return ret
-
-    # def get_free_tainted_regs_onehot(self):
-    #     ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE and self.regs[reg_id].get_val_t0() != 0) for reg_id in range(self.num_pickable_regs)]
-    #     return ret
-
     def get_free_or_relocused_regs_onehot(self): # WARNING: Use those only for outputs, not for inputs.
-        ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
+        ret = [int(self.regs[reg_id].fsm_state in [IntRegIndivState.FREE, IntRegIndivState.RELOCUSED]) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
             assert sum(ret) >= NUM_MIN_FREE_INTREGS
         return ret
-
-    # def get_free_or_relocused_untainted_regs_onehot(self): # WARNING: Use those only for outputs, not for inputs.
-    #     ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE and self.regs[reg_id].get_val_t0() == 0) for reg_id in range(self.num_pickable_regs)]
-    #     return ret
 
     # Weights after deducting the forbidden registers
     def get_effective_weights(self, authorized_regs_onehot):
@@ -155,7 +147,9 @@ class IntRegPickState:
     
     # Returns a free and likely tainted inputreg.
     def pick_tainted_int_inputreg(self, authorize_sideeffects: bool = True, force: bool = False):
-        return random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(self.get_free_regs_onehot(), False, force))[0]
+        id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(self.get_free_regs_onehot(), False, force))[0]
+        assert self.regs[id].fsm_state == IntRegIndivState.FREE
+        return id
 
     # Excludes the zero register
     def pick_int_inputreg_nonzero(self, authorize_sideeffects: bool = True):
@@ -164,6 +158,7 @@ class IntRegPickState:
         authorized_regs_onehot[0] = 0
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights(authorized_regs_onehot))[0]
         authorized_regs_onehot[0] = was_zero_authorized
+        assert self.regs[id].fsm_state == IntRegIndivState.FREE
         return id
 
     # Excludes the zero register
@@ -173,6 +168,7 @@ class IntRegPickState:
         authorized_regs_onehot[0] = 0
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, False, force))[0]
         authorized_regs_onehot[0] = was_zero_authorized
+        assert self.regs[id].fsm_state == IntRegIndivState.FREE
         return id
 
     # Excludes the zero register. When force is enabled, will either throw an exception or return an untainted register.
@@ -182,6 +178,7 @@ class IntRegPickState:
         authorized_regs_onehot[0] = 0
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, True, force))[0]
         authorized_regs_onehot[0] = was_zero_authorized
+        assert self.regs[id].fsm_state == IntRegIndivState.FREE
         return id
 
     # Consuming multiple input registers in one go.
@@ -294,7 +291,7 @@ class IntRegPickState:
                 elif self.regs[reg_id].fsm_state == IntRegIndivState.PRODUCED1:
                     assert new_state in (IntRegIndivState.CONSUMED, IntRegIndivState.UNRELIABLE)
                 elif self.regs[reg_id].fsm_state == IntRegIndivState.CONSUMED:
-                    assert new_state == IntRegIndivState.FREE
+                    assert new_state == IntRegIndivState.FREE or new_state == IntRegIndivState.RELOCUSED
                 if DO_EXPENSIVE_ASSERT:
                     # Check that the register is registered in exactly one state
                     for s in IntRegIndivState:
@@ -421,6 +418,11 @@ class IntRegPickState:
             value_t0 = int(regdumps_rtl[reg_id]["value_t0"],16)
             self.regs[reg_id+1].print_and_compare(value,value_t0)
 
+    def add_writeback_trace(self, addr, rd, val_t0, is_spike_resolution):
+        if is_spike_resolution:
+            self.writeback_trace_spikeresol[addr] = (rd, val_t0)
+        else:
+            self.writeback_trace_final[addr] = (rd,val_t0)
 # Float registers are never forbidden, therefore this is simpler than integer registers.
 class FloatRegPickState:
     def __init__(self, num_pickable_floating_regs: int):
