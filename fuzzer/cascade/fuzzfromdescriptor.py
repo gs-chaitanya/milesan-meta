@@ -47,7 +47,7 @@ def gen_fuzzerstate_elf_expectedvals(memsize: int, design_name: str, randseed: i
 
     # spike resolution
     start = time.time()
-    expected_regvals = spike_resolution(fuzzerstate, check_pc_spike_again)
+    expected_regvals, intem_elfpath = spike_resolution_return_interm(fuzzerstate, check_pc_spike_again)
     time_seconds_spent_in_spike_resol = time.time() - start
 
     start = time.time()
