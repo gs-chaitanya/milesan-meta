@@ -70,9 +70,9 @@ def filter_reg_t0_traceback(reg_id, addr, fuzzerstate, correct_val, is_spike_res
             assert addr_spike == addr_final
             assert trace_spike[0] == trace_final[0]
             if trace_spike[1] != trace_final[1]:
-                print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}/{hex(trace_final[1])} (spike/final)")
-            # else:
-            #     print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}")
+                print(f"MISMATCH {hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}/{hex(trace_final[1])} (spike/final)")
+            else:
+                print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}")
 
     return last_instr
 ###
@@ -662,7 +662,7 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
         addr = self.instr_func(rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
         res_t0 = self.fuzzerstate.memview.read_t0(addr)
-        self.writeback_t0(res_t0,res, is_spike_resolution) # We allow rd to be tainted, thus taint could be propagated to several destination registers.
+        self.writeback_t0(res_t0,res, is_spike_resolution) # We allow the rd field to be tainted, thus taint could be propagated to several destination registers.
 
     def gen_bytecode_int_t0(self, is_spike_resolution: bool):
         assert(self.injectable), "Generating bytecode_t0 for non-injectable instruction. This should not happen."
@@ -687,7 +687,7 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         return masked_taint
         
 
-class IntStoreInstruction_t0(IntStoreInstruction):
+class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, iscompressed)
         self.imm_t0 = 0
@@ -695,21 +695,21 @@ class IntStoreInstruction_t0(IntStoreInstruction):
         self.rs2_t0 = 0
     
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        addr = self.instr_func(self.fuzzerstate.intregpickstate.regs[self.rs2].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
-        res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val()
+        addr = self.instr_func(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
+        res = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
         if taint_en:
-            self.execute_t0(is_spike_resolution)
+            self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.memview.write(addr, res)
 
     def execute_t0(self, res, is_spike_resolution):
         assert self.fuzzerstate.taint_en
-        rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
-        rs2_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
-        assert rs2_val_t0 == 0, f"Source register {ABI_INAMES[self.rs2]} is tainted ({hex(rs2_val_t0)}), this is not allowed."
-        assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
-        addr = self.instr_func(rs2_val,self.imm, self.fuzzerstate.is_design_64bit)
+        rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         rs1_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
-        self.fuzzerstate.memview.write_t0(addr,rs1_val_t0) # We don't allow addresses to be tainted, thus we don't need a writeback here.
+        assert rs1_val_t0 == 0, f"Source register {ABI_INAMES[self.rs1]} is tainted ({hex(rs1_val_t0)}), this is not allowed."
+        assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
+        addr = self.instr_func(rs1_val,self.imm, self.fuzzerstate.is_design_64bit)
+        rs2_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
+        self.fuzzerstate.memview.write_t0(addr,rs2_val_t0) # We don't allow addresses to be tainted, thus we don't need a writeback here.
 
     def gen_bytecode_int_t0(self, is_spike_resolution: bool):
         assert self.fuzzerstate.taint_en
@@ -734,4 +734,46 @@ class IntStoreInstruction_t0(IntStoreInstruction):
         assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
         return masked_taint
 
-    
+
+class RegdumpInstruction_t0(IntStoreInstruction_t0):
+    def gen_bytecode_int(self, is_spike_resolution: bool):
+        if is_spike_resolution:
+            return rv32i_addi(0x0,0x0,0x0) # Return nop for spike resolution
+        else:
+            return super().gen_bytecode_int(is_spike_resolution)
+
+    def get_str(self, is_spike_resolution):
+        if not is_spike_resolution:
+            return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
+        else:
+            return f"{hex(self.addr)}: nop"
+
+    def check_regs_t0(self,val_t0):
+        assert self.fuzzerstate.taint_en
+        if PRINT_CHECK_REGS_T0:
+            print(f"{hex(self.addr)}: Checking register taint: {ABI_INAMES[self.rs2]}:{hex(val_t0)}")
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check_t0(val_t0)
+        assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(self.rs2,self.addr,self.fuzzerstate,val_t0).get_str(False)}"
+
+
+    def check_regs(self,val):
+        assert self.fuzzerstate.taint_en
+        if PRINT_CHECK_REGS_T0:
+            print(f"{hex(self.addr)}: Checking register taint: {ABI_INAMES[self.rs2]}:{hex(val)}")
+        mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check(val)
+
+        assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(self.rs2,self.addr,self.fuzzerstate,val).get_str(False)}"
+
+class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int = 0, rs1: int = 0, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, iscompressed)
+
+    def execute(self, taint_en, is_spike_resolution):
+        print("Skipping sfence execution.")
+
+    def execute_t0(self, res, is_spike_resolution):
+        print("Skipping sfence taint execution.")
+
+
+def has_taint_trace(obj):
+    return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0))
