@@ -4,7 +4,7 @@
 
 from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT
 from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG
-from params.fuzzparams import RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID
+from params.fuzzparams import RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
 from cascade.util import IntRegIndivState
 from cascade.registers import Int32RegState, ABI_INAMES
@@ -42,12 +42,14 @@ class IntRegPickState:
 
     def setup_registers(self):
         self.regs = {id:Int32RegState(id,pickable=True) for id in range(self.num_pickable_regs)} # pickable registers
+        # Below are non-pickable registers.
         self.regs[RELOCATOR_REGISTER_ID] = Int32RegState(RELOCATOR_REGISTER_ID)
         self.regs[RDEP_MASK_REGISTER_ID] = Int32RegState(RDEP_MASK_REGISTER_ID)
         self.regs[FPU_ENDIS_REGISTER_ID] = Int32RegState(FPU_ENDIS_REGISTER_ID)
         self.regs[MPP_BOTH_ENDIS_REGISTER_ID] = Int32RegState(MPP_BOTH_ENDIS_REGISTER_ID)
         self.regs[MPP_TOP_ENDIS_REGISTER_ID] = Int32RegState(MPP_TOP_ENDIS_REGISTER_ID)
         self.regs[SPP_ENDIS_REGISTER_ID] = Int32RegState(SPP_ENDIS_REGISTER_ID)
+        self.regs[REGDUMP_REGISTER_ID] = Int32RegState(REGDUMP_REGISTER_ID)
         self.set_spike_boot_values()
 
     def set_initial_values(self, fuzzerstate): # Reset seed to starting value to ensure random values match if this function is called twice.
@@ -65,7 +67,7 @@ class IntRegPickState:
         self.regs[RDEP_MASK_REGISTER_ID].set_val_t0(0x0)
 
     def set_spike_boot_values(self): # Spike implicitly executes a couple of boot instructions that change the register values.
-        if ABI_INAMES.index("t0") in range(self.num_pickable_regs):
+        if ABI_INAMES.index("t0") in range(self.num_pickable_regs): # We only modify them if they are considered during the register checks.
             self.regs[ABI_INAMES.index("t0")].set_val(SPIKE_STARTADDR) # The provided SPIKE_STARTADDR is loaded into t0 during boot.
         if ABI_INAMES.index("a1") in range(self.num_pickable_regs):
             self.regs[ABI_INAMES.index("a1")].set_val(SPIKE_BOOTVAL_A1)
