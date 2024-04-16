@@ -47,6 +47,7 @@ class Testbench {
 	public:
         std::deque<doutput_t *> outputs;
         std::deque<tick_req_t *> tick_reqs;
+        std::deque<tick_req_t *> reg_stream;
         vluint32_t tick_count_;
         std::unique_ptr<Module> module_;
         std::chrono::_V2::steady_clock::time_point start_time;
@@ -83,7 +84,6 @@ class Testbench {
         void meta_reset_t0();
         void meta_reset_pc_t0();
         void check_got_stop_req();
-
         #endif // TAINT_EN
         void print_outputs();
         std::deque<doutput_t *> *pop_outputs();
@@ -94,7 +94,7 @@ class Testbench {
         void clear_instructions();
 		tick_req_t *tick(int num_ticks = 1, bool false_tick = false);
         std::deque<tick_req_t *> *pop_tick_reqs();
-
+        std::deque<tick_req_t *> *pop_reg_stream();
 
 		
 };

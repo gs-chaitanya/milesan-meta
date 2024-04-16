@@ -41,6 +41,13 @@ void fuzz_once(Testbench *tb, int simlen, bool reset = false) {
 			tb->tick_reqs.push_back(tick_req);
 		}
 		// Check whether stop has been requested.
+		if(tick_req->type == REQ_REGSTREAM){
+			#ifdef PRINT_REG_REQ
+			tick_req->print();
+			#endif
+			tb->reg_stream.push_back(tick_req);
+		}
+
 		if (!tb->got_stop_req && tick_req->type == REQ_STOP) {
 			#ifdef PRINT_STOP_REQ
 			std::cout << "Found a stop request. Stopping the benchmark after " << N_TICKS_AFTER_STOP << " more ticks, total tickcount was " << step_id << std::endl;
@@ -100,15 +107,21 @@ long fuzz(size_t simlen, bool prune = true){
 	Testbench *tb = new Testbench(cl_get_tracefile());
 
 	tb->reset();
-	Queue *seed = new_queue(nullptr,true);
+	// Queue *seed = new_queue(nullptr,true);
+	Queue *seed = new Queue();
+	Queue *reg_stream = new Queue();
 
-	tb->push_instructions(seed->pop_tb_instructions());
+	// tb->push_instructions(seed->pop_tb_instructions());
 	fuzz_once(tb, simlen, true );
-		
-	tb->check_all_inst_retired();
+	seed->push_tb_tick_reqs(tb->pop_tick_reqs());
+	seed->dump_tick_reqs();
+
+	reg_stream->push_tb_tick_reqs(tb->pop_reg_stream());
+	reg_stream->dump_reg_stream();
+	// tb->check_all_inst_retired();
 	seed->push_tb_outputs(tb->pop_outputs());
 	seed->push_tb_tick_reqs(tb->pop_tick_reqs());
-	seed->push_tb_instructions(tb->pop_instructions());
+	// seed->push_tb_instructions(tb->pop_instructions());
 
 	tb->clear_outputs();
 	tb->clear_instructions();

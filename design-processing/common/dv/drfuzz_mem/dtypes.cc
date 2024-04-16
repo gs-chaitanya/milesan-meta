@@ -17,11 +17,16 @@ void tick_req_t::print(){
     if(this->type == REQ_INTREGDUMP){
         std::string abi_name = "";
         if(this->id<18) abi_name = abi_names[this->id];
-        else if(this->id<28) abi_name =  "s" + std::to_string(this->id);
-        else if (this->id<32) abi_name =  "t" + std::to_string(this->id);
+        else if(this->id<28) abi_name =  "s" + std::to_string(this->id-16);
+        else if (this->id<32) abi_name =  "t" + std::to_string(this->id-31);
         printf("Dump of reg %5s: 0x%016lx: 0x%016lx: ", abi_name.c_str(), this->content, this->content_t0);
     }
-    else printf("Dump of reg f%5lu: 0x%016lx: 0x%016lx:", this->id, this->content, this->content_t0);
+    else if(this->type == REQ_INTREGDUMP){
+        printf("Dump of reg f%5lu: 0x%016lx: 0x%016lx:", this->id, this->content, this->content_t0);
+    }
+    else{
+        printf("Dump at addr 0x%08lx: 0x%016lx: 0x%016lx:", this->id, this->content, this->content_t0);
+    }
     #ifdef ARCH_32b
     int n_bits = 32;
     #else
@@ -47,9 +52,13 @@ std::string tick_req_t::get_json(){
     if(this->type == REQ_INTREGDUMP){
         out << "{\"id\": \"i" << this->id << "\", \"value\": \"0x" << std::hex << this->content  << "\", \"value_t0\": \"0x" << std::hex << this->content_t0 << "\"}";
     }
-    else{
+    else if(this->type == REQ_FLOATREGDUMP){
         out << "{\"id\": \"f" << this->id << "\", \"value\": \"0x" << std::hex << this->content  << "\", \"value_t0\": \"0x" << std::hex << this->content_t0 << "\"}";
     }
+    else if(this->type == REQ_REGSTREAM){
+        out << "{\"id\": \"0x" << std::hex << this->id << "\", \"value\": \"0x" << std::hex << this->content  << "\", \"value_t0\": \"0x" << std::hex << this->content_t0 << "\"}";
+    }
+
     return out.str();
 }
 

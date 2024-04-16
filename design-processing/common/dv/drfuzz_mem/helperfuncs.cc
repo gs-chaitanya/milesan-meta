@@ -86,7 +86,15 @@ std::string get_regdump_path(){
   else if(!printed) std::cout << "REDDUMP_PATH not set, defaulting to" << REGDUMP_PATH << std::endl; 
   printed = true;
   return REGDUMP_PATH;
+}
 
+std::string get_regstream_path(){
+  const static char* p = std::getenv("REGSTREAM_PATH");
+  static bool printed = false;
+  if(p) return std::string(p);
+  else if(!printed) std::cout << "REGSTREAM_PATH not set, defaulting to" << REGSTREAM_PATH << std::endl; 
+  printed = true;
+  return REGSTREAM_PATH;
 }
 
 std::string get_id(){

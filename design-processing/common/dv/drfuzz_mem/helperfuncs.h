@@ -22,5 +22,6 @@ std::string get_new_timeout_path();
 std::string get_new_reg_mismatch_path();
 std::string get_mut_inst_path();
 std::string get_regdump_path();
+std::string get_regstream_path();
 void recompute_elf();
 #endif //HELPFERFUNCS_H

@@ -60,72 +60,72 @@ void Testbench::clear_outputs(){
 }
 
 void Testbench::reset_memory(){
-    #ifdef SINGLE_MEM
-    svScope scope = svGetScopeFromName(VSCOPE_MEM);
-    assert(scope);  // Check for nullptr if scope not found
-    svSetScope(scope);
-    _reset_memory();
-    #endif
-    #ifdef DUAL_MEM // also reset inst rom because of taints
-    svScope scope = svGetScopeFromName(VSCOPE_DMEM);
-    assert(scope);  // Check for nullptr if scope not found
-    svSetScope(scope);
-    _reset_memory();
-    scope = svGetScopeFromName(VSCOPE_IMEM);
-    assert(scope);  // Check for nullptr if scope not found
-    svSetScope(scope);
-    _reset_memory();
-    #endif
+    // #ifdef SINGLE_MEM
+    // svScope scope = svGetScopeFromName(VSCOPE_MEM);
+    // assert(scope);  // Check for nullptr if scope not found
+    // svSetScope(scope);
+    // _reset_memory();
+    // #endif
+    // #ifdef DUAL_MEM // also reset inst rom because of taints
+    // svScope scope = svGetScopeFromName(VSCOPE_DMEM);
+    // assert(scope);  // Check for nullptr if scope not found
+    // svSetScope(scope);
+    // _reset_memory();
+    // scope = svGetScopeFromName(VSCOPE_IMEM);
+    // assert(scope);  // Check for nullptr if scope not found
+    // svSetScope(scope);
+    // _reset_memory();
+    // #endif
 }
 
 void Testbench::reset_memory_t(){
-    #ifdef SINGLE_MEM // TODO test
-    svScope scope = svGetScopeFromName(VSCOPE_MEM);
-    assert(scope);  // Check for nullptr if scope not found
-    svSetScope(scope);
-    _reset_memory_t();
-    // this->module_->mem_req_t0 = 0x0ULL;
-    #endif
+    // #ifdef SINGLE_MEM // TODO test
+    // svScope scope = svGetScopeFromName(VSCOPE_MEM);
+    // assert(scope);  // Check for nullptr if scope not found
+    // svSetScope(scope);
+    // _reset_memory_t();
+    // // this->module_->mem_req_t0 = 0x0ULL;
+    // #endif
 
-    #ifdef DUAL_MEM
-    svScope scope = svGetScopeFromName(VSCOPE_DMEM);
-    assert(scope);  // Check for nullptr if scope not found
-    svSetScope(scope);
-    _reset_memory_t();
-    // this->module_->data_mem_req_t0 = 0x0ULL;
-    // this->module_->data_mem_addr_t0 = 0x0ULL;
+    // #ifdef DUAL_MEM
+    // svScope scope = svGetScopeFromName(VSCOPE_DMEM);
+    // assert(scope);  // Check for nullptr if scope not found
+    // svSetScope(scope);
+    // _reset_memory_t();
+    // // this->module_->data_mem_req_t0 = 0x0ULL;
+    // // this->module_->data_mem_addr_t0 = 0x0ULL;
     
-    scope = svGetScopeFromName(VSCOPE_IMEM);
-    assert(scope);  // Check for nullptr if scope not found
-    svSetScope(scope);
-    _reset_memory_t();
-    // this->module_->instr_mem_req_t0 = 0x0ULL;
-    // this->module_->instr_mem_addr_t0 = 0x0ULL;
-    #endif
+    // scope = svGetScopeFromName(VSCOPE_IMEM);
+    // assert(scope);  // Check for nullptr if scope not found
+    // svSetScope(scope);
+    // _reset_memory_t();
+    // // this->module_->instr_mem_req_t0 = 0x0ULL;
+    // // this->module_->instr_mem_addr_t0 = 0x0ULL;
+    // #endif
 
 }
 
 void Testbench::dump_mem(){
-    #ifdef SINGLE_MEM // TODO test
-    std::cout << "MEM:\n";
-    svScope scope = svGetScopeFromName(VSCOPE_MEM);
-    assert(scope);  // Check for nullptr if scope not found
-    svSetScope(scope);
-    _dump_mem();
-    #endif
+    // #ifdef SINGLE_MEM // TODO test
+    // std::cout << "MEM:\n";
+    // svScope scope = svGetScopeFromName(VSCOPE_MEM);
+    // assert(scope);  // Check for nullptr if scope not found
+    // svSetScope(scope);
+    // _dump_mem();
+    // #endif
 
-    #ifdef DUAL_MEM
-    svScope scope = svGetScopeFromName(VSCOPE_DMEM);
-    assert(scope);  // Check for nullptr if scope not found
-    svSetScope(scope);
-    std::cout << "DMEM:\n";
-    _dump_mem();
-    scope = svGetScopeFromName(VSCOPE_IMEM);
-    assert(scope);  // Check for nullptr if scope not found
-    svSetScope(scope);
-    std::cout << "IMEM:\n";
-    _dump_mem();
-    #endif
+    // #ifdef DUAL_MEM
+    // svScope scope = svGetScopeFromName(VSCOPE_DMEM);
+    // assert(scope);  // Check for nullptr if scope not found
+    // svSetScope(scope);
+    // std::cout << "DMEM:\n";
+    // _dump_mem();
+    // scope = svGetScopeFromName(VSCOPE_IMEM);
+    // assert(scope);  // Check for nullptr if scope not found
+    // svSetScope(scope);
+    // std::cout << "IMEM:\n";
+    // _dump_mem();
+    // #endif
 }
 
 void Testbench::close_trace(void) {
@@ -150,64 +150,67 @@ tick_req_t *Testbench::tick(int num_ticks, bool false_tick) {
         #endif // VM_TRACE
 
         module_->clk_i = !false_tick;
-
-        if(intercept != nullptr){
-            if(intercept->retired){
-                intercept = nullptr;
-                #ifdef DUAL_MEM
-                #ifdef TAINT_EN
-                module_->instr_mem_rdata_t0 = 0x0;
-                #endif // TAINT_EN
-                module_->intercept_instr_mem_rdata = 0x0;
-                module_->intercept_instr_mem_en = 0;
-                #else // DUAL_MEM
-                #ifdef TAINT_EN
-                module_->mem_rdata_o_t0 = 0x0;
-                #endif // TAINT_EN
-                module_->intercept_mem_rdata = 0x0;
-                module_->intercept_mem_en = 0;
-                #endif // DUAL_MEM
-            }
-            else{
-                #ifdef DUAL_MEM
-                module_->intercept_instr_mem_en = 1;
-                module_->intercept_instr_mem_rdata = intercept->inject_inst ? intercept->get_binary() : module_->instr_mem_rdata;
-                module_->instr_mem_rdata_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
-                #ifdef PRINT_INTERCEPT
-                intercept->print_intercept(module_->instr_mem_rdata,0x0);
-                #endif // PRINT_INTERCEPT
-                #else // DUAL_MEM
-                module_->intercept_mem_en = 1;
-                #if DATA_WIDTH_BYTES == 4
-                module_->intercept_mem_rdata = intercept->inject_inst ?   module_->mem_rdata_o | intercept->get_binary() : module_->mem_rdata_o;
-                module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
-                #else // DATA_WIDTH_BYTES == 8
-                assert(DATA_WIDTH_BYTES==8);
-                if(intercept->alignment == 0){
-                    module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o&(0xFFFFFFFFULL<<32) | intercept->get_binary()) : module_->mem_rdata_o;
-                    #ifdef TAINT_EN
-                    module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
-                    #endif // TAINT_EN
-                    #ifdef PRINT_INTERCEPT
-                    intercept->print_intercept(module_->mem_rdata_o&0xFFFFFFFFULL,0x0);
-                    #endif // PRINT_INTERCEPT
-                }
-                else{
-                    assert(intercept->alignment == 4);
-                    module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o & (0xFFFFFFFFULL) | ((uint64_t) intercept->get_binary())<<32) : module_->mem_rdata_o;
-                    #ifdef TAINT_EN
-                    module_->mem_rdata_o_t0 = intercept->inject_taint ? ((uint64_t) intercept->get_binary_t0())<<32 : 0x0;
-                    #endif // TAINT_EN
-                    #ifdef PRINT_INTERCEPT
-                    intercept->print_intercept((module_->mem_rdata_o&(0xFFFFFFFFULL<<32))>>32,0x0);
-                    #endif // PRINT_INTERCEPT
-                }
-                #endif // DATA_WIDTH_BYTES
-                #endif // DUAL_MEM
-                intercept->retired = true;
-                this->intercepted = true;
-            }
+        if(module_->data_mem_rdata_t0){
+            std::cout << "dbus taint: " << std::hex << module_->data_mem_rdata_t0 << std::endl;
         }
+
+        // if(intercept != nullptr){
+        //     if(intercept->retired){
+        //         intercept = nullptr;
+        //         #ifdef DUAL_MEM
+        //         #ifdef TAINT_EN
+        //         module_->instr_mem_rdata_t0 = 0x0;
+        //         #endif // TAINT_EN
+        //         module_->intercept_instr_mem_rdata = 0x0;
+        //         module_->intercept_instr_mem_en = 0;
+        //         #else // DUAL_MEM
+        //         #ifdef TAINT_EN
+        //         module_->mem_rdata_o_t0 = 0x0;
+        //         #endif // TAINT_EN
+        //         module_->intercept_mem_rdata = 0x0;
+        //         module_->intercept_mem_en = 0;
+        //         #endif // DUAL_MEM
+        //     }
+        //     else{
+        //         #ifdef DUAL_MEM
+        //         module_->intercept_instr_mem_en = 1;
+        //         module_->intercept_instr_mem_rdata = intercept->inject_inst ? intercept->get_binary() : module_->instr_mem_rdata;
+        //         module_->instr_mem_rdata_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
+        //         #ifdef PRINT_INTERCEPT
+        //         intercept->print_intercept(module_->instr_mem_rdata,0x0);
+        //         #endif // PRINT_INTERCEPT
+        //         #else // DUAL_MEM
+        //         module_->intercept_mem_en = 1;
+        //         #if DATA_WIDTH_BYTES == 4
+        //         module_->intercept_mem_rdata = intercept->inject_inst ?   module_->mem_rdata_o | intercept->get_binary() : module_->mem_rdata_o;
+        //         module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
+        //         #else // DATA_WIDTH_BYTES == 8
+        //         assert(DATA_WIDTH_BYTES==8);
+        //         if(intercept->alignment == 0){
+        //             module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o&(0xFFFFFFFFULL<<32) | intercept->get_binary()) : module_->mem_rdata_o;
+        //             #ifdef TAINT_EN
+        //             module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
+        //             #endif // TAINT_EN
+        //             #ifdef PRINT_INTERCEPT
+        //             intercept->print_intercept(module_->mem_rdata_o&0xFFFFFFFFULL,0x0);
+        //             #endif // PRINT_INTERCEPT
+        //         }
+        //         else{
+        //             assert(intercept->alignment == 4);
+        //             module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o & (0xFFFFFFFFULL) | ((uint64_t) intercept->get_binary())<<32) : module_->mem_rdata_o;
+        //             #ifdef TAINT_EN
+        //             module_->mem_rdata_o_t0 = intercept->inject_taint ? ((uint64_t) intercept->get_binary_t0())<<32 : 0x0;
+        //             #endif // TAINT_EN
+        //             #ifdef PRINT_INTERCEPT
+        //             intercept->print_intercept((module_->mem_rdata_o&(0xFFFFFFFFULL<<32))>>32,0x0);
+        //             #endif // PRINT_INTERCEPT
+        //         }
+        //         #endif // DATA_WIDTH_BYTES
+        //         #endif // DUAL_MEM
+        //         intercept->retired = true;
+        //         this->intercepted = true;
+        //     }
+        // }
         module_->eval();
 
 
@@ -221,17 +224,17 @@ tick_req_t *Testbench::tick(int num_ticks, bool false_tick) {
         module_->clk_i = 0;
         module_->eval();
 
-        if(intercept==nullptr){
-            #ifdef DUAL_MEM
-            if(this->intercept_instructions.count((module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
-                intercept = this->intercept_instructions[(module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2)];
-                }
-            #else // single memory for data and instructions 
-            if(this->intercept_instructions.count((module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
-                intercept = this->intercept_instructions[(module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2)];
-            }
-            #endif
-        }
+        // if(intercept==nullptr){
+        //     #ifdef DUAL_MEM
+        //     if(this->intercept_instructions.count((module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
+        //         intercept = this->intercept_instructions[(module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2)];
+        //         }
+        //     #else // single memory for data and instructions 
+        //     if(this->intercept_instructions.count((module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
+        //         intercept = this->intercept_instructions[(module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2)];
+        //     }
+        //     #endif
+        // }
         // if(module_->mem_addr_o) std::cout << std::hex << (module_->mem_addr_o>>3) << ":" << module_->mem_rdata_o << std::endl;
         #if VM_TRACE
             trace_->dump(5 * tick_count_ + 2);
@@ -302,6 +305,10 @@ std::deque<doutput_t *> *Testbench::pop_outputs(){
 
 std::deque<tick_req_t *> *Testbench::pop_tick_reqs(){
     return &this->tick_reqs;
+}
+
+std::deque<tick_req_t *> *Testbench::pop_reg_stream(){
+    return &this->reg_stream;
 }
 
 void Testbench::push_instruction(Instruction *instruction){
