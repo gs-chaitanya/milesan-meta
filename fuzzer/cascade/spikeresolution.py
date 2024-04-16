@@ -85,6 +85,13 @@ def gen_regdump_reqs_all_rds(fuzzerstate):
             elif isinstance(bb_instr, IntStoreInstruction):
                 ret.append((curr_addr, False, bb_instr.rs1))
                 ret.append((curr_addr, False, bb_instr.rs2))
+            elif isinstance(bb_instr, CSRRegInstruction):
+                ret.append((curr_addr, False, bb_instr.rd))
+                ret.append((curr_addr, False, bb_instr.rs1))
+            elif isinstance(bb_instr, CSRImmInstruction):
+                ret.append((curr_addr, False, bb_instr.rd))
+
+
 
     return ret
 
