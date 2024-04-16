@@ -9,6 +9,7 @@ from common.spike import SPIKE_STARTADDR
 from rv.csrids import CSR_IDS
 from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES
 from params.fuzzparams import TAINT_EN
+from params.runparams import INSERT_REGDUMPS
 from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 from cascade.randomize.pickisainstrclass import gen_next_isainstrclass, ISAInstrClass
@@ -26,6 +27,7 @@ from cascade.blacklist import blacklist_changing_instructions, blacklist_final_b
 from cascade.privilegestate import PrivilegeStateEnum
 
 import random
+CURR_ALLOC_CURSOR_INC = 8 if INSERT_REGDUMPS else 4
 
 # Given the provided control flow instruction, finds a location for a new block, but does not allocate it.
 # @return False if could not find a next bb address
@@ -42,7 +44,6 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
 # @return True iff the creation is successful
 def gen_basicblock(fuzzerstate):
     fuzzerstate.init_new_bb() # Update fuzzer state to support a new basic block
-
     # This points to the first address after the current basic block allocation. The block allocation takes 16 bytes in advance, to avoid storing and then not being able to continue expanding the basic block.
     curr_alloc_cursor = fuzzerstate.curr_bb_start_addr + BASIC_BLOCK_MIN_SPACE
 
@@ -53,7 +54,7 @@ def gen_basicblock(fuzzerstate):
 
         # Allocate the next 4 bytes
         fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+4)
-        curr_alloc_cursor += 4
+        curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
         curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
 
         # Get the next instruction class
@@ -67,8 +68,8 @@ def gen_basicblock(fuzzerstate):
 
             # For consumers, we may need to insert one more instruction
             for next_instrobj_id in range(1, len(new_instrobjs)):
-                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+4)
-                curr_alloc_cursor += 4
+                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 # fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[next_instrobj_id])
                 fuzzerstate.append_and_execute_instr(new_instrobjs[next_instrobj_id], True)
             del new_instrobjs # For safety, we prevent accidental reuse of this variable
@@ -80,10 +81,11 @@ def gen_basicblock(fuzzerstate):
                 fuzzerstate.fpuendis_coords.append((len(fuzzerstate.instr_objs_seq)-1, len(fuzzerstate.instr_objs_seq[-1])))
             if DO_ASSERT:
                 assert len(new_instrobjs) * 4 < BASIC_BLOCK_MIN_SPACE # NO_COMPRESSED
-            fuzzerstate.instr_objs_seq[-1] += new_instrobjs
+            for new_instrobj in new_instrobjs:
+                fuzzerstate.append_and_execute_instr(new_instrobj, True)
             if len(new_instrobjs) > 1:
-                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+4*(len(new_instrobjs)-1)) # NO_COMPRESSED
-                curr_alloc_cursor += 4*(len(new_instrobjs)-1) # NO_COMPRESSED
+                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC*(len(new_instrobjs)-1)) # NO_COMPRESSED
+                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC*(len(new_instrobjs)-1) # NO_COMPRESSED
             del new_instrobjs # For safety, we prevent accidental reuse of this variable
             continue
 
