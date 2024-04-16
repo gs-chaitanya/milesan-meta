@@ -2,7 +2,7 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT
+from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT, PRINT_FSM_TRANSITIONS
 from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
@@ -183,6 +183,13 @@ class IntRegPickState:
         assert self.regs[id].fsm_state == IntRegIndivState.FREE
         return id
 
+    # Includes the zero register. When force is enabled, will either throw an exception or return an untainted register.
+    def pick_untainted_int_inputreg(self, force: bool = False):
+        authorized_regs_onehot = self.get_free_regs_onehot()
+        id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, True, force))[0]
+        assert self.regs[id].fsm_state == IntRegIndivState.FREE
+        return id
+
     # Consuming multiple input registers in one go.
     def pick_int_inputregs(self, n: int):
         authorized_regs_onehot = self.get_free_regs_onehot()
@@ -303,6 +310,8 @@ class IntRegPickState:
         self.__regs_in_state_onehot[self.regs[reg_id].fsm_state][reg_id] = 0
         self.__regs_in_state_onehot[new_state][reg_id] = 1
         self.regs[reg_id].fsm_state = new_state
+        if PRINT_FSM_TRANSITIONS:
+            print(f"Setting {ABI_INAMES[reg_id]} to {new_state.name}")
     # Brings iteratively a register to the requested state, as fast as possible
     # @return nothing, but guarantees that a register will be in the target state
     def bring_some_reg_to_state(self, req_state: int, fuzzerstate):
