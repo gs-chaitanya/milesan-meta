@@ -39,7 +39,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.EPCFSM:      0,
     ISAInstrClass.MEDELEG:     0,
     ISAInstrClass.EXCEPTION:   0,
-    ISAInstrClass.RANDOM_CSR:  0,
+    ISAInstrClass.RANDOM_CSR:  0.001,
     ISAInstrClass.DESCEND_PRV: 0,
     ISAInstrClass.SPECIAL:     0
 }
