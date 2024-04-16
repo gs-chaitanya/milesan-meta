@@ -65,7 +65,7 @@ module ift_sram_mem #(
     end
 
     // Taint the read data if the addr was tainted.
-    assign rdata_o_taint[taint_id] = rdata_o_taint_before_conservative[taint_id] | {(Width){was_req_addr_tainted_q | is_mem_fully_tainted_q}};
+    assign rdata_o_taint[taint_id] = rdata_o_taint_before_conservative[taint_id];
   end
 
   logic [Width-1:0]    mem [bit [31:0]];
@@ -103,8 +103,8 @@ module ift_sram_mem #(
           for (int j = 0; j < WidthBytes; j++) begin
             word[j] = buffer[i*WidthBytes+j];
           end
-          if (|word)
-            $display("Writing ELF word to SRAM addr %x: %x", (AddrMask&section_addr)/WidthBytes+i, word);
+          // if (|word)
+          //   $display("Writing ELF word to SRAM addr %x: %x", (AddrMask&section_addr)/WidthBytes+i, word);
           mem[(AddrMask&section_addr)/WidthBytes+i] = word;
         end
       end
@@ -175,7 +175,7 @@ module ift_sram_mem #(
             if (wmask_i[i]) begin
               if (!mem_taints.exists(AddrMask & (RelocateRequestUp | addr_i)))
                 mem_taints[AddrMask & (RelocateRequestUp | addr_i)] = '0;
-              mem_taints[AddrMask & (RelocateRequestUp | addr_i)][i] = wdata_i_taint[taint_id][i] | wdata_i_taint[taint_id][i];
+              mem_taints[AddrMask & (RelocateRequestUp | addr_i)][i] = wdata_i_taint[taint_id][i];
             end
         end
         else
