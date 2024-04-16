@@ -72,7 +72,7 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool, e
 def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool, en_taint: bool = False):
     if DO_ASSERT:
         assert instr_str in BranchInstructions
-    rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputregs(2))
+    rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputregs(2, force=True))
     plan_taken = fuzzerstate.curr_branch_taken
     if plan_taken:
         # print('A', flush=True)
@@ -90,14 +90,12 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
             imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     
     # print('New imm', hex(imm), flush=True)
-    return BranchInstruction(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
+    return BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
 
 def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool, en_taint: bool = False):
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg()
     imm = fuzzerstate.next_bb_addr-curr_addr
     if rd > 0:
-        if PRINT_FSM_TRANSITIONS:
-            print(f"Setting {ABI_INAMES[rd]} to FREE")
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     return JALInstruction_t0(fuzzerstate, instr_str, rd, imm, iscompressed)
 
@@ -107,12 +105,8 @@ def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool, en_
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg()
     imm = 0
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-    if PRINT_FSM_TRANSITIONS:
-        print(f"Setting {ABI_INAMES[rs1]} to RELOCUSED")
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCUSED)
     if rd > 0:
-        if PRINT_FSM_TRANSITIONS:
-            print(f"Setting {ABI_INAMES[rd]} to FREE")
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
@@ -238,14 +232,16 @@ def _create_FloatIntRs1Instruction(instr_str: str, fuzzerstate, iscompressed: bo
 def create_regfsm_instrobjs(fuzzerstate, en_taint: bool = False):
     # Check which reg fsm operations are doable
     doable_fsm_ops = np.zeros(3, dtype=np.int8)
-    doable_fsm_ops[0] = fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) > NUM_MIN_FREE_INTREGS
+    n_free_or_relocused_regs =  fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) +  fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.RELOCUSED)
+    doable_fsm_ops[0] = n_free_or_relocused_regs > NUM_MIN_FREE_INTREGS
     doable_fsm_ops[1] = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED0)
     doable_fsm_ops[2] = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED1)
     doable_fsm_ops[2] &= fuzzerstate.intregpickstate.exists_untainted_reg_in_state(IntRegIndivState.FREE)
 
     effective_weights = doable_fsm_ops * REG_FSM_WEIGHTS
-    if not np.any(effective_weights):
-        fuzzerstate.intregpickstate.print()
+    # if not np.any(effective_weights):
+    #     fuzzerstate.intregpickstate.print()
+    #     print(f"n_free_or_relocused: {n_free_or_relocused_regs}")
     assert np.any(effective_weights), f"No FSM operation possible! {doable_fsm_ops}"
     choice = None
     while choice is None or not doable_fsm_ops[choice]:
