@@ -10,11 +10,14 @@ from common.sim.modelsim import get_next_worker_id
 from params.runparams import DO_ASSERT, PATH_TO_TMP
 from common.sim.commonsim import setup_sim_env
 from common import designcfgs
+from cascade.spikeresolution import SPIKE_STARTADDR
+
 import itertools
 import os
 import subprocess
 import sys
 from enum import Enum
+import json
 
 # Either Verilator or Modelsim
 class SimulatorEnum(Enum):
@@ -246,3 +249,22 @@ def runtest_modelsim_forcoverage(fuzzerstate, elfpath: str, coveragepath: str):
     # Check successful stop
     if not is_stop_successful:
         raise Exception(f"Timeout during modelsim testing of design `{fuzzerstate.design_name}` for tuple ({fuzzerstate.memsize}, design_name, {fuzzerstate.randseed}, {fuzzerstate.nmax_bbs}).")
+
+
+def run_rtl_and_load_regstream(env,design_name: str):
+    cmd = ["make","rerun_drfuzz_mem_notrace"]
+    cascadedir = designcfgs.get_design_cascade_path(design_name)
+    subprocess.run(cmd,cwd=cascadedir,env=env,capture_output=True,check=True)
+
+    assert "REGDUMP_PATH" in env
+    with open(env["REGDUMP_PATH"], "rb") as f:
+        regdumps_rtl = json.load(f)
+
+    assert "REGSTREAM_PATH" in env
+    with open(env["REGSTREAM_PATH"], "rb") as f:
+        regstream_rtl = json.load(f)
+    
+    regstream_rtl_val_t0 = {int(r["id"],16) + SPIKE_STARTADDR - 12: int(r["value_t0"],16) for r in regstream_rtl}
+    regstream_rtl_val = {int(r["id"],16) + SPIKE_STARTADDR - 12: int(r["value"],16) for r in regstream_rtl}
+
+    return (regstream_rtl_val, regstream_rtl_val_t0), regdumps_rtl

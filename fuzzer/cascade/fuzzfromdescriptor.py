@@ -16,6 +16,7 @@ import numpy as np
 import os
 import random
 import time
+import subprocess
 
 FUZZ_USE_MODELSIM = False
 
@@ -55,6 +56,14 @@ def gen_fuzzerstate_elf_expectedvals(memsize: int, design_name: str, randseed: i
     rtl_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'rtl', fuzzerstate.instance_to_str(), fuzzerstate.design_base_addr)
     time_seconds_spent_in_gen_elf = time.time() - start
     return fuzzerstate, rtl_elfpath, expected_regvals, time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf
+
+
+def gen_fuzzerstate_elf_flipped_bits(fuzzerstate):
+    # spike resolution
+    expected_regvals, intem_elfpath = spike_resolution_return_interm(fuzzerstate, True)
+    rtl_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'rtl', fuzzerstate.instance_to_str(), fuzzerstate.design_base_addr)
+    return rtl_elfpath, expected_regvals
+
 
 def gen_fuzzerstate_elf_expectedvals_interm(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, check_pc_spike_again: bool, en_taint: bool = TAINT_EN):
     from cascade.fuzzerstate import FuzzerState
@@ -122,3 +131,4 @@ def fuzz_single_from_descriptor(memsize: int, design_name: str, randseed: int, n
         else:
             print(f"Failed test_run_rtl_single for params memsize: `{memsize}`, design_name: `{design_name}`, check_pc_spike_again: `{check_pc_spike_again}`, randseed: `{randseed}`, nmax_bbs: `{nmax_bbs}` -- ({memsize}, design_name, {randseed}, {nmax_bbs})\n{e}")
         return 0, 0, 0, 0
+
