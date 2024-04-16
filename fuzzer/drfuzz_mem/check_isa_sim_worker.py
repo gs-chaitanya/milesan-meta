@@ -21,8 +21,8 @@ def test_done_callback(ret):
         if(ret):
             total_finished_tests += 1
             print(f"Finished {total_finished_tests} threads.")
-        else:
-            print(f"Thread failed.")
+        # else:
+        #     print(f"Thread failed.")
 
 
 

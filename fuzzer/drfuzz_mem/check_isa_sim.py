@@ -48,10 +48,11 @@ def check_isa_sim(design_name: str,seed: int):
         for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)): # skip first and last bb
             for inst_idx,next_instr in enumerate(bb_instrs):
                 if next_instr.addr not in pc_rd_pairs:
-                    # print(f"Skipping check for {next_instr.get_str()}")
+                    print(f"Skipping check for {next_instr.get_str()}")
                     continue
                 next_instr.check_regs(pc_rd_pairs[next_instr.addr]) # check value before executing instruction
                 next_instr.execute(fuzzerstate.taint_en)
+                next_instr.print()
                 # next_instr.log(SPIKE_STARTADDR+curr_addr)
 
         expected_intregvals = expected_regvals[0]

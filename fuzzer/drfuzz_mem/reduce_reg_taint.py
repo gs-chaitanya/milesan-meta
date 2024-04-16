@@ -3,8 +3,8 @@ import shutil
 import glob
 import json
 
-from params.runparams import PATH_TO_TMP, PATH_TO_COV, PRINT_INSTRUCTION_EXECUTION_FINAL
-from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
+from params.runparams import PATH_TO_TMP, PATH_TO_COV, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS
+from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance, gen_fuzzerstate_elf_flipped_bits
 from cascade.cfinstructionclasses import *
 import subprocess, itertools
 from common import designcfgs
@@ -13,35 +13,39 @@ from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
 from cascade.registers import ABI_INAMES,MAX_32b
 from cascade.spikeresolution import spike_resolution_return_interm
 from drfuzz_mem.spike_sim_taint import spike_sim_taint
+MAX_CYCLES_PER_INSTR = 30
+SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
 
 def reduce_reg_taint(design_name: str, seed: int):   
     try:
         # get fuzzerstate and expected regvals from program
         # print(f"Starting program generation and ad-hoc simulation.(FSM instructions are ignored.)")
         # fuzzerstate, interm_elfpath, expected_regvals  = gen_fuzzerstate_elf_expectedvals_interm(*gen_new_test_instance(design_name, seed, True), True)
-        fuzzerstate, rtl_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), True)
+        fuzzerstate, rtl_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), not INSERT_REGDUMPS)
         ID = fuzzerstate.instance_to_str()
         ## temp dirs below
         env_dir = os.path.join(PATH_TO_TMP, 'envs')
         env_path = os.path.join(env_dir,f'{ID}.env.sh')
         regdump_path = os.path.join(PATH_TO_TMP, f"{ID}.regump.json")
         simsramtaint_path = os.path.join(PATH_TO_TMP, f"{ID}.simsramtaint")
+        num_instrs = len(list(itertools.chain.from_iterable(fuzzerstate.instr_objs_seq)))
+        simlen = str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
         env = os.environ.copy()
+        env["SIMLEN"] = simlen
         env["SIMSRAMELF"] = rtl_elfpath
         env["ID"] = str(ID)
         env["DESIGN"] = design_name
         env["SEED"] = str(seed)
         env["REGDUMP_PATH"] = regdump_path
         env["SIMSRAMTAINT"] = simsramtaint_path
-
+        print(env_path)
         with open(env_path, "w") as f:
             f.write(f"export SIMSRAMELF={env['SIMSRAMELF']}\n")
             f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF']}.dump\n")
             f.write(f"export SIMSRAMTAINT={simsramtaint_path}\n")
             f.write(f"export SEED={env['SEED']}\n")
             f.write(f"export ID={env['ID']}\n")
-
-
+            f.write(f"export SIMLEN={simlen}")
 
         fuzzerstate.intregpickstate.reset()
         fuzzerstate.intregpickstate.set_spike_boot_values()
@@ -77,21 +81,23 @@ def reduce_reg_taint(design_name: str, seed: int):
 
         cmd = ["make","rerun_drfuzz_mem_notrace"]
         cascadedir = designcfgs.get_design_cascade_path(fuzzerstate.design_name)
-        subprocess.run(cmd,cwd=cascadedir,env=env,capture_output=True,check=True)
+        ret = subprocess.run(cmd,cwd=cascadedir,env=env,capture_output=True,check=False)
+        if ret.stderr:
+            mismatch = True
+        else:
+            with open(regdump_path, "rb") as f:
+                regdumps_rtl = json.load(f)
 
-        with open(regdump_path, "rb") as f:
-            regdumps_rtl = json.load(f)
+            print("*** REGISTER VALIDATION ***:")
+            fuzzerstate.intregpickstate.print_and_compare(regdumps_rtl)
 
-        print("*** REGISTER VALIDATION ***:")
-        fuzzerstate.intregpickstate.print_and_compare(regdumps_rtl)
-
-        mismatch = False
-        for id in range(fuzzerstate.num_pickable_regs-1):
-            value = int(regdumps_rtl[id]["value"],16)
-            value_t0 = int(regdumps_rtl[id]["value_t0"],16)
-            mismatch |= fuzzerstate.intregpickstate.regs[id+1].check(value) != False
-            mismatch |= fuzzerstate.intregpickstate.regs[id+1].check(expected_intregvals[id]) != False
-            mismatch |= fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0) != False
+            mismatch = False
+            for id in range(fuzzerstate.num_pickable_regs-1):
+                value = int(regdumps_rtl[id]["value"],16)
+                value_t0 = int(regdumps_rtl[id]["value_t0"],16)
+                mismatch |= fuzzerstate.intregpickstate.regs[id+1].check(value) != False
+                mismatch |= fuzzerstate.intregpickstate.regs[id+1].check(expected_intregvals[id]) != False
+                mismatch |= fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0) != False
         
         assert mismatch, "No mismatch detected in initial run."
         while True:
@@ -134,7 +140,10 @@ def reduce_reg_taint(design_name: str, seed: int):
 
             cmd = ["make","rerun_drfuzz_mem_notrace"]
             cascadedir = designcfgs.get_design_cascade_path(fuzzerstate.design_name)
-            subprocess.run(cmd,cwd=cascadedir,env=env,capture_output=True,check=True)
+            ret = subprocess.run(cmd,cwd=cascadedir,env=env,capture_output=True,check=False)
+            if ret.stderr:
+                mismatch = True
+                continue
 
             with open(regdump_path, "rb") as f:
                 regdumps_rtl = json.load(f)
@@ -153,8 +162,8 @@ def reduce_reg_taint(design_name: str, seed: int):
                 assert not value_spike_sim_mismatch
                 taint_rtl_sim_mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
                 if taint_rtl_sim_mismatch:
-                        print(f"Taint mismatch for {taint_rtl_sim_mismatch[0]}: {hex(taint_rtl_sim_mismatch[1])} != {hex(taint_rtl_sim_mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str(False)}")
-                        mismatch |= taint_rtl_sim_mismatch != False
+                    print(f"Taint mismatch for {taint_rtl_sim_mismatch[0]}: {hex(taint_rtl_sim_mismatch[1])} != {hex(taint_rtl_sim_mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str(False)}")
+                    mismatch |= taint_rtl_sim_mismatch != False
 
             if not mismatch:
                 del fuzzerstate.memview.states[-1]
@@ -165,7 +174,12 @@ def reduce_reg_taint(design_name: str, seed: int):
                 print(f"Fliping bit with reduced taint.")
                 fuzzerstate.memview.print()
                 fuzzerstate.memview.flip_tainted_bits()
+                fuzzerstate.load_init_regvals_from_memview()
+                bitflip_rtl_elfpath, expected_regvals = gen_fuzzerstate_elf_flipped_bits(fuzzerstate)
+                for i,regval in enumerate(expected_regvals[0]):
+                    print(f"{i}: {hex(regval)}")
 
+                print(f"new rtl: {bitflip_rtl_elfpath}")
                 for bb_id ,(bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)): # skip first and last bb
                     for inst_idx,next_instr in enumerate(bb_instrs):
                         if next_instr.addr not in pc_reg_pairs1:
