@@ -2,14 +2,15 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_SPIKERESOL, PATH_TO_TMP, INSERT_REGDUMPS
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_SPIKERESOL, PATH_TO_TMP, INSERT_REGDUMPS, PRINT_ENVIRONMENT
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS
-from params.fuzzparams import TAINT_EN
+from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp
 from common.spike import SPIKE_STARTADDR
 
 from cascade.util import ISAInstrClass, ExceptionCauseVal
 from cascade.memview import MemoryView
+from cascade.csrfile import CSRFile
 from cascade.contextreplay import get_context_setter_max_size
 from cascade.privilegestate import PrivilegeState
 from cascade.randomize.pickstoreaddr import MemStoreState
@@ -21,6 +22,7 @@ from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstru
 
 import random
 import os
+import itertools
 
 class FuzzerState:
     # @param randseed for identification purposes only.
@@ -64,6 +66,7 @@ class FuzzerState:
         self.ctxsv_size_upperbound: int = get_context_setter_max_size(self) # Can be called once is_design_64bit, design_has_fpu and design_has_fpud are set, and the number of store locations is known.
 
         self.memstorestate = MemStoreState()
+        self.csrfile = CSRFile()
         self.intregpickstate = IntRegPickState(self.num_pickable_regs)
         self.floatregpickstate = FloatRegPickState(self.num_pickable_floating_regs)
         self.privilegestate = PrivilegeState()
@@ -213,7 +216,6 @@ class FuzzerState:
         return 4
 
 
-
     def dump_instructions_t0(self):
         insts = {}
         for bb_id ,bb_instrs in enumerate(self.instr_objs_seq): # skip first and last bb
@@ -234,3 +236,44 @@ class FuzzerState:
             # print(f"Dumping memview to {path}")
         self.memview.dump_taint(path)
 
+    def setup_env(self, rtl_elfpath, seed):
+        ID = self.instance_to_str()
+        ## temp dirs below
+        env_dir = os.path.join(PATH_TO_TMP, 'envs')
+        env_path = os.path.join(env_dir,f'{ID}.env.sh')
+        regdump_path = os.path.join(PATH_TO_TMP, f"{ID}.regump.json")
+        regstream_path = os.path.join(PATH_TO_TMP, f"{ID}.regstream.json")
+        simsramtaint_path = os.path.join(PATH_TO_TMP, f"{ID}.simsramtaint")
+        num_instrs = len(list(itertools.chain.from_iterable(self.instr_objs_seq)))
+        simlen = str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
+        env = os.environ.copy()
+        env["SIMLEN"] = simlen
+        env["SIMSRAMELF"] = rtl_elfpath
+        env["ID"] = str(ID)
+        env["DESIGN"] = self.design_name
+        env["SEED"] = str(seed)
+        env["REGDUMP_PATH"] = regdump_path
+        env["REGSTREAM_PATH"] = regstream_path
+        env["SIMSRAMTAINT"] = simsramtaint_path
+
+        with open(env_path, "w") as f:
+            f.write(f"export SIMSRAMELF={env['SIMSRAMELF']}\n")
+            f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF']}.dump\n")
+            f.write(f"export SIMSRAMTAINT={simsramtaint_path}\n")
+            f.write(f"export SEED={env['SEED']}\n")
+            f.write(f"export ID={env['ID']}\n")
+            f.write(f"export SIMLEN={simlen}\n")
+            f.write(f"export REGSTREAM_PATH={regstream_path}\n")
+            f.write(f"export REGDUMP_PATH={regdump_path}\n")
+
+        if PRINT_ENVIRONMENT:
+            print("*** ENVIRONMENT ***")
+            print(f"source {env_path}")
+
+        return env
+
+
+    def load_init_regvals_from_memview(self):
+        self.initial_reg_data_content.clear()
+        for val,addr in self.memview.data.items():
+            self.initial_reg_data_content.append(val)
