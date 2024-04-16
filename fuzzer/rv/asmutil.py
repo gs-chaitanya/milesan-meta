@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT
+from params.celliftparams import SLL_IMPRECISE, SRL_IMPRECISE
 import random
 import numpy as np
 
@@ -172,43 +173,44 @@ def sub(a: int, b: int,  is_design_64bit: bool):
     return a - b
 
 def sub_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
-    a_and_not_a_t0 = a&~a_t0
-    b_and_not_b_t0 = b&~b_t0
+    # a_and_not_a_t0 = a&~a_t0
+    # b_and_not_b_t0 = b&~b_t0
 
-    a_or_a_t0 = a | a_t0
-    b_or_b_t0 = b | b_t0
+    # a_or_a_t0 = a|a_t0
+    # b_or_b_t0 = b|b_t0
 
-    # Compute the result where a is largets and b is smallest
-    a_max_minus_b_min = a_or_a_t0 - b_and_not_b_t0
-    # Compute the result where b is largets and a is smallest
-    a_min_minus_b_max = a_and_not_a_t0 - b_or_b_t0
+    # a_max_min_b_min = a_or_a_t0 - b_and_not_b_t0 
+    # a_min_min_b_max = a_and_not_a_t0 - b_or_b_t0
 
-    # Compute the polarization term.
-    polarization = a_max_minus_b_min ^ a_min_minus_b_max
+    # # Compute the polarization term.
+    # polarization = a_max_min_b_min ^ a_min_min_b_max
 
-    # Compute the transportability term.
-    transport = a_t0 | b_t0
+    # # Compute the transportability term.
+    # transport = a_t0 | b_t0
+    # res = polarization | transport
+    # # if a_t0 == 0 or b_t0 == 0:
+    # print(f"SUB: a={hex(a)} a_t0={hex(a_t0)} b={hex(b)} b_t0={hex(b_t0)} a_max_min_b_min={hex(a_max_min_b_min)} a_min_min_b_max={hex(a_min_min_b_max)} res={hex(res&0xFFFFFFFF)}")
+        
+    return add_t0(a, a_t0, ~b+1, b_t0, is_design_64bit)
+    return res
 
-    return (polarization | transport)
 
 def sll(a: int, b: int,  is_design_64bit: bool):
     shamt = b & 0x1F
     return a<<shamt
 
 def sll_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
-    if b_t0 and (a or a_t0):
+    if b_t0&0x1f:
         return MAX_64b if is_design_64bit else MAX_32b
-    elif b_t0 and not (a or a_t0):
-        return 0x0
     else:
         return sll(a_t0, b, is_design_64bit)
 
 def sll_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     # The first cell of the decomposition shifts a and a_t0 by b_0 (i.e. b&~b_t0)
-    a_p = a<<(b&~b_t0)
-    a_p_t0 = a_t0<<(b&~b_t0)
+    a_p = a<<((b&~b_t0)&0x1F)
+    a_p_t0 = a_t0<<((b&~b_t0)&0x1F)
 
-    # The second cell of the decomposition inputs a_p and b_p = b&b_t0 .
+    # The second cell of the decomposition inputs a_p and b_p = b&b_t0.
     b_p = b&b_t0
     y_t0 = a_p_t0
     for k in range((b_p &~b_t0) & (2**5-1), (b_p | b_t0) & (2**5-1)):
@@ -218,7 +220,7 @@ def sll_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
         y_t0 |= left_side&right_side
     
     y_t0 &= MAX_64b if is_design_64bit else MAX_32b
-
+    print(f"a: {hex(a)}, a_t0: {hex(a_t0)}, b: {hex(b)}, b_t0: {hex(b_t0)}")
     return y_t0
 
 def slt(a: int, b: int, is_design_64bit: bool):
@@ -253,7 +255,7 @@ def sltu_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     # Compute the result where b is largest and a is smallest
     a_min_lt_b_max = a_and_not_a_t0 < b_or_b_t0
 
-    # print(f"a_max_lt_b_min: {hex(a_max_lt_b_min)}, a_min_lt_b_max: {hex(a_min_lt_b_max)}")
+    # print(f"a:{hex(a)}, a_t0: {hex(a_t0)}, b: {hex(b)}, b_t0: {hex(b_t0)}, a_max_lt_b_min: {hex(a_max_lt_b_min)}, a_min_lt_b_max: {hex(a_min_lt_b_max)}")
 
     # Compute the polarization term.
     polarization = a_max_lt_b_min ^ a_min_lt_b_max
@@ -351,7 +353,7 @@ def sra(a: int, b: int, is_design_64bit: bool):
 
 
 def sra_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
-    if b_t0:
+    if b_t0&0x1F:
         return MAX_64b if is_design_64bit else MAX_32b
     else:
         return sra(a_t0, b, is_design_64bit)
@@ -517,6 +519,26 @@ def jalr_t0(pc: int, pc_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     return 0x0 # always returns 0 since pc is never tainted and jalr computes pc+4
 
 
+def csrrs(rs1_val: int, csr_val: int, is_design_64bit: bool):
+    return csr_val | rs1_val
+
+def csrrc(rs1_val: int, csr_val: int, is_design_64bit: bool):
+    return csr_val & ~rs1_val
+
+def csrrw(rs1_val: int, csr_val: int, is_design_64bit: bool):
+    return rs1_val
+
+
+def csrrsi(uimm: int, csr_val: int, is_design_64bit: bool):
+    return csr_val | uimm
+
+def csrrci(uimm: int, csr_val: int, is_design_64bit: bool):
+    return csr_val & ~uimm
+
+def csrrwi(uimm: int, csr_val: int, is_design_64bit: bool):
+    return uimm
+
+
 
 INSTR_FUNCS = {
     # register instructions
@@ -553,34 +575,42 @@ INSTR_FUNCS = {
     # load and store instructions
     "sw": addi, # to compute the address
     "lw": addi, # to compute the address
+    # csr instructions
+    "csrw": csrrw, # csrw is a pseudo instruction, rd=zero
+    "csrrw": csrrw,
+    "csrr": csrrs,  # csrw is a pseudo instruction, rs1=zero
+    "csrrs": csrrs,
+    "csrrc": csrrc,
+    "csrwi": csrrwi, # csrw is a pseudo instruction, rd=zero
+    "csrrwi": csrrwi,
+    "csrri": csrrsi,  # csrw is a pseudo instruction, rs1=zero
+    "csrrsi": csrrsi,
+    "csrrci": csrrci,
+    # Branches
+    "bne": None,
     # unimplemented instructions
-    "csrw": None,
-    "csrrw": None,
-    "csrrwi": None,
-    "csrrs": None,
     "fence": None,
-    "bne": None
 }
 
 INSTR_FUNCS_T0 = {
     # register instructions
     "add": add_t0,
     "sub": sub_t0,
-    "sll": sll_t0_precise,
+    "sll": sll_t0_imprecise if SLL_IMPRECISE else sll_t0_precise,
     "slt": slt_t0,
     "sltu": sltu_t0,
     "xor": xor_t0,
-    "srl": srl_t0_precise,
+    "srl": srl_t0_imprecise if SRL_IMPRECISE else srl_t0_precise,
     "sra": sra_t0,
     "or": or_t0,
     "and": and_t0,
     # immediate instructions
     "addi": addi_t0,
-    "slli": slli_t0_precise,
+    "slli": slli_t0_imprecise if SLL_IMPRECISE else slli_t0_precise,
     "slti": slti_t0,
     "sltiu": sltiu_t0,
     "xori": xori_t0,
-    "srli": srli_t0_precise,
+    "srli": srli_t0_imprecise if SRL_IMPRECISE else srl_t0_precise,
     "srai": srai_t0,
     "ori": ori_t0,
     "andi": andi_t0,
@@ -597,11 +627,18 @@ INSTR_FUNCS_T0 = {
     # load and store instructions
     "sw": None, # we don't allow tainted addresses
     "lw": None, # we don't allow tainted addresses
-    # unimplemented instructions
-    "csrw": None,
+    # csr instructions, we dont allow taint propagation to and from csrs.
+    "csrw": None, # csrw is a pseudo instruction, rd=zero
     "csrrw": None,
-    "csrrwi": None,
+    "csrr": None,  # csrw is a pseudo instruction, rs1=zero
     "csrrs": None,
+    "csrrc": None,
+    "csrwi": None, # csrw is a pseudo instruction, rd=zero
+    "csrrwi": None,
+    "csrri": None,  # csrw is a pseudo instruction, rs1=zero
+    "csrrsi": None,
+    "csrrci": None,
+    # unimplemented instructions
     "fence": None,
     "bne": None
 }
