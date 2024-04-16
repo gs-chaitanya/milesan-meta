@@ -460,6 +460,7 @@ class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
 
     def execute_t0(self, res, is_spike_resolution: bool):
         assert self.fuzzerstate.taint_en
+        assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, "JALR source register is tainted. This is not allowed."
         # We assume the PC does not get tainted, therefore the result of JAL is never either.
         self.writeback_t0(0x0, res, is_spike_resolution)
 
@@ -753,16 +754,15 @@ class RegdumpInstruction_t0(IntStoreInstruction_t0):
         if PRINT_CHECK_REGS_T0:
             print(f"{hex(self.addr)}: Checking register taint: {ABI_INAMES[self.rs2]}:{hex(val_t0)}")
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check_t0(val_t0)
-        assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(self.rs2,self.addr,self.fuzzerstate,val_t0).get_str(False)}"
-
+        assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.addr,self.fuzzerstate,val_t0,False).get_str(False)}"
 
     def check_regs(self,val):
         assert self.fuzzerstate.taint_en
-        if PRINT_CHECK_REGS_T0:
-            print(f"{hex(self.addr)}: Checking register taint: {ABI_INAMES[self.rs2]}:{hex(val)}")
+        if PRINT_CHECK_REGS:
+            print(f"{hex(self.addr)}: Checking register value: {ABI_INAMES[self.rs2]}:{hex(val)}")
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check(val)
 
-        assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(self.rs2,self.addr,self.fuzzerstate,val).get_str(False)}"
+        assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.addr,self.fuzzerstate,val,False).get_str(False)}"
 
 class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int = 0, rs1: int = 0, iscompressed: bool = False):
@@ -774,6 +774,55 @@ class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
     def execute_t0(self, res, is_spike_resolution):
         print("Skipping sfence taint execution.")
 
+class BranchInstruction_t0(BranchInstruction, BaseInstruction_t0):
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
+
+    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+        if taint_en:
+            self.execute_t0(None,is_spike_resolution)
+
+    def execute_t0(self,res,is_spike_resolution):
+        assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"{self.instr_str} source register is tainted. This is not allowed."
+        assert self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0() == 0, f"{self.instr_str} source register is tainted. This is not allowed."
+
+
+class CSRRegInstruction_t0(CSRRegInstruction, BaseInstruction_t0):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, csr_id, iscompressed)
+
+    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+        rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
+        csr_val = self.fuzzerstate.csrfile.regs[self.csr_id].get_val()
+        res = self.instr_func(rs1_val, csr_val, self.fuzzerstate.is_design_64bit)
+        if taint_en:
+            self.execute_t0(None,is_spike_resolution)
+        self.fuzzerstate.csrfile.regs[self.csr_id].set_val(res)
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(csr_val)
+
+    def execute_t0(self,res,is_spike_resolution):
+        assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"{self.instr_str} source register is tainted. This is not allowed."
+        assert self.fuzzerstate.csrfile.regs[self.csr_id].get_val_t0() == 0, f"{self.get_str()} csr is tainted. This is not allowed."
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(0x0) # The result of any CSR instruction is taint-free.
+
+
+class CSRImmInstruction_t0(CSRImmInstruction, BaseInstruction_t0):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, csr_id, iscompressed)
+
+    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+        csr_val = self.fuzzerstate.csrfile.regs[self.csr_id].get_val()
+        res = self.instr_func(self.uimm, csr_val, self.fuzzerstate.is_design_64bit)
+        if taint_en:
+            self.execute_t0(None,is_spike_resolution)
+        self.fuzzerstate.csrfile.regs[self.csr_id].set_val(res)
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(csr_val)
+
+    def execute_t0(self,res,is_spike_resolution):
+        assert self.fuzzerstate.csrfile.regs[self.csr_id].get_val_t0() == 0, f"{self.get_str()} csr is tainted. This is not allowed."
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(0x0) # The result of any CSR instruction is taint-free.
+
+
 
 def has_taint_trace(obj):
-    return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0))
+    return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0, CSRImmInstruction_t0, CSRRegInstruction_t0)) and obj.instr_str != "auipc"

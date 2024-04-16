@@ -78,6 +78,9 @@ def filter_reg_traceback(reg_id, addr, fuzzerstate, correct_val, is_spike_resolu
                     dep_regs |= {instr_obj.rprod}
             elif isinstance(instr_obj, PlaceholderPreConsumerInstr) and instr_obj.rdep in dep_regs:
                 instr_stream += [instr_obj]
+            if 0 in dep_regs:
+                dep_regs.remove(0)
+
   
     
     if PRINT_FILTERED_REG_TRACEBACK:
@@ -119,10 +122,8 @@ class BaseInstruction:
         return f"{hex(self.addr)}: {self.instr_str}"
 
     def execute(self, taint_en, is_spike_resolution: bool = True):
-        pass
-        # raise Exception(f"Function execute() called on abstract class BaseInstruction {self.get_str(is_spike_resolution)}.", is_spike_resolution: bool = True)
-        # print(f"Function execute() called on abstract class BaseInstruction {self.get_str(is_spike_resolution)}.", is_spike_resolution: bool = True)
-# 
+        raise Exception(f"Function execute() called on abstract class BaseInstruction {self.get_str(is_spike_resolution)}.")
+ 
     def check_regs(self,reg_cmp):
         for reg_id,reg_val in reg_cmp.items():
             if reg_id not in self.fuzzerstate.intregpickstate.regs:
@@ -1229,6 +1230,9 @@ class CSRRegInstruction(CSRInstruction):
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
+    def get_str(self, is_spike_resolution: bool = True):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {ABI_INAMES[self.rs1]}"
+
 # CSR operations with immediate
 CSRImmInstructions = "csrrwi", "csrrsi", "csrrci"
 class CSRImmInstruction(CSRInstruction):
@@ -1256,6 +1260,8 @@ class CSRImmInstruction(CSRInstruction):
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
+    def get_str(self, is_spike_resolution: bool = True):
+        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {hex(self.uimm)}"
 
 ###
 # Placeholder instructions
