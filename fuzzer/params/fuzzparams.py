@@ -69,7 +69,7 @@ TAINT_EN = True
 P_TAINT_REG = 0.2
 MAX_NUM_INIT_TAINTED_REGS = 5
 
-# There should always be at least this number of free registers
+# There should always be at least this number of free or relocused registers
 NUM_MIN_FREE_INTREGS = 2
 
 # There should be at least this number of untainted regs
@@ -90,6 +90,7 @@ FPU_ENDIS_REGISTER_ID = 29 # The mask to enable or disable the FPU
 MPP_BOTH_ENDIS_REGISTER_ID = 28 # The mask to switch both MPP bits
 MPP_TOP_ENDIS_REGISTER_ID = 27 # The mask to switch only the top MPP bit. We cannot do it for the bottom, because we could not go to supervisor mode reliably on a design that does not have user mode.
 SPP_ENDIS_REGISTER_ID = 26 # The mask to switch the (unique) SPP Bit
+REGDUMP_REGISTER_ID = 25 # Holds the address we write to when dumping registers.
 
 assert RELOCATOR_REGISTER_ID < 32
 assert RDEP_MASK_REGISTER_ID < 32
@@ -129,3 +130,8 @@ PROBA_CONSUME_PRODUCED1_SAME = 0.05 # The proba to output the same register as P
 SIMPLE_ILLEGAL_INSTRUCTION_PROBA = 0.01
 PROBA_PICK_WRONG_FPU = 0.0 # Having this being zero eases the analysis of the program since we can try to simply remove all the FPU activations/deactivations to ensure that dumping is possible. More sophisticated methods could be implemented.
 PROBA_AUTHORIZE_PRIVILEGES = 0.05
+
+# Environment setup
+MAX_CYCLES_PER_INSTR = 30
+SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
+
