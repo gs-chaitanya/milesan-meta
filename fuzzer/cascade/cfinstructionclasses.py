@@ -133,7 +133,7 @@ class BaseInstruction:
             if PRINT_CHECK_REGS:
                 print(f"{hex(self.addr)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
-            assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
+            assert not mismatch, f"{self.get_str()}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
 class CFInstruction(BaseInstruction):
     # Could be any instruction
