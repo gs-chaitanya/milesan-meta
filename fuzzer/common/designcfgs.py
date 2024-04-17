@@ -89,6 +89,13 @@ def get_design_trap_sig_addr(design_name) -> int:
 def get_design_reg_dump_addr(design_name) -> int:
     device_config = get_design_cfg(design_name)
     return int(device_config["regdumpaddr"], base=0)
+
+# @param design_name: must be one of the keys of the design_repos.json dict.
+# @return the register stream address of the design: the address to which the CPU streams the inserted register dumps
+def get_design_reg_stream_addr(design_name) -> int:
+    device_config = get_design_cfg(design_name)
+    return int(device_config["regstreamaddr"], base=0)
+
 # @param design_name: must be one of the keys of the design_repos.json dict.
 # @return the floating point register dump address of the design: the address to which the CPU dumps the floating point registers, in order from 0.
 def get_design_fpreg_dump_addr(design_name) -> int:
