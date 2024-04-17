@@ -25,7 +25,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.AMO64:       0,
     ISAInstrClass.JAL :        0.01,
     ISAInstrClass.JALR:        0.01,
-    ISAInstrClass.BRANCH:      0,
+    ISAInstrClass.BRANCH:      0.01,
     ISAInstrClass.MEM:         0,
     ISAInstrClass.MEM64:       0,
     ISAInstrClass.MEMFPU:      0,
@@ -177,12 +177,21 @@ def _get_isainstrclass_filtered_weights(fuzzerstate):
 
 # Sets the REGFSM weight to 0 if no register can be produced, consumed or relocated
 def _filter_regfsm_weight(fuzzerstate, filtered_weights: list):
-    if fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) > NUM_MIN_FREE_INTREGS or \
+    if fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) + fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.RELOCUSED) > NUM_MIN_FREE_INTREGS or \
             fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED0) or \
             fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED1):
             return
 
     filtered_weights[ISAInstrClass.REGFSM] = 0
+    
+# We need at least one untainted and free input register and one free or relocused output register.
+def _filter_csr_weight(fuzzerstate, filtered_weights: list):
+    if fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE) > 0 and \
+        (fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) > 1  or \
+        fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.RELOCUSED) > 0):
+        return
+        
+    filtered_weights[ISAInstrClass.RANDOM_CSR] = 0
 
 # Filters out the sensitive instructions considering whether there are available registers in the suitable state
 def _filter_sensitive_instr_weights(fuzzerstate, filtered_weights: list):
@@ -207,6 +216,7 @@ def _filter_sensitive_instr_weights(fuzzerstate, filtered_weights: list):
 def gen_next_isainstrclass(fuzzerstate) -> ISAInstrClass:
     filtered_weights = _get_isainstrclass_filtered_weights(fuzzerstate)
     _filter_regfsm_weight(fuzzerstate, filtered_weights)
+    _filter_csr_weight(fuzzerstate, filtered_weights)
     _filter_sensitive_instr_weights(fuzzerstate, filtered_weights)
 
     return _gen_next_isainstrclass_from_weights(filtered_weights)
