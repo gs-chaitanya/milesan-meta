@@ -3,7 +3,7 @@ import shutil
 import glob
 import json
 
-from params.runparams import PATH_TO_TMP, PATH_TO_COV, PRINT_INSTRUCTION_EXECUTION_FINAL, PRINT_ENVIRONMENT, INSERT_REGDUMPS
+from params.runparams import PATH_TO_TMP, PATH_TO_COV, PRINT_INSTRUCTION_EXECUTION_FINAL, PRINT_ENVIRONMENT, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION
 from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0
@@ -13,10 +13,10 @@ from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
 from cascade.registers import ABI_INAMES,MAX_32b
 from cascade.spikeresolution import spike_resolution_return_interm
 from drfuzz_mem.spike_sim_taint import spike_sim_taint
-
+USE_SPIKE_INTERM_ELF = True
 def check_isa_sim_taint(design_name: str,seed: int):   
     # Get fuzzerstate and expected regvals from program.
-    fuzzerstate, rtl_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), not INSERT_REGDUMPS) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
+    fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), not INSERT_REGDUMPS) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
 
 
     # Retrieve register stream and final intregvals from spike.
@@ -28,7 +28,7 @@ def check_isa_sim_taint(design_name: str,seed: int):
 
     # Expected regvals of the program where bit was flipped are in in pc_reg_pairs1, which is the one that will be executed in the crossvalidation.
     # Initial program register dumps are in pc_reg_pairs_0, TODO: should this also be executed and checked?
-    env = fuzzerstate.setup_env(rtl_elfpath,seed)
+    env = fuzzerstate.setup_env(interm_elfpath if USE_SPIKE_INTERM_ELF else rtl_elfpath,seed)
 
     regstream_rtl, final_regvals_rtl = run_rtl_and_load_regstream(env, fuzzerstate.design_name)
 
@@ -47,12 +47,12 @@ def check_isa_sim_taint(design_name: str,seed: int):
                 elif not is_placeholder(next_instr):
                     next_instr.check_regs(pc_reg_pairs1[next_instr.addr]) # check value before executing instruction. Skip if placeholder as their values change between spikeresol and final elf.
             else:
-                print(f"Skipping check for {next_instr.get_str(False)}")
+                print(f"Skipping check for {next_instr.get_str(USE_SPIKE_INTERM_ELF)}")
 
-            next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=False)
+            next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
             if PRINT_INSTRUCTION_EXECUTION_FINAL:
-                next_instr.print(False)
-            # next_instr.log(SPIKE_STARTADDR+curr_addr)
+                next_instr.print(USE_SPIKE_INTERM_ELF)
+
 
     try:
 
@@ -63,9 +63,9 @@ def check_isa_sim_taint(design_name: str,seed: int):
             # else:
             #     print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}")
 
-
-        # print("*** REGISTER VALIDATION ***:")
-        # fuzzerstate.intregpickstate.print_and_compare(final_regvals_rtl)
+        if PRINT_REGISTER_VALIDATION:
+            print("*** REGISTER VALIDATION ***:")
+            fuzzerstate.intregpickstate.print_and_compare(final_regvals_rtl)
         for id in range(fuzzerstate.num_pickable_regs-1):
             value = int(final_regvals_rtl[id]["value"],16)
             value_t0 = int(final_regvals_rtl[id]["value_t0"],16)
@@ -82,7 +82,7 @@ def check_isa_sim_taint(design_name: str,seed: int):
         # os.removedirs(trace_dir)
         # if os.path.isfile(env_path): os.remove(env_path)
         # if os.path.isfile(interm_elfpath): os.remove(interm_elfpath)
-        print("*** REGISTER VALIDATION ***:")
+        print("*** REGISTER VALIDATION FAILED ***:")
         fuzzerstate.intregpickstate.print_and_compare(final_regvals_rtl)
         # fuzzerstate.intregpickstate.print()
         print(f"Failed for seed {seed}")
