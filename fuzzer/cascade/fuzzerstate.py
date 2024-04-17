@@ -17,9 +17,8 @@ from cascade.randomize.pickstoreaddr import MemStoreState
 from cascade.randomize.pickreg import IntRegPickState, FloatRegPickState
 from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
-from cascade.cfinstructionclasses import is_placeholder
 from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace
-
+from rv.csrids import CSR_IDS
 import random
 import os
 import itertools
@@ -197,6 +196,10 @@ class FuzzerState:
     def instance_to_str(self):
         return f"{self.memview.memsize}_{self.design_name}_{self.randseed}_{self.nmax_bbs}"
         
+    def advance_minstret(self):
+        curr_val = self.csrfile.regs[CSR_IDS.MINSTRET].get_val()
+        self.csrfile.regs[CSR_IDS.MINSTRET].set_val(curr_val+1)
+
     def append_and_execute_instr(self, instr, execute: bool= False, insert_regdump: bool = INSERT_REGDUMPS):
         # if execute:
         instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
@@ -210,7 +213,6 @@ class FuzzerState:
                 # store_instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
                 if PRINT_INSTRUCTION_EXECUTION_SPIKERESOL: 
                     store_instr.print(is_spike_resolution=True)
-
                 self.instr_objs_seq[-1].append(store_instr)
                 return 8
         return 4
