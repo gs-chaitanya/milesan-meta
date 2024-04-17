@@ -539,6 +539,30 @@ def csrrwi(uimm: int, csr_val: int, is_design_64bit: bool):
     return uimm
 
 
+def csrrs_t0(rs1_val: int, rs1_val_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
+    return or_t0(rs1_val,rs1_val_t0,csr_val,csr_val_t0,is_design_64bit)
+
+def csrrc_t0(rs1_val: int, rs1_val_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
+    return and_t0(csr_val,csr_val_t0, ~rs1_val, rs1_val_t0)
+
+def csrrw_t0(rs1_val: int, rs1_val_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
+    return rs1_val_t0
+
+
+def csrrsi_t0(uimm: int, uimm_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
+    return ori_t0(uimm,uimm_t0,csr_val,csr_val_t0)
+
+def csrrci_t0(uimm: int, uimm_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
+    return andi_t0(uimm,uimm_t0,~csr_val,csr_val_t0)
+
+def csrrwi_t0(uimm: int, uimm_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
+    return uimm_t0
+
+
+
+
+
+
 
 INSTR_FUNCS = {
     # register instructions
@@ -573,8 +597,17 @@ INSTR_FUNCS = {
     "and (PlaceholderPreConsumerInstr)": and_,
     "xor (PlaceholderConsumerInstr)": xor,
     # load and store instructions
-    "sw": addi, # to compute the address
-    "lw": addi, # to compute the address
+    "lb": addi, # to compute the address
+    "lh": addi,
+    "lw": addi,
+    "lbu": addi,
+    "lhu": addi,
+    "lwu": addi,
+    "ld": addi,
+    "sb": addi, # to compute the address
+    "sh": addi,
+    "sw": addi,
+    "sd": addi,
     # csr instructions
     "csrw": csrrw, # csrw is a pseudo instruction, rd=zero
     "csrrw": csrrw,
@@ -586,8 +619,13 @@ INSTR_FUNCS = {
     "csrri": csrrsi,  # csrw is a pseudo instruction, rs1=zero
     "csrrsi": csrrsi,
     "csrrci": csrrci,
-    # Branches
+    # Branches don't effect the dataflow.
+    "beq": None,
     "bne": None,
+    "blt": None,
+    "bge": None,
+    "bltu": None,
+    "bgeu": None,
     # unimplemented instructions
     "fence": None,
 }
@@ -624,23 +662,39 @@ INSTR_FUNCS_T0 = {
     "addi (PlaceholderProducerInstr1)": addi_t0,
     "and (PlaceholderPreConsumerInstr)": and_t0,
     "xor (PlaceholderConsumerInstr)": xor_t0,
-    # load and store instructions
-    "sw": None, # we don't allow tainted addresses
-    "lw": None, # we don't allow tainted addresses
-    # csr instructions, we dont allow taint propagation to and from csrs.
-    "csrw": None, # csrw is a pseudo instruction, rd=zero
-    "csrrw": None,
-    "csrr": None,  # csrw is a pseudo instruction, rs1=zero
-    "csrrs": None,
-    "csrrc": None,
-    "csrwi": None, # csrw is a pseudo instruction, rd=zero
-    "csrrwi": None,
-    "csrri": None,  # csrw is a pseudo instruction, rs1=zero
-    "csrrsi": None,
-    "csrrci": None,
+    # load and store instructions, no taint function as we dont allow tainted operands for address computation.
+    "lb": None, 
+    "lh": None,
+    "lw": None,
+    "lbu": None,
+    "lhu": None,
+    "lwu": None,
+    "ld": None,
+    "sb": None,
+    "sh": None,
+    "sw": None,
+    "sd": None,
+    # csr instructions
+    "csrw": csrrw_t0, # csrw is a pseudo instruction, rd=zero
+    "csrrw": csrrw_t0,
+    "csrr": csrrs_t0,  # csrw is a pseudo instruction, rs1=zero
+    "csrrs": csrrs_t0,
+    "csrrc": csrrc_t0,
+    "csrwi": csrrwi_t0, # csrw is a pseudo instruction, rd=zero
+    "csrrwi": csrrwi_t0,
+    "csrri": csrrsi_t0,  # csrw is a pseudo instruction, rs1=zero
+    "csrrsi": csrrsi_t0,
+    "csrrci": csrrci_t0,
+    # Branches
+    "beq": None,
+    "bne": None,
+    "blt": None,
+    "bge": None,
+    "bltu": None,
+    "bgeu": None,
     # unimplemented instructions
     "fence": None,
-    "bne": None
+
 }
 
 
