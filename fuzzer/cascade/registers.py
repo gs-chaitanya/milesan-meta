@@ -79,19 +79,17 @@ class CSR32(__32RegState):
     def __init__(self, id: CSR_IDS = None, val: int = 0, val_t0: int = 0):
         super().__init__(id, val, val_t0)
         self.abi_name = id.name
-        assert self.val_t0 == 0
 
     def set_val(self, val):
         self.val = val&MAX_32b
 
     def set_val_t0(self, val_t0):
-        assert val_t0 == 0
+        self.val_t0 = val_t0&MAX_32b
 
     def get_val(self):
         return self.val
 
     def get_val_t0(self):
-        assert self.val_t0 == 0
         return self.val_t0
 
     def reset(self):
@@ -145,7 +143,7 @@ class Int32RegState(__32RegState):
         if rtl_val == self.val:
             val_str =  "0x{:08x}".format(self.val)
         else:
-            val_str = "\0330x{:08x} != 0x{:08x}".format(self.val,rtl_val)
+            val_str = "0x{:08x} != 0x{:08x}".format(self.val,rtl_val)
 
         if rtl_val_t0 == self.val_t0:
             val_t0_str = "0x{:08x}".format(self.val_t0)

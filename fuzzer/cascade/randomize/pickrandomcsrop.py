@@ -6,6 +6,7 @@
 
 from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS
+from cascade.util import IntRegIndivState
 from cascade.toleratebugs import is_no_interaction_minstret, is_tolerate_kronos_minstret, is_tolerate_vexriscv_minstret, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readnonimplcsr, is_tolerate_picorv32_writehpm, is_tolerate_cva6_mhpmcounter, is_tolerate_boom_minstret, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_vexriscv_mhpmcountern, is_tolerate_cva6_mhpmevent31
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.cfinstructionclasses import CSRRegInstruction, CSRImmInstruction
@@ -109,7 +110,9 @@ def gen_random_csr_op(fuzzerstate):
                         rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
                     else:
                         rs = 0
-                    ret = CSRRegInstruction_t0(fuzzerstate,opcode_str, fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), rs, CSR_IDS.MINSTRET)
+                    rd =  fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False, authorize_sideeffects = False)
+                    ret = CSRRegInstruction_t0(fuzzerstate,opcode_str,rd, rs, CSR_IDS.MINSTRET)
+                    fuzzerstate.intregpickstate.set_regstate(rd,IntRegIndivState.RELOCUSED,True)
                 else:
                     ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.MINSTRET)
             else:

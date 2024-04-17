@@ -48,14 +48,14 @@ def gen_fuzzerstate_elf_expectedvals(memsize: int, design_name: str, randseed: i
 
     # spike resolution
     start = time.time()
-    expected_regvals, intem_elfpath = spike_resolution_return_interm(fuzzerstate, check_pc_spike_again)
+    expected_regvals, interm_elfpath = spike_resolution_return_interm(fuzzerstate, check_pc_spike_again)
     time_seconds_spent_in_spike_resol = time.time() - start
 
     start = time.time()
     # This is typically quite short
     rtl_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'rtl', fuzzerstate.instance_to_str(), fuzzerstate.design_base_addr)
     time_seconds_spent_in_gen_elf = time.time() - start
-    return fuzzerstate, rtl_elfpath, expected_regvals, time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf
+    return fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals, time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf
 
 
 def gen_fuzzerstate_elf_flipped_bits(fuzzerstate):

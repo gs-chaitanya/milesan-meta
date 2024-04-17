@@ -249,7 +249,7 @@ class MemoryView:
 
     def print(self):
         for addr, val_t0 in self.data_t0.items():
-            print(f"{hex(addr)}: {hex(self.data[addr])}: {hex(val_t0)}")
+            print(f"{hex(addr>>2)}: {hex(self.data[addr])}: {hex(val_t0)}")
 
     def flip_tainted_bits(self):
         for addr,val_t0 in self.data_t0.items():

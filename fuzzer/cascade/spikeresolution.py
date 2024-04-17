@@ -85,14 +85,14 @@ def gen_regdump_reqs_all_rds(fuzzerstate):
             elif isinstance(bb_instr, IntStoreInstruction):
                 ret.append((curr_addr, False, bb_instr.rs1))
                 ret.append((curr_addr, False, bb_instr.rs2))
-            elif isinstance(bb_instr, CSRRegInstruction):
+            elif isinstance(bb_instr, CSRRegInstruction): # Ignore CSRs for now.
                 ret.append((curr_addr, False, bb_instr.rd))
                 ret.append((curr_addr, False, bb_instr.rs1))
             elif isinstance(bb_instr, CSRImmInstruction):
                 ret.append((curr_addr, False, bb_instr.rd))
-
-
-
+            elif isinstance(bb_instr, BranchInstruction):
+                ret.append((curr_addr, False, bb_instr.rs1))
+                ret.append((curr_addr, False, bb_instr.rs2))
     return ret
 
 # @brief generates the register dump requests made to spike for pruning.
