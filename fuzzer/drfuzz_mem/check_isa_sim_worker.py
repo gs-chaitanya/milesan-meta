@@ -7,6 +7,8 @@ from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
 from cascade.randomize.pickbytecodetaints import MAX_N_INJECT_PER_BB
 from cascade.util import CFInstructionClass
+
+PRINT_THREAD_STATUS = False
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 total_finished_tests = 0
@@ -20,7 +22,8 @@ def test_done_callback(ret):
         newly_finished_tests += 1
         if(ret):
             total_finished_tests += 1
-            print(f"Finished {total_finished_tests} threads.")
+            if PRINT_THREAD_STATUS:
+                print(f"Finished {total_finished_tests} threads.")
         # else:
         #     print(f"Thread failed.")
 
@@ -59,11 +62,14 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en:
             #     print(e)
             process_instance_id += 1
         exit(0)
+    if total_tests != -1:
+        print(f"Starting parallel ISA sim validation on {total_tests} total tests of `{design_name}` on {num_workers} processes.")
+    print(f"Starting parallel ISA sim validation of `{design_name}` on {num_workers} processes. No max number of tests given.")
 
-    print(f"Starting parallel ISA sim validation on {total_tests} total tests of `{design_name}` on {num_workers} processes.")
     pool = mp.Pool(processes=num_workers)
     for _ in range(num_workers):
-        print(f"Starting thread {process_instance_id}.")
+        if PRINT_THREAD_STATUS:
+            print(f"Starting thread {process_instance_id}.")
         pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id,taint_en,),callback=test_done_callback)
         process_instance_id += 1
 
@@ -73,12 +79,14 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en:
         with callback_lock:
             if newly_finished_tests > 0:
                 for _ in range(newly_finished_tests):
-                    print(f"Starting thread {process_instance_id}.")
+                    if PRINT_THREAD_STATUS:
+                        print(f"Starting thread {process_instance_id}.")
                     pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id,taint_en),callback=test_done_callback)
                     process_instance_id += 1
                 newly_finished_tests = 0
-            if total_finished_tests >= total_tests:
-                print(f"Finished {total_finished_tests} threads. Exiting.")
+            if total_finished_tests >= total_tests and total_tests != -1:
+                if PRINT_THREAD_STATUS:
+                    print(f"Finished {total_finished_tests} threads. Exiting.")
                 pool.terminate()
                 exit(0)
 
