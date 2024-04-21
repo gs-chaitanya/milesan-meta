@@ -29,7 +29,7 @@ PRINT_WRITEBACK_T0 = False # Print taint writeback of instructions.
 
 PRINT_CHECK_REGS = False
 
-PRINT_INSTRUCTION_EXECUTION_SPIKERESOL = False # Prints execution during program generation.
+PRINT_INSTRUCTION_EXECUTION_IN_SITU = False # Prints execution during program generation.
 PRINT_INSTRUCTION_EXECUTION_FINAL = False # Prints execution during register value checks.
 
 PRINT_DBUS_TAINT = False
@@ -39,4 +39,8 @@ PRINT_FILTERED_REG_TRACEBACK = True
 
 PRINT_ENVIRONMENT = True
 
-INSERT_REGDUMPS = True
+INSERT_REGDUMPS = False
+
+PRINT_REGISTER_VALIDATION = False
+
+PRINT_SKIPPED_CHECKS = False

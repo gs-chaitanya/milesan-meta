@@ -62,11 +62,11 @@ LIMIT_MEM_SATURATION_RATIO = 0.8
 # When a register is produced, it gets this probability to be picked next. What is nice is that it immediately saturates: producing it twice does not increase picking proba.
 REGPICK_PROTUBERANCE_RATIO = 0.2 
 
-REGPICK_PROTUBERANCE_RATIO_T0_POS = 0.3
-REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.1
+REGPICK_PROTUBERANCE_RATIO_T0_POS = 0.4
+REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.3
 
 TAINT_EN = True
-P_TAINT_REG = 0.2
+P_TAINT_REG = 0.5
 MAX_NUM_INIT_TAINTED_REGS = 5
 
 # There should always be at least this number of free or relocused registers
@@ -129,9 +129,10 @@ PROBA_CONSUME_PRODUCED1_SAME = 0.05 # The proba to output the same register as P
 
 SIMPLE_ILLEGAL_INSTRUCTION_PROBA = 0.01
 PROBA_PICK_WRONG_FPU = 0.0 # Having this being zero eases the analysis of the program since we can try to simply remove all the FPU activations/deactivations to ensure that dumping is possible. More sophisticated methods could be implemented.
-PROBA_AUTHORIZE_PRIVILEGES = 0.05
+PROBA_AUTHORIZE_PRIVILEGES = 1
 
 # Environment setup
 MAX_CYCLES_PER_INSTR = 30
 SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
 
+USE_SPIKE_INTERM_ELF = False
