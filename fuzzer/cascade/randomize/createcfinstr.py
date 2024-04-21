@@ -236,7 +236,7 @@ def create_regfsm_instrobjs(fuzzerstate, en_taint: bool = False):
     doable_fsm_ops[0] = n_free_or_relocused_regs > NUM_MIN_FREE_INTREGS
     doable_fsm_ops[1] = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED0)
     doable_fsm_ops[2] = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED1)
-    doable_fsm_ops[2] &= fuzzerstate.intregpickstate.exists_untainted_reg_in_state(IntRegIndivState.FREE)
+    doable_fsm_ops[2] &= fuzzerstate.intregpickstate.exists_untainted_reg_in_state(IntRegIndivState.FREE, allow_zero = False)
 
     effective_weights = doable_fsm_ops * REG_FSM_WEIGHTS
     # if not np.any(effective_weights):
@@ -259,8 +259,6 @@ def create_regfsm_instrobjs(fuzzerstate, en_taint: bool = False):
 def create_targeted_producer0_instrobj(fuzzerstate, en_taint: bool = False):
     fuzzerstate.next_producer_id += 1
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(authorize_sideeffects=False, force = False) # Rd will be untainted after execution.
-    if PRINT_FSM_TRANSITIONS:
-        print(f"Setting {ABI_INAMES[rd]} to PRODUCED0")
     fuzzerstate.intregpickstate.set_producer_id(rd, fuzzerstate.next_producer_id)
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED0)
@@ -271,8 +269,6 @@ def create_targeted_producer1_instrobj(fuzzerstate, en_taint: bool = False):
     rd = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.PRODUCED0, force = True)  # rd should not be tainted
     # assert fuzzerstate.intregpickstate.regs[rd].get_val_t0() == 0, f"Register {ABI_INAMES[rd]} in produced0 state is tainted!"
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
-    if PRINT_FSM_TRANSITIONS:
-        print(f"Setting {ABI_INAMES[rd]} to PRODUCED1")
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED1)
     # return [PlaceholderProducerInstr1(rd, fuzzerstate.intregpickstate.get_producer_id(rd), fuzzerstate.is_design_64bit)]
     return [PlaceholderProducerInstr1_t0(fuzzerstate, rd, fuzzerstate.intregpickstate.get_producer_id(rd))]
@@ -283,8 +279,6 @@ def create_targeted_consumer_instrobj(fuzzerstate, en_taint: bool = False):
     assert fuzzerstate.intregpickstate.regs[rdep].get_val_t0() == 0
     # WARNING: We CANNOT throw a PRODUCEDX into the nature because its value will change between spike and RTL.
     rd = rprod
-    if PRINT_FSM_TRANSITIONS:
-        print(f"Setting {ABI_INAMES[rd]} to CONSUMED")
     fuzzerstate.intregpickstate.set_regstate(rprod, IntRegIndivState.CONSUMED)
     if fuzzerstate.is_design_64bit:
         # return [PlaceholderPreConsumerInstr(rprod), PlaceholderPreConsumerInstr(rdep), PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
