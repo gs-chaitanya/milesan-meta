@@ -1,10 +1,10 @@
 from params.fuzzparams import TAINT_EN
 from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
 from cascade.cfinstructionclasses import *
-from cascade.util import CFInstructionClass
+from cascade.util import CFInstructionClass, ExceptionCauseVal
 from rv.asmutil import INSTR_FUNCS_T0
 from cascade.registers import ABI_INAMES
-from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0, PRINT_INSTRUCTION_EXECUTION_SPIKERESOL
+from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0, PRINT_INSTRUCTION_EXECUTION_IN_SITU
 import random
 import numpy as np
 
@@ -22,7 +22,7 @@ def clean_reg_taint(reg, reg_t0, skip_regs):
                     break
     return reg_t0
 
-def filter_reg_t0_traceback(reg_id, addr, fuzzerstate, correct_val, is_spike_resolution: bool = False):
+def filter_reg_t0_traceback(reg_id, addr, fuzzerstate, correct_val: int = None, is_spike_resolution: bool = False):
     last_instr = compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val)
     dep_regs = set()
     instr_stream = []
@@ -57,16 +57,19 @@ def filter_reg_t0_traceback(reg_id, addr, fuzzerstate, correct_val, is_spike_res
     if PRINT_FILTERED_REG_TRACEBACK:
         print("*** FILTERED TAINT TRACEBACK ***")
         for instr_obj in reversed(instr_stream):
-            rd_spike,val_t0_spike = fuzzerstate.intregpickstate.writeback_trace_spikeresol[instr_obj.addr]
+            if instr_obj.addr not in fuzzerstate.intregpickstate.writeback_trace_in_situ:
+                assert instr_obj.addr not in fuzzerstate.intregpickstate.writeback_trace_final
+                continue
+            rd_spike,val_t0_spike = fuzzerstate.intregpickstate.writeback_trace_in_situ[instr_obj.addr]
             rd_final,val_t0_final = fuzzerstate.intregpickstate.writeback_trace_final[instr_obj.addr]
             if rd_final != rd_spike or val_t0_final != val_t0_spike:
-                print("Mismatch between spikeresol and final:")
+                print("Mismatch between in-situ and final simulation:")
                 instr_obj.print(True)
                 print(f"{ABI_INAMES[rd_spike]}<-{hex(val_t0_spike)}")
                 instr_obj.print(False)
                 print(f"{ABI_INAMES[rd_final]}<-{hex(val_t0_final)}")
 
-        for (addr_spike,trace_spike),(addr_final, trace_final) in zip(fuzzerstate.intregpickstate.writeback_trace_spikeresol.items(),fuzzerstate.intregpickstate.writeback_trace_final.items()):
+        for (addr_spike,trace_spike),(addr_final, trace_final) in zip(fuzzerstate.intregpickstate.writeback_trace_in_situ.items(),fuzzerstate.intregpickstate.writeback_trace_final.items()):
             assert addr_spike == addr_final
             assert trace_spike[0] == trace_final[0]
             if trace_spike[1] != trace_final[1]:
@@ -110,6 +113,9 @@ class CFInstruction_t0(BaseInstruction_t0):
         super().__init__(fuzzerstate, instr_str)
 
 class RDInstruction_t0(CFInstruction_t0):
+    def __init__(self, fuzzerstate, instr_str):
+        super().__init__(fuzzerstate, instr_str)
+        self.rd_t0 = 0
     # This function writes back the tainted value to the destination register. Since the fields for the source and destination registers
     # could also be tainted, the alternative values for those executions (i.e. where the registers were chosen differently according to their taints)
     # are computed and written back to the set of registers derived from the taints in the rd field.
@@ -489,7 +495,7 @@ class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0, RDInstruction_t0):
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         if is_spike_resolution:
             if self.spike_resolution_offset is None:
-                if PRINT_INSTRUCTION_EXECUTION_SPIKERESOL:
+                if PRINT_INSTRUCTION_EXECUTION_IN_SITU:
                     print(f"{self.get_str(is_spike_resolution)}: spike_resolution_offset not yet determined. Setting rd_t0 to 0.")
                 if taint_en:
                     self.execute_t0(None,is_spike_resolution)
@@ -521,7 +527,7 @@ class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1, RDInstruction_t0):
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         if is_spike_resolution:
             if self.spike_resolution_offset is None:
-                if PRINT_INSTRUCTION_EXECUTION_SPIKERESOL:
+                if PRINT_INSTRUCTION_EXECUTION_IN_SITU:
                     print(f"{self.get_str(is_spike_resolution)}: spike_resolution_offset not yet determined. Skipping.")
                 assert self.fuzzerstate.intregpickstate.regs[self.rd].get_val_t0() == 0
                 if taint_en:
@@ -673,29 +679,6 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         res_t0 = self.fuzzerstate.memview.read_t0(addr)
         self.writeback_t0(res_t0,res, is_spike_resolution) # We allow the rd field to be tainted, thus taint could be propagated to several destination registers.
 
-    def gen_bytecode_int_t0(self, is_spike_resolution: bool):
-        assert(self.injectable), "Generating bytecode_t0 for non-injectable instruction. This should not happen."
-        rd = self.rd
-        rs1 = self.rs1
-        imm = self.imm
-        assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
-        assert self.rs1_t0 == 0, f"Source register field is tainted ({hex(self.rs1_t0)}), this is not allowed."
-        self.rd = self.rd_t0 # set regs to taints to get taint bytecode
-        self.rs1 = self.rs1_t0
-        self.imm = self.imm_t0
-        taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
-        self.rd = 0x00 # set regs to 0 to get taint bytecode mask to remove func and opcode fields
-        self.rs1 = 0x00
-        self.imm = 0x00
-        taint_bytecode_mask = self.gen_bytecode_int(is_spike_resolution)
-        self.rd = rd
-        self.rs1 = rs1
-        self.imm = imm
-        masked_taint = taint_bytecode ^ taint_bytecode_mask
-        assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
-        return masked_taint
-        
-
 class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, iscompressed)
@@ -720,29 +703,6 @@ class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
         addr = self.instr_func(rs1_val,self.imm, self.fuzzerstate.is_design_64bit)
         rs2_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
         self.fuzzerstate.memview.write_t0(addr,rs2_val_t0) # We don't allow addresses to be tainted, thus we don't need a writeback here.
-
-    def gen_bytecode_int_t0(self, is_spike_resolution: bool):
-        assert self.fuzzerstate.taint_en
-        assert(self.injectable), "Generating bytecode_t0 for non-injectable instruction. This should not happen."
-        rs1 = self.rs1
-        rs2 = self.rs2
-        imm = self.imm
-        assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
-        assert self.rs2_t0 == 0, f"Source register field is tainted ({hex(self.rs2_t0)}), this is not allowed."
-        self.rs1 = self.rs1_t0
-        self.rs2 = self.rs2_t0
-        self.imm = self.imm_t0
-        taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
-        self.rd = 0x00 # set regs to 0 to get taint bytecode mask to remove func and opcode fields
-        self.rs1 = 0x00
-        self.imm = 0x00
-        taint_bytecode_mask = self.gen_bytecode_int(is_spike_resolution)
-        self.rs1 = rs1
-        self.rs2 = rs2
-        self.imm = imm
-        masked_taint = taint_bytecode ^ taint_bytecode_mask
-        assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, imm_t0: {hex(self.imm_t0)},  this should not happen."
-        return masked_taint
 
 
 class RegdumpInstruction_t0(IntStoreInstruction_t0):
@@ -795,13 +755,12 @@ class BranchInstruction_t0(BranchInstruction, BaseInstruction_t0):
             self.execute_t0(None,is_spike_resolution)
         self.fuzzerstate.advance_minstret()
 
-
     def execute_t0(self,res,is_spike_resolution):
         assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"{self.instr_str} source register is tainted. This is not allowed."
         assert self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0() == 0, f"{self.instr_str} source register is tainted. This is not allowed."
 
 
-class CSRRegInstruction_t0(CSRRegInstruction, BaseInstruction_t0):
+class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, rd, rs1, csr_id, iscompressed)
 
@@ -825,9 +784,10 @@ class CSRRegInstruction_t0(CSRRegInstruction, BaseInstruction_t0):
         csr_val_t0 = self.fuzzerstate.csrfile.regs[self.csr_id].get_val_t0()
         res_t0 = self.instr_func_t0(rs1_val, rs1_val_t0, csr_val, csr_val_t0, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.csrfile.regs[self.csr_id].set_val_t0(res_t0)
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(csr_val_t0)
+        self.writeback_t0(csr_val_t0,csr_val,is_spike_resolution)
 
-class CSRImmInstruction_t0(CSRImmInstruction, BaseInstruction_t0):
+
+class CSRImmInstruction_t0(CSRImmInstruction, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, uimm: int, csr_id: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, rd, uimm, csr_id, iscompressed)
         self.uimm_t0 = 0
@@ -848,8 +808,59 @@ class CSRImmInstruction_t0(CSRImmInstruction, BaseInstruction_t0):
         csr_val_t0 = self.fuzzerstate.csrfile.regs[self.csr_id].get_val_t0()
         res_t0 = self.instr_func_t0(self.uimm, self.uimm_t0, csr_val, csr_val_t0, self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.csrfile.regs[self.csr_id].set_val_t0(res_t0)
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(csr_val_t0)
+        self.writeback_t0(csr_val_t0,csr_val,is_spike_resolution)
 
 
 def has_taint_trace(obj):
     return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0, CSRImmInstruction_t0, CSRRegInstruction_t0)) and obj.instr_str != "auipc"
+
+
+class TvecWriterInstruction_t0(TvecWriterInstruction, BaseInstruction_t0):
+    def __init__(self, fuzzerstate, is_mtvec: bool, rd: int, rs1: int, producer_id: int):
+        super().__init__(fuzzerstate, is_mtvec, rd, rs1, producer_id)
+        csr_id = CSR_IDS.MTVEC if is_mtvec else CSR_IDS.STVEC
+        self.csr_instr = CSRRegInstruction_t0(fuzzerstate, "csrrw", rd, rs1, csr_id)
+        assert self.addr == self.csr_instr.addr
+
+    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+        self.csr_instr.execute(taint_en,is_spike_resolution)
+    
+class EPCWriterInstruction_t0(EPCWriterInstruction, BaseInstruction_t0):  
+    def __init__(self, fuzzerstate, is_mepc: bool, rd: int, rs1: int, producer_id: int):
+        super().__init__(fuzzerstate, is_mepc, rd, rs1, producer_id)
+        self.rd = rd
+        self.rs1 = rs1
+        self.csr_id = CSR_IDS.MEPC if is_mepc else CSR_IDS.SEPC
+        self.csr_instr = CSRRegInstruction_t0(fuzzerstate, "csrrw", rd, rs1, self.csr_id)
+        assert self.addr == self.csr_instr.addr
+
+
+    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+        self.csr_instr.execute(taint_en,is_spike_resolution)
+
+class GenericCSRWriterInstruction_t0(GenericCSRWriterInstruction, BaseInstruction_t0):
+    def __init__(self, fuzzerstate, csr_id: int, rd: int, rs1: int, producer_id: int, val_to_write_spike: int, val_to_write_cpu: int):
+        super().__init__(fuzzerstate, csr_id, rd, rs1, producer_id, val_to_write_spike, val_to_write_cpu)
+        self.rd = rd
+        self.rs1 = rs1
+        self.csr_instr = CSRRegInstruction_t0(fuzzerstate,"csrrw", rd, rs1, csr_id)
+        assert self.addr == self.csr_instr.addr
+
+    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+        self.csr_instr.execute(taint_en,is_spike_resolution)
+
+class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstruction_t0):
+    def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr: BaseInstruction, exception_op_type: ExceptionCauseVal):
+        super().__init__(fuzzerstate, is_mtvec, producer_id, instr)
+        self.exception_op_type = exception_op_type
+        assert self.addr == self.instr.addr
+
+    def execute(self, taint_en, is_spike_resolution: bool = True):
+        # print(f"{self.get_str(is_spike_resolution)}, setting MCAUSE to {self.exception_op_type}")
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+
+class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
+    def execute(self, taint_en, is_spike_resolution: bool = True):
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)

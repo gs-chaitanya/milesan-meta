@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
-from params.fuzzparams import TAINT_EN
+from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF
 from params.runparams import DO_ASSERT, PRINT_CHECK_REGS, PRINT_REG_TRACEBACK, PRINT_FILTERED_REG_TRACEBACK
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
@@ -106,11 +106,8 @@ class BaseInstruction:
     injectable = False
 
     def __init__(self, fuzzerstate, instr_str):
-        if fuzzerstate is not None:
-            self.addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1]) + SPIKE_STARTADDR
-        else:
-            print(f"Fuzzerstate is None. Setting addr to -1: {self.get_str()}")
-            self.addr = -1
+        assert fuzzerstate is not None
+        self.addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1]) + SPIKE_STARTADDR
         self.fuzzerstate = fuzzerstate
         self.instr_str = instr_str
         self.instr_func = INSTR_FUNCS[self.instr_str]
@@ -118,7 +115,7 @@ class BaseInstruction:
     def print(self, is_spike_resolution: bool):
         print(self.get_str(is_spike_resolution))
 
-    def get_str(self, is_spike_resolution: bool):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str}"
 
     def execute(self, taint_en, is_spike_resolution: bool = True):
@@ -209,7 +206,7 @@ class R12DInstruction(CFInstruction):
         self.rs2 = rs2
         self.rd =  rd
 
-    def get_str(self, is_spike_resolution: bool):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -310,7 +307,7 @@ class ImmRdInstruction(ImmInstruction):
         self.rd =  rd
         # self.compute_taints()
 
-    def get_str(self, is_spike_resolution: bool):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -356,7 +353,7 @@ class RegImmInstruction(ImmInstruction):
         if self.instr_str == "sraiw" and self.imm < 0:
             assert False
         
-    def get_str(self, is_spike_resolution: bool):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def set_bytecode(self,bytecode):
@@ -425,7 +422,7 @@ class BranchInstruction(ImmInstruction):
         self.plan_taken = plan_taken
         # self.producer_id = producer_id We do not use producers anymore for branches
 
-    def get_str(self, is_spike_resolution: bool):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, {hex(self.imm)}"
 
     # Choose an opcode that, given the values of rs1 and rs2, will comply with the required takenness
@@ -486,7 +483,7 @@ class JALInstruction(ImmInstruction):
             assert rd < MAX_NUM_PICKABLE_REGS
         self.rd  = rd
         
-    def get_str(self, is_spike_resolution: bool):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -521,7 +518,7 @@ class JALRInstruction(ImmInstruction):
         self.rs1 = rs1
         self.producer_id = producer_id
 
-    def get_str(self, is_spike_resolution: bool):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -546,7 +543,7 @@ class SpecialInstruction(CFInstruction):
         self.rd = rd
         self.rs1 = rs1
 
-    def get_str(self, is_spike_resolution: bool):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -598,7 +595,7 @@ class IntLoadInstruction(ImmInstruction):
         self.rs1 =  rs1
         self.producer_id = producer_id
 
-    def get_str(self, is_spike_resolution: bool):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.imm}({ABI_INAMES[self.rs1]}) "
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -1452,32 +1449,35 @@ class RawDataWord:
 # When an exception is encountered, we find back the last corresponding tvec write and set its expected value properly.
 # Inheritance from ExceptionInstruction allows us to distinguish, for example, a real JAL form a JAL to a misaligned address that should cause an exception.
 # It also serves to abstract exception types in general parts of the codebase such as basicblock.py.
-class ExceptionInstruction:
+class ExceptionInstruction(BaseInstruction):
     # @param producer_id: Used for exceptions (typically intentionally faulty jalr/loads/stores) that require a produced register for themselves in addition to the target address (held in the corresponding tvec). Keep None if none is needed.
     # @param is_mtvec: if the exception will be handled in machine mode. If false, then stvec.
     # Remargk: is_mtvec also determines which of mepc and sepc will be set.
-    def __init__(self, is_mtvec: bool, producer_id: int = None):
-        self.instr_str = 'ExceptionInstruction'  # Just for compatibility with the fuzzer
+    def __init__(self, fuzzerstate, is_mtvec: bool, producer_id: int = None):
+        super().__init__(fuzzerstate, 'ExceptionInstruction')
         self.is_mtvec = is_mtvec
         self.producer_id = producer_id
         self.instr_type = CFInstructionClass.NONE
         self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
 class SimpleIllegalInstruction(ExceptionInstruction):
-    def __init__(self, is_mtvec):
-        super().__init__(is_mtvec, None)
+    def __init__(self, fuzzerstate, is_mtvec):
+        super().__init__(fuzzerstate, is_mtvec, None)
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return 0x00000000
 
 # Exception that encapsulates an instruction that causes an exception, such as a misaligned JAL.
 class SimpleExceptionEncapsulator(ExceptionInstruction):
-    def __init__(self, is_mtvec, producer_id: int, instr):
-        super().__init__(is_mtvec, producer_id)
+    def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr):
+        super().__init__(fuzzerstate, is_mtvec, producer_id)
         if DO_ASSERT:
             assert producer_id is None, "SimpleExceptionEncapsulator does not support a producer_id. If we want to support it, then we need to adapt gen_producer_id_to_tgtaddr in basicblock.py."
         self.instr = instr
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.instr.gen_bytecode_int(is_spike_resolution)
+
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+        return self.instr.get_str(is_spike_resolution) + f" ({self.instr_str})"
 
 # This is a wrapper class for a misaligned load or store.
 # As opposed to usual load and store operations used above, this class chooses a consumed register by itself.
@@ -1603,57 +1603,70 @@ class MisalignedMemInstruction(ExceptionInstruction):
 
 # @remark we use a specific instruction for xtvec to find them easily when an exception occurs, to transmit back the expected value to the producer
 # @brief this instruction writes to mtvec or stvec
-class TvecWriterInstruction():
-    def __init__(self, is_mtvec: bool, rd: int, rs1: int, producer_id: int):
-        self.instr_str = 'TvecWriterInstruction'  # Just for compatibility with the fuzzer
-
+class TvecWriterInstruction(BaseInstruction):
+    def __init__(self, fuzzerstate, is_mtvec: bool, rd: int, rs1: int, producer_id: int):
+        super().__init__(fuzzerstate,"TvecWriterInstruction")
         self.producer_id = producer_id
         self.is_mtvec = is_mtvec # A bit redundant with the content of csr_instr, but practical.
 
         csr_id = CSR_IDS.MTVEC if is_mtvec else CSR_IDS.STVEC
-        self.csr_instr = CSRRegInstruction("csrrw", rd, rs1, csr_id)
+        self.csr_instr = CSRRegInstruction(fuzzerstate, "csrrw", rd, rs1, csr_id)
+        assert self.addr == self.csr_instr.addr
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
 
+    def get_str(self, is_spike_resolution: bool = False):
+        return self.csr_instr.get_str() + f" ({self.instr_str})"
+
+
 # @remark we use a specific instruction for xtvec to find them easily when an exception occurs, to transmit back the expected value to the producer
 # @brief this instruction writes to mepc or sepc
-class EPCWriterInstruction():
-    def __init__(self, is_mepc: bool, rd: int, rs1: int, producer_id: int):
-        self.instr_str = 'EPCWriterInstruction'  # Just for compatibility with the fuzzer
-
+class EPCWriterInstruction(BaseInstruction):
+    def __init__(self, fuzzerstate, is_mepc: bool, rd: int, rs1: int, producer_id: int):
+        super().__init__(fuzzerstate,'EPCWriterInstruction')
         self.producer_id = producer_id
         self.is_mepc = is_mepc # A bit redundant with the content of csr_instr, but practical.
 
         csr_id = CSR_IDS.MEPC if is_mepc else CSR_IDS.SEPC
-        self.csr_instr = CSRRegInstruction("csrrw", rd, rs1, csr_id)
+        self.csr_instr = CSRRegInstruction(fuzzerstate, "csrrw", rd, rs1, csr_id)
+        assert self.addr == self.csr_instr.addr
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
+    
+    def get_str(self, is_spike_resolution: bool = False):
+        return self.csr_instr.get_str() + f" ({self.instr_str})"
+
 
 # @brief this instruction writes to mtvec or stvec
 # @The value written may differ between Spike and CPU
-class GenericCSRWriterInstruction():
-    def __init__(self, csr_id: int, rd: int, rs1: int, producer_id: int, val_to_write_spike: int, val_to_write_cpu: int):
+class GenericCSRWriterInstruction(BaseInstruction):
+    def __init__(self, fuzzerstate, csr_id: int, rd: int, rs1: int, producer_id: int, val_to_write_spike: int, val_to_write_cpu: int):
+        super().init(fuzzerstate,'GenericCSRWriterInstruction')
         if DO_ASSERT:
             assert csr_id in CSR_IDS
             # These two CSRs are treated separately in TvecWriterInstruction
             assert csr_id != CSR_IDS.MTVEC and csr_id != CSR_IDS.STVEC
             # Currently to ease analysis, we impose val_to_write_spike == val_to_write_cpu
             
-        self.instr_str = 'GenericCSRWriterInstruction' # Just for compatibility with the fuzzer
 
         self.producer_id = producer_id
         self.val_to_write_spike = val_to_write_spike
         self.val_to_write_cpu = val_to_write_cpu
 
-        self.csr_instr = CSRRegInstruction("csrrw", rd, rs1, csr_id)
+        self.csr_instr = CSRRegInstruction(fuzzerstate,"csrrw", rd, rs1, csr_id)
+        assert self.addr == self.csr_instr.addr
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
+    
+    def get_str(self, is_spike_resolution: bool = False):
+        return self.csr_instr.get_str() + f" ({self.instr_str})"
+
 
 class PrivilegeDescentInstruction():
-    def __init__(self, is_mret: bool):
+    def __init__(self, fuzzerstate,is_mret: bool):
         self.instr_str = 'PrivilegeDescentInstruction' # Just for compatibility with the fuzzer
         self.is_mret = is_mret
 
@@ -1664,4 +1677,3 @@ class PrivilegeDescentInstruction():
             return rvprivileged_sret()
 
 
-CHECKABLE_INSTRUCTION_CLASSES = (R12DInstruction,RegImmInstruction,ImmRdInstruction,JALInstruction,JALRInstruction,PlaceholderProducerInstr0,PlaceholderProducerInstr1,PlaceholderPreConsumerInstr,PlaceholderConsumerInstr)
