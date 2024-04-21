@@ -626,8 +626,16 @@ INSTR_FUNCS = {
     "bge": None,
     "bltu": None,
     "bgeu": None,
+    # environment calls,
+    "ecall": None,
+    "ebreak": None,
     # unimplemented instructions
     "fence": None,
+    # wrapper instructions
+    "TvecWriterInstruction": None,
+    "EPCWriterInstruction": None,
+    "GenericCSRWriterInstruction": None,
+    "ExceptionInstruction": None
 }
 
 INSTR_FUNCS_T0 = {
@@ -692,8 +700,17 @@ INSTR_FUNCS_T0 = {
     "bge": None,
     "bltu": None,
     "bgeu": None,
+    # environment calls,
+    "ecall": None,
+    "ebreak": None,
     # unimplemented instructions
     "fence": None,
+    # wrapper instructions
+    "TvecWriterInstruction": None,
+    "EPCWriterInstruction": None,
+    "GenericCSRWriterInstruction": None,
+    "ExceptionInstruction": None
+
 
 }
 
