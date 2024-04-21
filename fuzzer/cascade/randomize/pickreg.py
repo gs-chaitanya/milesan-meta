@@ -37,7 +37,7 @@ class IntRegPickState:
         # Will ignore x0 if line below is uncommented. This is a design decision.
         # self.__reg_weights[0] = 0
 
-        self.writeback_trace_spikeresol = {}
+        self.writeback_trace_in_situ = {}
         self.writeback_trace_final = {}
 
     def setup_registers(self):
@@ -431,7 +431,7 @@ class IntRegPickState:
 
     def add_writeback_trace(self, addr, rd, val_t0, is_spike_resolution):
         if is_spike_resolution:
-            self.writeback_trace_spikeresol[addr] = (rd, val_t0)
+            self.writeback_trace_in_situ[addr] = (rd, val_t0)
         else:
             self.writeback_trace_final[addr] = (rd,val_t0)
 # Float registers are never forbidden, therefore this is simpler than integer registers.
