@@ -2,7 +2,7 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_SPIKERESOL, PATH_TO_TMP, INSERT_REGDUMPS, PRINT_ENVIRONMENT
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PATH_TO_TMP, INSERT_REGDUMPS, PRINT_ENVIRONMENT
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp
@@ -203,7 +203,7 @@ class FuzzerState:
     def append_and_execute_instr(self, instr, execute: bool= False, insert_regdump: bool = INSERT_REGDUMPS):
         # if execute:
         instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
-        if PRINT_INSTRUCTION_EXECUTION_SPIKERESOL: 
+        if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
             instr.print(is_spike_resolution=True)
         self.instr_objs_seq[-1].append(instr)
         if insert_regdump:
@@ -211,7 +211,7 @@ class FuzzerState:
                 # fence_instr = SpecialInstruction_t0(self,"fence")
                 store_instr = RegdumpInstruction_t0(self,"sw",REGDUMP_REGISTER_ID,instr.rd,0,-1)
                 # store_instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
-                if PRINT_INSTRUCTION_EXECUTION_SPIKERESOL: 
+                if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
                     store_instr.print(is_spike_resolution=True)
                 self.instr_objs_seq[-1].append(store_instr)
                 return 8

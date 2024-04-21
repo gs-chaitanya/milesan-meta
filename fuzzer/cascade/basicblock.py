@@ -19,7 +19,6 @@ from cascade.randomize.pickexceptionop import gen_exception_instr, gen_tvecfill_
 from cascade.randomize.pickrandomcsrop import gen_random_csr_op
 from cascade.randomize.pickprivilegedescentop import gen_priv_descent_instr
 from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, EcallEbreakInstruction, SimpleExceptionEncapsulator, CSRRegInstruction
-from cascade.cfinstructionclasses import CHECKABLE_INSTRUCTION_CLASSES
 from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS
 from cascade.finalblock import get_finalblock_max_size,finalblock
 from cascade.initialblock import gen_initial_basic_block
