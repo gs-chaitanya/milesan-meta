@@ -12,7 +12,6 @@ from cascade.util import IntRegIndivState
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import *
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
-import cascade.cfinstructions as cfi
 # This module creates an instruction from its instruction string, and some state which will condition which registers and immediates will be picked, and with which probability.
 
 ###

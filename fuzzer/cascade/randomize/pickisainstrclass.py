@@ -15,7 +15,7 @@ from copy import copy
 
 # Must not all be 0. Must be filtered according to the capabilities of the different CPUs.
 ISAINSTRCLASS_INITIAL_BOOSTERS = {
-    ISAInstrClass.REGFSM:      0.01,
+    ISAInstrClass.REGFSM:      0.1,
     ISAInstrClass.FPUFSM:      0,
     ISAInstrClass.ALU:         1,
     ISAInstrClass.ALU64:       0,
@@ -24,7 +24,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.AMO:         0,
     ISAInstrClass.AMO64:       0,
     ISAInstrClass.JAL :        0.01,
-    ISAInstrClass.JALR:        0.01,
+    ISAInstrClass.JALR:        0.1,
     ISAInstrClass.BRANCH:      0.01,
     ISAInstrClass.MEM:         0,
     ISAInstrClass.MEM64:       0,
@@ -34,11 +34,11 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.MEMFPUD:     0,
     ISAInstrClass.FPUD:        0,
     ISAInstrClass.FPUD64:      0,
-    ISAInstrClass.TVECFSM:     0,
+    ISAInstrClass.TVECFSM:     0.01,
     ISAInstrClass.PPFSM:       0,
-    ISAInstrClass.EPCFSM:      0,
+    ISAInstrClass.EPCFSM:      0.01,
     ISAInstrClass.MEDELEG:     0,
-    ISAInstrClass.EXCEPTION:   0,
+    ISAInstrClass.EXCEPTION:   0.01,
     ISAInstrClass.RANDOM_CSR:  0.001,
     ISAInstrClass.DESCEND_PRV: 0,
     ISAInstrClass.SPECIAL:     0
@@ -179,11 +179,12 @@ def _get_isainstrclass_filtered_weights(fuzzerstate):
 def _filter_regfsm_weight(fuzzerstate, filtered_weights: list):
     if fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) + fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.RELOCUSED) > NUM_MIN_FREE_INTREGS or \
             fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED0) or \
-            fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED1):
+            (fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PRODUCED1) and \
+            fuzzerstate.intregpickstate.exists_untainted_reg_in_state(IntRegIndivState.FREE, allow_zero = False)):
             return
 
     filtered_weights[ISAInstrClass.REGFSM] = 0
-    
+
 # We need at least one untainted and free input register and one free or relocused output register.
 def _filter_csr_weight(fuzzerstate, filtered_weights: list):
     if fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE) > 0 and \

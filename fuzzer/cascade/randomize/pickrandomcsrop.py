@@ -97,7 +97,9 @@ def gen_random_csr_op(fuzzerstate):
                 ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.SSCRATCH)
             elif target_csr == MachineCSROpCandidates32.MSCRATCH:
                 rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
-                ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), rs, CSR_IDS.MSCRATCH)
+                rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force=False)
+                ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", rd, rs, CSR_IDS.MSCRATCH)
+                # fuzzerstate.intregpickstate.set_regstate(rd,IntRegIndivState.RELOCUSED,True)
             elif target_csr == MachineCSROpCandidates32.MINSTRET:
                 if "kronos" in fuzzerstate.design_name and not is_tolerate_kronos_minstret() or "vexriscv" in fuzzerstate.design_name and not is_tolerate_vexriscv_minstret():
                     ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.MINSTRET)
@@ -112,7 +114,6 @@ def gen_random_csr_op(fuzzerstate):
                         rs = 0
                     rd =  fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False, authorize_sideeffects = False)
                     ret = CSRRegInstruction_t0(fuzzerstate,opcode_str,rd, rs, CSR_IDS.MINSTRET)
-                    fuzzerstate.intregpickstate.set_regstate(rd,IntRegIndivState.RELOCUSED,True)
                 else:
                     ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.MINSTRET)
             else:
