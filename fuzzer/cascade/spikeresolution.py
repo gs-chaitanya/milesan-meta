@@ -54,7 +54,6 @@ def gen_regdump_reqs_all_rds(fuzzerstate):
 
             assert curr_addr not in ret
             assert bb_instr.addr == curr_addr + SPIKE_STARTADDR, f"Address mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}"
-            # All we need is the value of the dependent register at consumption time.
             if isinstance(bb_instr, R12DInstruction):
                 ret.append((curr_addr, False, bb_instr.rd))
                 ret.append((curr_addr, False, bb_instr.rs1))
@@ -93,6 +92,11 @@ def gen_regdump_reqs_all_rds(fuzzerstate):
             elif isinstance(bb_instr, BranchInstruction):
                 ret.append((curr_addr, False, bb_instr.rs1))
                 ret.append((curr_addr, False, bb_instr.rs2))
+            elif isinstance(bb_instr, (TvecWriterInstruction, EPCWriterInstruction,GenericCSRWriterInstruction)):
+                assert isinstance(bb_instr.csr_instr, CSRRegInstruction)
+                ret.append((curr_addr, False, bb_instr.csr_instr.rd))
+                ret.append((curr_addr, False, bb_instr.csr_instr.rs1))
+
     return ret
 
 # @brief generates the register dump requests made to spike for pruning.
