@@ -38,7 +38,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     lui_imm, addi_imm = li_into_reg(offset_addr, False)
     curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", RELOCATOR_REGISTER_ID, lui_imm), True, insert_regdump = False)
 
-    curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, addi_imm, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+    curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, addi_imm), True, insert_regdump = False)
     
 
     if INSERT_REGDUMPS:
@@ -51,7 +51,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         lui_imm, addi_imm = li_into_reg(regdump_addr, False)
         curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", REGDUMP_REGISTER_ID, lui_imm), True, insert_regdump = False)
         
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", REGDUMP_REGISTER_ID, REGDUMP_REGISTER_ID, addi_imm, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", REGDUMP_REGISTER_ID, REGDUMP_REGISTER_ID, addi_imm), True, insert_regdump = False)
         
 
     if fuzzerstate.is_design_64bit:
@@ -81,22 +81,22 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     if not ("vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs()):
         if fuzzerstate.design_has_pmp:
             # pmpcfg0
-            curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 1, 0, 31, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+            curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 1, 0, 31), True, insert_regdump = False)
             
             curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.PMPCFG0), insert_regdump = False)
             
             # pmpaddr0
             if fuzzerstate.is_design_64bit:
-                curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 1, 0, 1, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+                curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 1, 0, 1), True, insert_regdump = False)
                 
-                curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"slli", 1, 0, 0x36, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+                curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"slli", 1, 0, 0x36), True, insert_regdump = False)
                 
-                curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 1, 1, -1, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+                curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 1, 1, -1), True, insert_regdump = False)
                 
                 curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.PMPADDR0), insert_regdump = False)          
                 
             else:
-                curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 1, 0, -1, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+                curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 1, 0, -1), True, insert_regdump = False)
                 
                 curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.PMPADDR0), insert_regdump = False)
                 
@@ -132,26 +132,26 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     if fuzzerstate.design_has_fpu:
         # FUTURE Create dependencies on FPU_ENDIS_REGISTER_ID
         # Prepare FPU_ENDIS_REGISTER_ID, which will be used across the program's execution
-        curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", FPU_ENDIS_REGISTER_ID, 0b10, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", FPU_ENDIS_REGISTER_ID, 0b10), True, insert_regdump = False)
         
         # Enable the FPU
         curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, FPU_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), insert_regdump = False)
         
         # Set the initial rounding mode to zero initially, arbitrarily. We arbitrarily use the register x1 as an intermediate register
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 1, 0, 0, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 1, 0, 0), True, insert_regdump = False)
         
         curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.FCSR), insert_regdump = False)
         
 
     if fuzzerstate.design_has_supervisor_mode or fuzzerstate.design_has_user_mode:
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", MPP_TOP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 1, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", MPP_TOP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 1), True, insert_regdump = False)
         
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", MPP_BOTH_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 2, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", MPP_BOTH_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 2), True, insert_regdump = False)
         
         curr_addr += fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"or", MPP_BOTH_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID), True, insert_regdump = False)
         
         # Just for the alignment. Could be removed if we improved the alignment prediction. FUTURE.
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0), True, insert_regdump = False)
         
         # While it is not necesary to set the mpp initially, it is convenient to do so. If we don't, then we should adapt the initial values (typically to None) in privilegestate.py
         curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrs", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), insert_regdump = False)
@@ -161,7 +161,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
 
     if not ("vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs()):
         if fuzzerstate.design_has_user_mode:
-            curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", SPP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 5, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+            curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", SPP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 5), True, insert_regdump = False)
              # NO_COMPRESSED
             # While it is not necesary to set the mpp initially, it is convenient to do so. If we don't, then we should adapt the initial values (typically to None) in privilegestate.py
             curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrs", 0, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), insert_regdump = False)
@@ -170,11 +170,11 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     # Set the rdep mask to the correct value
 
     if fuzzerstate.is_design_64bit:
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, 0, -1, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, 0, -1), True, insert_regdump = False)
         
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"slli", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, 32, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"slli", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, 32), True, insert_regdump = False)
         
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"xori", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, -1, fuzzerstate.is_design_64bit), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"xori", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, -1), True, insert_regdump = False)
         
         if DO_ASSERT:
             assert curr_addr == fuzzerstate.curr_bb_start_addr + len(fuzzerstate.instr_objs_seq[-1]) * 4 # NO_COMPRESSED
@@ -204,7 +204,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     fuzzerstate.memview.set_initial_register_values(fuzzerstate, SPIKE_STARTADDR +  curr_addr + bytes_until_random_vals)
     fuzzerstate.dump_memview_t0()
 
-    next_instr = RegImmInstruction_t0(fuzzerstate,"addi", fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_regs-1, bytes_until_random_vals + curr_addr, fuzzerstate.is_design_64bit)
+    next_instr = RegImmInstruction_t0(fuzzerstate,"addi", fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_regs-1, bytes_until_random_vals + curr_addr)
     curr_addr += fuzzerstate.append_and_execute_instr(next_instr, True, insert_regdump = False)
 
     
@@ -213,11 +213,11 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         if DO_ASSERT:
             assert fuzzerstate.num_pickable_floating_regs <= fuzzerstate.num_pickable_regs, "For this param choice, we need to adapt slightly the initial block."
         for fp_reg_id in range(fuzzerstate.num_pickable_floating_regs):
-            next_instr = FloatLoadInstruction(fuzzerstate,"fld" if fuzzerstate.is_design_64bit else "flw", fp_reg_id, fuzzerstate.num_pickable_regs-1, 8*(fp_reg_id+fuzzerstate.num_pickable_regs-1), -1, fuzzerstate.is_design_64bit)
+            next_instr = FloatLoadInstruction(fuzzerstate,"fld" if fuzzerstate.is_design_64bit else "flw", fp_reg_id, fuzzerstate.num_pickable_regs-1, 8*(fp_reg_id+fuzzerstate.num_pickable_regs-1), -1)
             curr_addr += fuzzerstate.append_and_execute_instr(next_instr, True, insert_regdump = False)
             
     for reg_id in range(1, fuzzerstate.num_pickable_regs):
-        next_instr = IntLoadInstruction_t0(fuzzerstate,"ld" if fuzzerstate.is_design_64bit else "lw", reg_id, fuzzerstate.num_pickable_regs-1, 8*(reg_id-1), -1, fuzzerstate.is_design_64bit)
+        next_instr = IntLoadInstruction_t0(fuzzerstate,"ld" if fuzzerstate.is_design_64bit else "lw", reg_id, fuzzerstate.num_pickable_regs-1, 8*(reg_id-1), -1)
         curr_addr += fuzzerstate.append_and_execute_instr(next_instr, True, insert_regdump = False)
         
     # fuzzerstate.intregpickstate.print()
