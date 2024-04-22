@@ -864,3 +864,8 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = True):
         self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
         self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+
+class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
+    def execute(self, taint_en, is_spike_resolution: bool = True):
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)

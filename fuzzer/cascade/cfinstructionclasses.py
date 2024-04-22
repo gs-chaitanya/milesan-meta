@@ -23,6 +23,7 @@ from rv.rv64m import *
 from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
 from common.spike import SPIKE_STARTADDR
 from cascade.registers import ABI_INAMES, MAX_32b, MAX_64b, MAX_20b
+from cascade.util import ExceptionCauseVal
 import random
 import numpy as np
 
@@ -1477,7 +1478,7 @@ class SimpleExceptionEncapsulator(ExceptionInstruction):
         return self.instr.gen_bytecode_int(is_spike_resolution)
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return self.instr.get_str(is_spike_resolution) + f" ({self.instr_str})"
+        return self.instr.get_str(is_spike_resolution) + f" (SimpleExceptionInstruction)"
 
 # This is a wrapper class for a misaligned load or store.
 # As opposed to usual load and store operations used above, this class chooses a consumed register by itself.
@@ -1495,8 +1496,8 @@ class MisalignedMemInstruction(ExceptionInstruction):
     MISALIGNED_FLD = 10 # Requires D extension
     MISALIGNED_FSD = 11
 
-    def __init__(self, is_mtvec: bool, fuzzerstate, is_load: bool, iscompressed: bool = False):
-        super().__init__(is_mtvec, None) # We compute the producer id later
+    def __init__(self,fuzzerstate, is_mtvec: bool, is_load: bool, iscompressed: bool = False):
+        super().__init__(fuzzerstate, is_mtvec, None) # We compute the producer id later
 
         from cascade.randomize.pickreg import IntRegIndivState
         # First, choose a consumed register.
@@ -1524,6 +1525,14 @@ class MisalignedMemInstruction(ExceptionInstruction):
           (not is_load) and fuzzerstate.design_has_fpud  # MISALIGNED_FSD
         ]
         meminstr_type = random.choices(range(len(meminstr_type_weights)), meminstr_type_weights)[0]
+        if meminstr_type in [MisalignedMemInstruction.MISALIGNED_SH,
+                            MisalignedMemInstruction.MISALIGNED_SW,
+                            MisalignedMemInstruction.MISALIGNED_SD,
+                            MisalignedMemInstruction.MISALIGNED_FSW,
+                            MisalignedMemInstruction.MISALIGNED_FSD]:
+                            self.exceptioncause_val = ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED
+        else:
+            self.exceptioncause_val = ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED
         # Third, the destination register for loads, and the source register for stores does not matter because will not be architecturally accessed.
         random_reg = random.randrange(MAX_NUM_PICKABLE_REGS)
         # Finally, pick a readable or writable address, since page or access faults would have priority
@@ -1554,47 +1563,51 @@ class MisalignedMemInstruction(ExceptionInstruction):
         # Instantiate the wrapped instruction
         imm = 0
         if meminstr_type == MisalignedMemInstruction.MISALIGNED_LH:
-            self.meminstr = IntLoadInstruction("lh", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntLoadInstruction(fuzzerstate,"lh", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_LW:
-            self.meminstr = IntLoadInstruction("lw", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntLoadInstruction(fuzzerstate,"lw", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_LHU:
-            self.meminstr = IntLoadInstruction("lhu", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntLoadInstruction(fuzzerstate,"lhu", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_LWU:
-            self.meminstr = IntLoadInstruction("lwu", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntLoadInstruction(fuzzerstate,"lwu", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_LD:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpu
-            self.meminstr = IntLoadInstruction("ld", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntLoadInstruction(fuzzerstate,"ld", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_SH:
-            self.meminstr = IntStoreInstruction("sh", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntStoreInstruction(fuzzerstate,"sh", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_SW:
-            self.meminstr = IntStoreInstruction("sw", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntStoreInstruction(fuzzerstate,"sw", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_SD:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpu
-            self.meminstr = IntStoreInstruction("sd", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntStoreInstruction(fuzzerstate,"sd", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_FLW:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpu
-            self.meminstr = FloatLoadInstruction("flw", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = FloatLoadInstruction(fuzzerstate,"flw", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_FSD:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpud
-            self.meminstr = FloatStoreInstruction("fsd", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = FloatStoreInstruction(fuzzerstate,"fsd", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_FSW:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpu
-            self.meminstr = FloatStoreInstruction("fsw", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = FloatStoreInstruction(fuzzerstate,"fsw", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_FLD:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpud
-            self.meminstr = FloatLoadInstruction("fld", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = FloatLoadInstruction(fuzzerstate,"fld", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
         else:
             raise NotImplementedError('Unsupported meminstrtype: ' + str(meminstr_type))
         # print('Generated misaligned memory instruction: ' + str(self.meminstr.instr_str), 'misaligned address', hex(self.misaligned_addr))
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.meminstr.gen_bytecode_int(is_spike_resolution)
+
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+        return self.meminstr.get_str(is_spike_resolution) + f" (MisalignedMemInstruction)"
+
 
 
 ###

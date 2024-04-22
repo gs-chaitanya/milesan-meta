@@ -5,7 +5,7 @@
 # This module is responsible for picking specific operations among exceptions.
 
 from cascade.cfinstructionclasses import JALInstruction, SimpleIllegalInstruction, SimpleExceptionEncapsulator, MisalignedMemInstruction, EcallEbreakInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, CSRRegInstruction, PrivilegeDescentInstruction, CSRRegInstructions, Float3Instruction, Float3Instructions
-from cascade.cfinstructionclasses_t0 import TvecWriterInstruction_t0, EPCWriterInstruction_t0, GenericCSRWriterInstruction_t0, SimpleExceptionEncapsulator_t0, CSRRegInstruction_t0, SimpleIllegalInstruction_t0
+from cascade.cfinstructionclasses_t0 import TvecWriterInstruction_t0, EPCWriterInstruction_t0, GenericCSRWriterInstruction_t0, SimpleExceptionEncapsulator_t0, CSRRegInstruction_t0, SimpleIllegalInstruction_t0, MisalignedMemInstruction_t0
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.randomize.createcfinstr import gen_random_rounding_mode
 from cascade.toleratebugs import is_tolerate_rocket_minstret, is_tolerate_kronos_readbadcsr, is_tolerate_picorv32_readnonimplcsr, is_forbid_vexriscv_csrs, is_tolerate_vexriscv_fpu_disabled, is_tolerate_vexriscv_fpu_leak
@@ -193,13 +193,13 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
-        return MisalignedMemInstruction(is_mtvec, fuzzerstate, True)
+        return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, True)
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
         raise NotImplementedError("ID_LOAD_ACCESS_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
-        return MisalignedMemInstruction(is_mtvec, fuzzerstate, False)
+        return MisalignedMemInstruction_t0(is_mtvec, fuzzerstate, False)
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
         raise NotImplementedError("ID_STORE_AMO_ACCESS_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE:
