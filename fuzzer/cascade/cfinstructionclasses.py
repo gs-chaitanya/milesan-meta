@@ -139,7 +139,7 @@ class CFInstruction(BaseInstruction):
     # Check that it's not a wrong instruction id.
     def assert_authorized_instr_strs(self):
         if DO_ASSERT:
-            assert self.instr_str in self.__class__.authorized_instr_strs
+            assert self.instr_str in self.__class__.authorized_instr_strs, f"{self.instr_str} is not authorized."
 
     def __init__(self, fuzzerstate, instr_str: str, iscompressed: bool = False):
         super().__init__(fuzzerstate,instr_str)
@@ -280,19 +280,7 @@ class R12DInstruction(CFInstruction):
         self.rs2 = (bytecode>>OPCODE_FIELD_BITS["rs2"])&OPCODE_FIELD_MASKS["rs"]
         self.rd =  (bytecode>>OPCODE_FIELD_BITS["rd"])&OPCODE_FIELD_MASKS["rd"]
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        if self.addr == -1:
-            print(f"Skipping execution of {self.get_str()}")
-            return
-        assert not taint_en, f"{self.get_str()} is not an IFT instruction."
-        assert self.fuzzerstate is not None, f"fuzzerstate not set, cannot execute {self.get_str()}" 
-        rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
-        rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
-        res = self.instr_func(rs1_val,rs2_val, self.fuzzerstate.is_design_64bit)
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
-
     
-
 # Instructions with imm and rd
 ImmRdInstructions = ("lui", "auipc")
 class ImmRdInstruction(ImmInstruction):
@@ -324,12 +312,6 @@ class ImmRdInstruction(ImmInstruction):
     def set_bytecode(self, bytecode):
         self.imm = (bytecode>>OPCODE_FIELD_BITS["immu"])&OPCODE_FIELD_MASKS["immu"]
         self.rd =  (bytecode>>OPCODE_FIELD_BITS["rd"])&OPCODE_FIELD_MASKS["rd"]
-
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        assert not taint_en, f"{self.get_str()} is not an IFT instruction."
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.instr_func(self.addr, self.imm, self.fuzzerstate.is_design_64bit)
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 
 # Instructions with rs1, imm and rd
@@ -395,13 +377,6 @@ class RegImmInstruction(ImmInstruction):
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
-
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        assert not taint_en, f"{self.get_str()} is not an IFT instruction."
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
-        rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
-        res = self.instr_func(rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 # Branch instructions: with rs1, rs2 and an immediate
 BranchInstructions = ("beq", "bne", "blt", "bge", "bltu", "bgeu")
@@ -491,14 +466,6 @@ class JALInstruction(ImmInstruction):
         # rv32i
         return rv32i_jal(self.rd, self.imm)
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        assert not taint_en, f"{self.get_str()} is not an IFT instruction."
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
-
-
-
 
 
 # The jalr instruction
@@ -525,12 +492,6 @@ class JALRInstruction(ImmInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
         return rv32i_jalr(self.rd, self.rs1, self.imm)
-
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 # Instructions that create no information flow
 SpecialInstructions = ("fence", "fence.i")
@@ -620,14 +581,6 @@ class IntLoadInstruction(ImmInstruction):
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
-        addr = self.instr_func(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
-        res = self.fuzzerstate.memview.read(addr)
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
-
-
 # Integer store instructions
 IntStoreInstructions = ("sb", "sh", "sw", "sd")
 class IntStoreInstruction(ImmInstruction):
@@ -647,7 +600,7 @@ class IntStoreInstruction(ImmInstruction):
         self.rs2  = rs2
         self.producer_id = producer_id
 
-    def get_str(self, is_spike_resolution):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -664,13 +617,6 @@ class IntStoreInstruction(ImmInstruction):
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
-
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        assert not taint_en, f"{self.get_str(is_spike_resolution)} is not an IFT instruction!"
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
-        addr = self.instr_func(self.fuzzerstate.intregpickstate.regs[self.rs2].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
-        res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val()
-
 
 
 class RegdumpInstruction(IntStoreInstruction):
@@ -1308,13 +1254,6 @@ class PlaceholderProducerInstr0(BaseInstruction):
                 assert self.rtl_offset is not None, "Producer0 cannot produce final bytecode because it does not yet know the final offset."
             return rv32i_lui(self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0])
 
-    def execute(self, taint_en: bool = False, is_spike_resolution: bool = True):
-        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
-        imm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0]
-        res = to_unsigned(imm, self.fuzzerstate.is_design_64bit)<<12
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
-
 # Does not inherit from CFInstruction.
 class PlaceholderProducerInstr1(BaseInstruction):
     # When it is instantiated, the producer instructions do not know the offset yet, just the target address.
@@ -1348,14 +1287,6 @@ class PlaceholderProducerInstr1(BaseInstruction):
                 assert self.rtl_offset is not None, "Producer1 cannot produce final bytecode because it does not yet know the final rtl_offset."
             return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1])
 
-    def execute(self, taint_en: bool = False, is_spike_resolution: bool = True):
-        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
-        uimm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1]
-        res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val() + uimm
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
-
-
 # Does not inherit from CFInstruction.
 class PlaceholderPreConsumerInstr(BaseInstruction):
     # @param rdep: the register that creates the dependency
@@ -1372,12 +1303,6 @@ class PlaceholderPreConsumerInstr(BaseInstruction):
         # Reduce the size of the rdep id to 30 bits
         return rv32i_and(self.rdep, self.rdep, RDEP_MASK_REGISTER_ID)
     
-    def execute(self, taint_en: bool = False, is_spike_resolution: bool = True):
-        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val() & self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
-        self.fuzzerstate.intregpickstate.regs[self.rdep].set_val(res)
-
 
 # Does not inherit from CFInstruction.
 class PlaceholderConsumerInstr(BaseInstruction):
@@ -1410,14 +1335,10 @@ class PlaceholderConsumerInstr(BaseInstruction):
         else:
             return rv32i_xor(self.rd, self.rdep, self.rprod) # self.rdep - self.rprod
 
-    def execute(self, taint_en: bool = False, is_spike_resolution: bool = True):
-        assert not taint_en, f"{self.get_str()} is not an IFT instruction!"
-        assert self.fuzzerstate is not None, "fuzzerstate not set."
-        res = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val() ^ self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val()
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
 
 def is_placeholder(obj):
     return isinstance(obj, PlaceholderProducerInstr0) or isinstance(obj, PlaceholderProducerInstr1) or isinstance(obj, PlaceholderPreConsumerInstr) or isinstance(obj, PlaceholderConsumerInstr)
+
 
 ###
 # Raw data

@@ -660,12 +660,19 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         self.rd_t0 = 0
         self.imm_t0 = 0
         self.rs1_t0 = 0
+        self.n_bytes = 1 if instr_str in ["lb","lbu"] else 2 if instr_str in ["lh","lhu"] else 4 if instr_str == "lw" else -1
+        assert self.n_bytes != -1
+        self.mask = 2**(self.n_bytes*8)-1
+
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         addr = self.instr_func(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
-        res = self.fuzzerstate.memview.read(addr)
+        res = self.fuzzerstate.memview.read(addr,self.n_bytes)
         if taint_en:
             self.execute_t0(res, is_spike_resolution)
+
+        msb = (res>>(self.n_bytes*8-1))&1 if self.instr_str not in ["lbu","lhu"] else 0 # sign-extend
+        res |= (0xFFFFFFFF^self.mask)*msb
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
 
@@ -676,7 +683,9 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         assert rs1_val_t0 == 0, f"Source register {ABI_INAMES[self.rs1]} is tainted ({hex(rs1_val_t0)}), this is not allowed."
         assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
         addr = self.instr_func(rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
-        res_t0 = self.fuzzerstate.memview.read_t0(addr)
+        res_t0 = self.fuzzerstate.memview.read_t0(addr,self.n_bytes)
+        msb = (res_t0>>(self.n_bytes*8-1))&1 # sign-extend
+        res_t0 |= (0xFFFFFFFF^self.mask)*msb
         self.writeback_t0(res_t0,res, is_spike_resolution) # We allow the rd field to be tainted, thus taint could be propagated to several destination registers.
 
 class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
@@ -685,13 +694,17 @@ class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
         self.imm_t0 = 0
         self.rs1_t0 = 0
         self.rs2_t0 = 0
+        self.n_bytes = 1 if instr_str == "sb" else 2 if instr_str == "sh" else 4 if instr_str == "sw" else -1
+        assert self.n_bytes != -1
+        self.mask = 2**(self.n_bytes*8)-1
+
     
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         addr = self.instr_func(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
         res = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
         if taint_en:
             self.execute_t0(res, is_spike_resolution)
-        self.fuzzerstate.memview.write(addr, res)
+        self.fuzzerstate.memview.write(addr, res&self.mask, self.n_bytes)
         self.fuzzerstate.advance_minstret()
 
     def execute_t0(self, res, is_spike_resolution):
@@ -702,7 +715,7 @@ class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
         assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
         addr = self.instr_func(rs1_val,self.imm, self.fuzzerstate.is_design_64bit)
         rs2_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
-        self.fuzzerstate.memview.write_t0(addr,rs2_val_t0) # We don't allow addresses to be tainted, thus we don't need a writeback here.
+        self.fuzzerstate.memview.write_t0(addr,rs2_val_t0%self.mask, self.n_bytes) # We don't allow addresses to be tainted, thus we don't need a writeback here.
 
 
 class RegdumpInstruction_t0(IntStoreInstruction_t0):

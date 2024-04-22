@@ -10,7 +10,7 @@ from rv.csrids import CSR_IDS
 from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES
 from params.fuzzparams import TAINT_EN
 from params.runparams import INSERT_REGDUMPS
-from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs
+from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memop_instrobjs
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 from cascade.randomize.pickisainstrclass import gen_next_isainstrclass, ISAInstrClass
 from cascade.randomize.pickmemop import pick_memop_addr, get_alignment_bits, is_instrstr_load
@@ -52,7 +52,7 @@ def gen_basicblock(fuzzerstate):
     while fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-4 > BASIC_BLOCK_MIN_SPACE:
 
         # Allocate the next 4 bytes
-        fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+4)
+        fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
         curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
         curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
 
@@ -61,20 +61,20 @@ def gen_basicblock(fuzzerstate):
 
         # If this is an instruction that influences offset register states
         if curr_isa_class == ISAInstrClass.REGFSM:
-            new_instrobjs = create_regfsm_instrobjs(fuzzerstate)
+            new_instrobjs_constructors, new_instrobjs_params = create_regfsm_instrobjs(fuzzerstate)
             # fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[0])
-            fuzzerstate.append_and_execute_instr(new_instrobjs[0], True)
+            fuzzerstate.append_and_execute_instr(new_instrobjs_constructors[0](*new_instrobjs_params[0]), True)
 
             # For consumers, we may need to insert one more instruction
-            for next_instrobj_id in range(1, len(new_instrobjs)):
+            for next_instrobj_id in range(1, len(new_instrobjs_constructors)):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
                 curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 # fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[next_instrobj_id])
-                fuzzerstate.append_and_execute_instr(new_instrobjs[next_instrobj_id], True)
-            del new_instrobjs # For safety, we prevent accidental reuse of this variable
+                fuzzerstate.append_and_execute_instr(new_instrobjs_constructors[next_instrobj_id](*new_instrobjs_params[next_instrobj_id]), True)
             continue
         # If this is an FPU enable-disable instruction or a rounding mode change
         elif curr_isa_class == ISAInstrClass.FPUFSM:
+            assert False, "not implemented"
             new_instrobjs = gen_fpufsm_instrs(fuzzerstate)
             if len(new_instrobjs) == 1: # Equivalent to FPU enable/disable
                 fuzzerstate.fpuendis_coords.append((len(fuzzerstate.instr_objs_seq)-1, len(fuzzerstate.instr_objs_seq[-1])))
@@ -90,6 +90,7 @@ def gen_basicblock(fuzzerstate):
 
         # If this is a privilege descent instruction or an mpp/spp write instruction
         elif curr_isa_class == ISAInstrClass.DESCEND_PRV:
+            assert False, "not implemented"
             # print('Priv descent at addr', hex(curr_addr), 'privstate', fuzzerstate.privilegestate.privstate)
             new_instrobj = gen_priv_descent_instr(fuzzerstate)
             # print('  New privstate', fuzzerstate.privilegestate.privstate)
@@ -111,6 +112,7 @@ def gen_basicblock(fuzzerstate):
             return True
 
         elif curr_isa_class == ISAInstrClass.PPFSM:
+            assert False, "not implemented"
             new_instrobjs = gen_ppfill_instrs(fuzzerstate)
             if DO_ASSERT:
                 assert len(new_instrobjs) * 4 < BASIC_BLOCK_MIN_SPACE # NO_COMPRESSED
@@ -143,6 +145,17 @@ def gen_basicblock(fuzzerstate):
             fuzzerstate.append_and_execute_instr(new_instrobj, True)
             del new_instrobj # For safety, we prevent accidental reuse of this variable
             return True
+        
+        elif curr_isa_class == ISAInstrClass.MEM:
+            instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
+            constructors, params = create_memop_instrobjs(fuzzerstate, instr_str)
+            for new_instrobj_constructor, new_instrobj_param in zip(constructors, params):
+                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                new_instrobj = new_instrobj_constructor(*new_instrobj_param)
+                fuzzerstate.append_and_execute_instr(new_instrobj, True)
+                # new_instrobj.print(True)
+            continue
 
         # Discriminate non-taken branches
         fuzzerstate.curr_branch_taken = False
@@ -260,7 +273,7 @@ def gen_random_data_block(fuzzerstate):
     for addr in range(fuzzerstate.random_data_block_start_addr, fuzzerstate.random_data_block_end_addr, 4):
         rand_val = random.randrange(0, 2**32)
         fuzzerstate.random_block_content4by4bytes.append(rand_val)
-        fuzzerstate.memview.write(addr, rand_val)
+        fuzzerstate.memview.write(addr+SPIKE_STARTADDR, rand_val)
 
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
 def alloc_final_basic_block(fuzzerstate):
@@ -472,11 +485,11 @@ def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
                     assert bb_instr.producer_id == -1 or not bb_instr.producer_id in producer_id_to_tgtaddr, "producer_id {} already in producer_id_to_tgtaddr".format(bb_instr.producer_id)
                 producer_id_to_tgtaddr[bb_instr.producer_id] = addr
 
-            elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM64] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPU] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPUD]:
-                if DO_ASSERT:
-                    assert bb_instr.producer_id == -1 or not bb_instr.producer_id in producer_id_to_tgtaddr, "producer_id {} already in producer_id_to_tgtaddr".format(bb_instr.producer_id)
-                producer_id_to_tgtaddr[bb_instr.producer_id] = memop_addrs[index_in_memaddr_array]
-                index_in_memaddr_array += 1
+            # elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM64] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPU] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPUD]:
+            #     if DO_ASSERT:
+            #         assert bb_instr.producer_id == -1 or not bb_instr.producer_id in producer_id_to_tgtaddr, "producer_id {} already in producer_id_to_tgtaddr".format(bb_instr.producer_id)
+            #     producer_id_to_tgtaddr[bb_instr.producer_id] = memop_addrs[index_in_memaddr_array]
+            #     index_in_memaddr_array += 1
 
             elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.JAL] or (bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.BRANCH] and bb_instr.plan_taken):
                 # If this is the last before the final block, we need to steer toward the final block.
@@ -511,6 +524,9 @@ def gen_basicblocks(fuzzerstate):
 
         # Generate the random data block
         gen_random_data_block(fuzzerstate)
+
+        # Store the state after the inital register values and random data block are determined.
+        fuzzerstate.memview.store_state()
 
         # Reserve space for the final basic block.
         alloc_final_basic_block(fuzzerstate)

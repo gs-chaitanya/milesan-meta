@@ -300,5 +300,5 @@ class IntRegIndivState(IntEnum):
     PRODUCED1          = auto() # aka "ready"
     CONSUMED           = auto() # aka "applied". Was either PRODUCED1 and directly consumed as input and output of the consumer, or FREE and just output of the consumer.
     UNRELIABLE         = auto() # If offset but not chosen as applied
-    RELOCUSED          = auto() # Already used by cf-ambiguous instruction, value differs between in-situ and spike simulation.
+    RELOCUSED          = auto() # Already used by cf-ambiguous instruction, value differs between in-situ and spike/final rtl simulation and must be excluded from df computation.
 BASIC_BLOCK_MIN_SPACE = 24 # bytes.

@@ -26,7 +26,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.JAL :        0.01,
     ISAInstrClass.JALR:        0.1,
     ISAInstrClass.BRANCH:      0.01,
-    ISAInstrClass.MEM:         0,
+    ISAInstrClass.MEM:         0.1,
     ISAInstrClass.MEM64:       0,
     ISAInstrClass.MEMFPU:      0,
     ISAInstrClass.FPU:         0,

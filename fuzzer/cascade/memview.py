@@ -18,6 +18,7 @@ from copy import deepcopy
 # from params.runparams import DO_ASSERT
 from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS
 from params.runparams import PRINT_DBUS_TAINT
+from cascade.spikeresolution import SPIKE_STARTADDR
 from cascade.registers import MAX_32b, MAX_64b
 DO_ASSERT = True
 
@@ -29,8 +30,8 @@ class MemoryView:
         self.freepairs = [(0, memsize)]
         self.memsize = memsize
         self.occupied_addrs = 0 # Follow the number of occupied addresses.
-        self.data = {} # Keep track of load/store operations
-        self.data_t0 = {} # Keep track of load/store operations' taints
+        self.data = {} # Keep track of load/store operations. Holds the addr-byte pairs in little endian format.
+        self.data_t0 = {} # Keep track of load/store operations' taints. Holds the addr-byte_t0 pairs in little endian format.
         self.states = []
 
     # In particular, returns False if it goes beyond the memory boundaries.
@@ -144,6 +145,18 @@ class MemoryView:
                 return picked_addr
         return None
 
+    def gen_random_addr_from_randomblock(self, alignment_bits: int = 2, min_space: int = 4, max_attempts: int = MEMVIEW_ALLOC_MAX_ATTEMPTS):
+        for _ in range(max_attempts):
+            picked_addr = random.choice([addr for addr in self.data.keys() if addr % (1 << alignment_bits) == 0])-SPIKE_STARTADDR
+            if min_space == 0 or all([addr+SPIKE_STARTADDR in self.data for addr in range(picked_addr,picked_addr+min_space-1)]):
+                if DO_ASSERT:
+                    assert picked_addr >= 0
+                    assert picked_addr + min_space <= self.memsize, f"{hex(picked_addr+min_space)} exceeds memsize {hex(self.memsize)}"
+                    assert picked_addr % (1 << alignment_bits) == 0
+                # print(f"Returning addr {hex(picked_addr)}, min_space: {min_space}, align: {alignment_bits}")
+                return picked_addr
+        return None
+
     # @brief Computes the percentage of the memory that is allocated
     def get_allocated_ratio(self):
         free_sum = sum(map(lambda p: p[1] - p[0], self.freepairs))
@@ -152,27 +165,41 @@ class MemoryView:
     def to_string(self):
         return str(self.freepairs)
 
-    def read(self, addr):
-        assert addr in self.data, f"Read request from invalid address {hex(addr)}."
-        return self.data[addr]
+    def read(self, addr, n_bytes: int = 4):
+        val = 0
+        # print(f"Reading {n_bytes} bytes from {hex(addr)}")
+        for i in range(n_bytes):
+            assert addr+i in self.data, f"Read request from invalid address {hex(addr+i)}."
+            b = self.data[addr+i]
+            assert b <= 0xFF
+            val |= (b << (i*8))
+        # print(f"Reading from {hex(addr)}: {hex(val)}")
+        return val
 
-    def read_t0(self, addr):
-        assert addr in self.data_t0, f"Read request from invalid address {hex(addr)}."
-        val_t0 = self.data_t0[addr]
-        if val_t0 and PRINT_DBUS_TAINT: 
-            print(f"read_t0: Taint on data bus detected: {hex(addr)} : {hex(val_t0)}")
-        return val_t0
+    def read_t0(self, addr, n_bytes: int = 4):
+        val = 0
+        for i in range(n_bytes):
+            assert addr+i in self.data_t0, f"Taint read request from invalid address {hex(addr+i)}."
+            b = self.data_t0[addr+i]
+            assert b <= 0xFF
+            val |= (b << (i*8))
+        # print(f"Reading taint from {hex(addr)}: {hex(val)}")
+        return val
 
-    def write(self, addr, val):
-        # print(f"Writing to {hex(addr)}: {hex(val)}")
-        self.data[addr] = val
-        if addr not in self.data_t0:
-            self.data_t0[addr] = 0
+    def write(self, addr, val, n_bytes: int = 4):
+        # print(f"Writing {n_bytes} bytes to {hex(addr)}")
+        for i in range(n_bytes):
+            b = (val&(0xFF<<(i*8)))>>(i*8)
+            # print(f"Writing to {hex(addr+i)}: {hex(b)}")
+            self.data[addr+i] = b # little endian
+            if addr+i not in self.data_t0:
+                self.data_t0[addr+i] = 0
 
-    def write_t0(self, addr, val_t0):
+    def write_t0(self, addr, val_t0, n_bytes: int = 4):
         if val_t0 and PRINT_DBUS_TAINT: 
             print(f"write_t0: Taint on data bus detected: {hex(addr)} : {hex(val_t0)}")
-        self.data_t0[addr] = val_t0
+        for i in range(n_bytes):
+            self.data_t0[addr+i] = (val_t0&(0xFF<<(i*8)))>>(i*8)
 
     def set_initial_register_values(self,fuzzerstate, start_addr):
         n_tainted_regs = 0
@@ -183,12 +210,11 @@ class MemoryView:
                 if random.choices([0,1],[1-P_TAINT_REG,P_TAINT_REG],k=1)[0]:
                     rand_val = random.randint(1,MAX_64b if fuzzerstate.is_design_64bit else MAX_32b)
                     n_tainted_regs += 1
-                    self.write_t0(addr, rand_val)
+                    self.write_t0(addr, rand_val, 4)
             else:
-                self.write_t0(addr, 0)
+                self.write_t0(addr, 0, 4)
 
-        self.initial_data = self.data
-        self.initial_data_t0 = self.data_t0
+    def store_state(self):
         self.states = [(deepcopy(self.data), deepcopy(self.data_t0))]
 
     def restore_and_reduce_taint(self, mismatch):
@@ -205,13 +231,6 @@ class MemoryView:
             del self.states[-1]
             self.restore()
 
-        # n_tainted_regs = sum([1 for i in self.data_t0.items() if i != 0])
-
-        # for addr, val_t0 in sorted(self.data_t0.items(), key=lambda _: random.random()):
-        #     if val_t0:
-        #         self.data_t0[addr] = 0  # untaint whole reg
-        #         break
-        # else:
         for addr, val_t0 in self.data.items():
             if val_t0:
                 highest_tainted_bit = 0
@@ -222,15 +241,10 @@ class MemoryView:
                 # break
 
         self.states.append((deepcopy(self.data), deepcopy(self.data_t0)))
-        # print([hash(frozenset(state[1].items())) for state in self.states])
-
 
     def restore(self):
         self.data = deepcopy(self.states[-1][0])
         self.data_t0 = deepcopy(self.states[-1][1])
-        # print(f"Restored to {hash(frozenset(self.data_t0.items()))}")
-
-
 
     def dump_taint(self, path: str = None):
         assert path is not None, "No path provided."
@@ -247,6 +261,7 @@ class MemoryView:
             #     f.write(f"\t{{\"addr\":\"{hex(addr)}\", \"val_t0\":\"{hex(val_t0)}\"}},\n")
             # f.write("]")
 
+
     def print(self):
         for addr, val_t0 in self.data_t0.items():
             print(f"{hex(addr>>2)}: {hex(self.data[addr])}: {hex(val_t0)}")
@@ -255,3 +270,4 @@ class MemoryView:
         for addr,val_t0 in self.data_t0.items():
             if val_t0:
                 self.data[addr] ^= val_t0
+
