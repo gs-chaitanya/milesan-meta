@@ -84,6 +84,9 @@ module ift_sram_mem #(
   import "DPI-C" context function byte get_next_taint_word(input longint taint_id, output longint word_address, output byte buffer[]);
   import "DPI-C" function string Get_SRAM_ELF_object_filename();
   import "DPI-C" function string Get_SRAM_TaintsPath();
+  import "DPI-C" function string Get_SRAM_DumpPath();
+
+  export "DPI-C" function _dump_memory;
 
   localparam int unsigned PreloadBufferSize = 100000000;
   initial begin // Load the binary into memory.
@@ -187,5 +190,22 @@ module ift_sram_mem #(
         rdata_o_taint_before_conservative[taint_id] = '0;
     end
   end : gen_taints
+
+  function _dump_memory();
+    begin
+      string path = Get_SRAM_DumpPath();
+      integer  fd;
+      fd = $fopen(path, "w");
+      foreach (mem[i]) begin
+        if(mem_taints.exists(i)) begin
+          $fdisplay(fd, "{\"addr\": \"0x%8h\", \"value\": \"0x%8h\", \"value_t0\": \"0x%8h\"}", i<<2, mem[i], mem_taints[i]);
+        end
+      end
+
+    end
+  endfunction: _dump_memory
+
+
+
 
 endmodule

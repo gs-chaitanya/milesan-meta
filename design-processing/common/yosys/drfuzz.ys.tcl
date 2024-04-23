@@ -49,7 +49,7 @@ if {[string equal $INSTRUMENTATION "drfuzz"]} {
     }
 
     yosys opt -purge
-    yosys cellift -exclude-signals $EXCLUDE_SIGNALS -imprecise-shl-sshl -verbose
+    yosys cellift -exclude-signals $EXCLUDE_SIGNALS -imprecise-shl-sshl -imprecise-shr-sshr -verbose
     yosys meta_reset_t0 $VERBOSE
 
 }

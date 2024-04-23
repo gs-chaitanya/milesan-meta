@@ -126,6 +126,7 @@ long fuzz(size_t simlen, bool prune = true){
 	tb->clear_outputs();
 	tb->clear_instructions();
 	seed->print_accumulated_output();
+	tb->dump_memory();
 	// #ifdef DUMP_QUEUES
 	// seed->dump(tb);
 	// #endif

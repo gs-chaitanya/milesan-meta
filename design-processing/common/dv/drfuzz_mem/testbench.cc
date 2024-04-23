@@ -105,27 +105,27 @@ void Testbench::reset_memory_t(){
 
 }
 
-void Testbench::dump_mem(){
-    // #ifdef SINGLE_MEM // TODO test
-    // std::cout << "MEM:\n";
-    // svScope scope = svGetScopeFromName(VSCOPE_MEM);
-    // assert(scope);  // Check for nullptr if scope not found
-    // svSetScope(scope);
-    // _dump_mem();
-    // #endif
+void Testbench::dump_memory(){
+    #ifdef SINGLE_MEM // TODO test
+    std::cout << "MEM:\n";
+    svScope scope = svGetScopeFromName(VSCOPE_MEM);
+    assert(scope);  // Check for nullptr if scope not found
+    svSetScope(scope);
+    _dump_memory();
+    #endif
 
-    // #ifdef DUAL_MEM
-    // svScope scope = svGetScopeFromName(VSCOPE_DMEM);
-    // assert(scope);  // Check for nullptr if scope not found
-    // svSetScope(scope);
-    // std::cout << "DMEM:\n";
-    // _dump_mem();
+    #ifdef DUAL_MEM
+    svScope scope = svGetScopeFromName(VSCOPE_DMEM);
+    assert(scope);  // Check for nullptr if scope not found
+    svSetScope(scope);
+    std::cout << "DMEM:\n";
+    _dump_memory();
     // scope = svGetScopeFromName(VSCOPE_IMEM);
     // assert(scope);  // Check for nullptr if scope not found
     // svSetScope(scope);
     // std::cout << "IMEM:\n";
     // _dump_mem();
-    // #endif
+    #endif
 }
 
 void Testbench::close_trace(void) {
@@ -150,9 +150,9 @@ tick_req_t *Testbench::tick(int num_ticks, bool false_tick) {
         #endif // VM_TRACE
 
         module_->clk_i = !false_tick;
-        if(module_->data_mem_rdata_t0){
-            std::cout << "dbus taint: " << std::hex << module_->data_mem_rdata_t0 << std::endl;
-        }
+        // if(module_->data_mem_rdata_t0){
+        //     std::cout << "dbus taint: " << std::hex << module_->data_mem_rdata_t0 << std::endl;
+        // }
 
         // if(intercept != nullptr){
         //     if(intercept->retired){

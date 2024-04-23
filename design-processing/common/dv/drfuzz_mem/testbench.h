@@ -78,7 +78,7 @@ class Testbench {
 		int get_coverage_amount();
 		void read_new_output();
 		void print_last_output();
-        void dump_mem();
+        void dump_memory();
         #ifdef TAINT_EN
         bool is_output_tainted();
         void meta_reset_t0();
