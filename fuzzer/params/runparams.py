@@ -23,6 +23,7 @@ RUN_TIMEOUT_SECONDS = 60*60*2 # A program is not supposed to run longer than thi
 PRINT_FSM_TRANSITIONS = False # Print transitions between states for register FSM instructions.
 
 CHECK_REGS_T0_PRECISE = False
+CHECK_MEM_T0_PRECISE = False
 PRINT_CHECK_REGS_T0 = False # Print taint propagation checks.
 PRINT_CHECK_REGS_T0_MISMATCH_OK = False
 PRINT_WRITEBACK_T0 = False # Print taint writeback of instructions.

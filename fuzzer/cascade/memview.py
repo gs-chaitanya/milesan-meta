@@ -17,7 +17,7 @@ import random
 from copy import deepcopy
 # from params.runparams import DO_ASSERT
 from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS
-from params.runparams import PRINT_DBUS_TAINT, INSERT_REGDUMPS
+from params.runparams import PRINT_DBUS_TAINT, CHECK_MEM_T0_PRECISE
 from cascade.spikeresolution import SPIKE_STARTADDR
 from cascade.registers import MAX_32b, MAX_64b
 from common.designcfgs import get_design_reg_dump_addr, get_design_fpreg_dump_addr, get_design_reg_stream_addr
@@ -331,7 +331,7 @@ class MemoryView:
             print("{: >30} {: >30} {: >30}".format(*row))
 
 
-    def check(self, rtl_values):
+    def check(self, rtl_values, precise = CHECK_MEM_T0_PRECISE):
         addresses = self.data_t0.keys()
         checked_addresses = []
         # Skip the checks of the addresses we dump the register values to as we dont simluate the final block as of now.
@@ -354,8 +354,13 @@ class MemoryView:
             if addr in rtl_values:
                 rtl_val = rtl_values[addr]["val"]
                 rtl_val_t0 = rtl_values[addr]["val_t0"]
-                assert rtl_val == val, f"Value mismatch at address {hex(addr)}: {hex(val)} != {hex(rtl_val)}"
-                assert rtl_val_t0 == val_t0, f"Taint mismatch at address {hex(addr)}: {hex(val_t0)} != {hex(rtl_val_t0)}"
+
+                mismatch_val = rtl_val != val
+                mismatch_val_t0 = rtl_val_t0 != val_t0 if precise else ~val_t0&rtl_val_t0 != 0
+            
+                assert not mismatch_val, f"Value mismatch at address {hex(addr)}: {hex(val)} != {hex(rtl_val)}"
+                assert not mismatch_val_t0, f"Taint mismatch at address {hex(addr)}: {hex(val_t0)} != {hex(rtl_val_t0)}"
+        
         for addr in rtl_values.keys():
             assert addr in addresses or rtl_values[addr]["val_t0"] == 0 or addr in [regdump_addr,fpregdump_addr] , f"Memory at untracked address {hex(addr)} tainted in RTL simulation: {hex(rtl_values[addr]['val_t0'])}/{hex(rtl_values[addr]['val'])} (val_t0/val)."
 
