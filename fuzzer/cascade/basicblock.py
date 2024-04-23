@@ -49,7 +49,7 @@ def gen_basicblock(fuzzerstate):
     curr_isa_class = None # This is used in case there is only space for control flow
 
     # We stop the instruction generation either when there is no more space available, or when we encounter an end-of-state instruction
-    while fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-4 > BASIC_BLOCK_MIN_SPACE:
+    while fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > BASIC_BLOCK_MIN_SPACE:
 
         # Allocate the next 4 bytes
         fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
@@ -64,6 +64,7 @@ def gen_basicblock(fuzzerstate):
             new_instrobjs_constructors, new_instrobjs_params = create_regfsm_instrobjs(fuzzerstate)
             # fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[0])
             fuzzerstate.append_and_execute_instr(new_instrobjs_constructors[0](*new_instrobjs_params[0]), True)
+            curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
 
             # For consumers, we may need to insert one more instruction
             for next_instrobj_id in range(1, len(new_instrobjs_constructors)):
@@ -151,9 +152,9 @@ def gen_basicblock(fuzzerstate):
             constructors, params = create_memop_instrobjs(fuzzerstate, instr_str)
             for new_instrobj_constructor, new_instrobj_param in zip(constructors, params):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 new_instrobj = new_instrobj_constructor(*new_instrobj_param)
                 fuzzerstate.append_and_execute_instr(new_instrobj, True)
+                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 # new_instrobj.print(True)
             continue
 
