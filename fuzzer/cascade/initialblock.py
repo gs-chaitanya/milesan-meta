@@ -46,13 +46,15 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         try:
             regdump_addr = get_design_reg_stream_addr(fuzzerstate.design_name)
         except:
-            raise ValueError(f"Design `{fuzzerstate.design_name}` does not have the `regdumpaddr` attribute.")
+            raise ValueError(f"Design `{fuzzerstate.design_name}` does not have the `regstreamaddr` attribute.")
 
         lui_imm, addi_imm = li_into_reg(regdump_addr, False)
         curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", REGDUMP_REGISTER_ID, lui_imm), True, insert_regdump = False)
-        
+
         curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", REGDUMP_REGISTER_ID, REGDUMP_REGISTER_ID, addi_imm), True, insert_regdump = False)
         
+        curr_addr += fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"add", REGDUMP_REGISTER_ID, REGDUMP_REGISTER_ID, RELOCATOR_REGISTER_ID), True, insert_regdump = False)
+
 
     if fuzzerstate.is_design_64bit:
         # Clear the top 32 bits
