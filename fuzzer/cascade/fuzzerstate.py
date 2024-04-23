@@ -58,8 +58,8 @@ class FuzzerState:
         self.random_block_content4by4bytes = []
 
         self.next_bb_addr = 0
-        self.memview = MemoryView(self.memsize)
-        self.memview_blacklist = MemoryView(self.memsize) # For load blacklist
+        self.memview = MemoryView(self)
+        self.memview_blacklist = MemoryView(self) # For load blacklist
 
         self.num_store_locations = random.randint(1, MAX_NUM_STORE_LOCATIONS)
         self.ctxsv_size_upperbound: int = get_context_setter_max_size(self) # Can be called once is_design_64bit, design_has_fpu and design_has_fpud are set, and the number of store locations is known.
@@ -210,6 +210,7 @@ class FuzzerState:
             if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS:
                 # fence_instr = SpecialInstruction_t0(self,"fence")
                 store_instr = RegdumpInstruction_t0(self,"sw",REGDUMP_REGISTER_ID,instr.rd,0,-1)
+                store_instr.execute(taint_en=self.taint_en, is_spike_resolution=True)
                 # store_instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
                 if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
                     store_instr.print(is_spike_resolution=True)
@@ -244,6 +245,7 @@ class FuzzerState:
         env_dir = os.path.join(PATH_TO_TMP, 'envs')
         env_path = os.path.join(env_dir,f'{ID}.env.sh')
         regdump_path = os.path.join(PATH_TO_TMP, f"{ID}.regump.json")
+        sramdump_path = os.path.join(PATH_TO_TMP, f"{ID}.sramdump.json")
         regstream_path = os.path.join(PATH_TO_TMP, f"{ID}.regstream.json")
         simsramtaint_path = os.path.join(PATH_TO_TMP, f"{ID}.simsramtaint")
         num_instrs = len(list(itertools.chain.from_iterable(self.instr_objs_seq)))
@@ -256,6 +258,7 @@ class FuzzerState:
         env["SEED"] = str(seed)
         env["REGDUMP_PATH"] = regdump_path
         env["REGSTREAM_PATH"] = regstream_path
+        env["SRAMDUMP_PATH"] = sramdump_path
         env["SIMSRAMTAINT"] = simsramtaint_path
 
         with open(env_path, "w") as f:
@@ -267,6 +270,7 @@ class FuzzerState:
             f.write(f"export SIMLEN={simlen}\n")
             f.write(f"export REGSTREAM_PATH={regstream_path}\n")
             f.write(f"export REGDUMP_PATH={regdump_path}\n")
+            f.write(f"export SRAMDUMP_PATH={sramdump_path}\n")
 
         if PRINT_ENVIRONMENT:
             print("*** ENVIRONMENT ***")

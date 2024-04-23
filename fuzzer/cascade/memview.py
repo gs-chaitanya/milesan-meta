@@ -17,22 +17,25 @@ import random
 from copy import deepcopy
 # from params.runparams import DO_ASSERT
 from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS
-from params.runparams import PRINT_DBUS_TAINT
+from params.runparams import PRINT_DBUS_TAINT, INSERT_REGDUMPS
 from cascade.spikeresolution import SPIKE_STARTADDR
 from cascade.registers import MAX_32b, MAX_64b
+from common.designcfgs import get_design_reg_dump_addr, get_design_fpreg_dump_addr, get_design_reg_stream_addr
+
 DO_ASSERT = True
 
 MEMVIEW_ALLOC_MAX_ATTEMPTS = 1000
 
 class MemoryView:
     # @param memsize should be at least 4, typically much higher. It is also typically a power of 2.
-    def __init__(self, memsize: int):
-        self.freepairs = [(0, memsize)]
-        self.memsize = memsize
+    def __init__(self, fuzzerstate):
+        self.memsize = fuzzerstate.memsize
+        self.freepairs = [(0, self.memsize)]
         self.occupied_addrs = 0 # Follow the number of occupied addresses.
         self.data = {} # Keep track of load/store operations. Holds the addr-byte pairs in little endian format.
         self.data_t0 = {} # Keep track of load/store operations' taints. Holds the addr-byte_t0 pairs in little endian format.
         self.states = []
+        self.fuzzerstate = fuzzerstate
 
     # In particular, returns False if it goes beyond the memory boundaries.
     def is_mem_free(self, addr: int):
@@ -177,14 +180,15 @@ class MemoryView:
         return val
 
     def read_t0(self, addr, n_bytes: int = 4):
-        val = 0
+        val_t0 = 0
         for i in range(n_bytes):
             assert addr+i in self.data_t0, f"Taint read request from invalid address {hex(addr+i)}."
             b = self.data_t0[addr+i]
             assert b <= 0xFF
-            val |= (b << (i*8))
-        # print(f"Reading taint from {hex(addr)}: {hex(val)}")
-        return val
+            val_t0 |= (b << (i*8))
+        if val_t0 and PRINT_DBUS_TAINT: 
+            print(f"read_t0: Taint on data bus detected: {hex(addr)} : {hex(val_t0)}")
+        return val_t0
 
     def write(self, addr, val, n_bytes: int = 4):
         # print(f"Writing {n_bytes} bytes to {hex(addr)}")
@@ -199,7 +203,10 @@ class MemoryView:
         if val_t0 and PRINT_DBUS_TAINT: 
             print(f"write_t0: Taint on data bus detected: {hex(addr)} : {hex(val_t0)}")
         for i in range(n_bytes):
-            self.data_t0[addr+i] = (val_t0&(0xFF<<(i*8)))>>(i*8)
+            b = (val_t0&(0xFF<<(i*8)))>>(i*8)
+            # print(f"Writing to {hex(addr+i)}: {hex(b)}")
+            self.data_t0[addr+i] = b # little endian
+
 
     def set_initial_register_values(self,fuzzerstate, start_addr):
         n_tainted_regs = 0
@@ -246,25 +253,111 @@ class MemoryView:
         self.data = deepcopy(self.states[-1][0])
         self.data_t0 = deepcopy(self.states[-1][1])
 
-    def dump_taint(self, path: str = None):
-        assert path is not None, "No path provided."
+    def dump_taint(self, path):
         # print(f"Dumping memview taints to {path}")
+        dumped_addresses = []
         with open(path, "w") as f:
             # f.write("[\n")
-            for addr, val_t0 in self.data_t0.items():
-                # f.write("0 {:x} 4 {:08x}\n".format(addr, val_t0))
-                f.write("0 {:x} 4 ".format(addr))
-                for i in range(4): #TODO: Adapt for 64bit
+            for addr in self.data_t0.keys():
+                if addr in dumped_addresses:
+                    continue
+                n_bytes = 8 if self.fuzzerstate.is_design_64bit else 4
+                f.write("0 {:x} {:x} ".format(addr, n_bytes))
+                for i in range(n_bytes):
                     # Switch endianness.
-                    f.write("{:02x}".format((val_t0&(0xFF<<(i*8)))>>(i*8)))
+                    b = self.data_t0[addr+i] if addr+i in self.data_t0 else 0
+                    f.write("{:02x}".format(b))
+                    dumped_addresses += [addr+i]
                 f.write("\n")
             #     f.write(f"\t{{\"addr\":\"{hex(addr)}\", \"val_t0\":\"{hex(val_t0)}\"}},\n")
             # f.write("]")
 
 
     def print(self):
-        for addr, val_t0 in self.data_t0.items():
-            print(f"{hex(addr>>2)}: {hex(self.data[addr])}: {hex(val_t0)}")
+        row = ["ADDRESS","VALUE","VALUE_T0"]
+        print("{: >30} {: >30} {: >30}".format(*row))
+        row = ["*"*30,"*"*30,"*"*30]
+        print("{: >30} {: >30} {: >30}".format(*row))
+        addresses = self.data_t0.keys()
+        printed_addresses = []
+        for addr in addresses:
+            if addr in printed_addresses: continue
+            val = 0
+            val_t0 = 0
+            for i in range(4):
+                if addr+i in self.data:
+                    assert addr+i in self.data_t0
+                    val |= self.data[addr+i]<<(i*8)
+                    val_t0 |= self.data_t0[addr+i]<<(i*8)
+                    printed_addresses += [addr+i]
+            row = ["0x{:08x}".format(addr), "0x{:08x}".format(val), "0x{:08x}".format(val_t0)]
+            print("{: >30} {: >30} {: >30}".format(*row))
+    
+
+    def print_and_compare(self,rtl_values):
+        row = ["ADDRESS","VALUE (sim/rtl)","VALUE_T0 (sim/rtl)"]
+        print("{: >30} {: >30} {: >30}".format(*row))
+        row = ["*"*30,"*"*30,"*"*30]
+        print("{: >30} {: >30} {: >30}".format(*row))
+        addresses = self.data_t0.keys()
+        printed_addresses = []
+        for addr in addresses:
+            if addr in printed_addresses: continue
+            val = 0
+            val_t0 = 0
+            for i in range(4):
+                if addr+i in self.data:
+                    assert addr+i in self.data_t0
+                    val |= self.data[addr+i]<<(i*8)
+                    val_t0 |= self.data_t0[addr+i]<<(i*8)
+                    printed_addresses += [addr+i]
+            if addr in rtl_values:
+                rtl_val = rtl_values[addr]["val"]
+                rtl_val_t0 = rtl_values[addr]["val_t0"]
+            else:
+                rtl_val = None
+                rtl_val_t0 = None
+            if rtl_val == val:
+                val_str =  "0x{:08x}".format(val)
+            else:
+                val_str = "0x{:08x} != 0x{:08x}".format(val,rtl_val) if rtl_val is not None else "0x{:08x} (NONE)".format(val)
+
+            if rtl_val_t0 == val_t0:
+                val_t0_str =  "0x{:08x}".format(val_t0)
+            else:
+                val_t0_str = "0x{:08x} != 0x{:08x}".format(val_t0,rtl_val_t0) if rtl_val_t0 is not None else "0x{:08x} (NONE)".format(val_t0)
+
+            row = ["0x{:08x}".format(addr), val_str,val_t0_str]
+            print("{: >30} {: >30} {: >30}".format(*row))
+
+
+    def check(self, rtl_values):
+        addresses = self.data_t0.keys()
+        checked_addresses = []
+        # Skip the checks of the addresses we dump the register values to as we dont simluate the final block as of now.
+        regdump_addr = get_design_reg_dump_addr(self.fuzzerstate.design_name) + SPIKE_STARTADDR
+        fpregdump_addr = get_design_fpreg_dump_addr(self.fuzzerstate.design_name) + SPIKE_STARTADDR
+
+        for addr in addresses:
+            assert addr in self.data
+            if addr in checked_addresses: continue
+            val = 0
+            val_t0 = 0
+            for i in range(4):
+                if addr+i in self.data:
+                    assert addr+i in self.data_t0
+                    val |= self.data[addr+i]<<(i*8)
+                    val_t0 |= self.data_t0[addr+i]<<(i*8)
+                    checked_addresses += [addr+i]
+
+            assert addr in rtl_values or val_t0 == 0, f"Address {hex(addr)} not found."
+            if addr in rtl_values:
+                rtl_val = rtl_values[addr]["val"]
+                rtl_val_t0 = rtl_values[addr]["val_t0"]
+                assert rtl_val == val, f"Value mismatch at address {hex(addr)}: {hex(val)} != {hex(rtl_val)}"
+                assert rtl_val_t0 == val_t0, f"Taint mismatch at address {hex(addr)}: {hex(val_t0)} != {hex(rtl_val_t0)}"
+        for addr in rtl_values.keys():
+            assert addr in addresses or rtl_values[addr]["val_t0"] == 0 or addr in [regdump_addr,fpregdump_addr] , f"Memory at untracked address {hex(addr)} tainted in RTL simulation: {hex(rtl_values[addr]['val_t0'])}/{hex(rtl_values[addr]['val'])} (val_t0/val)."
 
     def flip_tainted_bits(self):
         for addr,val_t0 in self.data_t0.items():

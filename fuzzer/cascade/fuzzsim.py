@@ -267,4 +267,17 @@ def run_rtl_and_load_regstream(env,design_name: str):
     regstream_rtl_val_t0 = {int(r["id"],16) + SPIKE_STARTADDR - 12: int(r["value_t0"],16) for r in regstream_rtl}
     regstream_rtl_val = {int(r["id"],16) + SPIKE_STARTADDR - 12: int(r["value"],16) for r in regstream_rtl}
 
-    return (regstream_rtl_val, regstream_rtl_val_t0), regdumps_rtl
+
+
+    sramdump_rtl = {}
+    assert "SRAMDUMP_PATH" in env
+    with open(env["SRAMDUMP_PATH"], "r") as f:
+        for line in f.read().split("\n"):
+            if "{" not in line:
+                continue
+            d = json.loads(line)
+            addr = int(d["addr"],16) + SPIKE_STARTADDR
+            sramdump_rtl[addr] = {}
+            sramdump_rtl[addr]["val"] = int(d["value"],16)
+            sramdump_rtl[addr]["val_t0"] = int(d["value_t0"],16)
+    return (regstream_rtl_val, regstream_rtl_val_t0), regdumps_rtl, sramdump_rtl
