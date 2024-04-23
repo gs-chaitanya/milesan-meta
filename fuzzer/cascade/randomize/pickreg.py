@@ -150,7 +150,8 @@ class IntRegPickState:
     # Returns a free and likely tainted inputreg.
     def pick_tainted_int_inputreg(self, authorize_sideeffects: bool = True, force: bool = False):
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(self.get_free_regs_onehot(), False, force))[0]
-        assert self.regs[id].fsm_state == IntRegIndivState.FREE
+        if DO_ASSERT:
+            assert self.regs[id].fsm_state == IntRegIndivState.FREE
         return id
 
     # Excludes the zero register
@@ -160,7 +161,8 @@ class IntRegPickState:
         authorized_regs_onehot[0] = 0
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights(authorized_regs_onehot))[0]
         authorized_regs_onehot[0] = was_zero_authorized
-        assert self.regs[id].fsm_state == IntRegIndivState.FREE
+        if DO_ASSERT:
+            assert self.regs[id].fsm_state == IntRegIndivState.FREE
         return id
 
     # Excludes the zero register
@@ -170,7 +172,8 @@ class IntRegPickState:
         authorized_regs_onehot[0] = 0
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, False, force))[0]
         authorized_regs_onehot[0] = was_zero_authorized
-        assert self.regs[id].fsm_state == IntRegIndivState.FREE
+        if DO_ASSERT:
+            assert self.regs[id].fsm_state == IntRegIndivState.FREE
         return id
 
     # Excludes the zero register. When force is enabled, will either throw an exception or return an untainted register.
@@ -178,16 +181,20 @@ class IntRegPickState:
         authorized_regs_onehot = self.get_free_regs_onehot()
         was_zero_authorized = authorized_regs_onehot[0]
         authorized_regs_onehot[0] = 0
+        if DO_ASSERT:
+            assert self.get_num_untainted_regs_in_state(IntRegIndivState.FREE) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted registers available."
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, True, force))[0]
         authorized_regs_onehot[0] = was_zero_authorized
-        assert self.regs[id].fsm_state == IntRegIndivState.FREE
+        if DO_ASSERT:
+            assert self.regs[id].fsm_state == IntRegIndivState.FREE
         return id
 
     # Includes the zero register. When force is enabled, will either throw an exception or return an untainted register.
     def pick_untainted_int_inputreg(self, force: bool = False):
         authorized_regs_onehot = self.get_free_regs_onehot()
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, True, force))[0]
-        assert self.regs[id].fsm_state == IntRegIndivState.FREE
+        if DO_ASSERT:
+            assert self.regs[id].fsm_state == IntRegIndivState.FREE
         return id
 
     # Consuming multiple input registers in one go.
@@ -400,10 +407,10 @@ class IntRegPickState:
         ret = None
         while ret is None or not untainted_regs_in_state[ret]:
             ret = random.choices(range(self.num_pickable_regs), untainted_regs_in_state, k=1)[0]
-        assert untainted_regs_in_state[ret]
-        if force:
-            # self.print()
-            assert self.regs[ret].get_val_t0() == 0, f"Chosen register {ABI_INAMES[ret]} is tainted! {untainted_regs_in_state}"
+        if DO_ASSERT:
+            assert untainted_regs_in_state[ret]
+            if force:
+                assert self.regs[ret].get_val_t0() == 0, f"Chosen register {ABI_INAMES[ret]} is tainted! {untainted_regs_in_state}"
         return ret
     
     def display(self):
