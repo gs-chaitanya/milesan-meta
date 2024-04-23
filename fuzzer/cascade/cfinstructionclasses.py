@@ -1484,41 +1484,41 @@ class MisalignedMemInstruction(ExceptionInstruction):
         # Instantiate the wrapped instruction
         imm = 0
         if meminstr_type == MisalignedMemInstruction.MISALIGNED_LH:
-            self.meminstr = IntLoadInstruction(fuzzerstate,"lh", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntLoadInstruction(fuzzerstate,"lh", random_reg, rs1, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_LW:
-            self.meminstr = IntLoadInstruction(fuzzerstate,"lw", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntLoadInstruction(fuzzerstate,"lw", random_reg, rs1, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_LHU:
-            self.meminstr = IntLoadInstruction(fuzzerstate,"lhu", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntLoadInstruction(fuzzerstate,"lhu", random_reg, rs1, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_LWU:
-            self.meminstr = IntLoadInstruction(fuzzerstate,"lwu", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntLoadInstruction(fuzzerstate,"lwu", random_reg, rs1, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_LD:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpu
-            self.meminstr = IntLoadInstruction(fuzzerstate,"ld", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntLoadInstruction(fuzzerstate,"ld", random_reg, rs1, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_SH:
-            self.meminstr = IntStoreInstruction(fuzzerstate,"sh", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntStoreInstruction(fuzzerstate,"sh", rs1, random_reg, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_SW:
-            self.meminstr = IntStoreInstruction(fuzzerstate,"sw", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntStoreInstruction(fuzzerstate,"sw", rs1, random_reg, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_SD:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpu
-            self.meminstr = IntStoreInstruction(fuzzerstate,"sd", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = IntStoreInstruction(fuzzerstate,"sd", rs1, random_reg, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_FLW:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpu
-            self.meminstr = FloatLoadInstruction(fuzzerstate,"flw", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = FloatLoadInstruction(fuzzerstate,"flw", random_reg, rs1, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_FSD:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpud
-            self.meminstr = FloatStoreInstruction(fuzzerstate,"fsd", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = FloatStoreInstruction(fuzzerstate,"fsd", rs1, random_reg, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_FSW:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpu
-            self.meminstr = FloatStoreInstruction(fuzzerstate,"fsw", rs1, random_reg, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = FloatStoreInstruction(fuzzerstate,"fsw", rs1, random_reg, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_FLD:
             if DO_ASSERT:
                 assert fuzzerstate.design_has_fpud
-            self.meminstr = FloatLoadInstruction(fuzzerstate,"fld", random_reg, rs1, imm, self.producer_id, fuzzerstate.is_design_64bit, iscompressed)
+            self.meminstr = FloatLoadInstruction(fuzzerstate,"fld", random_reg, rs1, imm, self.producer_id, iscompressed)
         else:
             raise NotImplementedError('Unsupported meminstrtype: ' + str(meminstr_type))
         # print('Generated misaligned memory instruction: ' + str(self.meminstr.instr_str), 'misaligned address', hex(self.misaligned_addr))
