@@ -7,7 +7,7 @@ from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
 from cascade.util import IntRegIndivState
-from cascade.registers import Int32RegState, ABI_INAMES
+from cascade.registers import IntRegister, ABI_INAMES
 from common.spike import SPIKE_STARTADDR, SPIKE_BOOTVAL_A1
 from cascade.registers import ABI_INAMES,MAX_32b
 from copy import copy, deepcopy
@@ -16,8 +16,9 @@ import numpy as np
 import random
 
 class IntRegPickState:
-    def __init__(self, num_pickable_regs: int):
-        self.num_pickable_regs = num_pickable_regs
+    def __init__(self, fuzzerstate):
+        self.fuzzerstate = fuzzerstate
+        self.num_pickable_regs = fuzzerstate.num_pickable_regs
         self.__reg_weights  = np.ones(self.num_pickable_regs)
         self.__reg_weights /= np.sum(self.__reg_weights)
 
@@ -41,15 +42,15 @@ class IntRegPickState:
         self.writeback_trace_final = {}
 
     def setup_registers(self):
-        self.regs = {id:Int32RegState(id,pickable=True) for id in range(self.num_pickable_regs)} # pickable registers
+        self.regs = {id:IntRegister(id,self.fuzzerstate.is_design_64bit,pickable=True) for id in range(self.num_pickable_regs)} # pickable registers
         # Below are non-pickable registers.
-        self.regs[RELOCATOR_REGISTER_ID] = Int32RegState(RELOCATOR_REGISTER_ID)
-        self.regs[RDEP_MASK_REGISTER_ID] = Int32RegState(RDEP_MASK_REGISTER_ID)
-        self.regs[FPU_ENDIS_REGISTER_ID] = Int32RegState(FPU_ENDIS_REGISTER_ID)
-        self.regs[MPP_BOTH_ENDIS_REGISTER_ID] = Int32RegState(MPP_BOTH_ENDIS_REGISTER_ID)
-        self.regs[MPP_TOP_ENDIS_REGISTER_ID] = Int32RegState(MPP_TOP_ENDIS_REGISTER_ID)
-        self.regs[SPP_ENDIS_REGISTER_ID] = Int32RegState(SPP_ENDIS_REGISTER_ID)
-        self.regs[REGDUMP_REGISTER_ID] = Int32RegState(REGDUMP_REGISTER_ID)
+        self.regs[RELOCATOR_REGISTER_ID] = IntRegister(RELOCATOR_REGISTER_ID,self.fuzzerstate.is_design_64bit)
+        self.regs[RDEP_MASK_REGISTER_ID] = IntRegister(RDEP_MASK_REGISTER_ID,self.fuzzerstate.is_design_64bit)
+        self.regs[FPU_ENDIS_REGISTER_ID] = IntRegister(FPU_ENDIS_REGISTER_ID,self.fuzzerstate.is_design_64bit)
+        self.regs[MPP_BOTH_ENDIS_REGISTER_ID] = IntRegister(MPP_BOTH_ENDIS_REGISTER_ID,self.fuzzerstate.is_design_64bit)
+        self.regs[MPP_TOP_ENDIS_REGISTER_ID] = IntRegister(MPP_TOP_ENDIS_REGISTER_ID,self.fuzzerstate.is_design_64bit)
+        self.regs[SPP_ENDIS_REGISTER_ID] = IntRegister(SPP_ENDIS_REGISTER_ID,self.fuzzerstate.is_design_64bit)
+        self.regs[REGDUMP_REGISTER_ID] = IntRegister(REGDUMP_REGISTER_ID,self.fuzzerstate.is_design_64bit)
         self.set_spike_boot_values()
 
     def set_initial_values(self, fuzzerstate): # Reset seed to starting value to ensure random values match if this function is called twice.
@@ -80,13 +81,13 @@ class IntRegPickState:
     def get_free_regs_onehot(self):
         ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
-            assert sum(ret) >= NUM_MIN_FREE_INTREGS
+            assert sum(ret) >= NUM_MIN_FREE_INTREGS, f"There are less than {NUM_MIN_FREE_INTREGS} free integer registers available."
         return np.asarray(ret)
 
     def get_untainted_regs_onehot(self):
         ret = [int(self.regs[reg_id].get_val_t0() == 0) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
-            assert sum(ret) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted registers available."
+            assert sum(ret) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
         return np.asarray(ret)
 
     def get_tainted_regs_onehot(self):
@@ -218,7 +219,7 @@ class IntRegPickState:
             assert n > 1, "The function pick_int_inputregs should not be used for n < 2. For n = 1, please use pick_int_inputreg."
         return random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, True, force), k=n)
 
-    # This updates the Int32RegState.
+    # This updates the IntRegister.
     def pick_int_outputreg(self, authorize_sideeffects: bool = True):
         authorized_regs_onehot = self.get_free_or_relocused_regs_onehot() # We could use any, but let's not waste the generated ones
         if DO_ASSERT:
@@ -443,8 +444,9 @@ class IntRegPickState:
             self.writeback_trace_final[addr] = (rd,val_t0)
 # Float registers are never forbidden, therefore this is simpler than integer registers.
 class FloatRegPickState:
-    def __init__(self, num_pickable_floating_regs: int):
-        self.num_pickable_floating_regs = num_pickable_floating_regs
+    def __init__(self, fuzzerstate):
+        self.fuzzerstate = fuzzerstate
+        self.num_pickable_floating_regs = fuzzerstate.num_pickable_floating_regs
         self.__reg_weights = np.ones(self.num_pickable_floating_regs)
         self.__reg_weights /= sum(self.__reg_weights)
     # Consuming a register does not update the float pick state.

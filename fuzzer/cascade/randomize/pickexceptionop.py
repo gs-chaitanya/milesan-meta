@@ -199,7 +199,7 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
-        return MisalignedMemInstruction_t0(is_mtvec, fuzzerstate, False)
+        return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, False)
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
         raise NotImplementedError("ID_STORE_AMO_ACCESS_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE:

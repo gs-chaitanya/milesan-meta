@@ -66,8 +66,8 @@ class FuzzerState:
 
         self.memstorestate = MemStoreState()
         self.csrfile = CSRFile()
-        self.intregpickstate = IntRegPickState(self.num_pickable_regs)
-        self.floatregpickstate = FloatRegPickState(self.num_pickable_floating_regs)
+        self.intregpickstate = IntRegPickState(self)
+        self.floatregpickstate = FloatRegPickState(self)
         self.privilegestate = PrivilegeState()
 
         # self.instr_objs_seq does NEVER contain the final basic block.
@@ -243,6 +243,7 @@ class FuzzerState:
         ID = self.instance_to_str()
         ## temp dirs below
         env_dir = os.path.join(PATH_TO_TMP, 'envs')
+        os.makedirs(env_dir,exist_ok=True)
         env_path = os.path.join(env_dir,f'{ID}.env.sh')
         regdump_path = os.path.join(PATH_TO_TMP, f"{ID}.regump.json")
         sramdump_path = os.path.join(PATH_TO_TMP, f"{ID}.sramdump.json")
