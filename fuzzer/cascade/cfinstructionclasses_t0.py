@@ -684,8 +684,10 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
         addr = self.instr_func(rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
         res_t0 = self.fuzzerstate.memview.read_t0(addr,self.n_bytes)
-        msb = (res_t0>>(self.n_bytes*8-1))&1 # sign-extend
+        msb = (res_t0>>(self.n_bytes*8-1))&1 if self.instr_str not in ["lbu","lhu"] else 0 # sign-extend
         res_t0 |= (0xFFFFFFFF^self.mask)*msb
+        # if res_t0:
+        #     print(f"{self.get_str()} loaded tainted value from {hex(addr)}")
         self.writeback_t0(res_t0,res, is_spike_resolution) # We allow the rd field to be tainted, thus taint could be propagated to several destination registers.
 
 class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
@@ -715,7 +717,7 @@ class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
         assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
         addr = self.instr_func(rs1_val,self.imm, self.fuzzerstate.is_design_64bit)
         rs2_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
-        self.fuzzerstate.memview.write_t0(addr,rs2_val_t0%self.mask, self.n_bytes) # We don't allow addresses to be tainted, thus we don't need a writeback here.
+        self.fuzzerstate.memview.write_t0(addr,rs2_val_t0&self.mask, self.n_bytes) # We don't allow addresses to be tainted, thus we don't need a writeback here.
 
 
 class RegdumpInstruction_t0(IntStoreInstruction_t0):
@@ -747,7 +749,11 @@ class RegdumpInstruction_t0(IntStoreInstruction_t0):
         assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.addr,self.fuzzerstate,val,False).get_str(False)}"
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        self.fuzzerstate.advance_minstret()
+        if is_spike_resolution:
+            self.fuzzerstate.advance_minstret()
+        else:
+            super().execute(taint_en,is_spike_resolution)
+
 
 class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int = 0, rs1: int = 0, iscompressed: bool = False):
