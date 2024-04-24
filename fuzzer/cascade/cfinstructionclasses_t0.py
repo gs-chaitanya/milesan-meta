@@ -507,7 +507,7 @@ class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0, RDInstruction_t0):
             assert self.rtl_offset is not None
             imm = li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0]
 
-        res = to_unsigned(imm, self.fuzzerstate.is_design_64bit)<<12
+        res = self.instr_func(None,imm,self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res,is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
@@ -539,7 +539,8 @@ class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1, RDInstruction_t0):
         else:
             uimm = li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1]
         
-        res = self.fuzzerstate.intregpickstate.regs[self.rd].get_val() + uimm
+        rd_val = self.fuzzerstate.intregpickstate.regs[self.rd].get_val()
+        res = self.instr_func(rd_val, uimm, self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
@@ -553,26 +554,16 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
 
     def execute_t0(self, res, is_spike_resolution):
         assert self.fuzzerstate.taint_en
-        rdep = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val()
-        rmask = self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
-
         rdep_taint = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val_t0()
         assert rdep_taint == 0, "rdep is tainted, this should not happen."
         rmask_taint = self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val_t0()
         assert rmask_taint == 0, "rmask is tainted, this should not happen."
-
-        rdep_and_rmask_taint= rdep & rmask_taint
-        rmask_and_rdep_taint = rmask & rdep_taint
-
-        rdep_and_rmask_taint = rdep_taint & rmask_taint
-        rdep_taint_and_rmask_or_reverse = rdep_and_rmask_taint | rmask_and_rdep_taint
-
-        res_t0 = rdep_and_rmask_taint | rdep_taint_and_rmask_or_reverse
-
-        self.writeback_t0(res_t0, res, is_spike_resolution)
+        self.writeback_t0(0, res, is_spike_resolution)
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        res = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val() & self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
+        rdep_val = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val()
+        mask = self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
+        res = self.instr_func(rdep_val,mask,self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rdep].set_val(res)
@@ -633,10 +624,12 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
         self.writeback_t0(res_t0, res, is_spike_resolution)
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+        rprod_val = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val()
         if is_spike_resolution:
-            res = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val() ^ self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val()
+            rdep_val = self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val()
         else:
-            res = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val() ^ self.fuzzerstate.intregpickstate.regs[self.rdep].get_val()  
+            rdep_val = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val()  
+        res = self.instr_func(rprod_val,rdep_val,self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
