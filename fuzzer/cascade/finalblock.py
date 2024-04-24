@@ -45,14 +45,14 @@ def finalblock(fuzzerstate, design_name: str):
     # We re-purpose RDEP_MASK_REGISTER_ID, because we will not need it anymore.
     # Compute the register dump address
     ret += [
-        ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm_regdump, is_design_64bit),
-        RegImmInstruction(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm_regdump, is_design_64bit)
+        ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm_regdump),
+        RegImmInstruction(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm_regdump)
     ]
 
     # Store the register values to the register dump address
     ret.append(SpecialInstruction(fuzzerstate,"fence")) # Hopefully this prevents speculative execution of the stores
     for reg_id in range(1, MAX_NUM_PICKABLE_REGS):
-        ret.append(IntStoreInstruction(fuzzerstate,"sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, reg_id, 0, -1, is_design_64bit))
+        ret.append(IntStoreInstruction(fuzzerstate,"sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, reg_id, 0, -1))
         ret.append(SpecialInstruction(fuzzerstate,"fence"))
 
     # Store the floating values as well, if FPU is supported and if there is no risk of it being deactivated
@@ -66,7 +66,7 @@ def finalblock(fuzzerstate, design_name: str):
             fuzzerstate.is_fpu_activated = True
         if fuzzerstate.is_fpu_activated:
             for reg_id in range(MAX_NUM_PICKABLE_FLOATING_REGS):
-                ret.append(FloatStoreInstruction(fuzzerstate,"fsd" if design_has_fpud else "fsw", RDEP_MASK_REGISTER_ID, reg_id, 8, -1, is_design_64bit))
+                ret.append(FloatStoreInstruction(fuzzerstate,"fsd" if design_has_fpud else "fsw", RDEP_MASK_REGISTER_ID, reg_id, 8, -1))
                 ret.append(SpecialInstruction(fuzzerstate,"fence"))
 
     ###
@@ -78,12 +78,12 @@ def finalblock(fuzzerstate, design_name: str):
     # We re-purpose RDEP_MASK_REGISTER_ID, because we will not need it anymore.
     # Compute the stop request address
     ret += [
-        ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm_stopreq, is_design_64bit),
-        RegImmInstruction(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm_stopreq, is_design_64bit)
+        ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm_stopreq),
+        RegImmInstruction(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm_stopreq)
     ]
 
     # Store the register values to the register dump address
-    ret.append(IntStoreInstruction(fuzzerstate,"sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, 0, 0 & 0xFFFF, -1, is_design_64bit))
+    ret.append(IntStoreInstruction(fuzzerstate,"sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, 0, 0 & 0xFFFF, -1))
     ret.append(SpecialInstruction(fuzzerstate,"fence"))
 
     # Infinite loop in the end of the simulation
