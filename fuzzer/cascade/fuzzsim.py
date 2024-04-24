@@ -264,8 +264,8 @@ def run_rtl_and_load_regstream(env,design_name: str):
     with open(env["REGSTREAM_PATH"], "rb") as f:
         regstream_rtl = json.load(f)
     
-    regstream_rtl_val_t0 = {int(r["id"],16) + SPIKE_STARTADDR - 12: int(r["value_t0"],16) for r in regstream_rtl}
-    regstream_rtl_val = {int(r["id"],16) + SPIKE_STARTADDR - 12: int(r["value"],16) for r in regstream_rtl}
+    regstream_rtl_val_t0 = {int(r["id"],16): int(r["value_t0"],16) for r in regstream_rtl}
+    regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
 
 
 
