@@ -60,17 +60,19 @@ def gen_random_csr_op(fuzzerstate):
             elif target_csr == MachineCSROpCandidates64.SSCRATCH:
                     ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.SSCRATCH)
             elif target_csr == MachineCSROpCandidates64.MSCRATCH:
-                    ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.MSCRATCH)
+                rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
+                rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force=False)
+                ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", rd, rs, CSR_IDS.MSCRATCH)
             elif target_csr == MachineCSROpCandidates64.MINSTRET:
                 if fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak or ("boom" in fuzzerstate.design_name and not is_tolerate_boom_minstret()):
                     ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", 0, random.randrange(16), CSR_IDS.MINSTRET)
                 else:
-                    ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.MINSTRET)
+                    ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.MINSTRET)
                 fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = False
-            elif target_csr == MachineCSROpCandidates64.MHPMCOUNTER3:
-                ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", 0, random.randrange(16), CSR_IDS.MHPMCOUNTER3)
+            elif target_csr == MachineCSROpCandidates64.MHPMCOUNTER3: 
+                ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", 0, random.randrange(16), CSR_IDS.MHPMCOUNTER3) # TODO: write to pickable register
             elif target_csr == MachineCSROpCandidates64.MHPMEVENT31:
-                ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", 0, random.randrange(16), CSR_IDS.MHPMEVENT31)
+                ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", 0, random.randrange(16), CSR_IDS.MHPMEVENT31) # MHPMEVENT is platform specific, needs to write to zero (?)
             else:
                 raise Exception("Unexpected target_csr: {}".format(target_csr))
         else:
@@ -129,5 +131,4 @@ def gen_random_csr_op(fuzzerstate):
             ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.SSCRATCH)
         else:
             raise Exception("Unexpected target_csr: {}".format(target_csr))
-
     return ret
