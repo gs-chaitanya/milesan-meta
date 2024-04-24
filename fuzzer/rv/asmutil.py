@@ -196,11 +196,11 @@ def sub_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
 
 
 def sll(a: int, b: int,  is_design_64bit: bool):
-    shamt = b & 0x1F
+    shamt = b & 0x3F if is_design_64bit else b & 0x1F
     return a<<shamt
 
 def sll_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
-    if b_t0&0x1f:
+    if b_t0&(0x3f if is_design_64bit else 0x1f):
         return MAX_64b if is_design_64bit else MAX_32b
     else:
         return sll(a_t0, b, is_design_64bit)
@@ -314,11 +314,11 @@ def xor_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     return a_t0 | b_t0
 
 def srl(a: int, b: int,  is_design_64bit: bool):
-    shamt = b & 0x1F
+    shamt = b & 0x3F if is_design_64bit else b & 0x1F
     return a>>shamt
 
 def srl_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
-    if b_t0 and (a or a_t0):
+    if b_t0&(0x3f if is_design_64bit else 0x1f):
         return MAX_64b if is_design_64bit else MAX_32b
     elif b_t0 and not (a or a_t0):
         return 0x0
@@ -346,14 +346,14 @@ def srl_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
 def sra(a: int, b: int, is_design_64bit: bool):
     n_bits = 64 if is_design_64bit else 32
     msb = (a>>(n_bits-1))&1
-    shamt = b&0x1F
-    mask = MAX_32b<<(n_bits-shamt)
-    mask &= MAX_32b
+    shamt = b & 0x3F if is_design_64bit else b & 0x1F
+    mask = (MAX_64b if is_design_64bit else MAX_32b)<<(n_bits-shamt)
+    mask &= (MAX_64b if is_design_64bit else MAX_32b)
     return (a >> shamt) | (mask*msb)
 
 
 def sra_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
-    if b_t0&0x1F:
+    if b_t0&(0x3F if is_design_64bit else 0x1F):
         return MAX_64b if is_design_64bit else MAX_32b
     else:
         return sra(a_t0, b, is_design_64bit)
@@ -478,19 +478,23 @@ def andi_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: int):
     return and_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
 
 def lui(pc: int, imm: int, is_design_64bit: bool):
-    return to_unsigned(imm, is_design_64bit)<<12
-
+    res = to_unsigned(imm, is_design_64bit)<<12
+    if is_design_64bit:
+        msb = (res>>31)&1
+        res |= (MAX_64b^MAX_32b)*msb
+    return res
+    
 def lui_t0(pc: int, pc_t0: int,  imm: int, imm_t0: int, is_design_64bit: bool):
     return lui(0x0, imm_t0, is_design_64bit)
 
 def auipc(pc: int, imm: int, is_design_64bit: bool):
     uimm = to_unsigned(imm, is_design_64bit) & 0xFFFFF # 20 bit immediate
-    n_bits = 64 if is_design_64bit else 32
-    mask = (MAX_64b<<n_bits)&MAX_64b # extend to 64 bits
-    uimm = (uimm & 0xFFFFF) << 12
+    uimm = uimm << 12
+    if is_design_64bit:
+        msb = (uimm>>31)&1
+        uimm |= (MAX_64b^MAX_32b)*msb
     res = pc+uimm
-    msb = (res>>(n_bits-1))&1
-    return res | (mask*msb)
+    return res
 
 def auipc_t0(pc: int, pc_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     uimm = to_unsigned(imm, is_design_64bit) & 0xFFFFF # 20 bit immediate
@@ -558,8 +562,52 @@ def csrrci_t0(uimm: int, uimm_t0: int, csr_val: int, csr_val_t0: int, is_design_
 def csrrwi_t0(uimm: int, uimm_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
     return uimm_t0
 
+def sign_extend(a,n_bytes,is_design_64bit):
+    msb = (a>>(n_bytes*8-1))&1
+    mask = 2**(n_bytes*8)-1
+    return a | (((MAX_64b if is_design_64bit else MAX_32b)^mask))*msb
 
+def lb(a, is_design_64bit: bool):
+    return sign_extend(a,1,is_design_64bit)
 
+def lh(a, is_design_64bit: bool):
+    return sign_extend(a,2,is_design_64bit)
+
+def lw(a, is_design_64bit: bool):
+    return sign_extend(a,4,is_design_64bit)
+
+def lbu(a, is_design_64bit: bool):
+    return a&0xFF
+
+def lhu(a, is_design_64bit: bool):
+    return a&0xFFFF
+
+def lwu(a, is_design_64bit: bool):
+    return a&MAX_32b
+
+def ld(a, is_design_64bit: bool):
+    return sign_extend(a,8,is_design_64bit)
+
+def lb_t0(a, is_design_64bit: bool):
+    return sign_extend(a,1,is_design_64bit)
+
+def lh_t0(a, is_design_64bit: bool):
+    return sign_extend(a,2,is_design_64bit)
+
+def lw_t0(a, is_design_64bit: bool):
+    return sign_extend(a,4,is_design_64bit)
+
+def lbu_t0(a, is_design_64bit: bool):
+    return a&0xFF
+
+def lhu_t0(a, is_design_64bit: bool):
+    return a&0xFFFF
+
+def lwu_t0(a, is_design_64bit: bool):
+    return a&MAX_32b
+
+def ld_t0(a, is_design_64bit: bool):
+    return sign_extend(a,8,is_design_64bit)
 
 
 
@@ -597,17 +645,17 @@ INSTR_FUNCS = {
     "and (PlaceholderPreConsumerInstr)": and_,
     "xor (PlaceholderConsumerInstr)": xor,
     # load and store instructions
-    "lb": addi, # to compute the address
-    "lh": addi,
-    "lw": addi,
-    "lbu": addi,
-    "lhu": addi,
-    "lwu": addi,
-    "ld": addi,
-    "sb": addi, # to compute the address
-    "sh": addi,
-    "sw": addi,
-    "sd": addi,
+    "lb": lb,
+    "lh": lh,
+    "lw": lw,
+    "lbu": lbu,
+    "lhu": lhu,
+    "lwu": lwu,
+    "ld": ld,
+    "sb": None,
+    "sh": None,
+    "sw": None,
+    "sd": None,
     # csr instructions
     "csrw": csrrw, # csrw is a pseudo instruction, rd=zero
     "csrrw": csrrw,
@@ -671,17 +719,17 @@ INSTR_FUNCS_T0 = {
     "and (PlaceholderPreConsumerInstr)": and_t0,
     "xor (PlaceholderConsumerInstr)": xor_t0,
     # load and store instructions, no taint function as we dont allow tainted operands for address computation.
-    "lb": None, 
-    "lh": None,
-    "lw": None,
-    "lbu": None,
-    "lhu": None,
-    "lwu": None,
-    "ld": None,
+    "lb": lb_t0,
+    "lh": lh_t0,
+    "lw": lw_t0,
+    "lbu": lbu_t0,
+    "lhu": lhu_t0,
+    "lwu": lwu_t0,
+    "ld": ld_t0,
     "sb": None,
     "sh": None,
     "sw": None,
-    "sd": None,
+    "sd": None,    
     # csr instructions
     "csrw": csrrw_t0, # csrw is a pseudo instruction, rd=zero
     "csrrw": csrrw_t0,
@@ -710,8 +758,6 @@ INSTR_FUNCS_T0 = {
     "EPCWriterInstruction": None,
     "GenericCSRWriterInstruction": None,
     "ExceptionInstruction": None
-
-
 }
 
 
