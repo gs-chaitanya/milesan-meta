@@ -25,7 +25,7 @@ void tick_req_t::print(){
         printf("Dump of reg f%5lu: 0x%016lx: 0x%016lx:", this->id, this->content, this->content_t0);
     }
     else{
-        printf("Dump at addr 0x%08lx: 0x%016lx: 0x%016lx:", this->id, this->content, this->content_t0);
+        printf("Dump at idx 0x%08lx: 0x%016lx: 0x%016lx:", this->id, this->content, this->content_t0);
     }
     #ifdef ARCH_32b
     int n_bits = 32;

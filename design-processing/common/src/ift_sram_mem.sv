@@ -198,7 +198,7 @@ module ift_sram_mem #(
       fd = $fopen(path, "w");
       foreach (mem[i]) begin
         if(mem_taints.exists(i)) begin
-          $fdisplay(fd, "{\"addr\": \"0x%8h\", \"value\": \"0x%8h\", \"value_t0\": \"0x%8h\"}", i<<2, mem[i], mem_taints[i]);
+          $fdisplay(fd, "{\"addr\": \"0x%16h\", \"value\": \"0x%16h\", \"value_t0\": \"0x%16h\"}", i<<$clog2(WidthBytes), mem[i], mem_taints[i]);
         end
       end
 

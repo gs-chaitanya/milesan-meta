@@ -107,7 +107,7 @@ void Testbench::reset_memory_t(){
 
 void Testbench::dump_memory(){
     #ifdef SINGLE_MEM // TODO test
-    std::cout << "MEM:\n";
+    // std::cout << "MEM:\n";
     svScope scope = svGetScopeFromName(VSCOPE_MEM);
     assert(scope);  // Check for nullptr if scope not found
     svSetScope(scope);
