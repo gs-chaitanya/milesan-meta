@@ -113,7 +113,7 @@ class BaseInstruction:
         self.instr_str = instr_str
         self.instr_func = INSTR_FUNCS[self.instr_str]
 
-    def print(self, is_spike_resolution: bool):
+    def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         print(self.get_str(is_spike_resolution))
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):

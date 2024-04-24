@@ -80,8 +80,6 @@ def gen_fuzzerstate_elf_expectedvals_interm(memsize: int, design_name: str, rand
     start = time.time()
     expected_regvals, interm_elfpath = spike_resolution_return_interm(fuzzerstate, check_pc_spike_again)
     time_seconds_spent_in_gen_elf = time.time() - start
-    # for i,intreg in enumerate(expected_regvals[0]):
-    #     print(f"{i}:{hex(intreg)}")
     
     return fuzzerstate, interm_elfpath, expected_regvals
 
