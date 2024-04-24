@@ -58,7 +58,9 @@ def gen_random_csr_op(fuzzerstate):
             elif target_csr == MachineCSROpCandidates64.MCAUSE:
                 ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), random.randrange(16), CSR_IDS.MCAUSE)
             elif target_csr == MachineCSROpCandidates64.SSCRATCH:
-                    ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.SSCRATCH)
+                    rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
+                    rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force=False)
+                    ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", rd, rs, CSR_IDS.SSCRATCH)
             elif target_csr == MachineCSROpCandidates64.MSCRATCH:
                 rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
                 rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force=False)
