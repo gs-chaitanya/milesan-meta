@@ -45,6 +45,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         # prepare the register dump register
         try:
             regdump_addr = get_design_reg_stream_addr(fuzzerstate.design_name)
+            assert regdump_addr < 0x80000000, f"For the destination address `{hex(regdump_addr)}`, we will need to manage sign extension, which is not yet implemented here."
         except:
             raise ValueError(f"Design `{fuzzerstate.design_name}` does not have the `regstreamaddr` attribute.")
 
@@ -53,8 +54,8 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
 
         curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", REGDUMP_REGISTER_ID, REGDUMP_REGISTER_ID, addi_imm), True, insert_regdump = False)
         
-        curr_addr += fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"add", REGDUMP_REGISTER_ID, REGDUMP_REGISTER_ID, RELOCATOR_REGISTER_ID), True, insert_regdump = False)
-
+        if fuzzerstate.design_name == "kronos": # For kronos we need to add the spike offset, for e.g. rocket not.
+            curr_addr += fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"add", REGDUMP_REGISTER_ID, REGDUMP_REGISTER_ID, RELOCATOR_REGISTER_ID), True, insert_regdump = False)
 
     if fuzzerstate.is_design_64bit:
         # Clear the top 32 bits

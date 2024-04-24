@@ -190,7 +190,7 @@ class MemoryView:
             print(f"read_t0: Taint on data bus detected: {hex(addr)} : {hex(val_t0)}")
         return val_t0
 
-    def write(self, addr, val, n_bytes: int = 4):
+    def write(self, addr, val, n_bytes):
         # print(f"Writing {n_bytes} bytes to {hex(addr)}")
         for i in range(n_bytes):
             b = (val&(0xFF<<(i*8)))>>(i*8)
@@ -199,7 +199,7 @@ class MemoryView:
             if addr+i not in self.data_t0:
                 self.data_t0[addr+i] = 0
 
-    def write_t0(self, addr, val_t0, n_bytes: int = 4):
+    def write_t0(self, addr, val_t0, n_bytes):
         if val_t0 and PRINT_DBUS_TAINT: 
             print(f"write_t0: Taint on data bus detected: {hex(addr)} : {hex(val_t0)}")
         for i in range(n_bytes):
@@ -212,14 +212,15 @@ class MemoryView:
         n_tainted_regs = 0
         for i,reg_data_content in enumerate(fuzzerstate.initial_reg_data_content):
             addr = start_addr + i*8 # Stride for double is used even if design is 32bit.
-            self.write(addr, reg_data_content)
+            n_bytes = 8 if self.fuzzerstate.is_design_64bit else 4
+            self.write(addr, reg_data_content, n_bytes)
             if fuzzerstate.taint_en and n_tainted_regs < MAX_NUM_INIT_TAINTED_REGS:
                 if random.choices([0,1],[1-P_TAINT_REG,P_TAINT_REG],k=1)[0]:
                     rand_val = random.randint(1,MAX_64b if fuzzerstate.is_design_64bit else MAX_32b)
                     n_tainted_regs += 1
-                    self.write_t0(addr, rand_val, 4)
+                    self.write_t0(addr, rand_val, n_bytes)
             else:
-                self.write_t0(addr, 0, 4)
+                self.write_t0(addr, 0, n_bytes)
 
     def store_state(self):
         self.states = [(deepcopy(self.data), deepcopy(self.data_t0))]

@@ -280,9 +280,9 @@ def create_targeted_consumer_instrobj(fuzzerstate):
     rd = rprod
     fuzzerstate.intregpickstate.set_regstate(rprod, IntRegIndivState.CONSUMED)
     if fuzzerstate.is_design_64bit:
-        assert False, "Not implemented"
         # return [PlaceholderPreConsumerInstr(rprod), PlaceholderPreConsumerInstr(rdep), PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
-        return [PlaceholderPreConsumerInstr_t0(fuzzerstate, rprod), PlaceholderPreConsumerInstr_t0(fuzzerstate, rdep), PlaceholderConsumerInstr_t0(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
+        # return [PlaceholderPreConsumerInstr_t0(fuzzerstate, rprod), PlaceholderPreConsumerInstr_t0(fuzzerstate, rdep), PlaceholderConsumerInstr_t0(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
+        return [PlaceholderPreConsumerInstr_t0, PlaceholderPreConsumerInstr_t0, PlaceholderConsumerInstr_t0], [(fuzzerstate, rprod), (fuzzerstate, rdep), (fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
 
     else:
         # return [PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]

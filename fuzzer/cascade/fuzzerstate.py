@@ -209,7 +209,7 @@ class FuzzerState:
         if insert_regdump:
             if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS:
                 # fence_instr = SpecialInstruction_t0(self,"fence")
-                store_instr = RegdumpInstruction_t0(self,"sw",REGDUMP_REGISTER_ID,instr.rd,0,-1)
+                store_instr = RegdumpInstruction_t0(self,"sd" if self.is_design_64bit else "sw", REGDUMP_REGISTER_ID, instr.rd,0,-1)
                 store_instr.execute(taint_en=self.taint_en, is_spike_resolution=True)
                 # store_instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
                 if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 

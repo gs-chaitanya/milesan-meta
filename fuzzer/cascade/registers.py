@@ -94,18 +94,32 @@ class CheckableRegister(__Register):
             return self.abi_name,self.val_t0,cmp_val
 
     def print_and_compare(self,rtl_val,rtl_val_t0):
-        if rtl_val == self.val:
-            val_str =  "0x{:08x}".format(self.val)
-        else:
-            val_str = "0x{:08x} != 0x{:08x}".format(self.val,rtl_val)
+        if self.is_design_64bit:
+            if rtl_val == self.val:
+                val_str =  "0x{:016x}".format(self.val)
+            else:
+                val_str = "0x{:016x} != 0x{:016x}".format(self.val,rtl_val)
 
-        if rtl_val_t0 == self.val_t0:
-            val_t0_str = "0x{:08x}".format(self.val_t0)
-        elif rtl_val_t0&~self.val_t0 == 0:
-            val_t0_str = "0x{:08x} >= 0x{:08x}".format(self.val_t0,rtl_val_t0)
+            if rtl_val_t0 == self.val_t0:
+                val_t0_str = "0x{:016x}".format(self.val_t0)
+            elif rtl_val_t0&~self.val_t0 == 0:
+                val_t0_str = "0x{:016x} >= 0x{:016x}".format(self.val_t0,rtl_val_t0)
+            else:
+                val_t0_str = "0x{:016x} != 0x{:016x}".format(self.val_t0,rtl_val_t0)
+
         else:
-            val_t0_str = "0x{:08x} != 0x{:08x}".format(self.val_t0,rtl_val_t0)
-        
+            if rtl_val == self.val:
+                val_str =  "0x{:08x}".format(self.val)
+            else:
+                val_str = "0x{:08x} != 0x{:08x}".format(self.val,rtl_val)
+
+            if rtl_val_t0 == self.val_t0:
+                val_t0_str = "0x{:08x}".format(self.val_t0)
+            elif rtl_val_t0&~self.val_t0 == 0:
+                val_t0_str = "0x{:08x} >= 0x{:08x}".format(self.val_t0,rtl_val_t0)
+            else:
+                val_t0_str = "0x{:08x} != 0x{:08x}".format(self.val_t0,rtl_val_t0)
+            
         row = [self.abi_name,val_str,val_t0_str]
         print("{: >30} {: >30} {: >30}".format(*row))
 
