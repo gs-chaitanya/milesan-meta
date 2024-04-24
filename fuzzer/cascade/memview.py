@@ -191,7 +191,7 @@ class MemoryView:
         return val_t0
 
     def write(self, addr, val, n_bytes):
-        # print(f"Writing {n_bytes} bytes to {hex(addr)}")
+        # print(f"Writing {n_bytes} bytes {hex(val)} -> {hex(addr)}")
         for i in range(n_bytes):
             b = (val&(0xFF<<(i*8)))>>(i*8)
             # print(f"Writing to {hex(addr+i)}: {hex(b)}")
@@ -258,20 +258,17 @@ class MemoryView:
         # print(f"Dumping memview taints to {path}")
         dumped_addresses = []
         with open(path, "w") as f:
-            # f.write("[\n")
             for addr in self.data_t0.keys():
                 if addr in dumped_addresses:
                     continue
                 n_bytes = 8 if self.fuzzerstate.is_design_64bit else 4
                 f.write("0 {:x} {:x} ".format(addr, n_bytes))
                 for i in range(n_bytes):
-                    # Switch endianness.
+                    # Little endian.
                     b = self.data_t0[addr+i] if addr+i in self.data_t0 else 0
                     f.write("{:02x}".format(b))
                     dumped_addresses += [addr+i]
                 f.write("\n")
-            #     f.write(f"\t{{\"addr\":\"{hex(addr)}\", \"val_t0\":\"{hex(val_t0)}\"}},\n")
-            # f.write("]")
 
 
     def print(self):
@@ -285,7 +282,7 @@ class MemoryView:
             if addr in printed_addresses: continue
             val = 0
             val_t0 = 0
-            for i in range(4):
+            for i in range(8 if self.fuzzerstate.is_design_64bit else 4):
                 if addr+i in self.data:
                     assert addr+i in self.data_t0
                     val |= self.data[addr+i]<<(i*8)
@@ -306,7 +303,7 @@ class MemoryView:
             if addr in printed_addresses: continue
             val = 0
             val_t0 = 0
-            for i in range(4):
+            for i in range(8 if self.fuzzerstate.is_design_64bit else 4):
                 if addr+i in self.data:
                     assert addr+i in self.data_t0
                     val |= self.data[addr+i]<<(i*8)
@@ -344,7 +341,7 @@ class MemoryView:
             if addr in checked_addresses: continue
             val = 0
             val_t0 = 0
-            for i in range(4):
+            for i in range(8 if self.fuzzerstate.is_design_64bit else 4):
                 if addr+i in self.data:
                     assert addr+i in self.data_t0
                     val |= self.data[addr+i]<<(i*8)
