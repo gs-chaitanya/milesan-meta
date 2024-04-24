@@ -362,7 +362,7 @@ def or_(a: int, b: int, is_design_64bit: bool):
     return a | b
 
 def or_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
-    a_and_b_t0 = a_t0 & b_t0 # Can change value since both sides tainted
+    a_t0_and_b_t0 = a_t0 & b_t0 # Can change value since both sides tainted
     
     # Can change value since one side is zero while other is tainted.
     a_t0_and_not_b = a_t0 & ~b
@@ -370,7 +370,7 @@ def or_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
 
     a_t0_and_not_b_or_reverse = a_t0_and_not_b | b_t0_and_not_a
 
-    return a_and_b_t0 | a_t0_and_not_b_or_reverse
+    return a_t0_and_b_t0 | a_t0_and_not_b_or_reverse
 
 def and_(a: int, b: int, is_design_64bit: bool):
     return a & b
@@ -388,7 +388,9 @@ def and_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
 
 ## IMMEDIATE OPERATIONS ##
 def addi(a: int, imm: int, is_design_64bit: bool):
-    return a + to_unsigned(imm, is_design_64bit)
+    uimm = to_unsigned(imm, is_design_64bit)
+    uimm = sign_extend(uimm,12,is_design_64bit)
+    return a + uimm
 
 def addi_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit):
     uimm = to_unsigned(imm, is_design_64bit)
@@ -562,19 +564,19 @@ def csrrci_t0(uimm: int, uimm_t0: int, csr_val: int, csr_val_t0: int, is_design_
 def csrrwi_t0(uimm: int, uimm_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
     return uimm_t0
 
-def sign_extend(a,n_bytes,is_design_64bit):
-    msb = (a>>(n_bytes*8-1))&1
-    mask = 2**(n_bytes*8)-1
+def sign_extend(a,n_bit,is_design_64bit):
+    msb = (a>>(n_bit-1))&1
+    mask = 2**n_bit-1
     return a | (((MAX_64b if is_design_64bit else MAX_32b)^mask))*msb
 
 def lb(a, is_design_64bit: bool):
-    return sign_extend(a,1,is_design_64bit)
+    return sign_extend(a,8,is_design_64bit)
 
 def lh(a, is_design_64bit: bool):
-    return sign_extend(a,2,is_design_64bit)
+    return sign_extend(a,16,is_design_64bit)
 
 def lw(a, is_design_64bit: bool):
-    return sign_extend(a,4,is_design_64bit)
+    return sign_extend(a,32,is_design_64bit)
 
 def lbu(a, is_design_64bit: bool):
     return a&0xFF
@@ -586,16 +588,16 @@ def lwu(a, is_design_64bit: bool):
     return a&MAX_32b
 
 def ld(a, is_design_64bit: bool):
-    return sign_extend(a,8,is_design_64bit)
+    return sign_extend(a,64,is_design_64bit)
 
 def lb_t0(a, is_design_64bit: bool):
-    return sign_extend(a,1,is_design_64bit)
+    return sign_extend(a,8,is_design_64bit)
 
 def lh_t0(a, is_design_64bit: bool):
-    return sign_extend(a,2,is_design_64bit)
+    return sign_extend(a,16,is_design_64bit)
 
 def lw_t0(a, is_design_64bit: bool):
-    return sign_extend(a,4,is_design_64bit)
+    return sign_extend(a,32,is_design_64bit)
 
 def lbu_t0(a, is_design_64bit: bool):
     return a&0xFF
@@ -607,7 +609,7 @@ def lwu_t0(a, is_design_64bit: bool):
     return a&MAX_32b
 
 def ld_t0(a, is_design_64bit: bool):
-    return sign_extend(a,8,is_design_64bit)
+    return sign_extend(a,64,is_design_64bit)
 
 
 
