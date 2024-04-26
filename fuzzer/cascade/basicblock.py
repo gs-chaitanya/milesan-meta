@@ -274,7 +274,7 @@ def gen_random_data_block(fuzzerstate):
     for addr in range(fuzzerstate.random_data_block_start_addr, fuzzerstate.random_data_block_end_addr, 4):
         rand_val = random.randrange(0, 2**32)
         fuzzerstate.random_block_content4by4bytes.append(rand_val)
-        fuzzerstate.memview.write(addr+SPIKE_STARTADDR, rand_val, 8 if fuzzerstate.is_design_64bit else 4)
+        fuzzerstate.memview.write(addr+SPIKE_STARTADDR, rand_val, 4)
 
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
 def alloc_final_basic_block(fuzzerstate):
