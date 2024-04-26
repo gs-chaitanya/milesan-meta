@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT
-from params.celliftparams import SLL_IMPRECISE, SRL_IMPRECISE
+from params.celliftparams import *
 import random
 import numpy as np
 
@@ -146,6 +146,11 @@ def to_unsigned(val_signed: int, is_design_64bit: bool):
             assert val_signed < 1 << 32
         return (((val_signed >> 31) & 1) << 32) + val_signed
 
+# Sign-extends a number of specified bit-width to either 64 or 32 bit.
+def sign_extend(a,n_bit,is_design_64bit):
+    msb = (a>>(n_bit-1))&1
+    mask = 2**n_bit-1
+    return a | (((MAX_64b if is_design_64bit else MAX_32b)^mask))*msb
 
 def add(a: int, b: int,  is_design_64bit: bool):
     return a + b
@@ -173,25 +178,25 @@ def sub(a: int, b: int,  is_design_64bit: bool):
     return a - b
 
 def sub_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
-    # a_and_not_a_t0 = a&~a_t0
-    # b_and_not_b_t0 = b&~b_t0
+    a_and_not_a_t0 = a&~a_t0
+    b_and_not_b_t0 = b&~b_t0
 
-    # a_or_a_t0 = a|a_t0
-    # b_or_b_t0 = b|b_t0
+    a_or_a_t0 = a|a_t0
+    b_or_b_t0 = b|b_t0
 
-    # a_max_min_b_min = a_or_a_t0 - b_and_not_b_t0 
-    # a_min_min_b_max = a_and_not_a_t0 - b_or_b_t0
+    a_max_min_b_min = a_or_a_t0 - b_and_not_b_t0 
+    a_min_min_b_max = a_and_not_a_t0 - b_or_b_t0
 
-    # # Compute the polarization term.
-    # polarization = a_max_min_b_min ^ a_min_min_b_max
+    # Compute the polarization term.
+    polarization = a_max_min_b_min ^ a_min_min_b_max
 
-    # # Compute the transportability term.
-    # transport = a_t0 | b_t0
-    # res = polarization | transport
-    # # if a_t0 == 0 or b_t0 == 0:
+    # Compute the transportability term.
+    transport = a_t0 | b_t0
+    res = polarization | transport
+    # if a_t0 == 0 or b_t0 == 0:
     # print(f"SUB: a={hex(a)} a_t0={hex(a_t0)} b={hex(b)} b_t0={hex(b_t0)} a_max_min_b_min={hex(a_max_min_b_min)} a_min_min_b_max={hex(a_min_min_b_max)} res={hex(res&0xFFFFFFFF)}")
         
-    return add_t0(a, a_t0, ~b+1, b_t0, is_design_64bit)
+    # return add_t0(a, a_t0, ~b+1, b_t0, is_design_64bit)
     return res
 
 
@@ -361,16 +366,23 @@ def sra_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
 def or_(a: int, b: int, is_design_64bit: bool):
     return a | b
 
+def conj(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    return a_t0 | b_t0
+
 def or_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
     a_t0_and_b_t0 = a_t0 & b_t0 # Can change value since both sides tainted
-    
+    # print(f"a={hex(a)}, a_t0={hex(a_t0)}, b={hex(b)}, b_t0={hex(b_t0)}")
     # Can change value since one side is zero while other is tainted.
     a_t0_and_not_b = a_t0 & ~b
     b_t0_and_not_a = b_t0 & ~a
+    # print(f"a_t0_and_not_b={hex(a_t0_and_not_b)}")
+    # print(f"b_t0_and_not_a={hex(b_t0_and_not_a)}")
 
     a_t0_and_not_b_or_reverse = a_t0_and_not_b | b_t0_and_not_a
-
+    # print(f"a_t0_and_not_b_or_reverse={hex(a_t0_and_not_b_or_reverse)}")
+    # print(f"conjunctive: {hex(or_(a_t0,b_t0,is_design_64bit))}")
     return a_t0_and_b_t0 | a_t0_and_not_b_or_reverse
+    # return or_(a_t0,b_t0,is_design_64bit)
 
 def and_(a: int, b: int, is_design_64bit: bool):
     return a & b
@@ -388,96 +400,81 @@ def and_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
 
 ## IMMEDIATE OPERATIONS ##
 def addi(a: int, imm: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm = sign_extend(uimm,12,is_design_64bit)
-    return a + uimm
+    imm = sign_extend(imm,12,is_design_64bit)
+    return a + imm
 
 def addi_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return add_t0(a,a_t0,uimm,uimm_t0,is_design_64bit)
+    imm = sign_extend(imm,12,is_design_64bit)
+    imm_t0 = sign_extend(imm_t0,12,is_design_64bit)
+    return add_t0(a,a_t0,imm,imm_t0,is_design_64bit)
 
 def slli(a: int, imm: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    return sll(a,uimm,is_design_64bit)
+    return sll(a,imm,is_design_64bit)
 
 def slli_t0_precise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return sll_t0_precise(a,a_t0,uimm,uimm_t0,is_design_64bit)
-
+    return sll_t0_precise(a,a_t0,imm,imm_t0,is_design_64bit)
 
 def slli_t0_imprecise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return sll_t0_imprecise(a,a_t0,uimm,uimm_t0,is_design_64bit)
+    return sll_t0_imprecise(a,a_t0,imm,imm_t0,is_design_64bit)
 
 def slti(a: int, imm: int, is_design_64bit: bool):
-    return twos_complement(a,is_design_64bit) < imm
+    return twos_complement(a,is_design_64bit) < sign_extend(imm, 12,is_design_64bit)
 
 def slti_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     a_signed = twos_complement(a, is_design_64bit)
-    a_t0_signed = twos_complement(a_t0, is_design_64bit)
+    a_t0_signed = twos_complement(a, is_design_64bit)
     return slt_t0(a_signed, a_t0_signed, imm, imm_t0, is_design_64bit)
 
 def sltiu(a: int, imm: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
+    uimm = to_unsigned(sign_extend(imm,12,is_design_64bit), is_design_64bit)
     return sltu(a, uimm, is_design_64bit)
 
 def sltiu_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
+    uimm = to_unsigned(sign_extend(imm,12,is_design_64bit), is_design_64bit)
+    uimm_t0 = to_unsigned(sign_extend(imm_t0,12,is_design_64bit), is_design_64bit)
     return slti_t0(a,a_t0,uimm,uimm_t0,is_design_64bit)
 
 def xori(a: int, imm: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    return xor(a,uimm,is_design_64bit)
+    imm = sign_extend(imm,12,is_design_64bit)
+    return xor(a,imm,is_design_64bit)
 
 def xori_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return xor_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
+    imm = sign_extend(imm,12,is_design_64bit)
+    imm_t0 = sign_extend(imm_t0,12,is_design_64bit)
+    return xor_t0(a, a_t0, imm, imm_t0, is_design_64bit)
 
 def srli(a: int, imm: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    return srl(a,uimm, is_design_64bit)
+    return srl(a,imm, is_design_64bit)
 
 def srli_t0_precise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return srl_t0_precise(a, a_t0, uimm, uimm_t0, is_design_64bit)
+    return srl_t0_precise(a, a_t0, imm, imm_t0, is_design_64bit)
 
 def srli_t0_imprecise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return srl_t0_imprecise(a, a_t0, uimm, uimm_t0, is_design_64bit)
+    return srl_t0_imprecise(a, a_t0, imm, imm_t0, is_design_64bit)
 
 def srai(a: int, imm: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    return sra(a, uimm, is_design_64bit)
+    return sra(a, imm, is_design_64bit)
 
 def srai_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return sra_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
+    return sra_t0(a, a_t0, imm, imm_t0, is_design_64bit)
 
 def ori(a: int, imm: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    return or_(a, uimm, is_design_64bit)
+    imm = sign_extend(imm,12,is_design_64bit)
+    return or_(a, imm, is_design_64bit)
 
 def ori_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: int):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return or_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
+    imm = sign_extend(imm,12,is_design_64bit)
+    imm_t0 = sign_extend(imm_t0,12,is_design_64bit)
+    return or_t0(a, a_t0, imm, imm_t0, is_design_64bit)
 
 def andi(a: int, imm: int, is_design_64bit: bool):
-    uimm = to_unsigned(imm, is_design_64bit)
-    return and_(a, uimm, is_design_64bit)
+    imm = sign_extend(imm,12,is_design_64bit)
+    return and_(a, imm, is_design_64bit)
 
 def andi_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: int):
-    uimm = to_unsigned(imm, is_design_64bit)
-    uimm_t0 = to_unsigned(imm_t0, is_design_64bit)
-    return and_t0(a, a_t0, uimm, uimm_t0, is_design_64bit)
+    imm = sign_extend(imm,12,is_design_64bit)
+    imm_t0 = sign_extend(imm_t0,12,is_design_64bit)
+    return and_t0(a, a_t0, imm, imm_t0, is_design_64bit)
 
 def lui(pc: int, imm: int, is_design_64bit: bool):
     res = to_unsigned(imm, is_design_64bit)<<12
@@ -563,11 +560,6 @@ def csrrci_t0(uimm: int, uimm_t0: int, csr_val: int, csr_val_t0: int, is_design_
 
 def csrrwi_t0(uimm: int, uimm_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
     return uimm_t0
-
-def sign_extend(a,n_bit,is_design_64bit):
-    msb = (a>>(n_bit-1))&1
-    mask = 2**n_bit-1
-    return a | (((MAX_64b if is_design_64bit else MAX_32b)^mask))*msb
 
 def lb(a, is_design_64bit: bool):
     return sign_extend(a,8,is_design_64bit)
@@ -690,26 +682,26 @@ INSTR_FUNCS = {
 
 INSTR_FUNCS_T0 = {
     # register instructions
-    "add": add_t0,
-    "sub": sub_t0,
-    "sll": sll_t0_imprecise if SLL_IMPRECISE else sll_t0_precise,
-    "slt": slt_t0,
-    "sltu": sltu_t0,
-    "xor": xor_t0,
-    "srl": srl_t0_imprecise if SRL_IMPRECISE else srl_t0_precise,
-    "sra": sra_t0,
-    "or": or_t0,
-    "and": and_t0,
+    "add": add_t0 if not ADD_CONJ else conj,
+    "sub": sub_t0 if not SUB_CONJ else conj,
+    "sll": sll_t0_imprecise if SLL_IMPRECISE else conj if SLL_IMPRECISE else sll_t0_precise,
+    "slt": slt_t0 if not SLT_CONJ else conj,
+    "sltu": sltu_t0 if not SLTU_CONJ else conj,
+    "xor": xor_t0 if not XOR_CONJ else conj,
+    "srl": srl_t0_imprecise if SRL_IMPRECISE else conj if SRL_CONJ else srl_t0_precise,
+    "sra": sra_t0 if not SRA_CONJ else conj,
+    "or": or_t0 if not OR_CONJ else conj,
+    "and": and_t0 if not AND_CONJ else conj,
     # immediate instructions
-    "addi": addi_t0,
-    "slli": slli_t0_imprecise if SLL_IMPRECISE else slli_t0_precise,
-    "slti": slti_t0,
-    "sltiu": sltiu_t0,
-    "xori": xori_t0,
-    "srli": srli_t0_imprecise if SRL_IMPRECISE else srl_t0_precise,
-    "srai": srai_t0,
-    "ori": ori_t0,
-    "andi": andi_t0,
+    "addi": addi_t0 if not ADDI_CONJ else conj,
+    "slli": slli_t0_imprecise if SLL_IMPRECISE else conj if SLL_CONJ else slli_t0_precise,
+    "slti": slti_t0 if not SLTI_CONJ else conj,
+    "sltiu": sltiu_t0 if not SLTI_CONJ else conj,
+    "xori": xori_t0 if not XORI_CONJ else conj,
+    "srli": srli_t0_imprecise if SRL_IMPRECISE else conj if SRL_IMPRECISE else srl_t0_precise,
+    "srai": srai_t0 if not SRAI_CONJ else conj,
+    "ori": ori_t0 if not ORI_CONJ else conj,  
+    "andi": andi_t0 if not ANDI_CONJ else conj,
     "lui": lui_t0,
     "auipc": auipc_t0,
     # jal and jalr
@@ -717,9 +709,9 @@ INSTR_FUNCS_T0 = {
     "jalr": jalr_t0,
     # placeholder instructions
     "lui (PlaceholderProducerInstr0)": lui_t0,
-    "addi (PlaceholderProducerInstr1)": addi_t0,
-    "and (PlaceholderPreConsumerInstr)": and_t0,
-    "xor (PlaceholderConsumerInstr)": xor_t0,
+    "addi (PlaceholderProducerInstr1)": addi_t0 if not ADDI_CONJ else conj,
+    "and (PlaceholderPreConsumerInstr)": and_t0 if not AND_CONJ else conj,
+    "xor (PlaceholderConsumerInstr)": xor_t0 if not XOR_CONJ else conj,
     # load and store instructions, no taint function as we dont allow tainted operands for address computation.
     "lb": lb_t0,
     "lh": lh_t0,
