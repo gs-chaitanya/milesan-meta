@@ -45,7 +45,6 @@ MEMADDR_PICK_POLICY_WEIGTHS = {
 # Store locations
 MAX_NUM_STORE_LOCATIONS = 30 # Max number of locations where doublewords can be stored.
 
-
 ###
 # End condition
 ###
@@ -54,7 +53,6 @@ MAX_NUM_STORE_LOCATIONS = 30 # Max number of locations where doublewords can be 
 # In other words, if the memory is occupied by more than this amount, then do not start generating new basic blocks.
 LIMIT_MEM_SATURATION_RATIO = 0.8
 
-
 ###
 # Register picking
 ###
@@ -62,21 +60,8 @@ LIMIT_MEM_SATURATION_RATIO = 0.8
 # When a register is produced, it gets this probability to be picked next. What is nice is that it immediately saturates: producing it twice does not increase picking proba.
 REGPICK_PROTUBERANCE_RATIO = 0.2 
 
-REGPICK_PROTUBERANCE_RATIO_T0_POS = 0.3
-REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.2
-
-TAINT_EN = True
-P_TAINT_REG = 0.5
-MAX_NUM_INIT_TAINTED_REGS = 5
-
 # There should always be at least this number of free or relocused registers
 NUM_MIN_FREE_INTREGS = 2
-
-# There should be at least this number of untainted regs
-NUM_MIN_UNTAINTED_INTREGS = 2
-
-MIN_WEIGHT_T0 = 0.01
-MAX_WEIGHT_T0 = 1
 
 # Reduce the registers that we allow ourselves to pick randomly
 MIN_NUM_PICKABLE_REGS = 4
@@ -138,4 +123,27 @@ PROBA_AUTHORIZE_PRIVILEGES = 0.05
 MAX_CYCLES_PER_INSTR = 30
 SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
 
-USE_SPIKE_INTERM_ELF = False
+USE_SPIKE_INTERM_ELF = False # When both this and INSERT_REGDUMPS are enabled, the nops from the regdumps are part of the elf, which might be unintended.
+
+
+## TAINT PARAMETERS ##
+
+TAINT_EN = True
+P_TAINT_REG = 0.5
+MAX_NUM_INIT_TAINTED_REGS = 5
+
+# There should be at least this number of untainted regs
+NUM_MIN_UNTAINTED_INTREGS = 2
+
+MIN_WEIGHT_T0 = 0.01
+MAX_WEIGHT_T0 = 1
+
+# The maximal probability proturbance introduced when a register is fully tainted i.e. relative taint hamming weight is one.
+REGPICK_PROTUBERANCE_RATIO_T0_POS = 0.3
+REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.2
+
+ALLOW_CSR_TAINT = False
+
+
+
+
