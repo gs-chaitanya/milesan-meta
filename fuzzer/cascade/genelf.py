@@ -80,7 +80,7 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
         curr_bytearray[curr_addr] = curr_byte
     curr_bytes = bytes(curr_bytearray)
 
-    elfpath = os.path.join(PATH_TO_TMP, f"{prefixname}{test_identifier}.elf")
+    elfpath = os.path.join(fuzzerstate.tmp_dir, f"{prefixname}{test_identifier}.elf")
 
     # Generate the ELF object
     gen_elf(curr_bytes, start_addr=fuzzerstate.bb_start_addr_seq[0], section_addr=start_addr, destination_path=elfpath, is_64bit=fuzzerstate.is_design_64bit)
