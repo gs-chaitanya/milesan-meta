@@ -170,13 +170,12 @@ class MemoryView:
 
     def read(self, addr, n_bytes: int = 4):
         val = 0
-        # print(f"Reading {n_bytes} bytes from {hex(addr)}")
         for i in range(n_bytes):
             assert addr+i in self.data, f"Read request from invalid address {hex(addr+i)}."
             b = self.data[addr+i]
             assert b <= 0xFF
             val |= (b << (i*8))
-        # print(f"Reading from {hex(addr)}: {hex(val)}")
+        # print(f"Reading {n_bytes} bytes {hex(val)} from {hex(addr)}")
         return val
 
     def read_t0(self, addr, n_bytes: int = 4):
@@ -191,7 +190,7 @@ class MemoryView:
         return val_t0
 
     def write(self, addr, val, n_bytes):
-        # print(f"Writing {n_bytes} bytes {hex(val)} -> {hex(addr)}")
+        # print(f"Writing {n_bytes} bytes {hex(val)} to {hex(addr)}")
         for i in range(n_bytes):
             b = (val&(0xFF<<(i*8)))>>(i*8)
             # print(f"Writing to {hex(addr+i)}: {hex(b)}")
@@ -357,12 +356,14 @@ class MemoryView:
                 mismatch_val_t0 = rtl_val_t0 != val_t0 if precise else ~val_t0&rtl_val_t0 != 0
             
                 assert not mismatch_val, f"Value mismatch at address {hex(addr)}: {hex(val)} != {hex(rtl_val)}"
-                assert not mismatch_val_t0, f"Taint mismatch at address {hex(addr)}: {hex(val_t0)} != {hex(rtl_val_t0)}"
-        
-        for addr in rtl_values.keys():
-            assert addr in addresses or rtl_values[addr]["val_t0"] == 0 or addr in [regdump_addr,fpregdump_addr] , f"Memory at untracked address {hex(addr)} tainted in RTL simulation: {hex(rtl_values[addr]['val_t0'])}/{hex(rtl_values[addr]['val'])} (val_t0/val)."
+                if TAINT_EN:
+                    assert not mismatch_val_t0, f"Taint mismatch at address {hex(addr)}: {hex(val_t0)} != {hex(rtl_val_t0)}"
+        if TAINT_EN:
+            for addr in rtl_values.keys():
+                assert addr in addresses or rtl_values[addr]["val_t0"] == 0 or addr in [regdump_addr,fpregdump_addr] , f"Memory at untracked address {hex(addr)} tainted in RTL simulation: {hex(rtl_values[addr]['val_t0'])}/{hex(rtl_values[addr]['val'])} (val_t0/val)."
 
     def flip_tainted_bits(self):
+        assert TAINT_EN
         for addr,val_t0 in self.data_t0.items():
             if val_t0:
                 self.data[addr] ^= val_t0
