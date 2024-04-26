@@ -4,7 +4,7 @@ from cascade.util import IntRegIndivState
 from rv.csrids import CSR_IDS
 from rv.asmutil import twos_complement,to_unsigned
 from params.runparams import PRINT_CHECK_REGS_T0, CHECK_REGS_T0_PRECISE, PRINT_CHECK_REGS_T0_MISMATCH_OK
-
+from params.fuzzparams import ALLOW_CSR_TAINT
 ABI_INAMES = ["zero","ra","sp","gp","tp","t0","t1","t2","s0/fp","s1","a0","a1","a2","a3","a4","a5","a6","a7"]
 ABI_INAMES += [f"s{i}" for i in range(2,12)] + [f"t{i}" for i in range(3,7)]
 MAX_32b = 0xFFFFFFFF
@@ -50,12 +50,16 @@ class CSR(__Register):
         self.val = val&self.mask
 
     def set_val_t0(self, val_t0):
+        if not ALLOW_CSR_TAINT:
+            assert val_t0 == 0, "Taint propagation through CSRs is disabled!"
         self.val_t0 = val_t0&self.mask
 
     def get_val(self):
         return self.val
 
     def get_val_t0(self):
+        if not ALLOW_CSR_TAINT:
+            assert self.val_t0 == 0, "Taint propagation through CSRs is disabled!"
         return self.val_t0
 
     def reset(self):
