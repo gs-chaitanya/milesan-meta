@@ -2,6 +2,7 @@ from params.fuzzparams import TAINT_EN
 from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
 from cascade.cfinstructionclasses import *
 from cascade.util import CFInstructionClass, ExceptionCauseVal
+from cascade.privilegestate import PrivilegeStateEnum
 from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from cascade.registers import ABI_INAMES
 from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0, PRINT_INSTRUCTION_EXECUTION_IN_SITU
@@ -74,8 +75,8 @@ def filter_reg_t0_traceback(reg_id, addr, fuzzerstate, correct_val: int = None, 
             assert trace_spike[0] == trace_final[0]
             if trace_spike[1] != trace_final[1]:
                 print(f"MISMATCH {hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}/{hex(trace_final[1])} (spike/final)")
-            else:
-                print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}")
+            # else:
+            #     print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}")
 
     return last_instr
 ###
@@ -735,11 +736,9 @@ class RegdumpInstruction_t0(IntStoreInstruction_t0):
         assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.addr,self.fuzzerstate,val_t0,False).get_str(False)}"
 
     def check_regs(self,val):
-        assert self.fuzzerstate.taint_en
         if PRINT_CHECK_REGS:
             print(f"{hex(self.addr)}: Checking register value: {ABI_INAMES[self.rs2]}:{hex(val)}")
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check(val)
-
         assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.addr,self.fuzzerstate,val,False).get_str(False)}"
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
@@ -856,6 +855,7 @@ class GenericCSRWriterInstruction_t0(GenericCSRWriterInstruction, BaseInstructio
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         self.csr_instr.execute(taint_en,is_spike_resolution)
 
+# TODO: implement MEDELEG
 class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstruction_t0):
     def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr: BaseInstruction, exception_op_type: ExceptionCauseVal):
         super().__init__(fuzzerstate, is_mtvec, producer_id, instr)
@@ -866,15 +866,23 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
         # print(f"{self.get_str(is_spike_resolution)}, setting MCAUSE to {self.exception_op_type}")
         self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
         self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val_t0(0)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val_t0(0)
 
 class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = True):
         # print(f"{self.get_str(is_spike_resolution)}, setting MCAUSE to {ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION}")
         self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
         self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val_t0(0)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val_t0(0)
+
 
 class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = True):
         # print(f"{self.get_str(is_spike_resolution)}, setting MCAUSE to {self.exceptioncause_val}")
         self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
         self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val_t0(0)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val_t0(0)
+

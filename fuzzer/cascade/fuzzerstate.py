@@ -19,9 +19,11 @@ from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
 from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace
 from rv.csrids import CSR_IDS
+
 import random
 import os
 import itertools
+import shutil
 
 class FuzzerState:
     # @param randseed for identification purposes only.
@@ -51,6 +53,10 @@ class FuzzerState:
 
         self.inject_taint_addr = None
         self.taint_en = taint_en
+        
+        self.tmp_dir = os.path.join(PATH_TO_TMP, self.design_name, self.instance_to_str())
+        os.makedirs(self.tmp_dir,exist_ok=True)
+       
 
     # @brief cleans up the fuzzerstate. Used in case of failed input generation.
     def reset(self):
@@ -233,28 +239,23 @@ class FuzzerState:
                                     "bb_id": bb_id}]
     
     def dump_memview_t0(self, path: str = None):
-        if path is None:
-            id = self.instance_to_str()
-            path = os.path.join(PATH_TO_TMP, f"{id}.simsramtaint")
-            # print(f"Dumping memview to {path}")
+        path = os.path.join(self.tmp_dir, f"simsramtaint.txt")
         self.memview.dump_taint(path)
 
     def setup_env(self, rtl_elfpath, seed):
-        ID = self.instance_to_str()
         ## temp dirs below
-        env_dir = os.path.join(PATH_TO_TMP, 'envs')
-        os.makedirs(env_dir,exist_ok=True)
-        env_path = os.path.join(env_dir,f'{ID}.env.sh')
-        regdump_path = os.path.join(PATH_TO_TMP, f"{ID}.regump.json")
-        sramdump_path = os.path.join(PATH_TO_TMP, f"{ID}.sramdump.json")
-        regstream_path = os.path.join(PATH_TO_TMP, f"{ID}.regstream.json")
-        simsramtaint_path = os.path.join(PATH_TO_TMP, f"{ID}.simsramtaint")
+        os.makedirs(self.tmp_dir,exist_ok=True)
+        env_path = os.path.join(self.tmp_dir,f'env.sh')
+        regdump_path = os.path.join(self.tmp_dir, f"regump.json")
+        sramdump_path = os.path.join(self.tmp_dir, f"sramdump.json")
+        regstream_path = os.path.join(self.tmp_dir, f"regstream.json")
+        simsramtaint_path = os.path.join(self.tmp_dir, f"simsramtaint.txt")
         num_instrs = len(list(itertools.chain.from_iterable(self.instr_objs_seq)))
         simlen = str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
         env = os.environ.copy()
         env["SIMLEN"] = simlen
         env["SIMSRAMELF"] = rtl_elfpath
-        env["ID"] = str(ID)
+        env["ID"] = str(self.instance_to_str())
         env["DESIGN"] = self.design_name
         env["SEED"] = str(seed)
         env["REGDUMP_PATH"] = regdump_path
@@ -278,6 +279,9 @@ class FuzzerState:
             print(f"source {env_path}")
 
         return env
+
+    def remove_tmp_files(self):
+        shutil.rmtree(self.tmp_dir)
 
 
     def load_init_regvals_from_memview(self):
