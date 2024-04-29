@@ -10,6 +10,26 @@ __NO_INTERACTION_MINSTRET = False
 def is_no_interaction_minstret():
     return __NO_INTERACTION_MINSTRET
 
+def is_tolerate_ras0(design_name):
+    if design_name == "rocket":
+        return is_tolerate_rocket_ras0()
+    elif design_name == "boom":
+        return is_tolerate_boom_ras0()
+    else:
+        return True
+
+def is_tolerate_ras1(design_name):
+    if design_name == "boom":
+        return is_tolerate_boom_ras1()
+    else:
+        return True
+
+def is_tolerate_branchpred(design_name):
+    if design_name == "boom":
+        return is_tolerate_boom_branchpred()
+    else:
+        return True
+
 ###
 # BOOM
 ###
@@ -20,6 +40,25 @@ def is_tolerate_boom_minstret():
 if __TOLERATE_BOOM_MINSTRET:
     print('WARNING: Tolerating one bug: __TOLERATE_BOOM_MINSTRET')
 
+__TOLERATE_BOOM_RAS0 = False
+def is_tolerate_boom_ras0():
+    return 
+if __TOLERATE_BOOM_RAS0:
+    print('WARNING: Tolerating one bug: __TOLERATE_BOOM_RAS0')
+
+__TOLERATE_BOOM_RAS1 = False
+def is_tolerate_boom_ras1():
+    return 
+if __TOLERATE_BOOM_RAS1:
+    print('WARNING: Tolerating one bug: __TOLERATE_BOOM_RAS1')
+
+__TOLERATE_BOOM_BRANCHPRED = False
+def is_tolerate_boom_branchpred():
+    return 
+if __TOLERATE_BOOM_RAS1:
+    print('WARNING: Tolerating one bug: __TOLERATE_BOOM_BRANCHPRED')
+
+
 ###
 # Rocket
 ###
@@ -29,6 +68,16 @@ def is_tolerate_rocket_minstret():
     return __TOLERATE_ROCKET_MINSTRET
 if __TOLERATE_ROCKET_MINSTRET:
     print('WARNING: Tolerating one bug: __TOLERATE_ROCKET_MINSTRET')
+
+# Tainted data is in the same CL as the jump from the initial block and is thus loaded into the icache
+#
+__TOLERATE_ROCKET_RAS0 = False
+def is_tolerate_rocket_ras0():
+    return __TOLERATE_ROCKET_RAS0
+if __TOLERATE_ROCKET_RAS0:
+    print('WARNING: Tolerating one bug: __TOLERATE_ROCKET_RAS')
+
+#
 
 ###
 # CVA6
@@ -261,7 +310,11 @@ def tolerate_bug_for_bug_timing(design_name: str, bug_name: str, is_activate: bo
     global __TOLERATE_CVA6_MHPMCOUNTER
     global __TOLERATE_CVA6_MHPMEVENT31
     global __TOLERATE_BOOM_MINSTRET
+    global __TOLERATE_BOOM_RAS0
+    global __TOLERATE_BOOM_RAS1
+    global __TOLERATE_BOOM_BRANCHPRED
     global __TOLERATE_ROCKET_MINSTRET
+    global __TOLERATE_ROCKET_RAS0
 
     # Picorv32
 
@@ -479,6 +532,7 @@ def tolerate_bug_for_bug_timing(design_name: str, bug_name: str, is_activate: bo
 
     elif bug_name == 'b1':
         assert design_name == 'boom-b1', 'Bug b1 is only for boom-b1'
+
     elif bug_name == 'b2':
         assert design_name == 'boom', 'Bug b2 is only for boom'
         __TOLERATE_BOOM_MINSTRET = is_activate
@@ -486,6 +540,30 @@ def tolerate_bug_for_bug_timing(design_name: str, bug_name: str, is_activate: bo
             print('WARNING: Tolerating one bug for timing: __TOLERATE_BOOM_MINSTRET')
         else:
             print('INFO: De-tolerating one bug for timing: __TOLERATE_BOOM_MINSTRET')
+
+    elif bug_name == 'b3':
+        assert design_name == 'boom', 'Bug b3 is only for boom'
+        __TOLERATE_BOOM_RAS0 = is_activate
+        if is_activate:
+            print('WARNING: Tolerating one bug for timing: __TOLERATE_BOOM_RAS0')
+        else:
+            print('INFO: De-tolerating one bug for timing: __TOLERATE_BOOM_RAS0')
+
+    elif bug_name == 'b4':
+        assert design_name == 'boom', 'Bug b4 is only for boom'
+        __TOLERATE_BOOM_RAS1 = is_activate
+        if is_activate:
+            print('WARNING: Tolerating one bug for timing: __TOLERATE_BOOM_RAS1')
+        else:
+            print('INFO: De-tolerating one bug for timing: __TOLERATE_BOOM_RAS1')
+
+    elif bug_name == 'b5':
+        assert design_name == 'boom', 'Bug b4 is only for boom'
+        __TOLERATE_BOOM_BRANCHPRED = is_activate
+        if is_activate:
+            print('WARNING: Tolerating one bug for timing: __TOLERATE_BOOM_BRANCHPRED')
+        else:
+            print('INFO: De-tolerating one bug for timing: __TOLERATE_BOOM_BRANCHPRED')
 
     # Rocket
 
@@ -496,6 +574,14 @@ def tolerate_bug_for_bug_timing(design_name: str, bug_name: str, is_activate: bo
             print('WARNING: Tolerating one bug for timing: __TOLERATE_ROCKET_MINSTRET')
         else:
             print('INFO: De-tolerating one bug for timing: __TOLERATE_ROCKET_MINSTRET')
+
+    elif bug_name == 'r2':
+        assert design_name == 'rocket', 'Bug r2 is only for rocket'
+        __TOLERATE_ROCKET_RAS0 = is_activate
+        if is_activate:
+            print('WARNING: Tolerating one bug for timing: __TOLERATE_ROCKET_RAS')
+        else:
+            print('INFO: De-tolerating one bug for timing: __TOLERATE_ROCKET_RAS')
 
     # Yosys
 
