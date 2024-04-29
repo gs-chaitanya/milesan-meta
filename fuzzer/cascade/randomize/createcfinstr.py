@@ -11,6 +11,7 @@ from params.fuzzparams import NUM_MIN_FREE_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BR
 from cascade.util import IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS, ISAInstrClass
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import *
+from cascade.toleratebugs import is_tolerate_branchpred
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
 # This module creates an instruction from its instruction string, and some state which will condition which registers and immediates will be picked, and with which probability.
 
@@ -80,11 +81,20 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
         # Select whether to direct toward the random data basic block
         is_random_data_block_in_reach = abs(fuzzerstate.random_data_block_start_addr - curr_addr) < (1<<11) and abs(fuzzerstate.random_data_block_end_addr-4 - curr_addr) < (1<<11)
         if is_random_data_block_in_reach and random.random() < NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA:
-            lowest_random_data_reachable_addr = max(fuzzerstate.random_data_block_start_addr+4, curr_addr - (1<<11))
-            highest_random_data_reachable_addr = min(fuzzerstate.random_data_block_end_addr-4, curr_addr + (1<<11))
+            # lowest_random_data_reachable_addr = max(fuzzerstate.random_data_block_start_addr+4, curr_addr - (1<<11))
+            # highest_random_data_reachable_addr = min(fuzzerstate.random_data_block_end_addr-4, curr_addr + (1<<11))
 
-            target_addr_in_random_data_block = random.randrange(lowest_random_data_reachable_addr//2, highest_random_data_reachable_addr//2)*2
-            imm = target_addr_in_random_data_block-curr_addr
+            # target_addr_in_random_data_block = random.randrange(lowest_random_data_reachable_addr//2, highest_random_data_reachable_addr//2)*2
+            # imm = target_addr_in_random_data_block-curr_addr
+            target_addr =  None
+            while target_addr is None or (fuzzerstate.memview.is_addr_tainted(target_addr,4) and not is_tolerate_branchpred(fuzzerstate.design_name)):
+                target_addr = fuzzerstate.memview.gen_random_addr_from_randomblock(2,4)-curr_addr
+            if fuzzerstate.is_design_64bit:
+                curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1]
+            else:
+                curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[instr_str]][-1]
+
+            imm = (target_addr - curr_addr)&((1<<curr_param_size-1)-1)
         else:
             imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     

@@ -6,17 +6,18 @@
 
 from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS
-from cascade.toleratebugs import is_forbid_vexriscv_csrs
+from cascade.toleratebugs import is_forbid_vexriscv_csrs, is_tolerate_rocket_ras0, is_tolerate_boom_ras0
 from cascade.cfinstructionclasses import FloatLoadInstruction
 from cascade.cfinstructionclasses_t0 import  ImmRdInstruction_t0, RegImmInstruction_t0, R12DInstruction_t0, IntLoadInstruction_t0, CSRRegInstruction_t0
 from cascade.randomize.createcfinstr import create_instr
 from cascade.randomize.pickisainstrclass import ISAInstrClass
+from cascade.randomize.forbidden_random_value import is_forbidden_random_value
 from cascade.util import get_range_bits_per_instrclass, BASIC_BLOCK_MIN_SPACE
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
 from params.runparams import INSERT_REGDUMPS
 from rv.asmutil import li_into_reg
 from common.spike import SPIKE_STARTADDR
-from common.designcfgs import get_design_reg_stream_addr
+from common.designcfgs import get_design_reg_stream_addr, get_design_cl_size
 
 import random
 
@@ -30,6 +31,12 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
 
     fuzzerstate.init_new_bb() # Update fuzzer state to support a new basic block
 
+    if fuzzerstate.design_name == "rocket" and not is_tolerate_rocket_ras0():
+        interleave_cl_bytes_until_random_reg_vals = get_design_cl_size(fuzzerstate.design_name)
+    elif fuzzerstate.design_name == "boom" and not is_tolerate_boom_ras0():
+        interleave_cl_bytes_until_random_reg_vals = get_design_cl_size(fuzzerstate.design_name)
+    else:
+        interleave_cl_bytes_until_random_reg_vals = 0
     # Set the relocator register to the correct value
 
     curr_addr = fuzzerstate.curr_bb_start_addr
@@ -194,6 +201,9 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         expect_padding = bool((curr_addr + (4*(fuzzerstate.num_pickable_regs-1))) & 0x7 == 4) # Says whether there will be a padding required to align the random data
         bytes_until_random_vals = 8 + 4*(fuzzerstate.num_pickable_regs-1) + int(expect_padding) * 4 # NO_COMPRESSED
 
+
+    bytes_until_random_vals += interleave_cl_bytes_until_random_reg_vals # just add extra cl_size bytes to ensure its a different cache line (if RAS bug ignored)
+
     bytes_until_random_vals_base_for_debug = curr_addr
 
     # We pre-allocate the space for the initial block before generating the next bb address.
@@ -201,7 +211,10 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     if fuzzerstate.design_has_fpu:
         num_reginit_vals += fuzzerstate.num_pickable_floating_regs
     for _ in range(num_reginit_vals):
-        fuzzerstate.initial_reg_data_content.append(0 if random.random() < fuzzerstate.proba_reg_starts_with_zero else random.randrange(1 << 64))
+        rand_val = None
+        while rand_val is None or is_forbidden_random_value(fuzzerstate.design_name, rand_val, 8):
+            rand_val = 0 if random.random() < fuzzerstate.proba_reg_starts_with_zero else random.randrange(1 << 64)
+        fuzzerstate.initial_reg_data_content.append(rand_val)
 
     # Initial values for pickable registers are determined, so load them s.t. in-situ ISA simulation executes on correct initial arch. state.
     fuzzerstate.memview.set_initial_register_values(fuzzerstate, SPIKE_STARTADDR +  curr_addr + bytes_until_random_vals)
@@ -232,7 +245,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     if DO_ASSERT:
         assert expect_padding == has_padding, f"{expect_padding} != {has_padding}"
     # Allocate the initial block before choosing an address for the next bb.
-    intended_initial_block_plus_reginit_size = len(fuzzerstate.instr_objs_seq[-1]) * 4 + 4 + len(fuzzerstate.initial_reg_data_content) * 8 + int(has_padding) * 4  # NO_COMPRESSED
+    intended_initial_block_plus_reginit_size = len(fuzzerstate.instr_objs_seq[-1]) * 4 + 4 + len(fuzzerstate.initial_reg_data_content) * 8 + int(has_padding) * 4 + interleave_cl_bytes_until_random_reg_vals # NO_COMPRESSED
     fuzzerstate.memview.alloc_mem_range(fuzzerstate.curr_bb_start_addr, fuzzerstate.curr_bb_start_addr+intended_initial_block_plus_reginit_size+4) # NO_COMPRESSED
 
     # Jump to the next basic block, say, with jal for simplicity
@@ -248,14 +261,14 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
      # NO_COMPRESSED
 
     # Add a potential nop to align the ld that load the random vals into the registers
-    fuzzerstate.initial_reg_data_addr = curr_addr
+    fuzzerstate.initial_reg_data_addr = curr_addr + interleave_cl_bytes_until_random_reg_vals
     if has_padding:
         fuzzerstate.initial_reg_data_addr += 4
         curr_addr += 4
         
 
     fuzzerstate.initial_block_data_start = curr_addr
-
+    curr_addr += interleave_cl_bytes_until_random_reg_vals
     if DO_ASSERT:
         assert curr_addr == bytes_until_random_vals_base_for_debug + bytes_until_random_vals, f"curr_addr {hex(curr_addr)}, right-hand {hex(bytes_until_random_vals_base_for_debug + bytes_until_random_vals)} ({hex(bytes_until_random_vals_base_for_debug)} + {hex(bytes_until_random_vals)})"
         # Space taken by the random initial register values. We let some be zero.
