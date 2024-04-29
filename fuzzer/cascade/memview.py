@@ -15,8 +15,9 @@
 
 import random
 from copy import deepcopy
+import numpy as np
 # from params.runparams import DO_ASSERT
-from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS
+from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS, P_UNTAINT_BIT
 from params.runparams import PRINT_DBUS_TAINT, CHECK_MEM_T0_PRECISE
 from cascade.spikeresolution import SPIKE_STARTADDR
 from cascade.registers import MAX_32b, MAX_64b
@@ -160,6 +161,11 @@ class MemoryView:
                 return picked_addr
         return None
 
+    def is_addr_tainted(self,addr,n_bytes):
+        is_tainted = False
+        for i in range(n_bytes):
+            is_tainted |= addr+i*8 in self.data_t0 and self.data_t0[addr+i*8] != 0
+        return is_tainted
     # @brief Computes the percentage of the memory that is allocated
     def get_allocated_ratio(self):
         free_sum = sum(map(lambda p: p[1] - p[0], self.freepairs))
@@ -240,14 +246,16 @@ class MemoryView:
 
         for addr, val_t0 in self.data.items():
             if val_t0:
-                highest_tainted_bit = 0
-                for i in range(32):
-                    if (self.data_t0[addr]>>i)&1:
-                        highest_tainted_bit = i
-                self.data_t0[addr] &= ~(1<<highest_tainted_bit) # untained single bits
+                for i in range(8): # access at byte-granularity
+                    if (self.data_t0[addr]>>i)&1 and np.random.choice([1,0],p=[P_UNTAINT_BIT, 1-P_UNTAINT_BIT]):
+                        self.data_t0[addr] &= ~(1<<i) # untained single bits
                 # break
-
+        n_total_tainted_bits = 0
+        for addr, val_t0 in self.data.items():
+            n_total_tainted_bits += val_t0.bit_count()
+        
         self.states.append((deepcopy(self.data), deepcopy(self.data_t0)))
+        return n_total_tainted_bits
 
     def restore(self):
         self.data = deepcopy(self.states[-1][0])
@@ -255,6 +263,7 @@ class MemoryView:
 
     def dump_taint(self, path):
         # print(f"Dumping memview taints to {path}")
+        # self.print()
         dumped_addresses = []
         with open(path, "w") as f:
             for addr in self.data_t0.keys():
