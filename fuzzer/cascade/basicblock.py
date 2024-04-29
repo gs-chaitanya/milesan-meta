@@ -18,6 +18,7 @@ from cascade.randomize.pickfpuop import gen_fpufsm_instrs
 from cascade.randomize.pickexceptionop import gen_exception_instr, gen_tvecfill_instr, gen_epcfill_instr, gen_medeleg_instr, gen_ppfill_instrs
 from cascade.randomize.pickrandomcsrop import gen_random_csr_op
 from cascade.randomize.pickprivilegedescentop import gen_priv_descent_instr
+from cascade.randomize.forbidden_random_value import is_forbidden_random_value
 from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, EcallEbreakInstruction, SimpleExceptionEncapsulator, CSRRegInstruction
 from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS
 from cascade.finalblock import get_finalblock_max_size,finalblock
@@ -261,7 +262,6 @@ def gen_basicblock(fuzzerstate):
         next_instr = create_instr('jalr', fuzzerstate, curr_addr)
         fuzzerstate.append_and_execute_instr(next_instr, True)
 
-
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
 def gen_random_data_block(fuzzerstate):
     lenbytes = random.randrange(RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES)
@@ -272,7 +272,9 @@ def gen_random_data_block(fuzzerstate):
     fuzzerstate.memview.alloc_mem_range(fuzzerstate.random_data_block_start_addr, fuzzerstate.random_data_block_end_addr)
     # Generate the random data
     for addr in range(fuzzerstate.random_data_block_start_addr, fuzzerstate.random_data_block_end_addr, 4):
-        rand_val = random.randrange(0, 2**32)
+        rand_val = None
+        while rand_val is None or is_forbidden_random_value(fuzzerstate.design_name,rand_val, 4):
+            rand_val = random.randrange(0, 2**32)
         fuzzerstate.random_block_content4by4bytes.append(rand_val)
         fuzzerstate.memview.write(addr+SPIKE_STARTADDR, rand_val, 4)
 
