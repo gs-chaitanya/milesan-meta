@@ -16,6 +16,11 @@ RV32I_OPCODE_ALU_REG = 0b0110011 # For all rv32i arithmetics without immediate
 RV32I_OPCODE_FEN     = 0b0001111 # For rv32i fences
 RV32I_OPCODE_E       = 0b1110011 # For rv32i ECALL and EBREAK
 
+RV32I_C_OPCODE_JALR = 0b100 << 13 | 0b10
+RV32I_C_OPCODE_JAL = 0b001 << 13 | 0b01
+RV32I_C_OPCODE_J= 0b101 << 13 | 0b01
+RV32I_OPCODE_MASK = 0x3F
+RV32I_C_OPCODE_MASK = 0x7<<13 | 0x3
 # All functions return uint32_t
 
 def rv32i_lui(rd: int, imm: int):
