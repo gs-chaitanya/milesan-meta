@@ -53,6 +53,9 @@ class FuzzerState:
 
         self.inject_taint_addr = None
         self.taint_en = taint_en
+        self.expected_regvals = None
+        self.interm_elfpath = None
+        self.rtl_elfpath = None
         
         self.tmp_dir = os.path.join(PATH_TO_TMP, self.design_name, self.instance_to_str())
         os.makedirs(self.tmp_dir,exist_ok=True)
@@ -250,6 +253,7 @@ class FuzzerState:
         sramdump_path = os.path.join(self.tmp_dir, f"sramdump.json")
         regstream_path = os.path.join(self.tmp_dir, f"regstream.json")
         simsramtaint_path = os.path.join(self.tmp_dir, f"simsramtaint.txt")
+        tracefile_path = os.path.join(self.tmp_dir, f"{self.instance_to_str()}.trace.vcd")
         num_instrs = len(list(itertools.chain.from_iterable(self.instr_objs_seq)))
         simlen = str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
         env = os.environ.copy()
@@ -262,6 +266,7 @@ class FuzzerState:
         env["REGSTREAM_PATH"] = regstream_path
         env["SRAMDUMP_PATH"] = sramdump_path
         env["SIMSRAMTAINT"] = simsramtaint_path
+        env["TRACEFILE"] = tracefile_path
 
         with open(env_path, "w") as f:
             f.write(f"export SIMSRAMELF={env['SIMSRAMELF']}\n")
@@ -273,6 +278,7 @@ class FuzzerState:
             f.write(f"export REGSTREAM_PATH={regstream_path}\n")
             f.write(f"export REGDUMP_PATH={regdump_path}\n")
             f.write(f"export SRAMDUMP_PATH={sramdump_path}\n")
+            f.write(f"export TRACEFILE={tracefile_path}\n")
 
         if PRINT_ENVIRONMENT:
             print("*** ENVIRONMENT ***")
