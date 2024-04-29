@@ -15,10 +15,24 @@ from cascade.registers import ABI_INAMES,MAX_32b
 from cascade.spikeresolution import spike_resolution_return_interm
 from drfuzz_mem.spike_sim_taint import spike_sim_taint
 
-def check_isa_sim_taint(design_name: str,seed: int):   
-    # Get fuzzerstate and expected regvals from program.
-    fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), not INSERT_REGDUMPS) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
+class FuzzerStateException(Exception):
+    def __init__(self, *args: object, fuzzerstate) -> None:
+        super().__init__(*args)
+        self.fuzzerstate = fuzzerstate
 
+def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None):   
+    if generate_fuzzerstate:
+        assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
+        fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), not INSERT_REGDUMPS) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
+        fuzzerstate.intregpickstate.setup_registers()
+        fuzzerstate.memview.restore()
+        fuzzerstate.csrfile.reset()
+    else:
+        assert fuzzerstate is not None, "fuzzerstate needs to be provided when generate_fuzzerstate is disabled."
+        expected_regvals = fuzzerstate.expected_regvals
+        rtl_elfpath = fuzzerstate.rtl_elfpath
+        interm_elfpath = fuzzerstate.interm_elfpath
+        
     # Retrieve register stream and final intregvals from spike.
     pc_reg_pairs = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
     for req, regval in zip(expected_regvals[2],expected_regvals[3]):
@@ -29,13 +43,8 @@ def check_isa_sim_taint(design_name: str,seed: int):
     env = fuzzerstate.setup_env(interm_elfpath if USE_SPIKE_INTERM_ELF else rtl_elfpath,seed)
 
     regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(env, fuzzerstate.design_name)
-
     regstream_rtl_val, regstream_rtl_val_t0 = regstream_rtl
 
-    fuzzerstate.intregpickstate.setup_registers()
-    fuzzerstate.memview.restore()
-    fuzzerstate.csrfile.reset()
-    # print(f"Starting spike cross-validation. (FSM instructions are accounted for.)")
     regdump_idx = 0
     try:
         for bb_instrs in fuzzerstate.instr_objs_seq: # skip first and last bb
@@ -55,12 +64,13 @@ def check_isa_sim_taint(design_name: str,seed: int):
                 if PRINT_INSTRUCTION_EXECUTION_FINAL:
                     next_instr.print(USE_SPIKE_INTERM_ELF)
 
-        for (addr_in_situ,trace_in_situ),(addr_final, trace_final) in zip(fuzzerstate.intregpickstate.writeback_trace_in_situ.items(),fuzzerstate.intregpickstate.writeback_trace_final.items()):
-            assert addr_in_situ == addr_final
-            assert trace_in_situ[0] == trace_final[0]
-            assert trace_in_situ[1] == trace_final[1], f"Mismatch in taint trace between in-situ simulation and final elf: {hex(addr_final)}: {ABI_INAMES[trace_in_situ[0]]} <- {hex(trace_in_situ[1])}/{hex(trace_final[1])} (in-situ/final).{filter_reg_t0_traceback(trace_in_situ[0],addr_in_situ,fuzzerstate).get_str()}"
-            # else:
-            #     print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}")
+        if generate_fuzzerstate:
+            for (addr_in_situ,trace_in_situ),(addr_final, trace_final) in zip(fuzzerstate.intregpickstate.writeback_trace_in_situ.items(),fuzzerstate.intregpickstate.writeback_trace_final.items()):
+                assert addr_in_situ == addr_final
+                assert trace_in_situ[0] == trace_final[0]
+                assert trace_in_situ[1] == trace_final[1], f"Mismatch in taint trace between in-situ simulation and final elf: {hex(addr_final)}: {ABI_INAMES[trace_in_situ[0]]} <- {hex(trace_in_situ[1])}/{hex(trace_final[1])} (in-situ/final).{filter_reg_t0_traceback(trace_in_situ[0],addr_in_situ,fuzzerstate).get_str()}"
+                # else:
+                #     print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}")
 
         if PRINT_REGISTER_VALIDATION:
             print("*** REGISTER VALIDATION ***:")
@@ -72,8 +82,8 @@ def check_isa_sim_taint(design_name: str,seed: int):
             assert not mismatch, f"Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}"
             mismatch = fuzzerstate.intregpickstate.regs[id+1].check(expected_intregvals[id])
             assert not mismatch, f"Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}"
-            # mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
-            # assert not mismatch, f"Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}"
+            mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
+            assert not mismatch, f"Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}"
 
         if PRINT_MEMORY_VALIDATION:
             print("*** MEMORY VALIDATION ***:")
@@ -90,7 +100,7 @@ def check_isa_sim_taint(design_name: str,seed: int):
                 print("*** MEMORY CONTENT  ***")
                 fuzzerstate.memview.print_and_compare(final_sramdump_rtl)
         print(f"Failed for seed {seed}")
-        raise type(e)(f"{fuzzerstate.instance_to_str()}: {e}")
+        raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate)
 
     return fuzzerstate
 
