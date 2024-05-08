@@ -95,6 +95,8 @@ def finalblock(fuzzerstate, design_name: str):
     return ret
 
 # Spike does not support writing to some signaling addresses, but at the same time, we do not need it for spike resolution anyway. So let's replace it with an infinite loop.
-def finalblock_spike_resolution():
+def finalblock_spike_resolution(fuzzerstate):
     # Infinite loop in the end of the simulation
-    return [JALInstruction(fuzzerstate,"jal", 0, 0)]
+    jal_instr = JALInstruction(fuzzerstate,"jal", 0, 0)
+    jal_instr.addr = fuzzerstate.final_bb_base_addr
+    return [jal_instr]
