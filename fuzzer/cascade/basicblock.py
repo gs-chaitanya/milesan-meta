@@ -25,7 +25,9 @@ from cascade.finalblock import get_finalblock_max_size,finalblock
 from cascade.initialblock import gen_initial_basic_block
 from cascade.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setter
 from cascade.privilegestate import PrivilegeStateEnum
+from cascade.toleratebugs import is_tolerate_ras1
 
+import numpy as np
 import random
 CURR_ALLOC_CURSOR_INC = 8 if INSERT_REGDUMPS else 4
 
@@ -264,6 +266,9 @@ def gen_basicblock(fuzzerstate):
 
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
 def gen_random_data_block(fuzzerstate):
+    # The rng should have randomness that follows from the system random state but not have any reciprocal effects
+    # This is necessary s.t. the bugs can be enabled/disabled without further influencing program construction 
+    rng = np.random.RandomState(random.randrange(0,2**31)) 
     lenbytes = random.randrange(RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES)
     fuzzerstate.random_data_block_start_addr = fuzzerstate.memview.gen_random_free_addr(2, lenbytes, 0, fuzzerstate.memsize)
     fuzzerstate.random_data_block_end_addr = fuzzerstate.random_data_block_start_addr + lenbytes
@@ -273,8 +278,8 @@ def gen_random_data_block(fuzzerstate):
     # Generate the random data
     for addr in range(fuzzerstate.random_data_block_start_addr, fuzzerstate.random_data_block_end_addr, 4):
         rand_val = None
-        while rand_val is None or is_forbidden_random_value(fuzzerstate.design_name,rand_val, 4):
-            rand_val = random.randrange(0, 2**32)
+        while rand_val is None or is_forbidden_random_value(rand_val, 4) and not is_tolerate_ras1(fuzzerstate.design_name):
+            rand_val = rng.randint(0, 2**32)
         fuzzerstate.random_block_content4by4bytes.append(rand_val)
         fuzzerstate.memview.write(addr+SPIKE_STARTADDR, rand_val, 4)
 
