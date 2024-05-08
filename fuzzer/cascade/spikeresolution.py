@@ -41,62 +41,82 @@ def gen_regdump_reqs(fuzzerstate):
             
     return ret
 
+def get_dumps_from_instr(bb_instr):
+    ret = []
+    addr = bb_instr.addr - SPIKE_STARTADDR
+    if isinstance(bb_instr, R12DInstruction):
+        ret.append((addr, False, bb_instr.rd))
+        ret.append((addr, False, bb_instr.rs1))
+        ret.append((addr, False, bb_instr.rs2))
+    elif isinstance(bb_instr, RegImmInstruction):
+        ret.append((addr, False, bb_instr.rd))
+        ret.append((addr, False, bb_instr.rs1))
+    elif isinstance(bb_instr, ImmRdInstruction):
+        ret.append((addr, False, bb_instr.rd))
+    elif isinstance(bb_instr, JALInstruction):
+        ret.append((addr, False, bb_instr.rd))
+    elif isinstance(bb_instr, JALRInstruction):
+        ret.append((addr, False, bb_instr.rd))
+    elif isinstance(bb_instr, PlaceholderProducerInstr0):
+        ret.append((addr, False, bb_instr.rd))
+    elif isinstance(bb_instr, PlaceholderProducerInstr1):
+        ret.append((addr, False, bb_instr.rd))
+    elif isinstance(bb_instr, PlaceholderPreConsumerInstr):
+        ret.append((addr, False, bb_instr.rdep))
+        ret.append((addr, False, RDEP_MASK_REGISTER_ID))
+    elif isinstance(bb_instr, PlaceholderConsumerInstr):
+        ret.append((addr, False, bb_instr.rd))
+        ret.append((addr, False, bb_instr.rprod))
+        ret.append((addr, False, RELOCATOR_REGISTER_ID))
+    elif isinstance(bb_instr, IntLoadInstruction):
+        ret.append((addr, False, bb_instr.rd))
+        ret.append((addr, False, bb_instr.rs1))
+    elif isinstance(bb_instr, IntStoreInstruction):
+        ret.append((addr, False, bb_instr.rs1))
+        ret.append((addr, False, bb_instr.rs2))
+    elif isinstance(bb_instr, CSRRegInstruction): # Ignore CSRs for now.
+        ret.append((addr, False, bb_instr.rd))
+        ret.append((addr, False, bb_instr.rs1))
+    elif isinstance(bb_instr, CSRImmInstruction):
+        ret.append((addr, False, bb_instr.rd))
+    elif isinstance(bb_instr, BranchInstruction):
+        ret.append((addr, False, bb_instr.rs1))
+        ret.append((addr, False, bb_instr.rs2))
+    elif isinstance(bb_instr, (TvecWriterInstruction, EPCWriterInstruction,GenericCSRWriterInstruction)):
+        assert isinstance(bb_instr.csr_instr, CSRRegInstruction)
+        ret.append((addr, False, bb_instr.csr_instr.rd))
+        ret.append((addr, False, bb_instr.csr_instr.rs1))
+
+    return ret
+
 # @brief generates the register dump requests made to spike
 # @return the register dump requests: an iterable of pairs (pc, reg to dump) in program order
-def gen_regdump_reqs_all_rds(fuzzerstate):
+def gen_regdump_reqs_all_rds(fuzzerstate, max_bb_id: int = None, max_instr_id: int = None, index_first_bb_to_consider: int = 0, first_instr_id_in_first_bb_to_consider: int = 0):
     if DO_ASSERT:
+        assert max_bb_id is None or (max_bb_id >= 0 and max_bb_id <= len(fuzzerstate.instr_objs_seq))
+        assert max_instr_id is None or max_instr_id >= 0
         assert len(fuzzerstate.instr_objs_seq) == len(fuzzerstate.bb_start_addr_seq)
-
     ret = []
-    for bb_start_addr, bb_instrs in zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq):
+    for bb_id, (bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)):
+        if bb_id > 0 and bb_id < index_first_bb_to_consider: #  we always generate the dumps for the initial and ctxsv BBs
+            continue
+        if max_bb_id is not None and bb_id >= max_bb_id-1:
+            break
         for bb_instr_id, bb_instr in enumerate(bb_instrs):
+            if bb_id == index_first_bb_to_consider and bb_instr_id < first_instr_id_in_first_bb_to_consider:
+                continue
+            if max_instr_id is not None and bb_instr_id >= max_instr_id and max_bb_id is not None and bb_id >= max_bb_id:
+                break
             curr_addr = bb_start_addr + 4*bb_instr_id # NO_COMPRESSED
-
             assert curr_addr not in ret
             assert bb_instr.addr == curr_addr + SPIKE_STARTADDR, f"Address mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}"
-            if isinstance(bb_instr, R12DInstruction):
-                ret.append((curr_addr, False, bb_instr.rd))
-                ret.append((curr_addr, False, bb_instr.rs1))
-                ret.append((curr_addr, False, bb_instr.rs2))
-            elif isinstance(bb_instr, RegImmInstruction):
-                ret.append((curr_addr, False, bb_instr.rd))
-                ret.append((curr_addr, False, bb_instr.rs1))
-            elif isinstance(bb_instr, ImmRdInstruction):
-                ret.append((curr_addr, False, bb_instr.rd))
-            elif isinstance(bb_instr, JALInstruction):
-                ret.append((curr_addr, False, bb_instr.rd))
-            elif isinstance(bb_instr, JALRInstruction):
-                ret.append((curr_addr, False, bb_instr.rd))
-            elif isinstance(bb_instr, PlaceholderProducerInstr0):
-                ret.append((curr_addr, False, bb_instr.rd))
-            elif isinstance(bb_instr, PlaceholderProducerInstr1):
-                ret.append((curr_addr, False, bb_instr.rd))
-            elif isinstance(bb_instr, PlaceholderPreConsumerInstr):
-                ret.append((curr_addr, False, bb_instr.rdep))
-                ret.append((curr_addr, False, RDEP_MASK_REGISTER_ID))
-            elif isinstance(bb_instr, PlaceholderConsumerInstr):
-                ret.append((curr_addr, False, bb_instr.rd))
-                ret.append((curr_addr, False, bb_instr.rprod))
-                ret.append((curr_addr, False, RELOCATOR_REGISTER_ID))
-            elif isinstance(bb_instr, IntLoadInstruction):
-                ret.append((curr_addr, False, bb_instr.rd))
-                ret.append((curr_addr, False, bb_instr.rs1))
-            elif isinstance(bb_instr, IntStoreInstruction):
-                ret.append((curr_addr, False, bb_instr.rs1))
-                ret.append((curr_addr, False, bb_instr.rs2))
-            elif isinstance(bb_instr, CSRRegInstruction): # Ignore CSRs for now.
-                ret.append((curr_addr, False, bb_instr.rd))
-                ret.append((curr_addr, False, bb_instr.rs1))
-            elif isinstance(bb_instr, CSRImmInstruction):
-                ret.append((curr_addr, False, bb_instr.rd))
-            elif isinstance(bb_instr, BranchInstruction):
-                ret.append((curr_addr, False, bb_instr.rs1))
-                ret.append((curr_addr, False, bb_instr.rs2))
-            elif isinstance(bb_instr, (TvecWriterInstruction, EPCWriterInstruction,GenericCSRWriterInstruction)):
-                assert isinstance(bb_instr.csr_instr, CSRRegInstruction)
-                ret.append((curr_addr, False, bb_instr.csr_instr.rd))
-                ret.append((curr_addr, False, bb_instr.csr_instr.rs1))
-
+            [ret.append(d) for d in get_dumps_from_instr(bb_instr)]
+        if bb_id == 0 and fuzzerstate.ctxsv_bb_base_addr: # add the dumps for the context saver block if we have one. Must be done after initial block.
+            for bb_instr_id, bb_instr in enumerate(fuzzerstate.ctxsv_bb):
+                curr_addr = fuzzerstate.ctxsv_bb_base_addr + 4*bb_instr_id # NO_COMPRESSED
+                assert curr_addr not in ret
+                assert bb_instr.addr == curr_addr + SPIKE_STARTADDR, f"Address mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}"
+                [ret.append(d) for d in get_dumps_from_instr(bb_instr)]
     return ret
 
 # @brief generates the register dump requests made to spike for pruning.
