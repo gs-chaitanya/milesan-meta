@@ -183,7 +183,7 @@ class IntRegPickState:
         was_zero_authorized = authorized_regs_onehot[0]
         authorized_regs_onehot[0] = 0
         if DO_ASSERT:
-            assert self.get_num_untainted_regs_in_state(IntRegIndivState.FREE) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted registers available."
+            assert self.get_num_untainted_regs_in_state(IntRegIndivState.FREE) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, True, force))[0]
         authorized_regs_onehot[0] = was_zero_authorized
         if DO_ASSERT:

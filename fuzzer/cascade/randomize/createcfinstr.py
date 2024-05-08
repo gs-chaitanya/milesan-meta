@@ -34,6 +34,24 @@ def gen_random_imm(instr_str: str, is_design_64bit: bool):
         right_bound = 1<<imm_width
     return random.randrange(left_bound, right_bound)
 
+# For when the randomnees must be separated from program construction.
+# This facilitates bug enabling/disabling because it can be ensured that the remaining program remaing unchanged,
+# while only the portion that triggers the bug is modified.
+def gen_random_imm_from_rng(rng: np.random.RandomState, instr_str: str, is_design_64bit: bool):
+    if DO_ASSERT:
+        assert PARAM_REGTYPE[INSTRUCTION_IDS[instr_str]][-1] == ''
+    if is_design_64bit:
+        imm_width = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1]
+    else:
+        imm_width = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[instr_str]][-1]
+    if PARAM_IS_SIGNED[INSTRUCTION_IDS[instr_str]][-1]:
+        left_bound  = -(1<<(imm_width-1))
+        right_bound = 1<<(imm_width-1)
+    else:
+        left_bound  = 0
+        right_bound = 1<<imm_width
+    return rng.randint(left_bound, right_bound)
+
 # Random rounding modes
 def gen_random_rounding_mode():
     return random.sample([0, 1, 2, 3, 4, 7], 1)[0]
@@ -74,6 +92,10 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
         assert instr_str in BranchInstructions
     rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputregs(2, force=True))
     plan_taken = fuzzerstate.curr_branch_taken
+    # The rng should have randomness that follows from the system random state but not have any reciprocal effects
+    # This is necessary s.t. the bugs can be enabled/disabled without further influencing program construction
+    # except unavoidable sideeffects due to change in data-flow
+    rng = np.random.RandomState(random.randrange(0,2**31)) 
     if plan_taken:
         # print('A', flush=True)
         imm = fuzzerstate.next_bb_addr-curr_addr
@@ -87,8 +109,8 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
             # target_addr_in_random_data_block = random.randrange(lowest_random_data_reachable_addr//2, highest_random_data_reachable_addr//2)*2
             # imm = target_addr_in_random_data_block-curr_addr
             target_addr =  None
-            while target_addr is None or (fuzzerstate.memview.is_addr_tainted(target_addr,4) and not is_tolerate_branchpred(fuzzerstate.design_name)):
-                target_addr = fuzzerstate.memview.gen_random_addr_from_randomblock(2,4)-curr_addr
+            while target_addr is None or (fuzzerstate.memview.is_cl_tainted(target_addr) and not is_tolerate_branchpred(fuzzerstate.design_name)):
+                target_addr = fuzzerstate.memview.gen_random_addr_from_randomblock_from_rng(rng,2,4)-curr_addr
             if fuzzerstate.is_design_64bit:
                 curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1]
             else:
@@ -96,8 +118,13 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
 
             imm = (target_addr - curr_addr)&((1<<curr_param_size-1)-1)
         else:
-            imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
-    
+            imm = None
+            while imm is None or (fuzzerstate.memview.is_cl_tainted(curr_addr+imm) and not is_tolerate_branchpred(fuzzerstate.design_name)):
+                imm = gen_random_imm_from_rng(rng, instr_str, fuzzerstate.is_design_64bit)
+
+    if DO_ASSERT:
+        if not is_tolerate_branchpred(fuzzerstate.design_name):
+            assert not fuzzerstate.memview.is_cl_tainted(curr_addr+imm)
     # print('New imm', hex(imm), flush=True)
     return BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
 

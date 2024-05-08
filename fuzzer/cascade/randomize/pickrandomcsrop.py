@@ -5,6 +5,7 @@
 # This module picks some random valid CSR operation.
 
 from params.runparams import DO_ASSERT
+from params.fuzzparams import ALLOW_CSR_TAINT
 from rv.csrids import CSR_IDS
 from cascade.util import IntRegIndivState
 from cascade.toleratebugs import is_no_interaction_minstret, is_tolerate_kronos_minstret, is_tolerate_vexriscv_minstret, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readnonimplcsr, is_tolerate_picorv32_writehpm, is_tolerate_cva6_mhpmcounter, is_tolerate_boom_minstret, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_vexriscv_mhpmcountern, is_tolerate_cva6_mhpmevent31
