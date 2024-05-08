@@ -42,20 +42,22 @@ if __TOLERATE_BOOM_MINSTRET:
 
 __TOLERATE_BOOM_RAS0 = False
 def is_tolerate_boom_ras0():
-    return 
+    return __TOLERATE_BOOM_RAS0
 if __TOLERATE_BOOM_RAS0:
     print('WARNING: Tolerating one bug: __TOLERATE_BOOM_RAS0')
 
 __TOLERATE_BOOM_RAS1 = False
 def is_tolerate_boom_ras1():
-    return 
+    if __TOLERATE_BOOM_RAS1:
+        assert __TOLERATE_BOOM_BRANCHPRED, "__TOLERATE_BOOM_BRANCHPRED (b5) needs to be tolerated for this bug to be triggered."
+    return __TOLERATE_BOOM_RAS1
 if __TOLERATE_BOOM_RAS1:
     print('WARNING: Tolerating one bug: __TOLERATE_BOOM_RAS1')
 
 __TOLERATE_BOOM_BRANCHPRED = False
 def is_tolerate_boom_branchpred():
-    return 
-if __TOLERATE_BOOM_RAS1:
+    return __TOLERATE_BOOM_BRANCHPRED
+if __TOLERATE_BOOM_BRANCHPRED:
     print('WARNING: Tolerating one bug: __TOLERATE_BOOM_BRANCHPRED')
 
 
