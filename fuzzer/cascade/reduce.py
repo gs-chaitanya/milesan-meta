@@ -7,12 +7,16 @@
 from common.designcfgs import get_design_march_flags_nocompressed, get_design_boot_addr, get_design_cascade_path
 from common.spike import SPIKE_STARTADDR
 from cascade.basicblock import gen_basicblocks
-from cascade.cfinstructionclasses import JALInstruction, RegImmInstruction
+from cascade.cfinstructionclasses import filter_reg_traceback
+from cascade.cfinstructionclasses_t0 import JALInstruction_t0, RegImmInstruction_t0
 from cascade.fuzzsim import SimulatorEnum, runtest_simulator
-from cascade.spikeresolution import gen_elf_from_bbs, gen_regdump_reqs_reduced, gen_ctx_regdump_reqs, run_trace_regs_at_pc_locs, spike_resolution
+from cascade.spikeresolution import gen_elf_from_bbs, gen_regdump_reqs_reduced, gen_ctx_regdump_reqs, run_trace_regs_at_pc_locs, spike_resolution, gen_regdump_reqs_all_rds
 from cascade.contextreplay import SavedContext, gen_context_setter
 from cascade.privilegestate import PrivilegeStateEnum
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
+from params.fuzzparams import TAINT_EN
+from cascade.registers import ABI_INAMES
+from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint, FuzzerStateException
 
 from copy import deepcopy
 import itertools
@@ -31,10 +35,18 @@ FLATTEN_SANDWICH_INSTRUCTIONS = False # Not fully implemented & tested, hence do
 def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_consider: int, index_first_instr_to_consider: int):
     print(f"Saving context and jumping to pillar-specific instruction {index_first_bb_to_consider}:{index_first_instr_to_consider}...")
     spikereduce_elfpath = gen_elf_from_bbs(fuzzerstate, False, "spikereduce_savectx", f"{fuzzerstate.instance_to_str()}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", SPIKE_STARTADDR)
-
+    print(f"elf at {spikereduce_elfpath}")
     ctx_regdump_reqs, storenumbytes = gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider)
     dumpedvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags_nocompressed(fuzzerstate.design_name), SPIKE_STARTADDR, ctx_regdump_reqs, False, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
+    if fuzzerstate.taint_en:
+        dumpedvals_in_situ, dumpedvals_t0 = fuzzerstate.get_regdumps_from_reqs(ctx_regdump_reqs, False, None, False)
+        assert len(dumpedvals_in_situ) == len(dumpedvals)
+        for idx, (in_situ_d, in_situ_d_t0, spike_d) in enumerate(zip(dumpedvals_in_situ, dumpedvals_t0, dumpedvals)):
+            assert in_situ_d == spike_d or in_situ_d_t0 == 0, f"Mismatch between in-situ simulation and spike at addr {hex(ctx_regdump_reqs[idx][0])} for reg ID {ctx_regdump_reqs[idx][2]}: {filter_reg_traceback(ctx_regdump_reqs[idx][2],ctx_regdump_reqs[idx][0]+SPIKE_STARTADDR,fuzzerstate,spike_d).get_str()}: {hex(in_situ_d)} != {hex(spike_d)}" # Some dumps differ between in-situ and spike (e.g. generated and consumed registers)
+        fuzzerstate.intregpickstate.setup_registers() # reset after execution for get_regdumps_from_reqs
+        fuzzerstate.memview.restore()
+        fuzzerstate.csrfile.reset()
     del ctx_regdump_reqs
 
     # Remove the ELF
@@ -51,13 +63,16 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
     curr_id_in_dumpedvals = 0
     num_stores_found = (len(dumpedvals) - NUM_CSRS - fuzzerstate.num_pickable_floating_regs - fuzzerstate.num_pickable_regs) // 2
     saved_stores = dict()
+    saved_stores_t0 = dict()
 
     curr_id_in_storenumbytes = 0
     for _ in range(num_stores_found):
         for byte_id in range(storenumbytes[curr_id_in_storenumbytes]):
             addr = dumpedvals[curr_id_in_dumpedvals] + byte_id - SPIKE_STARTADDR
             val = (dumpedvals[curr_id_in_dumpedvals+1] >> (8*byte_id)) & 0xFF
+            val_t0 = (dumpedvals_t0[curr_id_in_dumpedvals+1] >> (8*byte_id)) & 0xFF
             saved_stores[addr] = val
+            saved_stores_t0[addr] = val_t0 # We only care for the taints of the stores, not CSRs as those are untainted by construction.
         curr_id_in_storenumbytes += 1
         curr_id_in_dumpedvals += 2
     csr_count_fordebug = 0
@@ -121,6 +136,7 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
         assert csr_count_fordebug == NUM_CSRS, "The number of CSRs found is not the expected one. Found: " + str(csr_count_fordebug) + ", expected: " + str(num_csrs)
 
     if fuzzerstate.design_has_fpu:
+        raise NotImplementedError("fpu not implemented.")
         # We only take the low part of the floats, because (currently) spike represents them on 16 bytes.
         if fuzzerstate.design_has_fpud:
             saved_fregvals = list(map(lambda x: ((1 << 64) -1) & x, dumpedvals[curr_id_in_dumpedvals:curr_id_in_dumpedvals+fuzzerstate.num_pickable_floating_regs]))
@@ -131,6 +147,7 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
 
     curr_id_in_dumpedvals += fuzzerstate.num_pickable_floating_regs
     saved_regvals  = dumpedvals[curr_id_in_dumpedvals:curr_id_in_dumpedvals+fuzzerstate.num_pickable_regs]
+    saved_regvals_t0  = dumpedvals_t0[curr_id_in_dumpedvals:curr_id_in_dumpedvals+fuzzerstate.num_pickable_regs]
 
     if DO_ASSERT:
         assert curr_id_in_dumpedvals + fuzzerstate.num_pickable_regs == len(dumpedvals)
@@ -149,13 +166,22 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
                                     saved_minstreth,
                                     saved_privilege,
                                     saved_stores,
+                                    saved_stores_t0,
                                     saved_fregvals,
-                                    saved_regvals)
+                                    None, # fp taint not supported yet
+                                    saved_regvals,
+                                    saved_regvals_t0)
 
     gen_context_setter(fuzzerstate, saved_context, fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] + index_first_instr_to_consider * 4) # NO_COMPRESSED
 
     # Jump from the intial state to the context setter
-    fuzzerstate.instr_objs_seq[0][-1] = JALInstruction("jal", 0, fuzzerstate.ctxsv_bb_base_addr - 4*(len(fuzzerstate.instr_objs_seq[0])-1)) # NO_COMPRESSED
+    old_jump = fuzzerstate.instr_objs_seq[0][-1]
+    new_jump = JALInstruction_t0(fuzzerstate,"jal", 0, fuzzerstate.ctxsv_bb_base_addr - 4*(len(fuzzerstate.instr_objs_seq[0])-1)) # NO_COMPRESSED
+    new_jump.addr = old_jump.addr
+    fuzzerstate.instr_objs_seq[0][-1] = new_jump
+    print(f"Replacing {old_jump.get_str()} with {new_jump.get_str()}")
+
+    # fuzzerstate.instr_objs_seq[0][-1] = JALInstruction_t0(fuzzerstate,"jal", 0, fuzzerstate.ctxsv_bb_base_addr - 4*(len(fuzzerstate.instr_objs_seq[0])-1)) # NO_COMPRESSED
 
     return fuzzerstate
 
@@ -194,8 +220,12 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     del fuzzerstate # Just for safety. We will not need fuzzerstate anymore in this function
 
     test_fuzzerstate.intregpickstate.restore_state(test_fuzzerstate.saved_reg_states[max_bb_id_to_consider])
+    test_fuzzerstate.intregpickstate.setup_registers()
+    test_fuzzerstate.memview.restore()
+    test_fuzzerstate.csrfile.reset()
+
     if DO_ASSERT:
-        if isinstance(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1], JALInstruction):
+        if isinstance(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1], JALInstruction_t0):
             assert test_fuzzerstate.memsize <= 1 << 20, "The whole memory cannot be addressed with JAL."
 
     ###
@@ -205,10 +235,23 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     # Pop intermediate instructions if required
     if max_instr_id_except_cf < len(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider]):
         curr_addr = test_fuzzerstate.bb_start_addr_seq[max_bb_id_to_consider] + (max_instr_id_except_cf+1) * 4 # NO_COMPRESSED
-        test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1] = JALInstruction("jal", 0, test_fuzzerstate.final_bb_base_addr-curr_addr)
+        new_jal = JALInstruction_t0(test_fuzzerstate, "jal", 0, test_fuzzerstate.final_bb_base_addr-curr_addr)
+        old_jal = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1]
+        new_jal.addr = old_jal.addr
+        test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1] = new_jal
+        test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
+        test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider] = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][:max_instr_id_except_cf+2]
     else:
         curr_addr = test_fuzzerstate.bb_start_addr_seq[max_bb_id_to_consider] + (len(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider])-1) * 4 # NO_COMPRESSED
-        test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1] = JALInstruction("jal", 0, test_fuzzerstate.final_bb_base_addr-curr_addr)
+        new_jal = JALInstruction_t0(test_fuzzerstate, "jal", 0, test_fuzzerstate.final_bb_base_addr-curr_addr)
+        old_jal = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1]
+        new_jal.addr = old_jal.addr
+        test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1] = new_jal
+        test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
+    
+    test_fuzzerstate.bb_start_addr_seq = test_fuzzerstate.bb_start_addr_seq[:max_bb_id_to_consider+1]
+
+    print(f"Swapping {old_jal.get_str()} for {new_jal.get_str()}")
 
     ###
     # Remove the first basic blocks and instructions
@@ -218,10 +261,10 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
         # First, we must record the context in the end of the last removed bb and after the correct number of instructions in that bb
         # storenumbytes is a list which, for each store operation, returns the number of bytes stored
         test_fuzzerstate = _save_ctx_and_jump_to_pillar_specific_instr(test_fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider)
-
         spikereduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "spikereduce_reducedstart", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", SPIKE_STARTADDR)
     else:
         spikereduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "spikereduce", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", SPIKE_STARTADDR)
+        
 
     ###
     # Generate the ELF for RTL
@@ -229,9 +272,12 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
 
     regdump_reqs = gen_regdump_reqs_reduced(test_fuzzerstate, max_bb_id_to_consider, max_instr_id_except_cf+1, index_first_bb_to_consider, index_first_instr_to_consider)
 
-
     # This is actually only needed for generating the final reg and freg values iirc.
     _, (finalintregvals_spikeresol, finalfloatregvals_spikeresol) = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags_nocompressed(test_fuzzerstate.design_name), SPIKE_STARTADDR, regdump_reqs, True, test_fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
+
+    # Retrieves the rd stream throughout execution to compare to in-situ simulation, only for safety.
+    rd_regdump_reqs = gen_regdump_reqs_all_rds(test_fuzzerstate, index_first_bb_to_consider=index_first_bb_to_consider, first_instr_id_in_first_bb_to_consider=index_first_instr_to_consider)
+    rd_regvals = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags_nocompressed(test_fuzzerstate.design_name), SPIKE_STARTADDR, rd_regdump_reqs, False, test_fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
 
     rtl_elfpath = spikereduce_elfpath
 
@@ -240,14 +286,32 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     for bb in test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]:
         numinstrs += len(bb)
 
-    return test_fuzzerstate, rtl_elfpath, (finalintregvals_spikeresol[1:], finalfloatregvals_spikeresol), numinstrs
+    # if test_fuzzerstate.taint_en:
+    #     _, ((finalintregvals_insitu,finalintregvals_insitu_t0), (finalfloatregvals_insitu, finalfloatregvals_insitu_t0)) = test_fuzzerstate.get_regdumps_from_reqs(regdump_reqs, True, test_fuzzerstate.final_bb_base_addr)
+    #     for i in range(test_fuzzerstate.num_pickable_regs):
+    #         assert finalintregvals_spikeresol[i] == finalintregvals_insitu[i] or finalintregvals_insitu_t0[i] == 0
+
+    #     for i in range(test_fuzzerstate.num_pickable_floating_regs):
+    #         raise NotImplementedError("Float registers not implemented yet.")
+    #         assert finalfloatregvals_spikeresol[i] == finalfloatregvals_insitu[i] or finalintregvals_insitu_t0[i] == 0
+
+    #     return test_fuzzerstate, rtl_elfpath, (finalintregvals_spikeresol[1:], finalfloatregvals_spikeresol, finalintregvals_insitu_t0[1:], finalfloatregvals_insitu_t0), numinstrs
+    
+    # We delete the instructions only here as the array size is changed
+    del test_fuzzerstate.instr_objs_seq[index_first_bb_to_consider][:index_first_instr_to_consider]
+    del test_fuzzerstate.instr_objs_seq[1:index_first_bb_to_consider]
+    del test_fuzzerstate.bb_start_addr_seq[1:index_first_bb_to_consider]
+
+    return test_fuzzerstate, rtl_elfpath, (finalintregvals_spikeresol[1:], finalfloatregvals_spikeresol, rd_regdump_reqs, rd_regvals), numinstrs
 
 # This module resolves a mismatch between design and simulation by finding the first basic block that causes a mismatch.
 # @param failing_instr_id the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore. It is None if the failing instruction is actually the last one in the previous bb. Only used in the second step.
 # @param index_first_bb_to_consider: only used in the second step
 def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int = None, index_first_bb_to_consider: int = 1, index_first_instr_to_consider: int = 0, quiet: bool = False):
     # try:
-    test_fuzzerstate, rtl_elfpath, expected_regvals_pair, numinstrs = gen_reduced_elf(fuzzerstate, max_bb_id_to_consider, failing_instr_id, index_first_bb_to_consider, index_first_instr_to_consider)
+    test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs = gen_reduced_elf(fuzzerstate, max_bb_id_to_consider, failing_instr_id, index_first_bb_to_consider, index_first_instr_to_consider)
+    test_fuzzerstate.expected_regvals = expected_regvals_pairs
+    test_fuzzerstate.rtl_elfpath = rtl_elfpath
     # except Exception as e:
     #     print(f"Error when generating reduced elf: `{e}`, for tuple: ({fuzzerstate.memsize}, design_name, {fuzzerstate.randseed}, {fuzzerstate.nmax_bbs})")
     #     raise Exception(e)
@@ -255,7 +319,8 @@ def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int =
         print(f"Generated RTL elf: {rtl_elfpath}")
 
     del fuzzerstate
-    is_success, rtl_msg = runtest_simulator(test_fuzzerstate, rtl_elfpath, expected_regvals_pair, numinstrs, REDUCTION_SIMULATOR)
+
+    is_success, rtl_msg = runtest_simulator(test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs, REDUCTION_SIMULATOR)
 
     if quiet and not is_success:
         print(rtl_msg)
@@ -279,7 +344,7 @@ def _try_flatten_cf(fuzzerstate):
     for bb in flat_fuzzerstate.instr_objs_seq[1:]:
         new_flat_instrs += bb[:-1]
     # Jump to the final block
-    new_flat_instrs.append(JALInstruction("jal", 0, flat_fuzzerstate.final_bb_base_addr - 4*(len(new_flat_instrs)) - addr_flat_instrs))
+    new_flat_instrs.append(JALInstruction_t0(fuzzerstate, "jal", 0, flat_fuzzerstate.final_bb_base_addr - 4*(len(new_flat_instrs)) - addr_flat_instrs))
 
     if DO_ASSERT:
         assert num_flat_instrs == len(new_flat_instrs), f"num_flat_instrs={num_flat_instrs} != len(new_flat_instrs)={len(new_flat_instrs)}"
@@ -289,7 +354,7 @@ def _try_flatten_cf(fuzzerstate):
     # flat_fuzzerstate.instr_objs_seq[-1][-1] = JALInstruction("jal", 0, flat_fuzzerstate.bb_start_addr_seq[1] - 4*(len(flat_fuzzerstate.instr_objs_seq[0])-1))
     # print('Base addr guessed', hex(flat_fuzzerstate.ctxsv_bb_base_addr + 4*flat_fuzzerstate.ctxsv_bb_jal_instr_id))
     # print('Tgt addr', hex(flat_fuzzerstate.bb_start_addr_seq[1]))
-    flat_fuzzerstate.ctxsv_bb[flat_fuzzerstate.ctxsv_bb_jal_instr_id] = JALInstruction("jal", 0, flat_fuzzerstate.bb_start_addr_seq[1] - (flat_fuzzerstate.ctxsv_bb_base_addr + 4*flat_fuzzerstate.ctxsv_bb_jal_instr_id))
+    flat_fuzzerstate.ctxsv_bb[flat_fuzzerstate.ctxsv_bb_jal_instr_id] = JALInstruction_t0(fuzzerstate, "jal", 0, flat_fuzzerstate.bb_start_addr_seq[1] - (flat_fuzzerstate.ctxsv_bb_base_addr + 4*flat_fuzzerstate.ctxsv_bb_jal_instr_id))
 
     is_flattening_success = is_mismatch(flat_fuzzerstate, 1)
 
@@ -555,7 +620,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
         for instr_id in range(pillar_instr, len(fuzzerstate.instr_objs_seq[pillar_bb_id])-1):
             saved_instr = fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id]
             # If this is already a nop, then pass
-            fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id] = RegImmInstruction("addi", 0, 0, 0, is_design_64bit=fuzzerstate.is_design_64bit)
+            fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id] = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
             # For debug printing
             curr_addr = fuzzerstate.bb_start_addr_seq[pillar_bb_id] + 4*instr_id # NO_COMPRESSED
             try:
@@ -576,7 +641,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
             # For each intermediate bb, first start by turning all instructions into nops (except the last one)
             coarse_saved_instrs = [copy(fuzzerstate.instr_objs_seq[bb_id][instr_id]) for instr_id in range(len(fuzzerstate.instr_objs_seq[bb_id])-1)]
             for instr_id in range(len(fuzzerstate.instr_objs_seq[bb_id])-1):
-                fuzzerstate.instr_objs_seq[bb_id][instr_id] = RegImmInstruction("addi", 0, 0, 0, is_design_64bit=fuzzerstate.is_design_64bit)
+                fuzzerstate.instr_objs_seq[bb_id][instr_id] = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
 
                 try:
                     if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr):
@@ -596,7 +661,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 
                 for instr_id in range(len(fuzzerstate.instr_objs_seq[bb_id])-1):
                     saved_instr = copy(fuzzerstate.instr_objs_seq[bb_id][instr_id])
-                    fuzzerstate.instr_objs_seq[bb_id][instr_id] = RegImmInstruction("addi", 0, 0, 0, is_design_64bit=fuzzerstate.is_design_64bit)
+                    fuzzerstate.instr_objs_seq[bb_id][instr_id] = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
                     # For debug printing
                     curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + 4*instr_id # NO_COMPRESSED
                     try:
@@ -613,7 +678,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 
         for instr_id in range(failing_instr_id+1):
             saved_instr = fuzzerstate.instr_objs_seq[failing_bb_id][instr_id]
-            fuzzerstate.instr_objs_seq[failing_bb_id][instr_id] = RegImmInstruction("addi", 0, 0, 0, is_design_64bit=fuzzerstate.is_design_64bit)
+            fuzzerstate.instr_objs_seq[failing_bb_id][instr_id] = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
             # For debug printing
             curr_addr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id # NO_COMPRESSED
             try:
@@ -639,7 +704,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 # @param target_dir: If not None, the directory where to save the generated files. Else, will be saved in the design's directory
 # @param find_pillars: If false, the front of the test case will not be reduced.
 # @return a boolean indicating whether the reduction was successful, a float measuring the elapesd time (in seconds), and the number of instructions in the test case.
-def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
+def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False, taint_en: bool = TAINT_EN):
     from cascade.fuzzerstate import FuzzerState
 
     ###
@@ -652,7 +717,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     start_time = time.time()
 
     random.seed(randseed)
-    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges)
+    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges, taint_en)
 
     gen_basicblocks(fuzzerstate)
     numinstrs = sum([len(bb) for bb in fuzzerstate.instr_objs_seq])
@@ -671,7 +736,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             continue
         if DO_ASSERT:
             assert 'csr' in fuzzerstate.instr_objs_seq[block_id][instr_id].instr_str, f"Block id {block_id}, instr id {instr_id} was not a csr instruction but was {fuzzerstate.instr_objs_seq[block_id][instr_id].instr_str}"
-        fuzzerstate.instr_objs_seq[block_id][instr_id] = RegImmInstruction("addi", 0, 0, 0, is_design_64bit=fuzzerstate.is_design_64bit)
+        fuzzerstate.instr_objs_seq[block_id][instr_id] = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
 
     ###
     # Find the first bb that causes trouble.
@@ -728,7 +793,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     ###
 
     # pillar_bb_id: the index of the last bb such as the test case still succeeds when the bb `pillar_bb_id` is removed (and all the preceding instructions and bbs).
-    # We have as an invariane: pillar_bb_id <= failing_bb_id
+    # We have as an invariant: pillar_bb_id <= failing_bb_id
     if find_pillars:
         pillar_bb_id = _find_pillar_bb(fuzzerstate, failing_bb_id, failing_instr_id, fault_from_prev_bb, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb)
     else:
@@ -749,10 +814,13 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     if not quiet:
         print(f"Failing bb id                    : {failing_bb_id}")
+        print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id])}")
         print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}")
+        print(f"Failing instr addr               : {hex(fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].addr)}")
         if find_pillars:
-            print(f"Pillar bb                        : {pillar_bb_id}")
-            print(f"Pillar instr                     : {pillar_instr}/{len(fuzzerstate.instr_objs_seq[pillar_bb_id])}")
+            print(f"Pillar bb id                     : {pillar_bb_id}")
+            print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id])}")
+            print(f"Pillar instr addr                : {hex(fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].addr)}")
 
     ###
     # Transform some instructions into nops.
@@ -808,9 +876,9 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             pillar_instr = _find_pillar_instr(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, fault_from_prev_bb)
             # Remove the instructions after and before
             fuzzerstate.instr_objs_seq[-1] = fuzzerstate.instr_objs_seq[-1][:failing_instr_id+2]
-            fuzzerstate.ctxsv_bb[fuzzerstate.ctxsv_bb_jal_instr_id] = JALInstruction("jal", 0, fuzzerstate.bb_start_addr_seq[1] + 4*(pillar_instr) - (fuzzerstate.ctxsv_bb_base_addr + 4*fuzzerstate.ctxsv_bb_jal_instr_id))
+            fuzzerstate.ctxsv_bb[fuzzerstate.ctxsv_bb_jal_instr_id] = JALInstruction_t0(fuzzerstate, "jal", 0, fuzzerstate.bb_start_addr_seq[1] + 4*(pillar_instr) - (fuzzerstate.ctxsv_bb_base_addr + 4*fuzzerstate.ctxsv_bb_jal_instr_id))
             for instr_id in range(pillar_instr):
-                fuzzerstate.instr_objs_seq[1][instr_id] = RegImmInstruction("addi", 0, 0, 0, is_design_64bit=fuzzerstate.is_design_64bit) # RawDataWord(0)
+                fuzzerstate.instr_objs_seq[1][instr_id] = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0) # RawDataWord(0)
 
             # We can do this one more time
             fuzzerstate = _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, fault_from_prev_bb)
@@ -824,19 +892,23 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         test_fuzzerstate_larger, rtl_elfpath_larger, expected_regvals_pairs_larger, numinstrs_larger = gen_reduced_elf(fuzzerstate, failing_bb_id, failing_instr_id)
     else:
         test_fuzzerstate_larger, rtl_elfpath_larger, expected_regvals_pairs_larger, numinstrs_larger = gen_reduced_elf(fuzzerstate, failing_bb_id, failing_instr_id)
+        test_fuzzerstate_larger.expected_regvals = expected_regvals_pairs_larger
+        test_fuzzerstate_larger.rtl_elfpath = rtl_elfpath_larger
         print(f"Larger: failing_bb_id: {failing_bb_id}, failing_instr_id: {failing_instr_id}, numinstrs_larger: {numinstrs_larger}")
         print(f"Larger ELF: {rtl_elfpath_larger}")
 
     if failing_instr_id == -1 and fault_from_prev_bb:
         ret = gen_reduced_elf(fuzzerstate, failing_bb_id-1)
         if ret is False:
-            test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller = itertools.repeat(None)
+            test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller = itertools.repeat(None,4)
             print('Warning: smaller is trivial. Error may come from initial block.')
             return True, time.time() - start_time, numinstrs
         else:
             test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller = ret
     else:
         test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller = gen_reduced_elf(fuzzerstate, failing_bb_id, failing_instr_id-1)
+        test_fuzzerstate_smaller.expected_regvals = expected_regvals_pairs_smaller
+        test_fuzzerstate_smaller.rtl_elfpath = rtl_elfpath_smaller
         print(f"Smaller: failing_bb_id: {failing_bb_id}, failing_instr_id: {failing_instr_id-1}, numinstrs_smaller: {numinstrs_smaller}")
         print(f"Smaller ELF: {rtl_elfpath_smaller}")
 

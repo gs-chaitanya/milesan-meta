@@ -19,7 +19,7 @@ if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
-    design_name = 'rocket'
+    design_name = 'boom'
     # 346864, 'rocket', 232, 75
     # 230898, 'rocket', 673, 991
     # 754911, 'rocket', 1220, 812
@@ -27,13 +27,13 @@ if __name__ == '__main__':
     # 493247, 'rocket', 1745, 936
     # 526858, 'rocket', 2170, 531
     # 269239, 'rocket', 1921, 707
-    descriptor = (346864, design_name, 232, 75, True)
-    tolerate_bug_for_eval_reduction(design_name)
+    descriptor = (747222, design_name, 576, 97, True)
+    # tolerate_bug_for_eval_reduction(design_name)
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
 
-    reduce_program(*descriptor, True, check_pc_spike_again=True)
+    reduce_program(*descriptor, True, check_pc_spike_again=True, hint_left_bound_bb=46, hint_right_bound_bb=47, taint_en=True)
 
 else:
     raise Exception("This module must be at the toplevel.")
