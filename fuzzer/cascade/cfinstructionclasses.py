@@ -49,8 +49,9 @@ def compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val):
     assert False, f"Traceback computation for instruction at {hex(addr)} failed, this should not happen."
 
 
-def filter_reg_traceback(reg_id, addr, fuzzerstate, correct_val, is_spike_resolution: bool = False):
+def filter_reg_traceback(reg_id, addr, fuzzerstate, correct_val, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
     last_instr = compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val)
+    assert last_instr is not None
     dep_regs = set()
     instr_stream = []
     for bb_instrs in reversed(fuzzerstate.instr_objs_seq):
@@ -170,8 +171,8 @@ class ImmInstruction(CFInstruction):
             else:
                 curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[self.instr_str]][-1]
             if PARAM_IS_SIGNED[INSTRUCTION_IDS[self.instr_str]][-1]:
-                assert self.imm >= -(1<<(curr_param_size-1))
-                assert self.imm <  1<<(curr_param_size-1)
+                assert self.imm >= -(1<<(curr_param_size-1)), f"{hex(self.imm)}"
+                assert self.imm <  1<<(curr_param_size-1),  f"{hex(self.imm)}"
             else:
                 assert self.imm >= 0
                 assert self.imm <  1<<curr_param_size
@@ -1240,8 +1241,10 @@ class PlaceholderProducerInstr0(BaseInstruction):
                 return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
             return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
         else:
-            assert self.rtl_offset is not None
-            return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
+            if self.rtl_offset is not None:
+                return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
+            else:
+                return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using lui
@@ -1273,8 +1276,10 @@ class PlaceholderProducerInstr1(BaseInstruction):
                 return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
             return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
         else:
-            assert self.rtl_offset is not None
-            return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
+            if self.rtl_offset is not None:
+                return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
+            else:
+                return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using addi
@@ -1346,8 +1351,10 @@ def is_placeholder(obj):
 
 class RawDataWord:
     # @param intentionally_signed: When unset, we expect a non-negative wordval
-    def __init__(self, wordval: int, signed: bool = False):
+    def __init__(self, fuzzerstate, wordval: int, signed: bool = False):
         self.instr_type = CFInstructionClass.NONE
+        self.fuzzerstate = fuzzerstate
+        self.addr = fuzzerstate.ctxsv_bb_base_addr + 4*len(fuzzerstate.ctxsv_bb) + SPIKE_STARTADDR
         if DO_ASSERT:
             if signed:
                 assert wordval >= -(1 << 31)
@@ -1362,6 +1369,15 @@ class RawDataWord:
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.wordval
+    
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+        return f"{hex(self.addr)}: {hex(self.wordval)} (RAW DATA)"
+
+    def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+        print(self.get_str(is_spike_resolution))
+
+    def write(self):
+        self.fuzzerstate.memview.write(self.addr, self.wordval, 4)
 
 ###
 # For exceptions
