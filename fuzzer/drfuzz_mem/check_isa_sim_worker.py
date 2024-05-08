@@ -1,4 +1,3 @@
-from drfuzz_mem.check_isa_sim import check_isa_sim
 from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
@@ -35,10 +34,7 @@ def test_done_callback(ret):
 
 def __check_isa_sim_worker(design_name, seed, taint_en):
     try:
-        if taint_en:
-            check_isa_sim_taint(design_name,seed).remove_tmp_files()
-        else:
-            check_isa_sim(design_name,seed)
+        check_isa_sim_taint(design_name,seed, taint_en=taint_en).remove_tmp_files()
         return True
     except Exception as e:
         print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {e}")
@@ -64,13 +60,7 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en:
     if num_workers == 1:
         print(f"Starting sequential ISA sim validation on `{design_name}` with {total_tests} total tests.")
         for _ in range(total_tests):
-            # try:
-            if taint_en:
-                check_isa_sim_taint(design_name,process_instance_id)
-            else:
-                check_isa_sim(design_name,process_instance_id)
-            # except Exception as e:
-            #     print(e)
+            check_isa_sim_taint(design_name,process_instance_id, taint_en=taint_en)
             process_instance_id += 1
         exit(0)
     if total_tests != -1:
