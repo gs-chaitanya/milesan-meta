@@ -155,6 +155,14 @@ def runsim_modelsim(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PI
 # @param override_num_instrs if not None, then use this value instead of the number of instructions in fuzzerstate.instr_objs_seq. Used when pruning to shorten a bit the timeout.
 # @return (is_success: bool, msg: str)
 def runtest_simulator(fuzzerstate, elfpath: str, expected_regvals: tuple, override_num_instrs: int = None, simulator=SimulatorEnum.VERILATOR):
+    from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint, FuzzerStateException
+    try:
+        check_isa_sim_taint(fuzzerstate.design_name, fuzzerstate.randseed, False, fuzzerstate)
+    except FuzzerStateException as e:
+        print(e)
+        return False, str(e)
+    return True, "No taint or value mismatch detected."
+
     expected_intregvals, expected_floatregvals = expected_regvals
     del expected_regvals
 
@@ -162,6 +170,7 @@ def runtest_simulator(fuzzerstate, elfpath: str, expected_regvals: tuple, overri
         assert len(expected_intregvals) >= fuzzerstate.num_pickable_regs-1
         if fuzzerstate.design_has_fpu:
             assert len(expected_floatregvals) == fuzzerstate.num_pickable_floating_regs
+
     num_instrs = override_num_instrs if override_num_instrs is not None else len(list(itertools.chain.from_iterable(fuzzerstate.instr_objs_seq)))
     if simulator == SimulatorEnum.VERILATOR:
         is_stop_successful, received_regvals = runsim_verilator(fuzzerstate.design_name, num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES, elfpath, fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_floating_regs)
@@ -266,8 +275,6 @@ def run_rtl_and_load_regstream(env,design_name: str):
     
     regstream_rtl_val_t0 = {int(r["id"],16): int(r["value_t0"],16) for r in regstream_rtl}
     regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
-
-
 
     sramdump_rtl = {}
     assert "SRAMDUMP_PATH" in env
