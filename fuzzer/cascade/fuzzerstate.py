@@ -2,11 +2,11 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PATH_TO_TMP, INSERT_REGDUMPS, PRINT_ENVIRONMENT
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS
-from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES
+from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp
-from common.spike import SPIKE_STARTADDR
+from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
 
 from cascade.util import ISAInstrClass, ExceptionCauseVal
 from cascade.memview import MemoryView
@@ -18,7 +18,7 @@ from cascade.randomize.pickreg import IntRegPickState, FloatRegPickState
 from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
 from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace
-from rv.csrids import CSR_IDS
+from rv.csrids import CSR_IDS, CSR_ABI_NAMES
 
 import random
 import os
@@ -114,7 +114,8 @@ class FuzzerState:
         self.fpuendis_coords = []
 
         self.curr_addr = -1 # keep track of current address during program generation
-        self.inject_taint_addr = None # Has taint been injected yet?
+        self.curr_pc = -1 # to validate correctness of simulated control flow
+        self.inject_taint_addr = None # Has taint been injected yet? TODO: remove this
 
     def init_new_bb(self):
         self.instr_objs_seq.append([])
@@ -210,7 +211,6 @@ class FuzzerState:
         self.csrfile.regs[CSR_IDS.MINSTRET].set_val(curr_val+1)
 
     def append_and_execute_instr(self, instr, execute: bool= False, insert_regdump: bool = INSERT_REGDUMPS):
-        # if execute:
         instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
         if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
             instr.print(is_spike_resolution=True)
@@ -220,10 +220,16 @@ class FuzzerState:
                 # fence_instr = SpecialInstruction_t0(self,"fence")
                 store_instr = RegdumpInstruction_t0(self,"sd" if self.is_design_64bit else "sw", REGDUMP_REGISTER_ID, instr.rd,0,-1)
                 store_instr.execute(taint_en=self.taint_en, is_spike_resolution=True)
-                # store_instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
                 if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
                     store_instr.print(is_spike_resolution=True)
                 self.instr_objs_seq[-1].append(store_instr)
+                if INSERT_FENCE:
+                    fence_instr = SpecialInstruction_t0(self,"fence")
+                    fence_instr.execute(taint_en=False, is_spike_resolution=True)
+                    if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
+                        fence_instr.print(is_spike_resolution=True)
+                    self.instr_objs_seq[-1].append(fence_instr)
+                    return 12
                 return 8
         return 4
 
@@ -242,7 +248,7 @@ class FuzzerState:
                                     "bb_id": bb_id}]
     
     def dump_memview_t0(self, path: str = None):
-        path = os.path.join(self.tmp_dir, f"simsramtaint.txt")
+        path = self.env["SIMSRAMTAINT"]
         self.memview.dump_taint(path)
 
     def setup_env(self, rtl_elfpath, seed):
@@ -252,7 +258,7 @@ class FuzzerState:
         regdump_path = os.path.join(self.tmp_dir, f"regump.json")
         sramdump_path = os.path.join(self.tmp_dir, f"sramdump.json")
         regstream_path = os.path.join(self.tmp_dir, f"regstream.json")
-        simsramtaint_path = os.path.join(self.tmp_dir, f"simsramtaint.txt")
+        simsramtaint_path = os.path.join(self.tmp_dir, f"{rtl_elfpath.split('/')[-1].split('.')[0]}.simsramtaint.txt")
         tracefile_path = os.path.join(self.tmp_dir, f"{self.instance_to_str()}.trace.vcd")
         num_instrs = len(list(itertools.chain.from_iterable(self.instr_objs_seq)))
         simlen = str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
@@ -284,6 +290,8 @@ class FuzzerState:
             print("*** ENVIRONMENT ***")
             print(f"source {env_path}")
 
+        self.env = env
+
         return env
 
     def remove_tmp_files(self):
@@ -294,3 +302,57 @@ class FuzzerState:
         self.initial_reg_data_content.clear()
         for val,addr in self.memview.data.items():
             self.initial_reg_data_content.append(val)
+
+    # Returns the register values and taints for the given spike requests.
+    # The register values are obtained from the in-situ simulation instead of spike 
+    # to also obtain the (upper-bound) taint values.
+    def get_regdumps_from_reqs(self, regdump_reqs, is_spike_resolution, final_address, dump_final_reg_vals):
+        regdump_idx = 0
+        regdumps = []
+        regdumps_t0 = []
+        reached_end = False
+        # Retrieve the register values from the requests
+        for bb_instrs in self.instr_objs_seq:
+            for next_instr in bb_instrs:
+                if PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS:
+                    next_instr.print(is_spike_resolution)
+                next_instr.execute(self.taint_en, is_spike_resolution=is_spike_resolution)
+                while regdump_idx < len(regdump_reqs) and next_instr.addr == regdump_reqs[regdump_idx][0] + SPIKE_STARTADDR: # there could be multiple dumps for this address
+                    is_floatdump = regdump_reqs[regdump_idx][1]
+                    reg_id = regdump_reqs[regdump_idx][2]
+                    regdump_idx += 1
+                    if is_floatdump:
+                        raise NotImplementedError("Float extension not implemented yet.")
+                    else:
+                        if DO_ASSERT:
+                            if not USE_SPIKE_INTERM_ELF:
+                                assert reg_id in CSR_ABI_NAMES + ["priv"] or reg_id < self.num_pickable_regs, f"Invalid register id {reg_id}"
+                        if reg_id in CSR_ABI_NAMES + ["priv"]: # We dont dump CSR values here for now
+                            regdumps += [None]
+                            regdumps_t0 += [0]
+                        elif reg_id in FPREG_ABINAMES:
+                            raise NotImplementedError("fp not implemented yet.")
+                        else:
+                            regdumps += [self.intregpickstate.regs[reg_id].get_val()]
+                            regdumps_t0 += [self.intregpickstate.regs[reg_id].get_val_t0()]
+                if final_address is not None and next_instr.addr == final_address:
+                    reached_end = True
+                    break
+            if reached_end:
+                break
+
+        
+        if DO_ASSERT:
+            assert reached_end or final_address is None
+            assert regdump_idx == len(regdump_reqs), f"Number of processed dumps does not match number of requests! {regdump_idx} != {len(regdump_reqs)-1}: requests at {[(hex(i[0]+SPIKE_STARTADDR),i[-1]) for i in regdump_reqs]}"
+        if not dump_final_reg_vals:
+            return (regdumps, regdumps_t0)
+        # Retrieve the final register values
+        final_intreg_vals = []
+        final_intreg_vals_t0 = []
+        for reg_id in range(self.num_pickable_regs):
+            final_intreg_vals += [self.intregpickstate.regs[reg_id].get_val()]
+            final_intreg_vals_t0 += [self.intregpickstate.regs[reg_id].get_val_t0()]
+
+        return (regdumps, regdumps_t0),((final_intreg_vals, final_intreg_vals_t0), (None, None))
+
