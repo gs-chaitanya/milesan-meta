@@ -13,10 +13,38 @@
 from drfuzz_mem.check_isa_sim_worker import check_isa_sims
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
-
+from cascade.toleratebugs import tolerate_bug_for_bug_timing
 
 import os
 import sys
+
+BUG_NAME_TO_ID = {
+    #### b3 ####
+    # The random values loaded into the registers map to the same cache line as some program code. It is thus loaded into
+    # the instruction cache and subsequently influences branch prediction.
+    "boom_ras0": "b3",
+
+    ### b4 ####
+    # The non-taken cascade branches point to the random data block, thus some of the random data can be loaded into the instruction
+    # cache. Now if there is data that can be decoded to a jump instruction (i.e. any JAL, JAR, C.J etc), then the subsequent address
+    # is placed into the return address stack (RAS). The icache fetches contents from memory that the RAS points to (if it is not already in the 
+    # icache because of a shared cache line). If an entry points to tainted data, the branch (target) prediction 
+    # processes the tainted data and thus return a tainted result, subequently tainting the PC during speculative execution subsquent to a return.
+    # This bug can only be discovered when "b5" is also allowed. See below.
+    # Triggered quickly.
+    "boom_ras1": "b4",
+
+    ### b5 ###
+    # Similar to "b4", the non-taken branches point to the random data block. If they point to an address that shares a cache line with
+    # tainted data, the tainted data is loaded into the instruction cache. The contents of the instruction cache are analyzed for branch (target)
+    # prediction, thus if it is tainted, the result of the branch (addresss) preduction unit (BPU) will be tainted. Then the pc gets tainted when
+    # the result is used during speculative execution i.e. when an unresolved branch or indirect jump is encountered.
+    # Triggered by seed 943.
+    "boom_branchpred": "b5",
+    
+    "rocket_ras0": "r2"
+}
+
 
 if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
@@ -39,8 +67,15 @@ if __name__ == '__main__':
     if len(sys.argv) > 5:
         seed_offset = int(sys.argv[5])
 
+
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
+    # tolerate_bug_for_bug_timing(design_name, "r1", True)
+    # tolerate_bug_for_bug_timing(design_name, "k4", True)
+    # tolerate_bug_for_bug_timing(design_name, "k5", True)
+    # tolerate_bug_for_bug_timing(design_name, "b3", True) # RAS0
+    # tolerate_bug_for_bug_timing(design_name, "b4", True) # RAS1
+    # tolerate_bug_for_bug_timing(design_name, "b5", True) # branch prediction
     check_isa_sims(design_name,n_cores,n_total_tests,taint_en,seed_offset)
     
 else:
