@@ -18,10 +18,10 @@ from copy import deepcopy
 import numpy as np
 # from params.runparams import DO_ASSERT
 from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS, P_UNTAINT_BIT
-from params.runparams import PRINT_DBUS_TAINT, CHECK_MEM_T0_PRECISE
+from params.runparams import CHECK_MEM_T0_PRECISE, PRINT_MEM_STORES, PRINT_MEM_STORES_T0, PRINT_MEM_LOADS, PRINT_MEM_LOADS_T0
 from cascade.spikeresolution import SPIKE_STARTADDR
 from cascade.registers import MAX_32b, MAX_64b
-from common.designcfgs import get_design_reg_dump_addr, get_design_fpreg_dump_addr, get_design_reg_stream_addr
+from common.designcfgs import get_design_reg_dump_addr, get_design_fpreg_dump_addr, get_design_reg_stream_addr, get_design_cl_size
 
 DO_ASSERT = True
 
@@ -37,7 +37,7 @@ class MemoryView:
         self.data_t0 = {} # Keep track of load/store operations' taints. Holds the addr-byte_t0 pairs in little endian format.
         self.states = []
         self.fuzzerstate = fuzzerstate
-
+        self.cl_size = get_design_cl_size(self.fuzzerstate.design_name)
     # In particular, returns False if it goes beyond the memory boundaries.
     def is_mem_free(self, addr: int):
         for curr_pair in self.freepairs:
@@ -161,11 +161,28 @@ class MemoryView:
                 return picked_addr
         return None
 
+    def gen_random_addr_from_randomblock_from_rng(self,rng: np.random.RandomState, alignment_bits: int = 2, min_space: int = 4, max_attempts: int = MEMVIEW_ALLOC_MAX_ATTEMPTS):
+        for _ in range(max_attempts):
+            picked_addr = int(rng.choice([addr for addr in self.data.keys() if addr % (1 << alignment_bits) == 0]))-SPIKE_STARTADDR
+            if min_space == 0 or all([addr+SPIKE_STARTADDR in self.data for addr in range(picked_addr,picked_addr+min_space-1)]):
+                if DO_ASSERT:
+                    assert picked_addr >= 0
+                    assert picked_addr + min_space <= self.memsize, f"{hex(picked_addr+min_space)} exceeds memsize {hex(self.memsize)}"
+                    assert picked_addr % (1 << alignment_bits) == 0
+                # print(f"Returning addr {hex(picked_addr)}, min_space: {min_space}, align: {alignment_bits}")
+                return picked_addr
+        return None
+
+
     def is_addr_tainted(self,addr,n_bytes):
         is_tainted = False
         for i in range(n_bytes):
-            is_tainted |= addr+i*8 in self.data_t0 and self.data_t0[addr+i*8] != 0
+            is_tainted |= addr+i*8 in self.data_t0 and self.data_t0[addr+i*8]
         return is_tainted
+
+    def is_cl_tainted(self, addr):
+        cl_addr = addr - addr%self.cl_size
+        return self.is_addr_tainted(cl_addr,self.cl_size)
     # @brief Computes the percentage of the memory that is allocated
     def get_allocated_ratio(self):
         free_sum = sum(map(lambda p: p[1] - p[0], self.freepairs))
@@ -181,7 +198,8 @@ class MemoryView:
             b = self.data[addr+i]
             assert b <= 0xFF
             val |= (b << (i*8))
-        # print(f"Reading {n_bytes} bytes {hex(val)} from {hex(addr)}")
+        if PRINT_MEM_LOADS:
+            print(f"VAL: Reading {n_bytes} bytes {hex(val)} from {hex(addr)}")
         return val
 
     def read_t0(self, addr, n_bytes: int = 4):
@@ -191,12 +209,13 @@ class MemoryView:
             b = self.data_t0[addr+i]
             assert b <= 0xFF
             val_t0 |= (b << (i*8))
-        if val_t0 and PRINT_DBUS_TAINT: 
-            print(f"read_t0: Taint on data bus detected: {hex(addr)} : {hex(val_t0)}")
+        if PRINT_MEM_LOADS_T0:
+            print(f"TAINT: Reading {n_bytes} bytes {hex(val_t0)} from {hex(addr)}")
         return val_t0
 
     def write(self, addr, val, n_bytes):
-        # print(f"Writing {n_bytes} bytes {hex(val)} to {hex(addr)}")
+        if PRINT_MEM_STORES: 
+            print(f"VAL: Writing {n_bytes} bytes {hex(val)} to {hex(addr)}")
         for i in range(n_bytes):
             b = (val&(0xFF<<(i*8)))>>(i*8)
             # print(f"Writing to {hex(addr+i)}: {hex(b)}")
@@ -205,8 +224,8 @@ class MemoryView:
                 self.data_t0[addr+i] = 0
 
     def write_t0(self, addr, val_t0, n_bytes):
-        if val_t0 and PRINT_DBUS_TAINT: 
-            print(f"write_t0: Taint on data bus detected: {hex(addr)} : {hex(val_t0)}")
+        if PRINT_MEM_STORES_T0: 
+            print(f"TAINT: Writing {n_bytes} bytes {hex(val_t0)} to {hex(addr)}")
         for i in range(n_bytes):
             b = (val_t0&(0xFF<<(i*8)))>>(i*8)
             # print(f"Writing to {hex(addr+i)}: {hex(b)}")
@@ -260,6 +279,10 @@ class MemoryView:
     def restore(self):
         self.data = deepcopy(self.states[-1][0])
         self.data_t0 = deepcopy(self.states[-1][1])
+
+    def reset(self):
+        self.data.clear()
+        self.data_t0.clear()
 
     def dump_taint(self, path):
         # print(f"Dumping memview taints to {path}")
