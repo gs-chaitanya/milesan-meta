@@ -6,7 +6,7 @@
 
 from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS
-from cascade.toleratebugs import is_forbid_vexriscv_csrs, is_tolerate_rocket_ras0, is_tolerate_boom_ras0
+from cascade.toleratebugs import is_forbid_vexriscv_csrs, is_tolerate_ras0, is_tolerate_ras1
 from cascade.cfinstructionclasses import FloatLoadInstruction
 from cascade.cfinstructionclasses_t0 import  ImmRdInstruction_t0, RegImmInstruction_t0, R12DInstruction_t0, IntLoadInstruction_t0, CSRRegInstruction_t0
 from cascade.randomize.createcfinstr import create_instr
@@ -18,7 +18,7 @@ from params.runparams import INSERT_REGDUMPS
 from rv.asmutil import li_into_reg
 from common.spike import SPIKE_STARTADDR
 from common.designcfgs import get_design_reg_stream_addr, get_design_cl_size
-
+import numpy as np
 import random
 
 # The first basic block is responsible for the initial setup
@@ -30,16 +30,14 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         assert csr_init_rounding_mode >= 0 and csr_init_rounding_mode <= 4
 
     fuzzerstate.init_new_bb() # Update fuzzer state to support a new basic block
-
-    if fuzzerstate.design_name == "rocket" and not is_tolerate_rocket_ras0():
-        interleave_cl_bytes_until_random_reg_vals = get_design_cl_size(fuzzerstate.design_name)
-    elif fuzzerstate.design_name == "boom" and not is_tolerate_boom_ras0():
-        interleave_cl_bytes_until_random_reg_vals = get_design_cl_size(fuzzerstate.design_name)
-    else:
-        interleave_cl_bytes_until_random_reg_vals = 0
+    
+    # Interleave a cache line inbetween initial basic block and random register values if bug is disabled
+    interleave_cl_bytes_until_random_reg_vals = get_design_cl_size(fuzzerstate.design_name) * int(not is_tolerate_ras0(fuzzerstate.design_name))
     # Set the relocator register to the correct value
 
     curr_addr = fuzzerstate.curr_bb_start_addr
+
+    fuzzerstate.curr_pc = SPIKE_STARTADDR
 
     # prepare the relocator register
     lui_imm, addi_imm = li_into_reg(offset_addr, False)
@@ -210,15 +208,15 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     num_reginit_vals = fuzzerstate.num_pickable_regs-1
     if fuzzerstate.design_has_fpu:
         num_reginit_vals += fuzzerstate.num_pickable_floating_regs
+    rng = np.random.RandomState(random.randrange(0,2**31))
     for _ in range(num_reginit_vals):
         rand_val = None
-        while rand_val is None or is_forbidden_random_value(fuzzerstate.design_name, rand_val, 8):
-            rand_val = 0 if random.random() < fuzzerstate.proba_reg_starts_with_zero else random.randrange(1 << 64)
+        while rand_val is None or is_forbidden_random_value(rand_val, 8) and not is_tolerate_ras1(fuzzerstate.design_name):
+            rand_val = 0 if rng.randint(0,2) < fuzzerstate.proba_reg_starts_with_zero else int(rng.randint(0,2**63,dtype=np.int64))
         fuzzerstate.initial_reg_data_content.append(rand_val)
 
     # Initial values for pickable registers are determined, so load them s.t. in-situ ISA simulation executes on correct initial arch. state.
     fuzzerstate.memview.set_initial_register_values(fuzzerstate, SPIKE_STARTADDR +  curr_addr + bytes_until_random_vals)
-    fuzzerstate.dump_memview_t0()
 
     next_instr = RegImmInstruction_t0(fuzzerstate,"addi", fuzzerstate.num_pickable_regs-1, fuzzerstate.num_pickable_regs-1, bytes_until_random_vals + curr_addr)
     curr_addr += fuzzerstate.append_and_execute_instr(next_instr, True, insert_regdump = False)
