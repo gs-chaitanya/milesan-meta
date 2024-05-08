@@ -97,6 +97,12 @@ def get_design_reg_stream_addr(design_name) -> int:
     return int(device_config["regstreamaddr"], base=0)
 
 # @param design_name: must be one of the keys of the design_repos.json dict.
+# @return the cache line size in bytes
+def get_design_cl_size(design_name) -> int:
+    device_config = get_design_cfg(design_name)
+    return device_config["clsize"]
+
+# @param design_name: must be one of the keys of the design_repos.json dict.
 # @return the floating point register dump address of the design: the address to which the CPU dumps the floating point registers, in order from 0.
 def get_design_fpreg_dump_addr(design_name) -> int:
     device_config = get_design_cfg(design_name)
