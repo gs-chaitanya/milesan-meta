@@ -20,10 +20,10 @@ class FuzzerStateException(Exception):
         super().__init__(*args)
         self.fuzzerstate = fuzzerstate
 
-def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None):   
+def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None, taint_en: bool = TAINT_EN):   
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
-        fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), not INSERT_REGDUMPS) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
+        fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), not INSERT_REGDUMPS, taint_en) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
         fuzzerstate.intregpickstate.setup_registers()
         fuzzerstate.memview.restore()
         fuzzerstate.csrfile.reset()
@@ -32,7 +32,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         expected_regvals = fuzzerstate.expected_regvals
         rtl_elfpath = fuzzerstate.rtl_elfpath
         interm_elfpath = fuzzerstate.interm_elfpath
-        
+        fuzzerstate.curr_pc = SPIKE_STARTADDR
     # Retrieve register stream and final intregvals from spike.
     pc_reg_pairs = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
     for req, regval in zip(expected_regvals[2],expected_regvals[3]):
@@ -42,20 +42,22 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
 
     env = fuzzerstate.setup_env(interm_elfpath if USE_SPIKE_INTERM_ELF else rtl_elfpath,seed)
 
+    fuzzerstate.dump_memview_t0()
+    
     regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(env, fuzzerstate.design_name)
     regstream_rtl_val, regstream_rtl_val_t0 = regstream_rtl
 
     regdump_idx = 0
     try:
-        for bb_instrs in fuzzerstate.instr_objs_seq: # skip first and last bb
+        for bb_id, bb_instrs in enumerate(fuzzerstate.instr_objs_seq):
             for next_instr in bb_instrs:
                 if isinstance(next_instr, RegdumpInstruction_t0) and INSERT_REGDUMPS:
                     if not USE_SPIKE_INTERM_ELF:
                         next_instr.check_regs(regstream_rtl_val[regdump_idx]) # check value before executing instruction
-                        if TAINT_EN:
+                        if fuzzerstate.taint_en:
                             next_instr.check_regs_t0(regstream_rtl_val_t0[regdump_idx]) # check value before executing instruction
                         regdump_idx += 1
-                elif not is_placeholder(next_instr) and next_instr.addr in pc_reg_pairs:
+                elif not is_placeholder(next_instr) and next_instr.addr in pc_reg_pairs: # TODO: why use is_placeholder? Values should also match here i think.
                     next_instr.check_regs(pc_reg_pairs[next_instr.addr]) # check value before executing instruction. Skip if placeholder as their values change between spikeresol and final elf.
                 elif PRINT_SKIPPED_CHECKS:
                     print(f"Skipping check for {next_instr.get_str(USE_SPIKE_INTERM_ELF)}")
@@ -63,6 +65,16 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
                 if PRINT_INSTRUCTION_EXECUTION_FINAL:
                     next_instr.print(USE_SPIKE_INTERM_ELF)
+                
+                # If there's a jump to the ctx block, simulate execution accordingly.
+                # if isinstance(next_instr, JALInstruction) and next_instr.addr + next_instr.imm == fuzzerstate.ctxsv_bb_base_addr + SPIKE_STARTADDR:
+            # after first BB we need to execute the ctx block if there is one
+            if bb_id == 0 and fuzzerstate.ctxsv_bb_base_addr:
+                for next_instr in fuzzerstate.ctxsv_bb:
+                    next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
+                    if PRINT_INSTRUCTION_EXECUTION_FINAL:
+                        print(f"{next_instr.get_str(USE_SPIKE_INTERM_ELF)} (ctx)")
+
 
         if generate_fuzzerstate:
             for (addr_in_situ,trace_in_situ),(addr_final, trace_final) in zip(fuzzerstate.intregpickstate.writeback_trace_in_situ.items(),fuzzerstate.intregpickstate.writeback_trace_final.items()):
@@ -82,8 +94,9 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             assert not mismatch, f"Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}"
             mismatch = fuzzerstate.intregpickstate.regs[id+1].check(expected_intregvals[id])
             assert not mismatch, f"Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}"
-            mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
-            assert not mismatch, f"Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}"
+            if fuzzerstate.taint_en:
+                mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
+                assert not mismatch, f"Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}"
 
         if PRINT_MEMORY_VALIDATION:
             print("*** MEMORY VALIDATION ***:")
@@ -100,6 +113,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 print("*** MEMORY CONTENT  ***")
                 fuzzerstate.memview.print_and_compare(final_sramdump_rtl)
         print(f"Failed for seed {seed}")
+        if "There are less" in str(e):
+            fuzzerstate.remove_tmp_files()
         raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate)
 
     return fuzzerstate
