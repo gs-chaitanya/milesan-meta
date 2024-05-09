@@ -144,6 +144,8 @@ REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.2
 
 ALLOW_CSR_TAINT = False
 
+P_UNTAINT_BIT = 0.3 # probability to untaint a single bit during input taint reduction
+
 
 
 
