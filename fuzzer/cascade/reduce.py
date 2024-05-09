@@ -7,7 +7,7 @@
 from common.designcfgs import get_design_march_flags_nocompressed, get_design_boot_addr, get_design_cascade_path
 from common.spike import SPIKE_STARTADDR
 from cascade.basicblock import gen_basicblocks
-from cascade.cfinstructionclasses import filter_reg_traceback
+from cascade.cfinstructionclasses import filter_reg_traceback, is_placeholder
 from cascade.cfinstructionclasses_t0 import JALInstruction_t0, RegImmInstruction_t0
 from cascade.fuzzsim import SimulatorEnum, runtest_simulator
 from cascade.spikeresolution import gen_elf_from_bbs, gen_regdump_reqs_reduced, gen_ctx_regdump_reqs, run_trace_regs_at_pc_locs, spike_resolution, gen_regdump_reqs_all_rds
@@ -40,10 +40,10 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
     dumpedvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags_nocompressed(fuzzerstate.design_name), SPIKE_STARTADDR, ctx_regdump_reqs, False, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
     if fuzzerstate.taint_en:
-        dumpedvals_in_situ, dumpedvals_t0 = fuzzerstate.get_regdumps_from_reqs(ctx_regdump_reqs, False, None, False)
+        dumpedvals_in_situ, dumpedvals_t0 = fuzzerstate.get_regdumps_from_reqs(ctx_regdump_reqs, False, None, False, True)
         assert len(dumpedvals_in_situ) == len(dumpedvals)
         for idx, (in_situ_d, in_situ_d_t0, spike_d) in enumerate(zip(dumpedvals_in_situ, dumpedvals_t0, dumpedvals)):
-            assert in_situ_d == spike_d or in_situ_d_t0 == 0, f"Mismatch between in-situ simulation and spike at addr {hex(ctx_regdump_reqs[idx][0])} for reg ID {ctx_regdump_reqs[idx][2]}: {filter_reg_traceback(ctx_regdump_reqs[idx][2],ctx_regdump_reqs[idx][0]+SPIKE_STARTADDR,fuzzerstate,spike_d).get_str()}: {hex(in_situ_d)} != {hex(spike_d)}" # Some dumps differ between in-situ and spike (e.g. generated and consumed registers)
+            assert in_situ_d == spike_d or in_situ_d_t0 == 0, f"Mismatch between in-situ simulation and spike at addr {hex(ctx_regdump_reqs[idx][0])} for reg ID {ctx_regdump_reqs[idx][2]}: {filter_reg_traceback(ctx_regdump_reqs[idx][2],ctx_regdump_reqs[idx][0]+SPIKE_STARTADDR,fuzzerstate,spike_d).get_str()}: {hex(in_situ_d)} != {hex(spike_d)}, {hex(in_situ_d_t0)}" # Some dumps differ between in-situ and spike (e.g. generated and consumed registers)
         fuzzerstate.intregpickstate.setup_registers() # reset after execution for get_regdumps_from_reqs
         fuzzerstate.memview.restore()
         fuzzerstate.csrfile.reset()
@@ -815,11 +815,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     if not quiet:
         print(f"Failing bb id                    : {failing_bb_id}")
         print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id])}")
-        print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}")
+        print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id] + SPIKE_STARTADDR)}")
         print(f"Failing instr addr               : {hex(fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].addr)}")
         if find_pillars:
             print(f"Pillar bb id                     : {pillar_bb_id}")
-            print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id])}")
+            print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id] + SPIKE_STARTADDR)}")
             print(f"Pillar instr addr                : {hex(fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].addr)}")
 
     ###

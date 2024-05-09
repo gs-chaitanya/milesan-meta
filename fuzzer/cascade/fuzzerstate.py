@@ -9,6 +9,7 @@ from common.designcfgs import is_design_32bit, design_has_float_support, design_
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
 
 from cascade.util import ISAInstrClass, ExceptionCauseVal
+from cascade.cfinstructionclasses import is_placeholder
 from cascade.memview import MemoryView
 from cascade.csrfile import CSRFile
 from cascade.contextreplay import get_context_setter_max_size
@@ -306,7 +307,7 @@ class FuzzerState:
     # Returns the register values and taints for the given spike requests.
     # The register values are obtained from the in-situ simulation instead of spike 
     # to also obtain the (upper-bound) taint values.
-    def get_regdumps_from_reqs(self, regdump_reqs, is_spike_resolution, final_address, dump_final_reg_vals):
+    def get_regdumps_from_reqs(self, regdump_reqs, is_spike_resolution, final_address, dump_final_reg_vals, skip_placeholder):
         regdump_idx = 0
         regdumps = []
         regdumps_t0 = []
@@ -316,7 +317,6 @@ class FuzzerState:
             for next_instr in bb_instrs:
                 if PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS:
                     next_instr.print(is_spike_resolution)
-                next_instr.execute(self.taint_en, is_spike_resolution=is_spike_resolution)
                 while regdump_idx < len(regdump_reqs) and next_instr.addr == regdump_reqs[regdump_idx][0] + SPIKE_STARTADDR: # there could be multiple dumps for this address
                     is_floatdump = regdump_reqs[regdump_idx][1]
                     reg_id = regdump_reqs[regdump_idx][2]
@@ -332,9 +332,13 @@ class FuzzerState:
                             regdumps_t0 += [0]
                         elif reg_id in FPREG_ABINAMES:
                             raise NotImplementedError("fp not implemented yet.")
+                        elif is_placeholder(next_instr) and skip_placeholder:
+                            regdumps += [None]
+                            regdumps_t0 += [0]
                         else:
                             regdumps += [self.intregpickstate.regs[reg_id].get_val()]
                             regdumps_t0 += [self.intregpickstate.regs[reg_id].get_val_t0()]
+                next_instr.execute(self.taint_en, is_spike_resolution=is_spike_resolution)
                 if final_address is not None and next_instr.addr == final_address:
                     reached_end = True
                     break
