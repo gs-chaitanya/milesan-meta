@@ -66,11 +66,10 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 if PRINT_INSTRUCTION_EXECUTION_FINAL:
                     next_instr.print(USE_SPIKE_INTERM_ELF)
                 
-                # If there's a jump to the ctx block, simulate execution accordingly.
-                # if isinstance(next_instr, JALInstruction) and next_instr.addr + next_instr.imm == fuzzerstate.ctxsv_bb_base_addr + SPIKE_STARTADDR:
-            # after first BB we need to execute the ctx block if there is one
-            if bb_id == 0 and fuzzerstate.ctxsv_bb_base_addr:
-                for next_instr in fuzzerstate.ctxsv_bb:
+            # if this bb is followed by a context saver block, execute it
+            if bb_id in fuzzerstate.bb_id_to_ctxsv_id:
+                ctxsv_bb_id = fuzzerstate.bb_id_to_ctxsv_id[bb_id]
+                for next_instr in fuzzerstate.ctxsv_bbs[ctxsv_bb_id]:
                     next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
                     if PRINT_INSTRUCTION_EXECUTION_FINAL:
                         print(f"{next_instr.get_str(USE_SPIKE_INTERM_ELF)} (ctx)")

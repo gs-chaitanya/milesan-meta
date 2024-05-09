@@ -814,8 +814,8 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     if not quiet:
         print(f"Failing bb id                    : {failing_bb_id}")
-        print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id])}")
-        print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id] + SPIKE_STARTADDR)}")
+        print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}")
+        print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}")
         print(f"Failing instr addr               : {hex(fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].addr)}")
         if find_pillars:
             print(f"Pillar bb id                     : {pillar_bb_id}")

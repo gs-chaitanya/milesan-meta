@@ -97,12 +97,18 @@ class FuzzerState:
         self.final_bb = []
         self.final_bb_base_addr = -1
         # Context setter
-        self.ctxsv_bb = []
-        self.ctxsv_bb_base_addr = -1
+        self.ctxsv_bbs = []
+        self.ctxsv_bb_start_addr_seq = []
+        self.bb_id_to_ctxsv_id = [] # map the id of the BB to the following context saver, if there is one
+        self.bb_id_to_next_ctxsv_bb = [] # id of context saver if followed by a bb
+        self.curr_ctxsv_bb_start_addr = -1
+        self.next_ctxsv_bb_start_addr = None
         self.ctxsv_bb_jal_instr_id = -1 # Useful because the last elements in ctxsv_bb are data.
-        self.ctxdmp_bb = []
-        self.ctxdmp_bb_base_addr = -1
-        self.ctxdmp_bb_jal_instr_id = -1 # Useful because the last elements in ctxdmp_bb are data.
+
+        # Context dump, not used i think
+        # self.ctxdmp_bb = []
+        # self.ctxdmp_bb_base_addr = -1
+        # self.ctxdmp_bb_jal_instr_id = -1 # Useful because the last elements in ctxdmp_bb are data.
 
         # Instructions after the basic blocks, called block tails
         self.block_tail_instrs = [] # List of pairs (instr_obj, instr_addr)
@@ -124,6 +130,12 @@ class FuzzerState:
         self.curr_bb_start_addr = self.next_bb_addr
         self.next_bb_addr = None
         self.bb_start_addr_seq.append(self.curr_bb_start_addr)
+
+    def init_new_ctxsv_bb(self, prior_bb_id, following_bb_id):
+        self.ctxsv_bbs.append([])
+        self.curr_ctxsv_bb_start_addr = self.next_ctxsv_bb_start_addr
+        self.next_ctxsv_bb_start_addr = None
+        self.ctxsv_bb_start_addr_seq.append(self.curr_bb_start_addr)
 
     def gen_pick_weights(self):
         self.fpuweight = random.random() # Can decrease the overall FPU load to favor other types of instructions

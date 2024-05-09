@@ -294,9 +294,11 @@ def alloc_final_basic_block(fuzzerstate):
 # This must be done early, say, just after generating the final basic block, to ensure that we have enough space.
 def alloc_context_saver_bb(fuzzerstate):
     # For the contextsaver, we first want to know the base address before we generate the basic block because we do loads and stores, which require absolute addresses.
-    fuzzerstate.ctxsv_bb_base_addr = fuzzerstate.memview.gen_random_free_addr(2, fuzzerstate.ctxsv_size_upperbound, 0, fuzzerstate.memsize)
-    fuzzerstate.memview.alloc_mem_range(fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.ctxsv_bb_base_addr+fuzzerstate.ctxsv_size_upperbound)
+    fuzzerstate.next_ctxsv_bb_start_addr = fuzzerstate.memview.gen_random_free_addr(2, fuzzerstate.ctxsv_size_upperbound, 0, fuzzerstate.memsize)
+    fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_ctxsv_bb_start_addr, fuzzerstate.next_ctxsv_bb_start_addr+fuzzerstate.ctxsv_size_upperbound)
 
+def free_context_saver_bb(fuzzerstate, ctxsv_bb_id):
+    raise NotImplementedError("not implemented yet")
 # This function is a bit tricky. The objective is to remove the final basic blocks until we find a basic block that can reach the final block. For example, a far JAL may not be able to each the final block.
 # This should be done once all the basic blocks have been inserted until a stop condition was met, such as no more space found for another bb, or memory usage above a certain percentage.
 # @return True iff the insertion succeeded. If False, the whole test case generation is considered failed.
@@ -568,9 +570,9 @@ def gen_basicblocks(fuzzerstate):
     fuzzerstate.final_bb = finalblock(fuzzerstate, fuzzerstate.design_name)
 
     # Forbid loads from addresses where instructions change between spike resolution and RTL sim.
-    blacklist_changing_instructions(fuzzerstate)
-    blacklist_final_block(fuzzerstate) # Must be done once the bb is created, else we could also blacklist upper bounds over the basic block size.
-    blacklist_context_setter(fuzzerstate)
+    # blacklist_changing_instructions(fuzzerstate)
+    # blacklist_final_block(fuzzerstate) # Must be done once the bb is created, else we could also blacklist upper bounds over the basic block size.
+    # blacklist_context_setter(fuzzerstate)
 
     # Generate addresses for memory operations
     memop_addrs = gen_memop_addrs(fuzzerstate)
