@@ -31,7 +31,6 @@ if __name__ == '__main__':
     hint_left_bound_pillar_bb = None
     hint_right_bound_pillar_bb = None
 
-    authorize_privileges = True
 
     if len(sys.argv) > 3:
         hint_left_bound_bb = int(sys.argv[3])
