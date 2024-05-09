@@ -108,9 +108,6 @@ class BaseInstruction_t0(BaseInstruction):
     def inject_taint(self, is_spike_resolution: bool = True):
         self.set_bytecode(self.gen_bytecode_int(is_spike_resolution) ^ self.gen_bytecode_int_t0(is_spike_resolution))
 
-    def assert_addr(self):
-        assert self.addr == self.fuzzerstate.curr_pc, f"Instruction address does not match pc: {self.get_str()}, {hex(self.fuzzerstate.curr_pc)}"
-
 class CFInstruction_t0(BaseInstruction_t0):
     def __init__(self, fuzzerstate, instr_str):
         super().__init__(fuzzerstate, instr_str)
@@ -466,7 +463,6 @@ class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
 
 
 ## Extended Placeholder Instructions ##
-#TODO: all these need to be adjusted for non-spike resolution execution
 class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0, RDInstruction_t0):
     def __init__(self, fuzzerstate, rd: int, producer_id: int):
         super().__init__(fuzzerstate, rd, producer_id)

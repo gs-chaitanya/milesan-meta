@@ -134,6 +134,9 @@ class BaseInstruction:
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
             assert not mismatch, f"{self.get_str()}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
+    def assert_addr(self):
+        assert self.addr == self.fuzzerstate.curr_pc, f"Instruction address does not match pc: {self.get_str()}, {hex(self.fuzzerstate.curr_pc)}"
+
 class CFInstruction(BaseInstruction):
     # Could be any instruction
     authorized_instr_strs = range(len(INSTRUCTION_IDS))
