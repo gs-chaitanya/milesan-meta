@@ -100,7 +100,7 @@ INSTRUCTIONS_BY_ISA_CLASS = {
         "xor",
         "srl",
         "sra",
-        "or",
+        # "or",
         "and"
     ],
     ISAInstrClass.ALU64: [
