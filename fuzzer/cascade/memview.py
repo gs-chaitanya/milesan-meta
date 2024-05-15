@@ -55,6 +55,10 @@ class MemoryView:
                 return start >= curr_pair[0] and end <= curr_pair[1]
         return False
 
+    def is_cl_free(self, addr: int):
+        cl_addr = addr - addr%self.cl_size
+        return self.is_mem_range_free(cl_addr,cl_addr+self.cl_size)
+
     # @param addr: the current address
     # @return: the number of addresses, including addr, that are free until the next allocated address (or until the end of the memory).
     def get_available_contig_space(self, addr: int):

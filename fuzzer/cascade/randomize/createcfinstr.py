@@ -99,7 +99,7 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
     if plan_taken:
         # print('A', flush=True)
         imm = fuzzerstate.next_bb_addr-curr_addr
-    else:
+    else: # The non-taken branches still have microarchitectual effects we need to account for.
         # Select whether to direct toward the random data basic block
         is_random_data_block_in_reach = abs(fuzzerstate.random_data_block_start_addr - curr_addr) < (1<<11) and abs(fuzzerstate.random_data_block_end_addr-4 - curr_addr) < (1<<11)
         if is_random_data_block_in_reach and random.random() < NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA:
@@ -109,8 +109,8 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
             # target_addr_in_random_data_block = random.randrange(lowest_random_data_reachable_addr//2, highest_random_data_reachable_addr//2)*2
             # imm = target_addr_in_random_data_block-curr_addr
             target_addr =  None
-            while target_addr is None or (fuzzerstate.memview.is_cl_tainted(target_addr) and not is_tolerate_branchpred(fuzzerstate.design_name)):
-                target_addr = fuzzerstate.memview.gen_random_addr_from_randomblock_from_rng(rng,2,4)-curr_addr
+            while target_addr is None or (fuzzerstate.memview.is_cl_tainted(target_addr+SPIKE_STARTADDR) and not is_tolerate_branchpred(fuzzerstate.design_name)):
+                target_addr = fuzzerstate.memview.gen_random_addr_from_randomblock_from_rng(rng,2,4)
             if fuzzerstate.is_design_64bit:
                 curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1]
             else:
@@ -119,12 +119,12 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
             imm = (target_addr - curr_addr)&((1<<curr_param_size-1)-1)
         else:
             imm = None
-            while imm is None or (fuzzerstate.memview.is_cl_tainted(curr_addr+imm) and not is_tolerate_branchpred(fuzzerstate.design_name)):
+            while imm is None or (fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR) and not is_tolerate_branchpred(fuzzerstate.design_name)):
                 imm = gen_random_imm_from_rng(rng, instr_str, fuzzerstate.is_design_64bit)
 
     if DO_ASSERT:
         if not is_tolerate_branchpred(fuzzerstate.design_name):
-            assert not fuzzerstate.memview.is_cl_tainted(curr_addr+imm)
+            assert not fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR)
     # print('New imm', hex(imm), flush=True)
     return BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
 

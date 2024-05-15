@@ -34,12 +34,12 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.MEMFPUD:     0,
     ISAInstrClass.FPUD:        0,
     ISAInstrClass.FPUD64:      0,
-    ISAInstrClass.TVECFSM:     0.0,
+    ISAInstrClass.TVECFSM:     0.01,
     ISAInstrClass.PPFSM:       0,
-    ISAInstrClass.EPCFSM:      0.0,
+    ISAInstrClass.EPCFSM:      0.01,
     ISAInstrClass.MEDELEG:     0,
-    ISAInstrClass.EXCEPTION:   0.0,
-    ISAInstrClass.RANDOM_CSR:  0.00,
+    ISAInstrClass.EXCEPTION:   0.01,
+    ISAInstrClass.RANDOM_CSR:  0.001,
     ISAInstrClass.DESCEND_PRV: 0,
     ISAInstrClass.SPECIAL:     0
 }

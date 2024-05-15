@@ -37,6 +37,8 @@ def blacklist_changing_instructions(fuzzerstate):
 def blacklist_final_block(fuzzerstate):
     fuzzerstate.memview_blacklist.alloc_mem_range(fuzzerstate.final_bb_base_addr, fuzzerstate.final_bb_base_addr + len(fuzzerstate.final_bb) * 4) # NO_COMPRESSED
 
+
 # Blacklist addresses where instructions change between spike resolution and RTL sim.
-def blacklist_context_setter(fuzzerstate):
-    fuzzerstate.memview_blacklist.alloc_mem_range(fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.ctxsv_bb_base_addr + fuzzerstate.ctxsv_size_upperbound) # NO_COMPRESSED
+def blacklist_context_setters(fuzzerstate):
+    for ctxsv_start_addr in fuzzerstate.ctxsv_bb_start_addr_seq:
+        fuzzerstate.memview_blacklist.alloc_mem_range(ctxsv_start_addr, ctxsv_start_addr + fuzzerstate.ctxsv_size_upperbound) # NO_COMPRESSED

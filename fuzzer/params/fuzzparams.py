@@ -147,5 +147,8 @@ ALLOW_CSR_TAINT = False
 P_UNTAINT_BIT = 0.3 # probability to untaint a single bit during input taint reduction
 
 
-
-
+LOG2_MEMSIZE_UPPERBOUND = 20
+LOG2_MEMSIZE_LOWERBOUND = 17
+NUM_MAX_BBS_UPPERBOUND = 30
+NUM_MIN_BBS_LOWERBOUND = 5
+NUM_BBS = 0

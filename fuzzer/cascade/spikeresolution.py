@@ -103,6 +103,7 @@ def gen_regdump_reqs_all_rds(fuzzerstate, max_bb_id: int = None, max_instr_id: i
         if max_bb_id is not None and bb_id >= max_bb_id-1:
             break
         for bb_instr_id, bb_instr in enumerate(bb_instrs):
+            # print(f"{bb_instr.get_str()} (BB {bb_id})")
             if bb_id == index_first_bb_to_consider and bb_instr_id < first_instr_id_in_first_bb_to_consider:
                 continue
             if max_instr_id is not None and bb_instr_id >= max_instr_id and max_bb_id is not None and bb_id >= max_bb_id:
@@ -114,6 +115,7 @@ def gen_regdump_reqs_all_rds(fuzzerstate, max_bb_id: int = None, max_instr_id: i
         if bb_id in fuzzerstate.bb_id_to_ctxsv_id:
             ctxsv_bb_id = fuzzerstate.bb_id_to_ctxsv_id[bb_id]
             for bb_instr_id, bb_instr in enumerate(fuzzerstate.ctxsv_bbs[ctxsv_bb_id]):
+                # print(f"{bb_instr.get_str()} (ctx)")
                 curr_addr = fuzzerstate.ctxsv_bb_start_addr_seq[ctxsv_bb_id] + 4*bb_instr_id # NO_COMPRESSED
                 assert curr_addr not in ret
                 assert bb_instr.addr == curr_addr + SPIKE_STARTADDR, f"Address mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}"

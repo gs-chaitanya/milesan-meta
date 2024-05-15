@@ -7,6 +7,7 @@
 from common.timeout import timeout
 from common.designcfgs import get_design_boot_addr
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
+from params.fuzzparams import LOG2_MEMSIZE_LOWERBOUND, LOG2_MEMSIZE_UPPERBOUND, NUM_MIN_BBS_LOWERBOUND, NUM_MAX_BBS_UPPERBOUND, NUM_BBS
 from params.fuzzparams import PROBA_AUTHORIZE_PRIVILEGES, TAINT_EN
 from cascade.basicblock import gen_basicblocks
 from cascade.fuzzsim import SimulatorEnum, runtest_simulator
@@ -20,11 +21,6 @@ import subprocess
 
 FUZZ_USE_MODELSIM = False
 
-LOG2_MEMSIZE_UPPERBOUND = 20
-LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MAX_BBS_UPPERBOUND = 100
-NUM_MIN_BBS_LOWERBOUND = 10
-NUM_BBS = 0
 
 # Creates a new program descriptor.
 def gen_new_test_instance(design_name: str, randseed: int, can_authorize_privileges: bool):

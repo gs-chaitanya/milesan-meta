@@ -20,7 +20,7 @@ from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
 from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace
 from rv.csrids import CSR_IDS, CSR_ABI_NAMES
-
+from cascade.registers import ABI_INAMES
 import random
 import os
 import itertools
@@ -99,11 +99,11 @@ class FuzzerState:
         # Context setter
         self.ctxsv_bbs = []
         self.ctxsv_bb_start_addr_seq = []
-        self.bb_id_to_ctxsv_id = [] # map the id of the BB to the following context saver, if there is one
-        self.bb_id_to_next_ctxsv_bb = [] # id of context saver if followed by a bb
+        self.bb_id_to_ctxsv_id = {} # map the id of the BB to the following context saver, if there is one
         self.curr_ctxsv_bb_start_addr = -1
         self.next_ctxsv_bb_start_addr = None
         self.ctxsv_bb_jal_instr_id = -1 # Useful because the last elements in ctxsv_bb are data.
+        self.last_bb_id_before_next_ctxsv_bb = None
 
         # Context dump, not used i think
         # self.ctxdmp_bb = []
@@ -131,11 +131,15 @@ class FuzzerState:
         self.next_bb_addr = None
         self.bb_start_addr_seq.append(self.curr_bb_start_addr)
 
-    def init_new_ctxsv_bb(self, prior_bb_id, following_bb_id):
+    def init_new_ctxsv_bb(self):
         self.ctxsv_bbs.append([])
         self.curr_ctxsv_bb_start_addr = self.next_ctxsv_bb_start_addr
+        if DO_ASSERT:
+            assert self.last_bb_id_before_next_ctxsv_bb is not None
+            assert self.last_bb_id_before_next_ctxsv_bb not in self.bb_id_to_ctxsv_id, f"Theres already a context saver that BB {last_bb_id_before_ctxsv_bb} jumps to."
+        self.bb_id_to_ctxsv_id[self.last_bb_id_before_next_ctxsv_bb] = len(self.ctxsv_bbs)-1
         self.next_ctxsv_bb_start_addr = None
-        self.ctxsv_bb_start_addr_seq.append(self.curr_bb_start_addr)
+        self.ctxsv_bb_start_addr_seq.append(self.curr_ctxsv_bb_start_addr)
 
     def gen_pick_weights(self):
         self.fpuweight = random.random() # Can decrease the overall FPU load to favor other types of instructions
@@ -325,6 +329,7 @@ class FuzzerState:
         regdumps_t0 = []
         reached_end = False
         # Retrieve the register values from the requests
+        self.curr_pc = SPIKE_STARTADDR
         for bb_instrs in self.instr_objs_seq:
             for next_instr in bb_instrs:
                 if PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS:
@@ -357,11 +362,12 @@ class FuzzerState:
             if reached_end:
                 break
 
-        
+
         if DO_ASSERT:
             assert reached_end or final_address is None
             assert regdump_idx == len(regdump_reqs), f"Number of processed dumps does not match number of requests! {regdump_idx} != {len(regdump_reqs)-1}: requests at {[(hex(i[0]+SPIKE_STARTADDR),i[-1]) for i in regdump_reqs]}"
         if not dump_final_reg_vals:
+            self.reset_after_execution()
             return (regdumps, regdumps_t0)
         # Retrieve the final register values
         final_intreg_vals = []
@@ -370,5 +376,75 @@ class FuzzerState:
             final_intreg_vals += [self.intregpickstate.regs[reg_id].get_val()]
             final_intreg_vals_t0 += [self.intregpickstate.regs[reg_id].get_val_t0()]
 
+        self.reset_after_execution()
         return (regdumps, regdumps_t0),((final_intreg_vals, final_intreg_vals_t0), (None, None))
 
+    
+    def print_writebacks_t0(self, final_addr: int = None):
+        if DO_ASSERT:
+            len_in_situ =  len(self.intregpickstate.writeback_trace_in_situ.items())
+            len_final = len(self.intregpickstate.writeback_trace_final.items())
+            assert len_in_situ != 0
+            assert len_final != 0
+            assert len_in_situ == len_final
+        for (addr_insitu,trace_insitu),(addr_final, trace_final) in zip(self.intregpickstate.writeback_trace_in_situ.items(),self.intregpickstate.writeback_trace_final.items()):
+            row = [hex(addr_insitu),ABI_INAMES[trace_insitu[0]],hex(trace_insitu[1])]
+            print("{: >20}: {: >20} <- {: >20}".format(*row))
+            if final_addr is not None and final_addr == addr_insitu:
+                return
+        if DO_ASSERT:
+            assert final_addr is None, f"Final address not reached {hex(final_addr)}."
+
+    def verify_writeback_t0(self,final_addr: int = None, print_trace: bool = False):
+        for (addr_insitu,trace_insitu),(addr_final, trace_final) in zip(self.intregpickstate.writeback_trace_in_situ.items(),self.intregpickstate.writeback_trace_final.items()):
+            assert addr_insitu == addr_final, f"Address mismatch between insitu and final taint simulation {hex(addr_insitu)} != {hex(addr_final)}"
+            assert trace_insitu[0] == trace_final[0], f"Register mismatch between insitu and final simulation {ABI_INAMES[trace_insitu[0]]} != {ABI_INAMES[trace_final[0]]}"
+            assert trace_insitu[1] == trace_final[1], f"Taint mismatch between insitu and final simulation: {hex(addr_insitu)}: {ABI_INAMES[trace_insitu[0]]} <- {ABI_INAMES[trace_insitu[1]]} != {ABI_INAMES[trace_final[1]]}"
+            if print_trace:
+                row = [hex(addr_insitu),ABI_INAMES[trace_insitu[0]],hex(trace_insitu[1])]
+                print("{: >20}: {: >20} <- {: >20}".format(*row))
+            if final_addr is not None and final_addr == addr_insitu:
+                return
+        if DO_ASSERT:
+            assert final_addr is None, f"Final address not reached {hex(final_addr)}."
+
+
+    def simulate_execution(self, is_spike_resolution: bool = True, final_addr: int = None, print_execution: bool = False, reset_after_execution: bool = False):
+        # Retrieve the register values from the requests
+        self.curr_pc = SPIKE_STARTADDR
+        for bb_id, bb_instrs in enumerate(self.instr_objs_seq):
+            for next_instr in bb_instrs:
+                next_instr.execute(self.taint_en, is_spike_resolution=is_spike_resolution)
+                if print_execution:
+                    next_instr.print(is_spike_resolution)
+                
+            # if this bb is followed by a context saver block, execute it
+            if bb_id in self.bb_id_to_ctxsv_id:
+                ctxsv_bb_id = self.bb_id_to_ctxsv_id[bb_id]
+                for next_instr in self.ctxsv_bbs[ctxsv_bb_id]:
+                    next_instr.execute(self.taint_en, is_spike_resolution=is_spike_resolution)
+                    if print_execution:
+                        print(f"{next_instr.get_str(is_spike_resolution)} (ctx)")
+                if final_addr is not None and next_instr.addr == final_addr:
+                    if reset_after_execution:
+                        self.reset_after_execution()
+                    return
+        if DO_ASSERT:
+            assert final_addr is None, f"Final address not reached {hex(final_addr)}."
+        if reset_after_execution:
+            self.reset_after_execution()
+
+    def reset_after_execution(self):
+        self.intregpickstate.setup_registers()
+        self.memview.restore() # Reset the memory content to the last stored state. If we have a ctxsv block, the last state needs to store it.
+        self.csrfile.reset()
+
+    def verify_program(self,print_execution: bool = False, print_trace:bool = False):
+        self.intregpickstate.setup_registers()
+        self.memview.restore() # Reset the memory content to the last stored state. If we have a ctxsv block, the last state needs to store it.
+        self.csrfile.reset()
+        self.intregpickstate.writeback_trace_in_situ.clear()
+        self.intregpickstate.writeback_trace_final.clear()
+        self.simulate_execution(True,print_execution=print_execution, reset_after_execution=True)
+        self.simulate_execution(False,print_execution=print_execution, reset_after_execution=True)
+        self.verify_writeback_t0(print_trace=print_trace)

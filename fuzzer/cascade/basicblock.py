@@ -23,7 +23,7 @@ from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRIns
 from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS
 from cascade.finalblock import get_finalblock_max_size,finalblock
 from cascade.initialblock import gen_initial_basic_block
-from cascade.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setter
+from cascade.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setters
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.toleratebugs import is_tolerate_ras1
 
@@ -570,9 +570,9 @@ def gen_basicblocks(fuzzerstate):
     fuzzerstate.final_bb = finalblock(fuzzerstate, fuzzerstate.design_name)
 
     # Forbid loads from addresses where instructions change between spike resolution and RTL sim.
-    # blacklist_changing_instructions(fuzzerstate)
-    # blacklist_final_block(fuzzerstate) # Must be done once the bb is created, else we could also blacklist upper bounds over the basic block size.
-    # blacklist_context_setter(fuzzerstate)
+    blacklist_changing_instructions(fuzzerstate)
+    blacklist_final_block(fuzzerstate) # Must be done once the bb is created, else we could also blacklist upper bounds over the basic block size.
+    blacklist_context_setters(fuzzerstate)
 
     # Generate addresses for memory operations
     memop_addrs = gen_memop_addrs(fuzzerstate)
@@ -588,5 +588,4 @@ def gen_basicblocks(fuzzerstate):
     #             print('Instr type:', bb_instr)
     #             print('Plan taken:', bb_instr.plan_taken)
     # # print('Start addr:', hex(fuzzerstate.bb_start_addr_seq[147]))
-
     return fuzzerstate

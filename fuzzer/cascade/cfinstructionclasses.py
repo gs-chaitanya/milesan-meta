@@ -1357,7 +1357,7 @@ class RawDataWord:
     def __init__(self, fuzzerstate, wordval: int, signed: bool = False):
         self.instr_type = CFInstructionClass.NONE
         self.fuzzerstate = fuzzerstate
-        self.addr = fuzzerstate.ctxsv_bb_base_addr + 4*len(fuzzerstate.ctxsv_bb) + SPIKE_STARTADDR
+        self.addr = fuzzerstate.curr_ctxsv_bb_start_addr + 4*len(fuzzerstate.ctxsv_bbs[-1]) + SPIKE_STARTADDR
         if DO_ASSERT:
             if signed:
                 assert wordval >= -(1 << 31)

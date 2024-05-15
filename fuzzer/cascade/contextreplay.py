@@ -7,12 +7,13 @@
 from dataclasses import dataclass
 from params.runparams import DO_ASSERT
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MPP_TOP_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID
+from cascade.toleratebugs import is_tolerate_ras0
 from rv.csrids import CSR_IDS
 from common.spike import SPIKE_STARTADDR
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.cfinstructionclasses_t0 import ImmRdInstruction_t0, RegImmInstruction_t0, IntLoadInstruction_t0, IntStoreInstruction_t0, CSRRegInstruction_t0, JALInstruction_t0, RawDataWord_t0
 from cascade.randomize.pickstoreaddr import ALIGNMENT_BITS_MAX
-
+from common.designcfgs import get_design_cl_size
 # @brief This function computes an upper bound on the size of the context setter basic block.
 # Do not functools.cache because it is cheap to compute, even though it is not expected to change during a fuzzing run.
 def get_context_setter_max_size(fuzzerstate):
@@ -50,7 +51,7 @@ def get_context_setter_max_size(fuzzerstate):
         num_instrs_reg = fuzzerstate.num_pickable_regs*4
     else:
         num_instrs_reg = 1+fuzzerstate.num_pickable_regs*5
-    return 4*(num_instrs_static + num_instrs_csrs + num_instr_privilege_restoration + num_instrs_mem + num_instrs_freg + num_instrs_reg + num_instrs_reset_last_reg)
+    return 4*(num_instrs_static + num_instrs_csrs + num_instr_privilege_restoration + num_instrs_mem + num_instrs_freg + num_instrs_reg + num_instrs_reset_last_reg) + get_design_cl_size(fuzzerstate.design_name)
 
 @dataclass
 class SavedContext:
@@ -81,15 +82,15 @@ class SavedContext:
 def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
     def addr_to_id_in_ctxsv(addr: int):
         if DO_ASSERT:
-            assert addr >= fuzzerstate.curr_ctxsv_bb_base_addr
-            assert addr < fuzzerstate.curr_ctxsv_bb_base_addr + get_context_setter_max_size(fuzzerstate)
+            assert addr >= fuzzerstate.curr_ctxsv_bb_start_addr
+            assert addr < fuzzerstate.curr_ctxsv_bb_start_addr + get_context_setter_max_size(fuzzerstate)
             assert len(saved_context.mem_bytes_dict) <= fuzzerstate.num_store_locations * (1 << (ALIGNMENT_BITS_MAX)) # Check that we do not have too many writes to memory, Else, we may want to adapt the assumption in get_context_setter_max_size.
-        return (addr - fuzzerstate.curr_ctxsv_bb_base_addr) // 4
+        return (addr - fuzzerstate.curr_ctxsv_bb_start_addr) // 4
 
-    fuzzerstate.init_new_ctxsv_bb(0)
     addr_csr_loads = {} # addr_csr_loads[csr_id]: addr
 
     curr_addr = fuzzerstate.curr_ctxsv_bb_start_addr
+    assert fuzzerstate.curr_ctxsv_bb_start_addr == fuzzerstate.ctxsv_bb_start_addr_seq[-1]
 
     # Use the register MAX_NUM_PICKABLE_REGS to hold the absolute address of the start of this bb.
     fuzzerstate.ctxsv_bbs[-1].append(ImmRdInstruction_t0(fuzzerstate,'auipc', MAX_NUM_PICKABLE_REGS, 0, is_rd_nonpickable_ok=True))
@@ -335,7 +336,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
     if DO_ASSERT:
         assert abs(next_jmp_addr - curr_addr) < 1 << 20 # Ensure that the jump is not too far for a jal
     fuzzerstate.ctxsv_bbs[-1].append(JALInstruction_t0(fuzzerstate,"jal", 0, next_jmp_addr - curr_addr))
-    print(f"Last context setter instruction: {fuzzerstate.ctxsv_bbs[-1][-1].get_str()}")
+    # print(f"Last context setter instruction: {fuzzerstate.ctxsv_bbs[-1][-1].get_str()}")
     fuzzerstate.ctxsv_bb_jal_instr_id = len(fuzzerstate.ctxsv_bbs[-1])-1
     curr_addr += 4 # NO_COMPRESSED
     instr_end_addr = curr_addr
@@ -343,6 +344,12 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
     ###
     # The actual values will be set here
     ###
+
+    # Leave an extra CL space between the instructions and possibly tainted data to avoid prefetching tainted data. We also do this when the bug is disabled
+    # since we don't want this possible interference when reducing the program as the bug could be mistakenly attributed to it.
+    for _ in range(get_design_cl_size(fuzzerstate.design_name)//4): # Each word has 4 bytes.
+        fuzzerstate.ctxsv_bbs[-1].append(RawDataWord_t0(fuzzerstate,0xdeadbeef))
+        curr_addr += 4
 
     # For CSRs, we must ensure that the address is aligned to 8 bytes
     while curr_addr % 8 != 0:
@@ -513,4 +520,6 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         instr.addr = fuzzerstate.curr_ctxsv_bb_start_addr + 4*id + SPIKE_STARTADDR
         if isinstance(instr, RawDataWord_t0):
             instr.write()
+    # We store this state so we can reset the memview to it before (re-)simulating.
+    fuzzerstate.memview.store_state()
         

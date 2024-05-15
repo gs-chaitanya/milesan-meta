@@ -21,7 +21,7 @@ if __name__ == '__main__':
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     if len(sys.argv) < 3:
-        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <seed> [authorize_privileges, hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb] ")
+        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <seed> [authorize_privileges, hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, hint_left_bound_instr, hint_right_bound_instr, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr] ")
 
     design_name = sys.argv[1]
     seed = int(sys.argv[2])
@@ -30,7 +30,10 @@ if __name__ == '__main__':
     hint_right_bound_bb = None
     hint_left_bound_pillar_bb = None
     hint_right_bound_pillar_bb = None
-
+    hint_left_bound_instr = None
+    hint_right_bound_instr = None
+    hint_left_bound_pillar_instr = None
+    hint_right_bound_pillar_instr = None
 
     if len(sys.argv) > 3:
         hint_left_bound_bb = int(sys.argv[3])
@@ -40,6 +43,15 @@ if __name__ == '__main__':
         hint_left_bound_pillar_bb = int(sys.argv[5])
     if len(sys.argv) > 6:
         hint_right_bound_pillar_bb = int(sys.argv[6])
+    if len(sys.argv) > 7:
+        hint_left_bound_instr = int(sys.argv[7])
+    if len(sys.argv) > 8:
+        hint_right_bound_instr = int(sys.argv[8])
+    if len(sys.argv) > 9:
+        hint_left_bound_pillar_instr = int(sys.argv[9])
+    if len(sys.argv) > 10:
+        hint_right_bound_pillar_instr = int(sys.argv[10])
+
 
     # 346864, 'rocket', 232, 75
     # 230898, 'rocket', 673, 991
@@ -60,7 +72,12 @@ if __name__ == '__main__':
                     hint_left_bound_bb=hint_left_bound_bb, 
                     hint_right_bound_bb=hint_right_bound_bb,
                     hint_left_bound_pillar_bb=hint_left_bound_pillar_bb,
-                    hint_right_bound_pillar_bb=hint_right_bound_pillar_bb)
+                    hint_right_bound_pillar_bb=hint_right_bound_pillar_bb,
+                    hint_left_bound_instr=hint_left_bound_instr,
+                    hint_right_bound_instr=hint_right_bound_instr,
+                    hint_left_bound_pillar_instr=hint_left_bound_pillar_instr,
+                    hint_right_bound_pillar_instr=hint_right_bound_pillar_instr
+                    )
 
 else:
     raise Exception("This module must be at the toplevel.")
