@@ -855,13 +855,13 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         print(f"Failing bb id                    : {failing_bb_id}")
         print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}")
         print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}")
-        print(f"Failing instr addr               : {hex(fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].addr)}")
+        print(f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}")
         if find_pillars:
             print(f"Pillar bb id                     : {pillar_bb_id}")
             print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id] + SPIKE_STARTADDR)}")
-            print(f"Pillar instr addr                : {hex(fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].addr)}")
+            print(f"Pillar instr                     : {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].get_str()}")
 
-
+    exit(0)
     ###
     # Transform some instructions into nops.
     ###
@@ -875,11 +875,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         print(f"Failing bb id                    : {failing_bb_id}")
         print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}")
         print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}")
-        print(f"Failing instr addr               : {hex(fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].addr)}")
+        print(f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}")
         if find_pillars:
             print(f"Pillar bb id                     : {pillar_bb_id}")
             print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id] + SPIKE_STARTADDR)}")
-            print(f"Pillar instr addr                : {hex(fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].addr)}")
+            print(f"Pillar instr                     : {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].get_str()}")
 
     # Not mature code yet.
     if FLATTEN_SANDWICH_INSTRUCTIONS and not pillar_bb_id == failing_bb_id:
@@ -918,11 +918,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
                 print(f"Failing bb id                    : {failing_bb_id}")
                 print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}")
                 print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}")
-                print(f"Failing instr addr               : {hex(fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].addr)}")
+                print(f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}")
                 if find_pillars:
                     print(f"Pillar bb id                     : {pillar_bb_id}")
                     print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id] + SPIKE_STARTADDR)}")
-                    print(f"Pillar instr addr                : {hex(fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].addr)}")
+                    print(f"Pillar instr                     : {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].get_str()}")
 
             fuzzerstate.verify_program(print_execution=True,print_trace=True)
 
