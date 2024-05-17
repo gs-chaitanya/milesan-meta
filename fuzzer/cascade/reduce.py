@@ -8,13 +8,13 @@ from common.designcfgs import get_design_march_flags_nocompressed, get_design_bo
 from common.spike import SPIKE_STARTADDR
 from cascade.basicblock import gen_basicblocks
 from cascade.cfinstructionclasses import filter_reg_traceback, is_placeholder
-from cascade.cfinstructionclasses_t0 import JALInstruction_t0, RegImmInstruction_t0, JALRInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0 
+from cascade.cfinstructionclasses_t0 import JALInstruction_t0, RegImmInstruction_t0, JALRInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0, R12DInstruction_t0, BranchInstruction_t0
 from cascade.fuzzsim import SimulatorEnum, runtest_simulator
 from cascade.spikeresolution import gen_elf_from_bbs, gen_regdump_reqs_reduced, gen_ctx_regdump_reqs, run_trace_regs_at_pc_locs, spike_resolution, gen_regdump_reqs_all_rds
 from cascade.contextreplay import SavedContext, gen_context_setter
 from cascade.privilegestate import PrivilegeStateEnum
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
-from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF
+from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF, RELOCATOR_REGISTER_ID
 from rv.asmutil import li_into_reg, to_unsigned
 from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint, FuzzerStateException
 
@@ -26,10 +26,11 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+import numpy as np
 
 REDUCTION_SIMULATOR = SimulatorEnum.VERILATOR
-NOPIZE_SANDWICH_INSTRUCTIONS = True
-FLATTEN_SANDWICH_INSTRUCTIONS = True
+NOPIZE_SANDWICH_INSTRUCTIONS = False
+FLATTEN_SANDWICH_INSTRUCTIONS = False
 
 # Used for removing the first BBs and instructions.
 def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_consider: int, index_first_instr_to_consider: int):
@@ -311,8 +312,19 @@ def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int =
         print(rtl_msg)
     return not is_success
 
+
+
+# def _pick_matching_regs(fuzzerstate, instr_str, addr):
+#     fuzzerstate.simulate_execution(False,addr) # execute until here to get register values
+#     if instr_str == "beq":
+
+# def _create_random_non_taken_brancu(fuzzerstate, addr):
+#     instr_str = random.choice(BranchInstruction_t0.authorized_instr_strs)
+#     BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
+
+
 # Flattens the control flow except for the initial block, the context setter and the final block.
-def _try_flatten_cf(fuzzerstate):
+def _try_flatten_cf(fuzzerstate, failing_bb, failing_instr, pillar_bb, pillar_instr):
     flat_fuzzerstate = deepcopy(fuzzerstate)
     orig_fuzzerstate = fuzzerstate # Renaming to prevent accidental use of fuzzerstate
     del fuzzerstate
@@ -323,27 +335,41 @@ def _try_flatten_cf(fuzzerstate):
 
     # num_flat_instrs: number of instructions in blocks, minus the cf instructions between them (fuzzerstate.instr_objs_seq - 2) + 1 for the final cf to the final block
     num_flat_instrs = sum(map(len, flat_fuzzerstate.instr_objs_seq[1:])) - len(flat_fuzzerstate.instr_objs_seq) + 2
-    n_jalr_instrs = sum([1 for bb in flat_fuzzerstate.instr_objs_seq[1:] if isinstance(bb[-1], JALRInstruction_t0)])
-    num_flat_instrs += n_jalr_instrs*2 # each JALR gets an lui+addi
+    n_jal_instrs = sum([1 for bb in flat_fuzzerstate.instr_objs_seq[1:] if isinstance(bb[-1], (JALRInstruction_t0,JALInstruction_t0))])
+    num_flat_instrs += n_jal_instrs*3 # 3 instrucions per jal/r for lui+addi sequence
     addr_flat_instrs = flat_fuzzerstate.memview.gen_random_free_addr(2, 4*num_flat_instrs, 0, flat_fuzzerstate.memsize)
 
     # copy the instructions of the BB to the single flattend BB and adjust their addresses
     new_flat_instrs = []
-    for bb in flat_fuzzerstate.instr_objs_seq[1:]:
+    for bb_id, bb in enumerate(flat_fuzzerstate.instr_objs_seq):
+        if bb_id == 0:
+            continue
         for instr in bb[:-1]:
             instr.addr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
             new_flat_instrs += [instr]
+
         last_instr = bb[-1]
-        # If the last instruction is a JALR, we set rd to address of the JALR with a lui+add sequence
-        if isinstance(last_instr, JALRInstruction_t0):
-            lui_imm,addi_imm = li_into_reg(to_unsigned(last_instr.addr, flat_fuzzerstate.is_design_64bit), False)
+        # If the last instruction is a JAL/R, we set rd to address of the JAL/R with a lui+add sequence
+        # Maybe add non-taken branches to have similar effect on BPU?
+        if isinstance(last_instr, (JALInstruction_t0,JALRInstruction_t0)):
+            lui_imm,addi_imm = li_into_reg(last_instr.addr-SPIKE_STARTADDR, False) # need to remove the spike offset because of sign-extension
             lui_instr = ImmRdInstruction_t0(flat_fuzzerstate,'lui',last_instr.rd,lui_imm)
             lui_instr.addr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
             new_flat_instrs += [lui_instr]
             addi_instr = RegImmInstruction_t0(flat_fuzzerstate, 'addi', last_instr.rd, last_instr.rd, addi_imm)
             addi_instr.addr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
             new_flat_instrs += [addi_instr]
-
+            add_instr = R12DInstruction_t0(flat_fuzzerstate, 'add', last_instr.rd, last_instr.rd, RELOCATOR_REGISTER_ID)  # add the spike offset again
+            add_instr.addr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
+            new_flat_instrs += [add_instr]
+            if bb_id == failing_bb:
+                if failing_instr == len(bb)-1:
+                    print(f"WARNING: Replacing failing instruction {last_instr.get_str()} with {lui_instr.get_str()}, {addi_instr.get_str()}")
+            if bb_id == pillar_bb:
+                if pillar_instr == len(bb)-1:
+                    print(f"WARNING: Replacing pillar instruction {last_instr.get_str()} with {lui_instr.get_str()}, {addi_instr.get_str()}")
+            
+            print(f"Replacing jump instruction {last_instr.get_str()} with {lui_instr.get_str()}, {addi_instr.get_str()}")
 
     # Jump to the final block
     jal_inst = JALInstruction_t0(flat_fuzzerstate, "jal", 0, flat_fuzzerstate.final_bb_base_addr - 4*(len(new_flat_instrs)) - addr_flat_instrs)
@@ -861,7 +887,6 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id] + SPIKE_STARTADDR)}")
             print(f"Pillar instr                     : {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].get_str()}")
 
-    exit(0)
     ###
     # Transform some instructions into nops.
     ###
@@ -871,22 +896,22 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         fuzzerstate = _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, fault_from_prev_bb)
         fuzzerstate.verify_program(print_execution=True,print_trace=True)
 
-    if not quiet:
-        print(f"Failing bb id                    : {failing_bb_id}")
-        print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}")
-        print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}")
-        print(f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}")
-        if find_pillars:
-            print(f"Pillar bb id                     : {pillar_bb_id}")
-            print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id] + SPIKE_STARTADDR)}")
-            print(f"Pillar instr                     : {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].get_str()}")
+        if not quiet:
+            print(f"Failing bb id                    : {failing_bb_id}")
+            print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}")
+            print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}")
+            print(f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}")
+            if find_pillars:
+                print(f"Pillar bb id                     : {pillar_bb_id}")
+                print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id] + SPIKE_STARTADDR)}")
+                print(f"Pillar instr                     : {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].get_str()}")
 
     # Not mature code yet.
     if FLATTEN_SANDWICH_INSTRUCTIONS and not pillar_bb_id == failing_bb_id:
         if not quiet:
             print('Flattening the control flow.')
         try:
-            fuzzerstate, is_success_flattening = _try_flatten_cf(fuzzerstate)
+            fuzzerstate, is_success_flattening = _try_flatten_cf(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr)
         except Exception as e:
             print(f"Exception while flattening the control flow: {e}")
             is_success_flattening = False
@@ -965,20 +990,32 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         print('Success smaller:', is_success_smaller)
         print('smaller msg:', rtl_msg_smaller)
 
-    if not (is_success_smaller and not is_success_larger):
-        print('Reduction did not totally succeed.')
+    assert is_success_smaller and not is_success_larger, f"Reduction failed."
 
-    if target_dir is None:
-        target_dir = os.path.join(get_design_cascade_path(design_name), 'sw', 'fuzzsample')
+
+    ret_msg = f"Reduction succcess for seed {randseed}:\n"
+    ret_msg += f"\t Failing bb id: {failing_bb_id}\n"
+    ret_msg += f"\t Failing instr id: {failing_instr_id}\n"
+    ret_msg += f"\t Failing instr: {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}\n"
+    ret_msg += f"\t Pillar bb id: {pillar_bb_id}\n"
+    ret_msg += f"\t Pillar instr id: {pillar_instr}\n"
+    ret_msg += f"\t Pillar instr: {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].get_str()}\n"
+    ret_msg += f"\t Total number of bbs: {failing_bb_id-pillar_bb_id}\n"
+    numinstrs = sum(map(len, fuzzerstate.instr_objs_seq[1:]))
+    n_nops =  _count_n_nops(fuzzerstate,pillar_bb_id,failing_bb_id)
+    ret_msg += f"\t Total number of non-nop instructions: {numinstrs-n_nops}\n"
+    n_tainted_bits, n_untainted_bits = fuzzerstate.intregpickstate.analyze_writeback_trace()
+    ret_msg += f"\t Ratio of tainted/total writeback bits {n_tainted_bits}/{n_untainted_bits+n_tainted_bits} -> {n_tainted_bits/(n_untainted_bits+n_tainted_bits)}"
     if not quiet:
-        print('Copying both ELFs')
-        Path(target_dir).mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(rtl_elfpath_larger, os.path.join(target_dir, 'app_buggy.elf'))
-        subprocess.run(' '.join([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objdump", '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_buggy.elf'), '>', os.path.join(target_dir, 'app_buggy.elf.dump')]), shell=True)
-        shutil.copyfile(rtl_elfpath_smaller, os.path.join(target_dir, 'app_ok.elf'))
-        subprocess.run(' '.join([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objdump", '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_ok.elf'), '>', os.path.join(target_dir, 'app_ok.elf.dump')]), shell=True)
-    # Write the error message
-    with open(os.path.join(target_dir, 'err.log'), 'w') as f:
-        f.write(rtl_msg_larger)
+        print(ret_msg)
+    return ret_msg
 
-    return is_success_smaller and not is_success_larger, time.time() - start_time, numinstrs
+def _count_n_nops(fuzzerstate, min_bb, max_bb):
+    nop_instr_bytecode =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0).gen_bytecode_int(USE_SPIKE_INTERM_ELF)
+    n_nops = 0
+    for bb in fuzzerstate.instr_objs_seq[min_bb:max_bb]:
+        for instr in bb:
+            if instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF) == nop_instr_bytecode:
+                n_nops += 1
+
+    return n_nops
