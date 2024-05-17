@@ -145,11 +145,13 @@ class MemoryView:
 
         for _ in range(max_attempts):
             picked_addr = random.randrange((left_bound+(1 << alignment_bits)-1) >> alignment_bits, ((right_bound-min_space) >> alignment_bits)) << alignment_bits
-            if min_space == 0 or self.is_mem_range_free(picked_addr, picked_addr+min_space): # is_mem_range_free returns False if it goes beyond the memory boundaries.
+            cl_addr = picked_addr - picked_addr%self.cl_size
+            if min_space == 0 or self.is_mem_range_free(cl_addr, picked_addr+min_space+self.cl_size): # is_mem_range_free returns False if it goes beyond the memory boundaries.
                 if DO_ASSERT:
                     assert picked_addr >= 0
                     assert picked_addr + min_space <= self.memsize
                     assert picked_addr % (1 << alignment_bits) == 0
+                    assert not self.is_cl_tainted(picked_addr)
                 return picked_addr
         return None
 
@@ -181,7 +183,7 @@ class MemoryView:
     def is_addr_tainted(self,addr,n_bytes):
         is_tainted = False
         for i in range(n_bytes):
-            is_tainted |= addr+i*8 in self.data_t0 and self.data_t0[addr+i*8]
+            is_tainted |= addr+i in self.data_t0 and self.data_t0[addr+i]
         return is_tainted
 
     def is_cl_tainted(self, addr):
@@ -196,6 +198,9 @@ class MemoryView:
         return str(self.freepairs)
 
     def read(self, addr, n_bytes: int = 4):
+        if DO_ASSERT:
+            assert addr >= SPIKE_STARTADDR
+            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
         val = 0
         for i in range(n_bytes):
             assert addr+i in self.data, f"Read request from invalid address {hex(addr+i)}."
@@ -207,6 +212,9 @@ class MemoryView:
         return val
 
     def read_t0(self, addr, n_bytes: int = 4):
+        if DO_ASSERT:
+            assert addr >= SPIKE_STARTADDR
+            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
         val_t0 = 0
         for i in range(n_bytes):
             assert addr+i in self.data_t0, f"Taint read request from invalid address {hex(addr+i)}."
@@ -218,6 +226,9 @@ class MemoryView:
         return val_t0
 
     def write(self, addr, val, n_bytes):
+        if DO_ASSERT:
+            assert addr >= SPIKE_STARTADDR
+            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
         if PRINT_MEM_STORES: 
             print(f"VAL: Writing {n_bytes} bytes {hex(val)} to {hex(addr)}")
         for i in range(n_bytes):
@@ -228,6 +239,9 @@ class MemoryView:
                 self.data_t0[addr+i] = 0
 
     def write_t0(self, addr, val_t0, n_bytes):
+        if DO_ASSERT:
+            assert addr >= SPIKE_STARTADDR
+            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
         if PRINT_MEM_STORES_T0: 
             print(f"TAINT: Writing {n_bytes} bytes {hex(val_t0)} to {hex(addr)}")
         for i in range(n_bytes):
@@ -294,6 +308,9 @@ class MemoryView:
         dumped_addresses = []
         with open(path, "w") as f:
             for addr in self.data_t0.keys():
+                if DO_ASSERT:
+                    assert addr >= SPIKE_STARTADDR
+                    assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
                 if addr in dumped_addresses:
                     continue
                 n_bytes = 8 if self.fuzzerstate.is_design_64bit else 4
