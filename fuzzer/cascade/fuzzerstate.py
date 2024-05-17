@@ -52,7 +52,6 @@ class FuzzerState:
         self.reset()
         self.init_design_state()
 
-        self.inject_taint_addr = None
         self.taint_en = taint_en
         self.expected_regvals = None
         self.interm_elfpath = None
@@ -122,7 +121,6 @@ class FuzzerState:
 
         self.curr_addr = -1 # keep track of current address during program generation
         self.curr_pc = -1 # to validate correctness of simulated control flow
-        self.inject_taint_addr = None # Has taint been injected yet? TODO: remove this
 
     def init_new_bb(self):
         self.instr_objs_seq.append([])
