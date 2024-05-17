@@ -274,7 +274,6 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
             assert mem_byte_addr in saved_context.mem_bytes_t0_dict, f"No taint entry found for addr {hex(mem_byte_addr)}"
             mem_byte_val_t0 = saved_context.mem_bytes_t0_dict[mem_byte_addr]
             inst = RegImmInstruction_t0(fuzzerstate,"addi", 2, 0, mem_byte_val, mem_byte_val_t0, is_rd_nonpickable_ok=True)
-            fuzzerstate.memview.write_t0(curr_addr, inst.gen_bytecode_int_t0(False), 4)
         else:
             inst = RegImmInstruction_t0(fuzzerstate,"addi", 2, 0, mem_byte_val, is_rd_nonpickable_ok=True)
             
@@ -520,6 +519,9 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         instr.addr = fuzzerstate.curr_ctxsv_bb_start_addr + 4*id + SPIKE_STARTADDR
         if isinstance(instr, RawDataWord_t0):
             instr.write()
+        if isinstance(instr, RegImmInstruction_t0):
+            instr.write_t0() # Could have tainted immediates
+
     # We store this state so we can reset the memview to it before (re-)simulating.
     fuzzerstate.memview.store_state()
         
