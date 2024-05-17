@@ -7,7 +7,7 @@ import numpy as np
 
 from params.runparams import DO_ASSERT, PRINT_FSM_TRANSITIONS
 
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA
 from cascade.util import IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS, ISAInstrClass
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import *
@@ -33,6 +33,15 @@ def gen_random_imm(instr_str: str, is_design_64bit: bool):
         left_bound  = 0
         right_bound = 1<<imm_width
     return random.randrange(left_bound, right_bound)
+
+def gen_random_imm_t0(instr_str: str, fuzzerstate):
+    n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
+    n_relocused_tainted_regs = fuzzerstate.intregpickstate.get_num_tainted_regs_in_state(IntRegIndivState.RELOCUSED)
+    assert n_relocused_tainted_regs == 0 # Relocused regs are excluded from taint propagation, thus this should always be zero
+    if n_free_untainted_regs > NUM_MIN_UNTAINTED_INTREGS: #  we can still taint some more
+        return gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
+    else:
+        return 0x0
 
 # For when the randomnees must be separated from program construction.
 # This facilitates bug enabling/disabling because it can be ensured that the remaining program remaing unchanged,
@@ -76,7 +85,10 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     if instr_str == "auipc" and rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
-    return ImmRdInstruction_t0(fuzzerstate,instr_str, rd, imm, iscompressed)
+    imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
+    instr = ImmRdInstruction_t0(fuzzerstate,instr_str, rd, imm, imm_t0, iscompressed)
+    instr.write_t0(False)  # Write tainted bytecode to instruction memory
+    return instr
 
 def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
@@ -84,8 +96,10 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     rs1 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg()
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
-
-    return RegImmInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, iscompressed)
+    imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
+    instr = RegImmInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, imm_t0, iscompressed)
+    instr.write_t0(False) # Write tainted bytecode to instruction memory if taint is enabled.
+    return instr
 
 def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
     if DO_ASSERT:
@@ -109,22 +123,23 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
             # target_addr_in_random_data_block = random.randrange(lowest_random_data_reachable_addr//2, highest_random_data_reachable_addr//2)*2
             # imm = target_addr_in_random_data_block-curr_addr
             target_addr =  None
-            while target_addr is None or (fuzzerstate.memview.is_cl_tainted(target_addr+SPIKE_STARTADDR) and not is_tolerate_branchpred(fuzzerstate.design_name)):
-                target_addr = fuzzerstate.memview.gen_random_addr_from_randomblock_from_rng(rng,2,4)
             if fuzzerstate.is_design_64bit:
                 curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1]
             else:
                 curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[instr_str]][-1]
 
-            imm = (target_addr - curr_addr)&((1<<curr_param_size-1)-1)
+            while target_addr is None or (fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR) and not is_tolerate_branchpred(fuzzerstate.design_name)):
+                target_addr = fuzzerstate.memview.gen_random_addr_from_randomblock_from_rng(rng,2,4)
+                imm = (target_addr - curr_addr)&((1<<curr_param_size-1)-1)
+
         else:
             imm = None
             while imm is None or (fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR) and not is_tolerate_branchpred(fuzzerstate.design_name)):
                 imm = gen_random_imm_from_rng(rng, instr_str, fuzzerstate.is_design_64bit)
 
-    if DO_ASSERT:
-        if not is_tolerate_branchpred(fuzzerstate.design_name):
-            assert not fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR)
+        if DO_ASSERT:
+            if not is_tolerate_branchpred(fuzzerstate.design_name):
+                assert not fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR), f"Chose tainted CL at {hex(curr_addr+imm+SPIKE_STARTADDR)} (plan_taken: {plan_taken}, is_random_data_block_in_reach: {is_random_data_block_in_reach})"
     # print('New imm', hex(imm), flush=True)
     return BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
 
@@ -328,6 +343,7 @@ def create_targeted_consumer_instrobj(fuzzerstate):
 # Creates the instruction sequence that prepares valid addresses for the load and stores. Returns the respective sequence of constructors and parameters as zip.
 # They objects cannot be created inside the class because their current address for the next instruction needs to be increased, which is done outside of this function. 
 def create_memop_instrobjs(fuzzerstate, instr_str):
+    assert instr_str in IntLoadInstruction_t0.authorized_instr_strs or instr_str in IntStoreInstruction_t0.authorized_instr_strs, f"{instr_str} not in a valid memory operation."
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.
     if instr_str in ["lb","sb","lbu"]:
         alignment_bits = 0
@@ -338,7 +354,7 @@ def create_memop_instrobjs(fuzzerstate, instr_str):
     elif instr_str in ["lw","sw"]:
         alignment_bits = 2
         min_space = 4
-
+    
     addr  = fuzzerstate.memview.gen_random_addr_from_randomblock(alignment_bits,min_space)
     assert addr is not None
     uimm0, uimm1 = li_into_reg(to_unsigned(addr, fuzzerstate.is_design_64bit), False)

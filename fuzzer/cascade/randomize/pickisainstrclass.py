@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT
 from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_fence, is_forbid_vexriscv_csrs
 from cascade.util import ISAInstrClass, IntRegIndivState
-from params.fuzzparams import NUM_MIN_FREE_INTREGS
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PERTURBANCE_FACTOR
 from cascade.privilegestate import PrivilegeStateEnum, is_ready_to_descend_privileges
 import random
 from copy import copy
@@ -209,6 +209,19 @@ def _filter_sensitive_instr_weights(fuzzerstate, filtered_weights: list):
         filtered_weights[ISAInstrClass.MEMFPU]  = 0
         filtered_weights[ISAInstrClass.MEMFPUD] = 0
 
+# When there's too much taint, we choose an RegImm or ImmRd to untaint some register(s).
+# When there's only little taint, we increase chance for RegImm or ImmRd to add taint.
+def _filter_taint(fuzzerstate, filtered_weights: list):
+    n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
+    if n_free_untainted_regs < NUM_MIN_FREE_INTREGS:
+        filtered_weights = dict.fromkeys(filtered_weights,0)
+        filtered_weights[ISAInstrClass.ALU] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU]
+        filtered_weights[ISAInstrClass.ALU64] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU64]
+    elif n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2:
+        filtered_weights[ISAInstrClass.ALU] *= TAINT_IMM_PERTURBANCE_FACTOR
+        filtered_weights[ISAInstrClass.ALU64] *= TAINT_IMM_PERTURBANCE_FACTOR
+
+
 ###
 # Exposed function
 ###
@@ -219,5 +232,6 @@ def gen_next_isainstrclass(fuzzerstate) -> ISAInstrClass:
     _filter_regfsm_weight(fuzzerstate, filtered_weights)
     _filter_csr_weight(fuzzerstate, filtered_weights)
     _filter_sensitive_instr_weights(fuzzerstate, filtered_weights)
+    _filter_taint(fuzzerstate, filtered_weights)
 
     return _gen_next_isainstrclass_from_weights(filtered_weights)

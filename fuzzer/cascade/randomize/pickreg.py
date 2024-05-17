@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT, PRINT_FSM_TRANSITIONS
-from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG
+from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG, NUM_MIN_TAINTED_REGS
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
 from cascade.util import IntRegIndivState
@@ -25,7 +25,6 @@ class IntRegPickState:
         self.__reg_weights_t0  = np.ones(self.num_pickable_regs)
         self.__reg_weights_t0 /= np.sum(self.__reg_weights_t0)
 
-        # self.regs   = [IntRegIndivState.FREE for _ in range(self.num_pickable_regs)]
         self.setup_registers()
         # Permits matching sensitive instructions with the producers
         self.__last_producer_ids = np.zeros(self.num_pickable_regs)
@@ -61,7 +60,6 @@ class IntRegPickState:
                 self.regs[i+1].set_val_t0(random.randint(1,MAX_32b))
             else:
                 self.regs[i+1].set_val_t0(0x0)
-        fuzzerstate.inject_taint_addr = -1
         self.regs[RELOCATOR_REGISTER_ID].set_val(SPIKE_STARTADDR)
         self.regs[RELOCATOR_REGISTER_ID].set_val_t0(0x0)
         self.regs[RDEP_MASK_REGISTER_ID].set_val(MAX_32b)
@@ -76,7 +74,6 @@ class IntRegPickState:
     def reset(self):
         for reg in self.regs.values():
             reg.reset()
-        # self.writeback_trace = {}
 
     def get_free_regs_onehot(self):
         ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
@@ -108,17 +105,23 @@ class IntRegPickState:
             assert np.any(authorized_regs_onehot)
         return self.__reg_weights * authorized_regs_onehot
 
+    def _get_taint_hws(self):
+        return np.asarray([self.regs[reg_id].get_val_t0().bit_count()/self.regs[reg_id].n_bits for reg_id in range(self.num_pickable_regs)])
+
+    def _get_taint_ps(self, inverse: bool):
+        taint_hws = self._get_taint_hws()
+        if not inverse:
+            taint_ps = self.__reg_weights + taint_hws*REGPICK_PROTUBERANCE_RATIO_T0_POS # Add pertubation to drive probability up for registers with higher taint hamming weight.
+            taint_ps = np.asarray([i if i<MAX_WEIGHT_T0 else MAX_WEIGHT_T0 for i in taint_ps]) # upper bound with MAX_WEIGHT_T0
+        else:
+            taint_ps = self.__reg_weights - taint_hws*REGPICK_PROTUBERANCE_RATIO_T0_NEG # Substract to do the opposite.            
+            taint_ps = np.asarray([i if i>MIN_WEIGHT_T0 else MIN_WEIGHT_T0 for i in taint_ps]) # lower bound with MIN_WEIGHT_T0
+        return taint_ps
+
     # Weights after deducting the forbidden registers
     def get_effective_weights_t0(self, authorized_regs_onehot, inverse = False, force = False):
         if not force:
-            taint_hws = np.asarray([self.regs[reg_id].get_val_t0().bit_count()/self.regs[reg_id].n_bits for reg_id in range(self.num_pickable_regs)])
-            if not inverse:
-                taint_ps = self.__reg_weights + taint_hws*REGPICK_PROTUBERANCE_RATIO_T0_POS # Add pertubation to drive probability up for registers with higher taint hamming weight.
-                taint_ps = np.asarray([i if i<MAX_WEIGHT_T0 else MAX_WEIGHT_T0 for i in taint_ps]) # upper bound with MAX_WEIGHT_T0
-            else:
-                taint_ps = self.__reg_weights - taint_hws*REGPICK_PROTUBERANCE_RATIO_T0_NEG # Substract to do the opposite.            
-                taint_ps = np.asarray([i if i>MIN_WEIGHT_T0 else MIN_WEIGHT_T0 for i in taint_ps]) # lower bound with MIN_WEIGHT_T0
-
+            taint_ps = self._get_taint_ps(inverse)
         else:
             if inverse:
                 taint_ps = self.get_untainted_regs_onehot()
@@ -286,8 +289,6 @@ class IntRegPickState:
             self.__reg_weights[reg_id] = self.__reg_weights[reg_id] * (1-REGPICK_PROTUBERANCE_RATIO) / sum_of_others
         self.__reg_weights[outreg] = REGPICK_PROTUBERANCE_RATIO
 
-
-
     # Getter and setter for register states
     def get_regstate(self, reg_id: int):
         if DO_ASSERT:
@@ -387,6 +388,9 @@ class IntRegPickState:
     def get_num_untainted_regs_in_state(self, req_state: IntRegIndivState) -> bool:
         return np.sum(self.__regs_in_state_onehot[req_state] * self.get_untainted_regs_onehot())
 
+    def get_num_tainted_regs_in_state(self, req_state: IntRegIndivState) -> bool:
+        return np.sum(self.__regs_in_state_onehot[req_state] * self.get_tainted_regs_onehot())
+
     def pick_int_reg_in_state(self, req_state: IntRegIndivState):
         if DO_ASSERT:
             assert self.exists_reg_in_state(req_state), f"No reg in state `{req_state}`"
@@ -442,6 +446,32 @@ class IntRegPickState:
             self.writeback_trace_in_situ[addr] = (rd, val_t0)
         else:
             self.writeback_trace_final[addr] = (rd,val_t0)
+            
+    def analyze_writeback_trace(self, use_final: bool = True):
+        n_tainted_bits = 0
+        n_untainted_bits = 0
+        traces = self.writeback_trace_final if use_final else self.writeback_trace_in_situ
+        for trace in traces.values():
+            n_tainted_bits += trace[1].bit_count()
+            n_untainted_bits += (64 if self.fuzzerstate.is_design_64bit else 32) - trace[1].bit_count()
+        # print(f"{n_tainted_bits}/{n_untainted_bits}/{len(traces)} (n_tainted_bits/n_untainted_bits/len(traces))")
+        return n_tainted_bits, n_untainted_bits
+
+    # NOT TESTED, DO NOT USE
+    def pick_two_free_regs_with_property(self, property_func):
+        raise NotImplementedError("This is not tested and should not be used.")
+        free_regs = self.get_free_regs_onehot()
+        for reg0_id in range(self.num_pickable_regs):
+            if not free_regs[reg0_id]:
+                continue
+            reg0_val = self.regs[reg0_id].get_val()
+            for reg1_id in range(self.num_pickable_regs):
+                if not free_regs[reg1_id]:
+                    continue
+                reg1_val = self.regs[reg1_id].get_val()
+                if property_func(reg0_val,reg1_val):
+                    return reg0_id, reg1_id
+
 # Float registers are never forbidden, therefore this is simpler than integer registers.
 class FloatRegPickState:
     def __init__(self, fuzzerstate):
@@ -475,3 +505,4 @@ class FloatRegPickState:
                 # We also do it (for performance) for outreg and we overwrite it later
                 self.__reg_weights[reg_id] = self.__reg_weights[reg_id] * (1-REGPICK_PROTUBERANCE_RATIO) / sum_of_others
             self.__reg_weights[outreg] = REGPICK_PROTUBERANCE_RATIO
+

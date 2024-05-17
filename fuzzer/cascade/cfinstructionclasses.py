@@ -1379,8 +1379,8 @@ class RawDataWord:
     def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         print(self.get_str(is_spike_resolution))
 
-    def write(self):
-        self.fuzzerstate.memview.write(self.addr, self.wordval, 4)
+    def write(self, is_spike_resolution: bool = False):
+        self.fuzzerstate.memview.write(self.addr, self.gen_bytecode_int(is_spike_resolution), 4)
 
 ###
 # For exceptions

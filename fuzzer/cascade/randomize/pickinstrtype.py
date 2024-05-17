@@ -5,7 +5,7 @@
 from cascade.cfinstructionclasses import *
 from cascade.toleratebugs import is_tolerate_cva6_fdivs_flags, is_tolerate_vexriscv_imprecise_fcvt, is_tolerate_vexriscv_fmin, is_tolerate_vexriscv_double_to_float, is_tolerate_vexriscv_dependent_single_precision, is_tolerate_vexriscv_dependent_fle_feq_ret1, is_tolerate_vexriscv_dependent_flt_ret0, is_tolerate_vexriscv_sqrt, is_tolerate_vexriscv_muldiv_conversion
 from cascade.util import ISAInstrClass, IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS
-from params.fuzzparams import NUM_MIN_FREE_INTREGS
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS
 
 from copy import copy
 from collections import defaultdict
@@ -130,6 +130,11 @@ def gen_next_instrstr_from_isaclass(isaclass: ISAInstrClass, fuzzerstate) -> str
     if isaclass == ISAInstrClass.SPECIAL:
         fuzzerstate.special_instrs_count += 1
 
+    if isaclass in [ISAInstrClass.ALU, ISAInstrClass.ALU64]:
+        n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
+        if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS+1: # Use an lui to overwrite a tainted register with untainted value.
+            return "lui"
+
     if fuzzerstate.design_name == "cva6":
         # Double precision
         keys_and_weights_dict["fsqrt.d"] = 0
@@ -150,6 +155,9 @@ def gen_next_instrstr_from_isaclass(isaclass: ISAInstrClass, fuzzerstate) -> str
         assert isaclass != ISAInstrClass.TVECFSM  , "ISAInstrClass.TVECFSM must be treated separately"
         assert isaclass != ISAInstrClass.PPFSM    , "ISAInstrClass.PPFSM must be treated separately"
         assert isaclass != ISAInstrClass.EPCFSM   , "ISAInstrClass.EPCFSM must be treated separately"
+    
+    # if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS+1:
+    #     keys_and_weights_dict["lui"] = max(keys_and_weights_dict.values())
 
     ret = None
     while ret is None or keys_and_weights_dict[ret] == 0:
