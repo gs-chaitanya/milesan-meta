@@ -446,3 +446,7 @@ class FuzzerState:
         self.simulate_execution(True,print_execution=print_execution, reset_after_execution=True)
         self.simulate_execution(False,print_execution=print_execution, reset_after_execution=True)
         self.verify_writeback_t0(print_trace=print_trace)
+
+    def log(self, log_msg):
+        with open(f"{self.tmp_dir}/log.txt", "a") as f:
+            f.write(log_msg)
