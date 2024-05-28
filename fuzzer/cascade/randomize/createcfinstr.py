@@ -137,11 +137,10 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
             while imm is None or (fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR) and not is_tolerate_branchpred(fuzzerstate.design_name)):
                 imm = gen_random_imm_from_rng(rng, instr_str, fuzzerstate.is_design_64bit)
 
-        if DO_ASSERT:
-            if not is_tolerate_branchpred(fuzzerstate.design_name):
-                assert not fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR), f"Chose tainted CL at {hex(curr_addr+imm+SPIKE_STARTADDR)} (plan_taken: {plan_taken}, is_random_data_block_in_reach: {is_random_data_block_in_reach})"
-    # print('New imm', hex(imm), flush=True)
-    return BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
+    if DO_ASSERT:
+            assert is_tolerate_branchpred(fuzzerstate.design_name) or not fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR), f"Chose tainted CL at {hex(curr_addr+imm+SPIKE_STARTADDR)} (plan_taken: {plan_taken}, is_random_data_block_in_reach: {is_random_data_block_in_reach})"
+    instr = BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
+    return instr
 
 def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg()
