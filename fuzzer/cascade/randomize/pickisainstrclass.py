@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT
 from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_fence, is_forbid_vexriscv_csrs
 from cascade.util import ISAInstrClass, IntRegIndivState
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PERTURBANCE_FACTOR
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR
 from cascade.privilegestate import PrivilegeStateEnum, is_ready_to_descend_privileges
 import random
 from copy import copy
@@ -218,8 +218,8 @@ def _filter_taint(fuzzerstate, filtered_weights: list):
         filtered_weights[ISAInstrClass.ALU] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU]
         filtered_weights[ISAInstrClass.ALU64] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU64]
     elif n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2:
-        filtered_weights[ISAInstrClass.ALU] *= TAINT_IMM_PERTURBANCE_FACTOR
-        filtered_weights[ISAInstrClass.ALU64] *= TAINT_IMM_PERTURBANCE_FACTOR
+        filtered_weights[ISAInstrClass.ALU] *= TAINT_IMM_PROTURBANCE_FACTOR
+        filtered_weights[ISAInstrClass.ALU64] *= TAINT_IMM_PROTURBANCE_FACTOR
 
 
 ###

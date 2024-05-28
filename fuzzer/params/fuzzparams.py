@@ -135,6 +135,10 @@ MAX_NUM_INIT_TAINTED_REGS = 5
 # There should be at least this number of untainted regs
 NUM_MIN_UNTAINTED_INTREGS = 2
 
+NUM_MIN_TAINTED_REGS = 1
+
+P_RANDOM_DATA_TAINTED = 0.1
+
 MIN_WEIGHT_T0 = 0.01
 MAX_WEIGHT_T0 = 1
 
@@ -142,13 +146,23 @@ MAX_WEIGHT_T0 = 1
 REGPICK_PROTUBERANCE_RATIO_T0_POS = 0.3
 REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.2
 
+
 ALLOW_CSR_TAINT = False
 
 P_UNTAINT_BIT = 0.3 # probability to untaint a single bit during input taint reduction
 
+# factor by which we multiply the probability for an ALU ISA class s.t. 
+# it is more likely to be chosen when there is too little taint in the registers
+TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MAX_BBS_UPPERBOUND = 30
-NUM_MIN_BBS_LOWERBOUND = 5
+NUM_MAX_BBS_UPPERBOUND = 100
+NUM_MIN_BBS_LOWERBOUND = 20
 NUM_BBS = 0
+
+# The tanh saturates, so that we don't neglect registers that have only few bits tainted when there are regs that have much more bits tainted
+USE_TAINT_TANH = True
+USE_TAINT_HW = False
+USE_TAINT_BIN = False
+assert USE_TAINT_TANH or USE_TAINT_BIN or USE_TAINT_HW
