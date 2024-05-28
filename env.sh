@@ -12,7 +12,7 @@ else
 	myroot=$(cd $(dirname $0) && pwd -P)
 fi
 
-echo "metarepo root: $myroot"
+echo "cascade metarepo root: $myroot"
 
 # Set meta repo root
 export CASCADE_META_ROOT=$myroot
