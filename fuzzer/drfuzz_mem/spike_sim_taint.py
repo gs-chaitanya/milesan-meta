@@ -16,6 +16,7 @@ from cascade.spikeresolution import spike_resolution_return_interm
 MAX_CYCLES_PER_INSTR = 30
 SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
 def spike_sim_taint(fuzzerstate, expected_regvals):    
+    raise NotImplementedError("This function is depricated as we don't inject taint in register selection bits anymore.")
     # get fuzzerstate and expected regvals from program
     pc_reg_pairs_0 = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
     for req, regval in zip(expected_regvals[2],expected_regvals[3]):

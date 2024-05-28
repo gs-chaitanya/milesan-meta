@@ -33,6 +33,12 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         rtl_elfpath = fuzzerstate.rtl_elfpath
         interm_elfpath = fuzzerstate.interm_elfpath
         fuzzerstate.curr_pc = SPIKE_STARTADDR
+
+    # n_tainted_bits, n_untainted_bits, n_tainted_writes, total_writes = fuzzerstate.intregpickstate.analyze_writeback_trace(use_final=False)
+    # print(f"\t Ratio of tainted/total writeback bits {n_tainted_bits}/{n_untainted_bits+n_tainted_bits} -> {n_tainted_bits/(n_untainted_bits+n_tainted_bits)}")
+    # print(f"\t Ratio of tainted/total writebacks {n_tainted_writes}/{total_writes} -> {n_tainted_writes/total_writes}")
+
+    # return fuzzerstate
     # Retrieve register stream and final intregvals from spike.
     pc_reg_pairs = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
     for req, regval in zip(expected_regvals[2],expected_regvals[3]):
@@ -82,7 +88,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 assert trace_in_situ[1] == trace_final[1], f"Mismatch in taint trace between in-situ simulation and final elf: {hex(addr_final)}: {ABI_INAMES[trace_in_situ[0]]} <- {hex(trace_in_situ[1])}/{hex(trace_final[1])} (in-situ/final).{filter_reg_t0_traceback(trace_in_situ[0],addr_in_situ,fuzzerstate).get_str()}"
                 # else:
                 #     print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}")
-
+        
         if PRINT_REGISTER_VALIDATION:
             print("*** REGISTER VALIDATION ***:")
             fuzzerstate.intregpickstate.print_and_compare(final_regvals_rtl)
@@ -114,6 +120,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         print(f"Failed for seed {seed}")
         if "There are less" in str(e):
             fuzzerstate.remove_tmp_files()
+        else:
+            fuzzerstate.log(str(e))
         raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate)
 
     return fuzzerstate
