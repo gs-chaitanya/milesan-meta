@@ -1,11 +1,10 @@
 from params.fuzzparams import TAINT_EN
-from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
+from cascade.randomize.pickbytecodetaints import OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS
 from cascade.cfinstructionclasses import *
-from cascade.util import CFInstructionClass, ExceptionCauseVal
-from cascade.privilegestate import PrivilegeStateEnum
+from cascade.util import ExceptionCauseVal
 from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from cascade.registers import ABI_INAMES
-from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0, PRINT_INSTRUCTION_EXECUTION_IN_SITU
+from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0
 import random
 import numpy as np
 
@@ -123,11 +122,9 @@ class RDInstruction_t0(CFInstruction_t0):
         assert self.fuzzerstate.taint_en
         if self.rd_t0 == 0:
             self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(res_t0)
-            self.fuzzerstate.intregpickstate.add_writeback_trace(self.addr, self.rd, res_t0, is_spike_resolution)
-            if PRINT_WRITEBACK_T0: 
-                print(f"writeback_t0: {self.get_str(is_spike_resolution)}: {ABI_INAMES[self.rd]} <- {hex(res_t0)}")
+            self.fuzzerstate.intregpickstate.add_writeback_trace(self, self.rd, res_t0, is_spike_resolution)
             return
-
+        raise NotImplementedError
         for alt_rd_id, alt_rd in self.fuzzerstate.intregpickstate.regs.items():
             if (alt_rd_id^self.rd)&(~self.rd_t0) == 0: # only differ in the tainted bits, therefore this register will get tainted
                 taints = alt_rd.get_val()^res # the taint vector is one in the bits that differ
@@ -492,11 +489,9 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
         assert self.fuzzerstate.taint_en
         if self.rdep_t0 == 0:
             self.fuzzerstate.intregpickstate.regs[self.rdep].set_val_t0(res_t0)
-            self.fuzzerstate.intregpickstate.add_writeback_trace(self.addr, self.rdep, res_t0, is_spike_resolution)
-            if PRINT_WRITEBACK_T0: 
-                print(f"writeback_t0: {self.get_str(is_spike_resolution)}: {ABI_INAMES[self.rdep]} <- {hex(res_t0)}")
+            self.fuzzerstate.intregpickstate.add_writeback_trace(self, self.rdep, res_t0, is_spike_resolution)
             return
-
+        raise NotImplementedError
         for alt_rdep_id, alt_rdep in self.fuzzerstate.intregpickstate.regs.items():
             if (alt_rdep_id^self.rdep)&(~self.rdep_t0) == 0 and self.rdep_t0 != 0: # only differ in the tainted bits, therefore this register will get tainted
                 taints = alt_rdep.get_val()^res # the taint vector is one in the bits that differ

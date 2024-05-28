@@ -2,9 +2,10 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT, PRINT_FSM_TRANSITIONS
+from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT, PRINT_FSM_TRANSITIONS, PRINT_WRITEBACK_T0
 from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG, NUM_MIN_TAINTED_REGS
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
+from params.fuzzparams import USE_TAINT_HW, USE_TAINT_TANH, USE_TAINT_BIN
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
 from cascade.util import IntRegIndivState
 from cascade.registers import IntRegister, ABI_INAMES
@@ -105,16 +106,27 @@ class IntRegPickState:
             assert np.any(authorized_regs_onehot)
         return self.__reg_weights * authorized_regs_onehot
 
-    def _get_taint_hws(self):
+    def _get_rel_taint_hw(self): 
         return np.asarray([self.regs[reg_id].get_val_t0().bit_count()/self.regs[reg_id].n_bits for reg_id in range(self.num_pickable_regs)])
 
+    def _get_taint_bin(self): 
+        return np.asarray([self.regs[reg_id].get_val_t0().bit_count()>0 for reg_id in range(self.num_pickable_regs)])
+
+    def _get_rel_taint_tanh(self): # this is nice because it saturates and thus we prefer more taint but dont overfit on fully tainted regs
+        return np.asarray([np.tanh(self.regs[reg_id].get_val_t0().bit_count()*np.pi/self.regs[reg_id].n_bits) for reg_id in range(self.num_pickable_regs)])
+
     def _get_taint_ps(self, inverse: bool):
-        taint_hws = self._get_taint_hws()
-        if not inverse:
-            taint_ps = self.__reg_weights + taint_hws*REGPICK_PROTUBERANCE_RATIO_T0_POS # Add pertubation to drive probability up for registers with higher taint hamming weight.
+        if USE_TAINT_TANH:
+            taint_ps = self._get_rel_taint_tanh()
+        elif USE_TAINT_HW:
+            taint_ps = self._get_rel_taint_hw()
+        elif USE_TAINT_BIN:
+            taint_ps = self._get_taint_bin()
+        if not inverse: # taint makes them more likely
+            taint_ps = self.__reg_weights + taint_ps*REGPICK_PROTUBERANCE_RATIO_T0_POS # Add pertubation to drive probability up for registers with higher taint hamming weight.
             taint_ps = np.asarray([i if i<MAX_WEIGHT_T0 else MAX_WEIGHT_T0 for i in taint_ps]) # upper bound with MAX_WEIGHT_T0
-        else:
-            taint_ps = self.__reg_weights - taint_hws*REGPICK_PROTUBERANCE_RATIO_T0_NEG # Substract to do the opposite.            
+        else: # taint makes them less likely
+            taint_ps = self.__reg_weights - taint_ps*REGPICK_PROTUBERANCE_RATIO_T0_NEG # Substract to do the opposite.            
             taint_ps = np.asarray([i if i>MIN_WEIGHT_T0 else MIN_WEIGHT_T0 for i in taint_ps]) # lower bound with MIN_WEIGHT_T0
         return taint_ps
 
@@ -156,6 +168,10 @@ class IntRegPickState:
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(self.get_free_regs_onehot(), False, force))[0]
         if DO_ASSERT:
             assert self.regs[id].fsm_state == IntRegIndivState.FREE
+        # if self.regs[id].get_val_t0() != 0:
+        #     print(f"WANT TAINTED: Got tainted reg.")
+        # else:
+        #     print(f"WANT TAINTED: Got tainted reg.")
         return id
 
     # Excludes the zero register
@@ -178,6 +194,10 @@ class IntRegPickState:
         authorized_regs_onehot[0] = was_zero_authorized
         if DO_ASSERT:
             assert self.regs[id].fsm_state == IntRegIndivState.FREE
+        # if self.regs[id].get_val_t0() == 0:
+        #     print(f"WANT TAINTED: Did not get tainted reg.")
+        # else:
+            # print(f"WANT TAINTED: Got tainted reg.")
         return id
 
     # Excludes the zero register. When force is enabled, will either throw an exception or return an untainted register.
@@ -191,6 +211,10 @@ class IntRegPickState:
         authorized_regs_onehot[0] = was_zero_authorized
         if DO_ASSERT:
             assert self.regs[id].fsm_state == IntRegIndivState.FREE
+        # if self.regs[id].get_val_t0() == 0:
+        #     print(f"WANT UNTAINTED: Got untainted reg.")
+        # else:
+        #     print(f"WANT UNTAINTED: Got tainted reg.")
         return id
 
     # Includes the zero register. When force is enabled, will either throw an exception or return an untainted register.
@@ -416,6 +440,10 @@ class IntRegPickState:
             assert untainted_regs_in_state[ret]
             if force:
                 assert self.regs[ret].get_val_t0() == 0, f"Chosen register {ABI_INAMES[ret]} is tainted! {untainted_regs_in_state}"
+        # if self.regs[ret].get_val_t0() == 0:
+        #     print(f"WANT UNTAINTED: Got untainted reg.")
+        # else:
+        #     print(f"WANT UNTAINTED: Got tainted reg.")
         return ret
     
     def display(self):
@@ -441,21 +469,26 @@ class IntRegPickState:
             value_t0 = int(regdumps_rtl[reg_id]["value_t0"],16)
             self.regs[reg_id+1].print_and_compare(value,value_t0)
 
-    def add_writeback_trace(self, addr, rd, val_t0, is_spike_resolution):
+    def add_writeback_trace(self, instr, reg, val_t0, is_spike_resolution):
+        if PRINT_WRITEBACK_T0: 
+            row = [instr.get_str(is_spike_resolution), ABI_INAMES[reg], val_t0]
+            print("WRITEBACK_T0: {: <75}: {: >5} <- 0x{:016x}".format(*row))
         if is_spike_resolution:
-            self.writeback_trace_in_situ[addr] = (rd, val_t0)
+            self.writeback_trace_in_situ[instr.addr] = (reg, val_t0)
         else:
-            self.writeback_trace_final[addr] = (rd,val_t0)
+            self.writeback_trace_final[instr.addr] = (reg,val_t0)
             
     def analyze_writeback_trace(self, use_final: bool = True):
         n_tainted_bits = 0
         n_untainted_bits = 0
+        n_tainted_writes = 0
         traces = self.writeback_trace_final if use_final else self.writeback_trace_in_situ
         for trace in traces.values():
             n_tainted_bits += trace[1].bit_count()
             n_untainted_bits += (64 if self.fuzzerstate.is_design_64bit else 32) - trace[1].bit_count()
+            n_tainted_writes += int(trace[1].bit_count() > 0)
         # print(f"{n_tainted_bits}/{n_untainted_bits}/{len(traces)} (n_tainted_bits/n_untainted_bits/len(traces))")
-        return n_tainted_bits, n_untainted_bits
+        return n_tainted_bits, n_untainted_bits, n_tainted_writes, len(traces)
 
     # NOT TESTED, DO NOT USE
     def pick_two_free_regs_with_property(self, property_func):
