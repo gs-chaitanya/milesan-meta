@@ -18,7 +18,7 @@ from copy import deepcopy
 import numpy as np
 # from params.runparams import DO_ASSERT
 from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS, P_UNTAINT_BIT
-from params.runparams import CHECK_MEM_T0_PRECISE, PRINT_MEM_STORES, PRINT_MEM_STORES_T0, PRINT_MEM_LOADS, PRINT_MEM_LOADS_T0
+from params.runparams import CHECK_MEM_T0_PRECISE, PRINT_MEM_STORES, PRINT_MEM_STORES_T0, PRINT_MEM_LOADS, PRINT_MEM_LOADS_T0, INSERT_REGDUMPS
 from cascade.spikeresolution import SPIKE_STARTADDR
 from cascade.registers import MAX_32b, MAX_64b
 from common.designcfgs import get_design_reg_dump_addr, get_design_fpreg_dump_addr, get_design_reg_stream_addr, get_design_cl_size
@@ -199,8 +199,8 @@ class MemoryView:
 
     def read(self, addr, n_bytes: int = 4):
         if DO_ASSERT:
-            assert addr >= SPIKE_STARTADDR
-            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
+            assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
+            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
         val = 0
         for i in range(n_bytes):
             assert addr+i in self.data, f"Read request from invalid address {hex(addr+i)}."
@@ -213,8 +213,8 @@ class MemoryView:
 
     def read_t0(self, addr, n_bytes: int = 4):
         if DO_ASSERT:
-            assert addr >= SPIKE_STARTADDR
-            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
+            assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
+            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
         val_t0 = 0
         for i in range(n_bytes):
             assert addr+i in self.data_t0, f"Taint read request from invalid address {hex(addr+i)}."
@@ -227,8 +227,8 @@ class MemoryView:
 
     def write(self, addr, val, n_bytes):
         if DO_ASSERT:
-            assert addr >= SPIKE_STARTADDR
-            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
+            assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
+            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
         if PRINT_MEM_STORES: 
             print(f"VAL: Writing {n_bytes} bytes {hex(val)} to {hex(addr)}")
         for i in range(n_bytes):
@@ -240,8 +240,8 @@ class MemoryView:
 
     def write_t0(self, addr, val_t0, n_bytes):
         if DO_ASSERT:
-            assert addr >= SPIKE_STARTADDR
-            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
+            assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
+            assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
         if PRINT_MEM_STORES_T0: 
             print(f"TAINT: Writing {n_bytes} bytes {hex(val_t0)} to {hex(addr)}")
         for i in range(n_bytes):
