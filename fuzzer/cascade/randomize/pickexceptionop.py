@@ -370,21 +370,19 @@ def gen_ppfill_instrs(fuzzerstate):
 
     if is_mpp:
         if target_privlvl == PrivilegeStateEnum.USER:
-            ret = [CSRRegInstruction_t0(fuzzerstate,"csrrc", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            return [CSRRegInstruction_t0], [(fuzzerstate,"csrrc", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
         elif target_privlvl == PrivilegeStateEnum.SUPERVISOR:
             # Could theretically be done in a single instruction if we had one more mask register.
-            ret = [CSRRegInstruction_t0(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), CSRRegInstruction_t0("csrrc", rd, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            return [CSRRegInstruction_t0, CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS),(fuzzerstate,"csrrc", rd, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
         elif target_privlvl == PrivilegeStateEnum.MACHINE:
-            ret = [CSRRegInstruction_t0(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret = [CSRRegInstruction_t0],[(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
         else:
             raise NotImplementedError("Hypervisor mode not implemented")
     else:
         if target_privlvl == PrivilegeStateEnum.USER:
-            ret = [CSRRegInstruction_t0(fuzzerstate,"csrrc", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS),
-                CSRRegInstruction_t0(fuzzerstate,"csrrc", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret = [CSRRegInstruction_t0,CSRRegInstruction_t0],[(fuzzerstate,"csrrc", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), (fuzzerstate,"csrrc", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
         elif target_privlvl == PrivilegeStateEnum.SUPERVISOR:
-            ret = [CSRRegInstruction_t0(fuzzerstate,"csrrs", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS),
-                CSRRegInstruction_t0(fuzzerstate,"csrrs", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret = [CSRRegInstruction_t0,CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), (fuzzerstate,"csrrs", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
         else:
             raise Exception("Invalid target privlvl when setting spp")
 
@@ -419,10 +417,11 @@ def gen_medeleg_instr(fuzzerstate):
         # The line below is a cool idea but makes the analysis more difficult, so we don't do it for now and we AND with bit_val
         # random_bit = random.randint(0, 1) # If this exception type is supported by the CPU, then the bit must be the same in Spike and in the CPU
         random_bit = bit_val and random.randint(0, 1)
-        val_to_write_cpu |= random_bit << bit_id
         # If the bit is not supported by the CPU, set it to 0 for Spike, but set it randomly for the CPU.
         if bit_val == 1:
             val_to_write_spike |= random_bit << bit_id
+            val_to_write_cpu |= random_bit << bit_id
+
 
     # Get some consumed register
     rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
@@ -436,5 +435,6 @@ def gen_medeleg_instr(fuzzerstate):
 
     # Update the delegated state in our model
     fuzzerstate.privilegestate.medeleg_val = val_to_write_spike
-
-    return GenericCSRWriterInstruction(CSR_IDS.MEDELEG, rd, rs1, producer_id, val_to_write_spike, val_to_write_cpu)
+    if rd > 0:
+        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True) # MEDLEG changes between spike and final elf, so cannot be used for taint computation
+    return GenericCSRWriterInstruction_t0(fuzzerstate, CSR_IDS.MEDELEG, rd, rs1, producer_id, val_to_write_spike, val_to_write_cpu)

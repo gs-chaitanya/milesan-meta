@@ -419,3 +419,12 @@ INTERESTING_CSRS_INACCESSIBLE_FROM_USER = [
 ]
 
 CSR_ABI_NAMES = [i.name.lower() for i in CSR_IDS]
+
+
+class CSRTypeEnum(enum.IntEnum):
+    WARL = enum.auto()
+    WLRL = enum.auto()
+    WPRI = enum.auto()
+
+CSR_TYPES = {i:CSRTypeEnum.WLRL for i in CSR_IDS}
+CSR_TYPES[CSR_IDS.MEDELEG] = CSRTypeEnum.WARL

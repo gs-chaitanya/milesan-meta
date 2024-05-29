@@ -2,8 +2,8 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
-from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF
+from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, RPROD_MASK_REGISTER_ID
+from params.fuzzparams import USE_MMU, USE_SPIKE_INTERM_ELF
 from params.runparams import DO_ASSERT, PRINT_CHECK_REGS, PRINT_REG_TRACEBACK, PRINT_FILTERED_REG_TRACEBACK
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
@@ -24,6 +24,7 @@ from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_IN
 from common.spike import SPIKE_STARTADDR
 from cascade.registers import ABI_INAMES, MAX_32b, MAX_64b, MAX_20b
 from cascade.util import ExceptionCauseVal
+from cascade.privilegestate import PrivilegeStateEnum
 import random
 import numpy as np
 
@@ -105,7 +106,8 @@ class BaseInstruction:
     instr_type = CFInstructionClass.NONE
     instr_func = None
     instr_func_t0 = None
-    injectable = False
+    priv_level = None
+    va_layout = None
 
     def __init__(self, fuzzerstate, instr_str):
         assert fuzzerstate is not None
@@ -198,8 +200,8 @@ class R12DInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.R12D
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
         if DO_ASSERT:
             assert rs1 >= 0
             assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID)
@@ -292,8 +294,8 @@ class ImmRdInstruction(ImmInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        self.instr_type = CFInstructionClass.IMMRD
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
         if DO_ASSERT:
             assert rd >= 0
             assert is_rd_nonpickable_ok or rd < MAX_NUM_PICKABLE_REGS or rd in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID)
@@ -326,8 +328,8 @@ class RegImmInstruction(ImmInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        self.instr_type = CFInstructionClass.REGIMM
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
 
         if DO_ASSERT:
             assert rs1 >= 0
@@ -388,10 +390,10 @@ class BranchInstruction(ImmInstruction):
     authorized_instr_strs = BranchInstructions
 
     # @param plan_taken is True iff the branch instruction is planned to be taken.
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        self.instr_type = CFInstructionClass.BRANCH
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
         if DO_ASSERT:
             assert rs1 >= 0
             assert rs1 < MAX_NUM_PICKABLE_REGS
@@ -400,7 +402,9 @@ class BranchInstruction(ImmInstruction):
         self.rs1 = rs1
         self.rs2 = rs2
         self.plan_taken = plan_taken
-        # self.producer_id = producer_id We do not use producers anymore for branches
+        self.va_layout = va_layout
+        self.priv_level = priv_level
+
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, {hex(self.imm)}"
@@ -454,15 +458,16 @@ JALInstructions = ("jal",)
 class JALInstruction(ImmInstruction):
     authorized_instr_strs = JALInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        self.instr_type = CFInstructionClass.JAL
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
         if DO_ASSERT:
             assert rd >= 0
             assert rd < MAX_NUM_PICKABLE_REGS
         self.rd  = rd
-        
+        self.va_layout = va_layout
+        self.priv_level = priv_level
+
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
@@ -477,10 +482,9 @@ JALRInstructions = ("jalr",)
 class JALRInstruction(ImmInstruction):
     authorized_instr_strs = JALRInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, to_new_layout: bool = False, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        self.instr_type = CFInstructionClass.JALR
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
         if DO_ASSERT:
             assert rd >= 0
             assert rd < MAX_NUM_PICKABLE_REGS
@@ -489,6 +493,9 @@ class JALRInstruction(ImmInstruction):
         self.rd  = rd
         self.rs1 = rs1
         self.producer_id = producer_id
+        self.va_layout = va_layout
+        self.priv_level = priv_level
+        self.to_new_layout = to_new_layout
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
@@ -504,8 +511,8 @@ class SpecialInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int = 0, rs1: int = 0, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.SPECIAL
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
         self.rd = rd
         self.rs1 = rs1
 
@@ -529,8 +536,8 @@ class EcallEbreakInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.ECALL
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -547,11 +554,9 @@ IntLoadInstructions = ("lb", "lh", "lw", "lbu", "lhu", "lwu", "ld")
 class IntLoadInstruction(ImmInstruction):
     authorized_instr_strs = IntLoadInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        self.instr_type = CFInstructionClass.INTLOAD
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
-
+    
         if DO_ASSERT:
             assert rd >= 0
             assert rd < MAX_NUM_PICKABLE_REGS
@@ -560,6 +565,9 @@ class IntLoadInstruction(ImmInstruction):
         self.rd  = rd
         self.rs1 =  rs1
         self.producer_id = producer_id
+        self.va_layout = va_layout
+        self.priv_level = priv_level
+
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.imm}({ABI_INAMES[self.rs1]}) "
@@ -590,11 +598,9 @@ IntStoreInstructions = ("sb", "sh", "sw", "sd")
 class IntStoreInstruction(ImmInstruction):
     authorized_instr_strs = IntStoreInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout : int = -1, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        self.instr_type = CFInstructionClass.INTSTORE
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
-
+        
         if DO_ASSERT:
             assert rs1 >= 0
             assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID)
@@ -603,6 +609,8 @@ class IntStoreInstruction(ImmInstruction):
         self.rs1 =  rs1
         self.rs2  = rs2
         self.producer_id = producer_id
+        self.priv_level = priv_level
+        self.va_layout = va_layout
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
@@ -646,10 +654,8 @@ FloatLoadInstructions = ("flw", "fld")
 class FloatLoadInstruction(ImmInstruction):
     authorized_instr_strs = FloatLoadInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout : int = -1, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        self.instr_type = CFInstructionClass.FLOATLOAD
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
         if DO_ASSERT:
             assert frd >= 0
@@ -659,6 +665,8 @@ class FloatLoadInstruction(ImmInstruction):
         self.frd  = frd
         self.rs1 =  rs1
         self.producer_id = producer_id
+        self.va_layout = va_layout
+        self.priv_level = priv_level
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32f
@@ -676,11 +684,9 @@ FloatStoreInstructions = ("fsw", "fsd")
 class FloatStoreInstruction(ImmInstruction):
     authorized_instr_strs = FloatStoreInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, frs2: int, imm: int, producer_id: int, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, frs2: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout : int = -1, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        self.instr_type = CFInstructionClass.FLOATSTORE
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
-
+        
         if DO_ASSERT:
             assert rs1 >= 0
             assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID)
@@ -689,6 +695,8 @@ class FloatStoreInstruction(ImmInstruction):
         self.rs1  =  rs1
         self.frs2 = frs2
         self.producer_id = producer_id
+        self.va_layout = va_layout
+        self.priv_level = priv_level
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32f
@@ -708,8 +716,8 @@ class FloatToIntInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, frs1: int, rm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.F2I
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
 
         if DO_ASSERT:
             assert rm >= 0
@@ -760,8 +768,8 @@ class IntToFloatInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, rm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate,instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.I2F
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
 
         if DO_ASSERT:
             assert rm >= 0
@@ -811,8 +819,8 @@ class Float4Instruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, frs2: int, frs3: int, rm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.F4
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
 
         if DO_ASSERT:
             assert rm >= 0
@@ -869,8 +877,8 @@ class Float3Instruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, frs2: int, rm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.F3
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
 
         if DO_ASSERT:
             assert rm >= 0
@@ -923,8 +931,8 @@ class Float3NoRmInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, frs2: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.F3NORM
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
 
         if DO_ASSERT:
             assert frs1 >= 0
@@ -976,8 +984,8 @@ class Float2Instruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, rm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.F2
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
         if DO_ASSERT:
             assert rm >= 0
             assert rm < 8
@@ -1018,8 +1026,8 @@ class FloatIntRd2Instruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, frs1: int, frs2: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.FIRD2
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
         if DO_ASSERT:
             assert frs1 >= 0
             assert frs1 < MAX_NUM_PICKABLE_REGS
@@ -1062,8 +1070,8 @@ class FloatIntRd1Instruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, frs1: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.FIRD1
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
         if DO_ASSERT:
             assert frs1 >= 0
             assert frs1 < MAX_NUM_PICKABLE_REGS
@@ -1099,8 +1107,8 @@ class FloatIntRs1Instruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        self.instr_type = CFInstructionClass.FIRS1
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
         if DO_ASSERT:
             assert rs1 >= 0
             assert rs1 < MAX_NUM_PICKABLE_REGS
@@ -1149,8 +1157,8 @@ class CSRInstruction(CFInstruction):
         super().__init__(fuzzerstate, instr_str, iscompressed)
         self.csr_id = csr_id
         self.assert_csr_size()
-        self.instr_type = CFInstructionClass.CSR
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
 
 # CSR operations without immediate
 CSRRegInstructions = "csrrw", "csrrs", "csrrc"
@@ -1235,8 +1243,6 @@ class PlaceholderProducerInstr0(BaseInstruction):
         self.relocation_offset = 0
         self.spike_resolution_offset = None
         self.rtl_offset = None
-        self.instr_type = CFInstructionClass.NONE
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
     def get_str(self, is_spike_resolution: bool = False):
         if is_spike_resolution:
@@ -1252,13 +1258,20 @@ class PlaceholderProducerInstr0(BaseInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using lui
         if is_spike_resolution:
+            # If this is a virtual address, we set bit 32 to one to sign extend and crop the value so that it can be loaded into the register
+            spike_res_off = self.spike_resolution_offset
+            if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1: 
+                spike_res_off = (self.spike_resolution_offset | 0x80000000) & 0xffffffff # TODO double check if the check of the 64th bit is valid
             if DO_ASSERT:
-                assert self.spike_resolution_offset < (1 << 32)
-            return rv32i_lui(self.rd, li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0])
+                assert spike_res_off < (1 << 32), f"{hex(spike_res_off)}"
+            return rv32i_lui(self.rd, li_into_reg(to_unsigned(spike_res_off, self.fuzzerstate.is_design_64bit), False)[0])
         else:
+            rtl_off = self.rtl_offset
+            if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1:
+                rtl_off = (self.rtl_offset | 0x80000000) & 0xffffffff # TODO double check if the check of the 64th bit is valid
             if DO_ASSERT:
-                assert self.rtl_offset is not None, "Producer0 cannot produce final bytecode because it does not yet know the final offset."
-            return rv32i_lui(self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0])
+                assert rtl_off is not None, "Producer0 cannot produce final bytecode because it does not yet know the final offset."
+            return rv32i_lui(self.rd, li_into_reg(to_unsigned(rtl_off, self.fuzzerstate.is_design_64bit), False)[0])
 
 # Does not inherit from CFInstruction.
 class PlaceholderProducerInstr1(BaseInstruction):
@@ -1270,8 +1283,8 @@ class PlaceholderProducerInstr1(BaseInstruction):
         self.relocation_offset = 0
         self.spike_resolution_offset = None # Is also the target address
         self.rtl_offset = None
-        self.instr_type = CFInstructionClass.NONE
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
 
     def get_str(self, is_spike_resolution: bool = True):
         if is_spike_resolution:
@@ -1287,13 +1300,20 @@ class PlaceholderProducerInstr1(BaseInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using addi
         if is_spike_resolution:
+            spike_res_off = self.spike_resolution_offset
+            if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1:
+                spike_res_off = (self.spike_resolution_offset | 0x80000000) & 0xffffffff
             if DO_ASSERT:
-                assert self.spike_resolution_offset < (1 << 32)
-            return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1])
+                assert spike_res_off < (1 << 32)
+            return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(spike_res_off, self.fuzzerstate.is_design_64bit), False)[1])
         else:
+            rtl_off = self.rtl_offset
+            if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1: 
+                rtl_off = (self.rtl_offset | 0x80000000) & 0xffffffff # TODO double check if the check of the 64th bit is valid
             if DO_ASSERT:
-                assert self.rtl_offset is not None, "Producer1 cannot produce final bytecode because it does not yet know the final rtl_offset."
-            return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1])
+                assert rtl_off is not None, "Producer1 cannot produce final bytecode because it does not yet know the final rtl_offset."
+            return rv32i_addi(self.rd, self.rd, li_into_reg(to_unsigned(rtl_off, self.fuzzerstate.is_design_64bit), False)[1])
+
 
 # Does not inherit from CFInstruction.
 class PlaceholderPreConsumerInstr(BaseInstruction):
@@ -1301,16 +1321,29 @@ class PlaceholderPreConsumerInstr(BaseInstruction):
     def __init__(self, fuzzerstate, rdep: int):
         super().__init__(fuzzerstate,"and (PlaceholderPreConsumerInstr)")
         self.rdep = rdep
-        self.instr_type = CFInstructionClass.NONE
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
+        
+        
 
     def get_str(self, is_spike_resolution: bool = False):
         return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rdep]}, {ABI_INAMES[RDEP_MASK_REGISTER_ID]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
-        # Reduce the size of the rdep id to 30 bits
-        return rv32i_and(self.rdep, self.rdep, RDEP_MASK_REGISTER_ID)
-    
+        # Reduce the size of the rdep id to 32 bits
+
+        ##
+        # When in bare, we use a 32 bit RDEP_MASK_REGISTER_ID for both.
+        # If we are translating or generating the MEPC, we need to use the RPROD_MASK_REGISTER_ID loaded with the right value for the next layout
+        # to generate the RPROD reg. The issue is that bit 32 is always xored with one in resol, but not necessarly in the final (which interferes because we set bit 32 to 1 manually 
+        # to produce the final 32 bits). The detail is that since we deal with absolute addreses in virtual memory, we don't need to reolocated, so we set,
+        # The high bits to the correct value here already. Thus we cannot have a dependant register which modifies those bits. 
+        ##
+
+        if USE_MMU and self.fuzzerstate.is_design_64bit and self.is_rprod and self.va_layout != -1:
+            return rv32i_and(self.rdep, self.rdep, RPROD_MASK_REGISTER_ID)
+        elif USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1:
+            return rv32i_and(self.rdep, self.rdep, RDEP_MASK_REGISTER_ID_VIRT)
+        else:
+            return rv32i_and(self.rdep, self.rdep, RDEP_MASK_REGISTER_ID)
 
 # Does not inherit from CFInstruction.
 class PlaceholderConsumerInstr(BaseInstruction):
@@ -1324,9 +1357,6 @@ class PlaceholderConsumerInstr(BaseInstruction):
         self.rprod = rprod
         self.producer_id = producer_id
         self.dont_relocate_spike = False # We want to relocate spike for addresses, but not for some CSRs such as medeleg.
-        # self.target_val = None
-        self.instr_type = CFInstructionClass.NONE
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
     def get_str(self, is_spike_resolution: bool = False):
         if is_spike_resolution:
@@ -1339,10 +1369,12 @@ class PlaceholderConsumerInstr(BaseInstruction):
             assert not self.dont_relocate_spike, "We do not yet support dont_relocate_spike because it causes other problems that cause vals to change from the DUT by an offset of 0x80000000."
         # If this is the spike resolution, then just transmit the produced register
         if is_spike_resolution:
-            return rv32i_xor(self.rd, self.rprod, RELOCATOR_REGISTER_ID) # self.rprod - 0
+            if USE_MMU and self.va_layout != -1:
+                return rv32i_addi(0, 0, 0) # nop, if we are in virtual address space, we already use absolute addresses (only in sv39, sv48)
+            else:
+                return rv32i_xor(self.rd, self.rprod, RELOCATOR_REGISTER_ID) # self.rprod - 0
         else:
             return rv32i_xor(self.rd, self.rdep, self.rprod) # self.rdep - self.rprod
-
 
 def is_placeholder(obj):
     return isinstance(obj, PlaceholderProducerInstr0) or isinstance(obj, PlaceholderProducerInstr1) or isinstance(obj, PlaceholderPreConsumerInstr) or isinstance(obj, PlaceholderConsumerInstr)
@@ -1355,7 +1387,7 @@ def is_placeholder(obj):
 class RawDataWord:
     # @param intentionally_signed: When unset, we expect a non-negative wordval
     def __init__(self, fuzzerstate, wordval: int, signed: bool = False):
-        self.instr_type = CFInstructionClass.NONE
+        
         self.fuzzerstate = fuzzerstate
         self.addr = fuzzerstate.curr_ctxsv_bb_start_addr + 4*len(fuzzerstate.ctxsv_bbs[-1]) + SPIKE_STARTADDR
         if DO_ASSERT:
@@ -1398,22 +1430,36 @@ class ExceptionInstruction(BaseInstruction):
         super().__init__(fuzzerstate, 'ExceptionInstruction')
         self.is_mtvec = is_mtvec
         self.producer_id = producer_id
-        self.instr_type = CFInstructionClass.NONE
-        self.injectable = CFINSTRCLASS_INJECT_PROBS[self.instr_type]
 
 class SimpleIllegalInstruction(ExceptionInstruction):
-    def __init__(self, fuzzerstate, is_mtvec):
+    def __init__(self, fuzzerstate, is_mtvec, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1, old_privilege: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE):
         super().__init__(fuzzerstate, is_mtvec, None)
+        self.va_layout_after_op = va_layout_after_op
+        self.priv_level_after_op = priv_level_after_op
+        # For the reduce program
+        self.va_layout = None
+        self.priv_level = None
+        self.old_privilege = old_privilege
+
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return 0x00000000
 
 # Exception that encapsulates an instruction that causes an exception, such as a misaligned JAL.
 class SimpleExceptionEncapsulator(ExceptionInstruction):
-    def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr):
+    def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr, exception_op_type: ExceptionCauseVal, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1, old_privilege: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE):
         super().__init__(fuzzerstate, is_mtvec, producer_id)
         if DO_ASSERT:
             assert producer_id is None, "SimpleExceptionEncapsulator does not support a producer_id. If we want to support it, then we need to adapt gen_producer_id_to_tgtaddr in basicblock.py."
         self.instr = instr
+        self.exception_op_type = exception_op_type
+
+        self.va_layout_after_op = va_layout_after_op
+        self.priv_level_after_op = priv_level_after_op
+        # For the reduce program
+        self.va_layout = None
+        self.priv_level = None
+        self.old_privilege = old_privilege
+
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.instr.gen_bytecode_int(is_spike_resolution)
 
@@ -1436,8 +1482,15 @@ class MisalignedMemInstruction(ExceptionInstruction):
     MISALIGNED_FLD = 10 # Requires D extension
     MISALIGNED_FSD = 11
 
-    def __init__(self,fuzzerstate, is_mtvec: bool, is_load: bool, iscompressed: bool = False):
+    def __init__(self,fuzzerstate, is_mtvec: bool, is_load: bool, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1, old_privilege: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, iscompressed: bool = False):
         super().__init__(fuzzerstate, is_mtvec, None) # We compute the producer id later
+
+        self.va_layout_after_op = va_layout_after_op
+        self.priv_level_after_op = priv_level_after_op
+        # For the reduce program
+        self.va_layout = None
+        self.priv_level = None
+        self.old_privilege = old_privilege
 
         from cascade.randomize.pickreg import IntRegIndivState
         # First, choose a consumed register.
@@ -1554,13 +1607,35 @@ class MisalignedMemInstruction(ExceptionInstruction):
 # CSR writers
 ###
 
+# @remark we use a specific instruction for mstatus to find them easily when an exception occurs, to transmit back the expected value to the producer
+# @brief this instruction writes to mtvec or stvec
+class MstatusWriterInstruction(BaseInstruction):
+    def __init__(self, fuzzerstate, rd: int, rs1: int, producer_id: int, instr_str: str, mstatus_mask: int, old_sum_mprv = (None, None), priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
+        super().__init__(fuzzerstate, instr_str)
+        self.mstatus_mask = mstatus_mask
+        self.producer_id = producer_id
+
+        self.va_layout = va_layout
+        self.priv_level = priv_level
+
+        self.old_sum_mprv = old_sum_mprv
+
+        self.csr_instr = CSRRegInstruction(instr_str, rd, rs1, CSR_IDS.MSTATUS)
+
+    def gen_bytecode_int(self, is_spike_resolution: bool):
+        return self.csr_instr.gen_bytecode_int(is_spike_resolution)
+
+
 # @remark we use a specific instruction for xtvec to find them easily when an exception occurs, to transmit back the expected value to the producer
 # @brief this instruction writes to mtvec or stvec
 class TvecWriterInstruction(BaseInstruction):
-    def __init__(self, fuzzerstate, is_mtvec: bool, rd: int, rs1: int, producer_id: int):
+    def __init__(self, fuzzerstate, is_mtvec: bool, rd: int, rs1: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
         super().__init__(fuzzerstate,"TvecWriterInstruction")
         self.producer_id = producer_id
         self.is_mtvec = is_mtvec # A bit redundant with the content of csr_instr, but practical.
+
+        self.va_layout = va_layout
+        self.priv_level = priv_level
 
         csr_id = CSR_IDS.MTVEC if is_mtvec else CSR_IDS.STVEC
         self.csr_instr = CSRRegInstruction(fuzzerstate, "csrrw", rd, rs1, csr_id)
@@ -1576,10 +1651,13 @@ class TvecWriterInstruction(BaseInstruction):
 # @remark we use a specific instruction for xtvec to find them easily when an exception occurs, to transmit back the expected value to the producer
 # @brief this instruction writes to mepc or sepc
 class EPCWriterInstruction(BaseInstruction):
-    def __init__(self, fuzzerstate, is_mepc: bool, rd: int, rs1: int, producer_id: int):
+    def __init__(self, fuzzerstate, is_mepc: bool, rd: int, rs1: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
         super().__init__(fuzzerstate,'EPCWriterInstruction')
         self.producer_id = producer_id
         self.is_mepc = is_mepc # A bit redundant with the content of csr_instr, but practical.
+
+        self.va_layout = va_layout
+        self.priv_level = priv_level
 
         csr_id = CSR_IDS.MEPC if is_mepc else CSR_IDS.SEPC
         self.csr_instr = CSRRegInstruction(fuzzerstate, "csrrw", rd, rs1, csr_id)
@@ -1596,17 +1674,17 @@ class EPCWriterInstruction(BaseInstruction):
 # @The value written may differ between Spike and CPU
 class GenericCSRWriterInstruction(BaseInstruction):
     def __init__(self, fuzzerstate, csr_id: int, rd: int, rs1: int, producer_id: int, val_to_write_spike: int, val_to_write_cpu: int):
-        super().init(fuzzerstate,'GenericCSRWriterInstruction')
+        super().__init__(fuzzerstate,'GenericCSRWriterInstruction')
         if DO_ASSERT:
             assert csr_id in CSR_IDS
             # These two CSRs are treated separately in TvecWriterInstruction
             assert csr_id != CSR_IDS.MTVEC and csr_id != CSR_IDS.STVEC
             # Currently to ease analysis, we impose val_to_write_spike == val_to_write_cpu
-            
 
         self.producer_id = producer_id
         self.val_to_write_spike = val_to_write_spike
         self.val_to_write_cpu = val_to_write_cpu
+        assert val_to_write_cpu == val_to_write_spike
 
         self.csr_instr = CSRRegInstruction(fuzzerstate,"csrrw", rd, rs1, csr_id)
         assert self.addr == self.csr_instr.addr
@@ -1618,10 +1696,12 @@ class GenericCSRWriterInstruction(BaseInstruction):
         return self.csr_instr.get_str() + f" ({self.instr_str})"
 
 
-class PrivilegeDescentInstruction():
-    def __init__(self, fuzzerstate,is_mret: bool):
-        self.instr_str = 'PrivilegeDescentInstruction' # Just for compatibility with the fuzzer
+class PrivilegeDescentInstruction(BaseInstruction):
+    def __init__(self, fuzzerstate,is_mret: bool, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1):
+        super().__init__(fuzzerstate, 'PrivilegeDescentInstruction')
         self.is_mret = is_mret
+        self.va_layout_after_op = va_layout_after_op
+        self.priv_level_after_op = priv_level_after_op
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         if self.is_mret:

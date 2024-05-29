@@ -13,7 +13,7 @@ from cascade.randomize.createcfinstr import create_instr
 from cascade.randomize.pickisainstrclass import ISAInstrClass
 from cascade.randomize.forbidden_random_value import is_forbidden_random_value
 from cascade.util import get_range_bits_per_instrclass, BASIC_BLOCK_MIN_SPACE
-from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
+from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, USE_MMU
 from params.runparams import INSERT_REGDUMPS
 from rv.asmutil import li_into_reg
 from common.spike import SPIKE_STARTADDR
@@ -191,6 +191,12 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     # Relocate for the loads
     curr_addr += fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"add", fuzzerstate.num_pickable_regs-1, 0, RELOCATOR_REGISTER_ID), True, insert_regdump = False)
     
+
+    if USE_MMU:
+        fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"sub", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID))
+        fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate, "csrrw", 0, 0, CSR_IDS.SATP)) # init satp to 0
+        curr_addr += 8
+
 
     if fuzzerstate.design_has_fpu:
         expect_padding = bool((curr_addr + (4*(fuzzerstate.num_pickable_regs+fuzzerstate.num_pickable_floating_regs-1))) & 0x7 == 4) # Says whether there will be a padding required to align the random data

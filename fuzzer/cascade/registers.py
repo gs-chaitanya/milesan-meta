@@ -1,9 +1,9 @@
 from abc import ABC
 
 from cascade.util import IntRegIndivState
-from rv.csrids import CSR_IDS
-from rv.asmutil import twos_complement,to_unsigned
-from params.runparams import PRINT_CHECK_REGS_T0, CHECK_REGS_T0_PRECISE, PRINT_CHECK_REGS_T0_MISMATCH_OK
+import enum
+from rv.csrids import CSR_IDS, CSRTypeEnum
+from params.runparams import PRINT_CHECK_REGS_T0, CHECK_REGS_T0_PRECISE, PRINT_CHECK_REGS_T0_MISMATCH_OK, DO_ASSERT
 from params.fuzzparams import ALLOW_CSR_TAINT
 ABI_INAMES = ["zero","ra","sp","gp","tp","t0","t1","t2","s0/fp","s1","a0","a1","a2","a3","a4","a5","a6","a7"]
 ABI_INAMES += [f"s{i}" for i in range(2,12)] + [f"t{i}" for i in range(3,7)]
@@ -39,15 +39,30 @@ class __Register(ABC):
         self.val = 0
         self.val_t0 = 0
 
+def _get_writeable_csr_value(value: int, csr_mask: int, csr_type: CSRTypeEnum):
+    if csr_type == CSRTypeEnum.WLRL:
+        return value # mask is ignored, any value can be written or read
+    elif csr_type == CSRTypeEnum.WARL:
+        return value&csr_mask # we only write the bits that can be written legally
+    elif csr_type == CSRTypeEnum.WPRI:
+        raise NotImplementedError("WPRI not implemented yet.")
+    else:
+        raise TypeError
+
 class CSR(__Register):
-    def __init__(self, id: CSR_IDS, val: int = 0, val_t0: int = 0):
+    def __init__(self, id: CSR_IDS, csr_mask, csr_type: CSRTypeEnum, val: int = 0, val_t0: int = 0):
         super().__init__(id, True, val, val_t0) # CSRs are always 64bit
+        if DO_ASSERT:
+            assert csr_type == CSRTypeEnum.WLRL or id == CSR_IDS.MEDELEG and csr_type == CSRTypeEnum.WARL, f"Only medeleg supported for other type than WLRL."
+            assert csr_mask is not None, f"Got None as csr mask for {id.name}. Check if medeleg was profiled."
         self.abi_name = id.name
         self.val = val
         self.val_t0 = val_t0
+        self.csr_mask = csr_mask
+        self.csr_type = csr_type
 
     def set_val(self, val):
-        self.val = val&self.mask
+        self.val = self.mask&_get_writeable_csr_value(val,self.csr_mask,self.csr_type)
 
     def set_val_t0(self, val_t0):
         if not ALLOW_CSR_TAINT:
@@ -65,6 +80,9 @@ class CSR(__Register):
     def reset(self):
         self.val = 0
         self.val_t0 = 0
+
+
+
 
 
 

@@ -34,4 +34,4 @@ def gen_priv_descent_instr(fuzzerstate):
             fuzzerstate.privilegestate.privstate = fuzzerstate.privilegestate.curr_mstatus_spp
             fuzzerstate.privilegestate.curr_mstatus_spp = PrivilegeStateEnum.USER
 
-        return PrivilegeDescentInstruction(is_mret)
+        return PrivilegeDescentInstruction(fuzzerstate, is_mret)

@@ -4,7 +4,7 @@ import glob
 import json
 
 from params.runparams import PATH_TO_TMP, PATH_TO_COV, PRINT_INSTRUCTION_EXECUTION_FINAL, PRINT_ENVIRONMENT, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE
-from params.fuzzparams import USE_SPIKE_INTERM_ELF
+from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN
 from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, filter_reg_t0_traceback
@@ -80,12 +80,11 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     if PRINT_INSTRUCTION_EXECUTION_FINAL:
                         print(f"{next_instr.get_str(USE_SPIKE_INTERM_ELF)} (ctx)")
 
-
         if generate_fuzzerstate:
             for (addr_in_situ,trace_in_situ),(addr_final, trace_final) in zip(fuzzerstate.intregpickstate.writeback_trace_in_situ.items(),fuzzerstate.intregpickstate.writeback_trace_final.items()):
                 assert addr_in_situ == addr_final
                 assert trace_in_situ[0] == trace_final[0]
-                assert trace_in_situ[1] == trace_final[1], f"Mismatch in taint trace between in-situ simulation and final elf: {hex(addr_final)}: {ABI_INAMES[trace_in_situ[0]]} <- {hex(trace_in_situ[1])}/{hex(trace_final[1])} (in-situ/final).{filter_reg_t0_traceback(trace_in_situ[0],addr_in_situ,fuzzerstate).get_str()}"
+                assert trace_in_situ[1] == trace_final[1], f"Mismatch in taint trace between in-situ simulation and final elf: {hex(addr_final)}: {ABI_INAMES[trace_in_situ[0]]} <- {hex(trace_in_situ[1])}/{hex(trace_final[1])} (in-situ/final)."
                 # else:
                 #     print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}")
         

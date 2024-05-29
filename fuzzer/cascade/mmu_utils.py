@@ -1,0 +1,433 @@
+from common.spike import SPIKE_STARTADDR
+from cascade.cfinstructionclasses import R12DInstruction, ImmRdInstruction, RegImmInstruction
+from rv.asmutil import li_into_reg
+from params.fuzzparams import RDEP_MASK_REGISTER_ID, PROBA_ENTANGLE_LAYOUT, PROBA_SAME_BASE_PT
+from params.runparams import DEBUG_PRINT
+from cascade.privilegestate import PrivilegeStateEnum
+from common.designcfgs import get_design_stop_sig_addr, get_design_reg_dump_addr
+import random
+from math import ceil, floor
+
+#DEBUG_PRINT = True
+
+MODES_PARAM_RV32 = {
+    "sv32": [1, 32, 2]
+}
+
+# [mode id, #bits_va, #PPN]
+MODES_PARAMS_RV64 = {
+    "sv39": [8, 39, 3],
+    "sv48": [9, 48, 4]
+}
+
+# MMU constants
+PHYSICAL_PAGE_SIZE = 0x1000 #4KiB
+PAGE_ALIGNMENT_MASK = (~0xfff)
+PAGE_ALIGNMENT_BITS = 0xfff
+PAGE_ALIGNMENT_SHIFT = 12
+VPN_WIDTH = 9
+PHYSICAL_ADDRESS_WIDTH = 64
+
+# @brief compute the virtual address
+# TODO we can now randomly choose between layouts with the same base page
+def phys2virt(paddr, priv_level, va_layout, fuzzerstate, absolute_addr = True):
+    #bare
+    if va_layout == -1: 
+        return paddr
+    else:
+        if absolute_addr:
+            vaddr = paddr + fuzzerstate.pagetablestate.vmem_base_list[va_layout][priv_level]
+        else:
+            vaddr = paddr - (SPIKE_STARTADDR - fuzzerstate.pagetablestate.vmem_base_list[va_layout][priv_level])
+        return vaddr
+
+# @brief Stores a 64 bit value into a 64 bit register. 
+def li_doubleword(value, rd, tmp, fuzzerstate):
+    instrs = []
+    imm_0_to_31 = value & 0xffffffff
+    imm_63_to_31 = value >> 32
+
+    assert rd != tmp
+    #load the first 32 bits 
+    lui_imm, addi_imm = li_into_reg(imm_0_to_31, False)
+    instrs.append(ImmRdInstruction("lui", tmp, lui_imm, fuzzerstate.is_design_64bit))
+    instrs.append(RegImmInstruction("addi", tmp, tmp, addi_imm, fuzzerstate.is_design_64bit))
+    #clear the top 32 bits
+    instrs.append(R12DInstruction("and", tmp, tmp, RDEP_MASK_REGISTER_ID))
+    #load the next 32 bits
+    lui_imm_2, addi_imm_2 = li_into_reg(imm_63_to_31, False)
+    instrs.append(ImmRdInstruction("lui", rd, lui_imm_2, fuzzerstate.is_design_64bit))
+    instrs.append(RegImmInstruction("addi", rd, rd, addi_imm_2, fuzzerstate.is_design_64bit))
+    instrs.append(RegImmInstruction("slli", rd, rd, 32, fuzzerstate.is_design_64bit))
+    #coalesce the result
+    instrs.append(R12DInstruction("or", rd, rd, tmp))
+        
+    return instrs
+
+class PageTablesGen:
+    def __init__(self, is_design_64bit, design_name):
+        # Constants
+        self.flags_leaf_pte_user         = 0b00011011111 #:=RSW DAGUXWRV
+        self.flags_leaf_pte_supervisor   = 0b00011001111 #:=RSW DAGUXWRV
+        self.flags_node_pte              = 0b00000000001 #:=RSW DAGUXWRV
+
+        # Tracking accross functions
+        self.entangled_layouts = [] # (None) or (entangled layout id, entanlged with, first common level)
+        self.global_from_level = []
+
+        # Output
+        self.finalblock_sig_vaddr = [] # Saves the virtual addresses of regdump and stopsig for all layouts
+        self.n_entries_per_level = [] # Number of PTE per level for each layouts
+        self.vmem_base_list = [] # The virtual address mapping to SPIKE_STARTADDR for each layout
+        self.ptr_pt_base_list_per_layout = [] # The physical address of the page base for each PT lavel and layouts, [[l0, l1, l2], [...], ...]
+        self.ppn_leaves = [] # The value of the PTE for the leaf at offset 0 for all layout (SPIKE_START or 0x0 depending on allignment)
+        self.page_size_per_layout = [] # The page size for all layout
+        self.all_pt_entries = [] # DATA BLOCK, saves all of the PTEs for all layouts, [[[ptel0], [ptel1], ...] ...]
+        self.layout_is_global = [] # If the layout has global mappings, TLB entries need to be flushed even if ASID changes
+
+        self.common_base_page = None #dict of layout with a common base page
+
+        if not is_design_64bit:
+            global VPN_WIDTH
+            VPN_WIDTH = 10
+            global PHYSICAL_ADDRESS_WIDTH
+            PHYSICAL_ADDRESS_WIDTH = 32
+
+        # Get the address for the final block
+        try:
+            self.stopsig_addr = get_design_stop_sig_addr(design_name)
+        except:
+            raise ValueError(f"Design `{design_name}` does not have the `stopsigaddr` attribute.")
+        try:
+            self.regdump_addr = get_design_reg_dump_addr(design_name)
+        except:
+            raise ValueError(f"Design `{design_name}` does not have the `regdumpaddr` attribute.")
+
+    # @brief return the worst case required number of pages on each level
+    def get_n_leaf_pte(self, page_size, mem_start, memsize, pte_size, n_levels):
+        pte_per_page = PHYSICAL_PAGE_SIZE/pte_size
+        # Get the first physical address mapped
+        if mem_start == SPIKE_STARTADDR:
+            mem_end = mem_start + memsize
+        else:
+            mem_end = mem_start + SPIKE_STARTADDR + memsize
+        memsize_absolute = mem_end - mem_start
+        n_leaf_pte = ceil(memsize_absolute / page_size)
+        return n_leaf_pte
+
+    # @brief gets node PTE for a given number of levels
+    def get_node_pte_addr(self, fuzzerstate, n_node_levels, n_entries_per_level, leaf_base):
+        ret             = []
+        prev_level_base = leaf_base
+        pte_per_page    = PHYSICAL_PAGE_SIZE/fuzzerstate.ptesize
+
+        # Get all the node page table addresses
+        for level in range(n_node_levels-1, -1, -1):
+            # Calculate the number of PTE required on the current level, based on the allignment of the previous level
+            page_offset_start       = (prev_level_base & PAGE_ALIGNMENT_BITS)/fuzzerstate.ptesize
+            n_pte_prev_level        = n_entries_per_level[level+1]
+            # Get the page span
+            start_page_id = floor(page_offset_start / pte_per_page)
+            end_page_id = ceil((page_offset_start + n_pte_prev_level) / pte_per_page)
+            n_entries_required = end_page_id - start_page_id
+            n_entries_per_level[level] = n_entries_required # Update traking
+
+            # With a certain probability, we generate base PTE in the same base page
+            same_base_page = False
+            if level == 0 and self.ptr_pt_base_list_per_layout != [] and random.random() < PROBA_SAME_BASE_PT:
+                base_page = (self.ptr_pt_base_list_per_layout[0][0] & PAGE_ALIGNMENT_MASK) - SPIKE_STARTADDR
+                addr = fuzzerstate.memview.gen_random_free_addr(fuzzerstate.ptesize, fuzzerstate.ptesize * n_entries_per_level[level], base_page, base_page + PAGE_ALIGNMENT_BITS)
+                if addr != None: 
+                    same_base_page = True
+            elif same_base_page == False:
+                addr = fuzzerstate.memview.gen_random_free_addr(fuzzerstate.ptesize, fuzzerstate.ptesize * n_entries_per_level[level], 0, fuzzerstate.memsize)
+            # In case all allocations fail
+            if addr is None:
+                return False
+            
+            # Allocate the right ammount of memory
+            fuzzerstate.memview.alloc_mem_range(addr, addr + fuzzerstate.ptesize * n_entries_required)
+            
+            # Update 
+            ret.append(addr + SPIKE_STARTADDR)
+            prev_level_base = addr # Save previous base
+        return ret
+    
+    # @brief makes a page table entry
+    def gen_page_table_entry(self, ppn, is_global, is_user: bool = False, is_node: bool = False):
+        if not is_node:
+            if is_user:
+                flags = self.flags_leaf_pte_user
+            else:
+                flags = self.flags_leaf_pte_supervisor
+        else:
+            flags = self.flags_node_pte
+        return ((ppn >> PAGE_ALIGNMENT_SHIFT) << 10) | (flags | (is_global << 5))
+
+    # @brief allocates space for all level of the page table
+    def gen_mmu_dependencies(self, fuzzerstate):
+        for layout_id, (mode, n_level) in enumerate(fuzzerstate.prog_mmu_params):
+            if DEBUG_PRINT:
+                print(f"\n======= allocating pages for layout {layout_id} ===========================")
+                print(VPN_WIDTH)
+            
+            # Initialize variables
+            pte_addr                            = []
+            leaf_pt_addr                        = []
+            if fuzzerstate.is_design_64bit:
+                n_virt_addr_bits, max_n_levels  = MODES_PARAMS_RV64[mode][1], MODES_PARAMS_RV64[mode][2]
+            else:
+                n_virt_addr_bits, max_n_levels  = MODES_PARAM_RV32[mode][1], MODES_PARAM_RV32[mode][2]
+            n_allignment_bits                   = PAGE_ALIGNMENT_SHIFT + VPN_WIDTH * (max_n_levels - n_level)
+            page_size                           = (1 << n_allignment_bits)
+            mem_start                           = SPIKE_STARTADDR & (~(page_size - 1)) # Holds the first address mapped using the current page size, either 0x80000000 or 0x0
+            start_vmem                          = {PrivilegeStateEnum.USER: 0, PrivilegeStateEnum.SUPERVISOR: 0, PrivilegeStateEnum.MACHINE: 0}
+            layout_entangled                    = False
+            
+            # Update the entangled list
+            self.entangled_layouts.append(None)
+
+            # Entangle the pages, we generate new PTEs for the upper levels, we randomly choose the level at which the PTEs will be identical to a randomly selected previous mapping
+            if self.ptr_pt_base_list_per_layout != [] and random.random() < PROBA_ENTANGLE_LAYOUT and n_level > 1:
+                # We can only entangle with layouts that have the same levels and page size
+                possible_layouts = []
+                for layout_id, (mode_entagle, n_level_entangle) in enumerate(fuzzerstate.prog_mmu_params):
+                    if layout_id >= len(self.ptr_pt_base_list_per_layout): break
+                    if mode_entagle == mode and n_level_entangle == n_level:
+                        possible_layouts.append(layout_id)
+
+                # If we can entangle, we randomly select the target
+                if possible_layouts != []:
+                    layout_entangled = True
+                    layout_entangle = random.choice(possible_layouts)
+                    if len(self.ptr_pt_base_list_per_layout[layout_entangle]) - 1 == 1:
+                        first_common_level = 1
+                    else:
+                        first_common_level = random.randrange(1, len(self.ptr_pt_base_list_per_layout[layout_entangle])-1) #We must generate at least one new level and at most all except the leaf
+                    if DEBUG_PRINT: print(f"We entagle layout {layout_id} with layout {layout_entangle}, at level: {first_common_level}")
+                    self.entangled_layouts[layout_id] = ((layout_id, layout_entangle, first_common_level))
+                    
+                    # Copy the values from the other layout
+                    pte_addr = self.ptr_pt_base_list_per_layout[layout_entangle].copy()
+                    n_entries_per_level = self.n_entries_per_level[layout_entangle].copy()
+
+                    # Get node PTEs
+                    addrs = self.get_node_pte_addr(fuzzerstate, first_common_level, n_entries_per_level, pte_addr[first_common_level])
+                    if addrs == False:
+                        return False
+                    level = 0
+                    for addr in addrs:
+                        pte_addr[level] = addr
+                        level + 1
+                    if DEBUG_PRINT: 
+                        print(f"pte are at addr: {[hex(x) for x in pte_addr]}")
+                        print(f"Will use {n_entries_per_level}")
+
+            # If we generate a fresh new layout
+            if not layout_entangled:
+                # Calculate number of leaf page table entries needed
+                n_entries_per_level = [0] * n_level
+                n_leaf_pte = self.get_n_leaf_pte(page_size, mem_start, fuzzerstate.memsize, fuzzerstate.ptesize, n_level)
+                n_leaves_with_duplicate = n_leaf_pte * 2 + 2 # Duplicate for S mode, + 2 for signal mappings
+                n_entries_per_level[-1] = n_leaves_with_duplicate
+
+                # Get leaf page table address
+                addr = fuzzerstate.memview.gen_random_free_addr(fuzzerstate.ptesize, n_leaves_with_duplicate * fuzzerstate.ptesize, 0, fuzzerstate.memsize) # + (2*fuzzerstate.ptesize) to map sig addr
+                if addr is None:
+                    return False
+                fuzzerstate.memview.alloc_mem_range(addr, addr + n_leaves_with_duplicate * fuzzerstate.ptesize) #+ (2*fuzzerstate.ptesize) to map sig addr
+                leaf_pt_addr.append(addr + SPIKE_STARTADDR)
+
+                # Get all the node page table addresses, and the number of pte accross levels
+                addrs = self.get_node_pte_addr(fuzzerstate, n_level - 1, n_entries_per_level, leaf_pt_addr[-1])
+                if addrs == False:
+                    return False
+                for addr in addrs:
+                    pte_addr.append(addr)
+
+                # reset the number of leave PTE
+                n_entries_per_level[-1] = n_leaf_pte
+
+                # Append leaf pt address at the end
+                pte_addr += leaf_pt_addr
+                if DEBUG_PRINT: print(f"pte are at addr: {[hex(x) for x in pte_addr]}, and use: {n_entries_per_level[-1]} leaves")
+                
+                if DEBUG_PRINT:
+                    print(f"Will use: {n_entries_per_level}")
+
+            # Compute the VA address equivalent to 0x80000000 to later translate from phys to virt
+            n_unused_level = max_n_levels - n_level
+            vpn_shift_amt = PAGE_ALIGNMENT_SHIFT + VPN_WIDTH * n_unused_level
+            for level in range(n_level):
+                curr_pte_addr = pte_addr[n_level - level - 1]
+                offset = (curr_pte_addr & PAGE_ALIGNMENT_BITS) // fuzzerstate.ptesize
+                start_vmem[PrivilegeStateEnum.USER] |= offset << vpn_shift_amt
+                vpn_shift_amt += VPN_WIDTH
+
+            # Set remaining bits in VA mode
+            if start_vmem[PrivilegeStateEnum.USER] >> (n_virt_addr_bits - 1):
+                same_bit = ((1 << (PHYSICAL_ADDRESS_WIDTH - n_virt_addr_bits)) - 1) << n_virt_addr_bits
+                start_vmem[PrivilegeStateEnum.USER] |= same_bit
+
+            # Compute the regdump and stopsig virtual addresses before adding the start address offset
+            regdump_vaddr                               = start_vmem[PrivilegeStateEnum.USER] + (n_entries_per_level[-1] * 2) * page_size + (self.regdump_addr & (page_size - 1))
+            stopsig_vaddr                               = start_vmem[PrivilegeStateEnum.USER] + ((n_entries_per_level[-1] * 2) + 1) * page_size + (self.stopsig_addr & (page_size - 1))
+            start_vmem[PrivilegeStateEnum.USER]         += (SPIKE_STARTADDR - mem_start) # Add offset if the pages start at address 0
+            # Add the offset to get the base for the supervisor mappings
+            start_vmem[PrivilegeStateEnum.SUPERVISOR]   = start_vmem[PrivilegeStateEnum.USER] + n_entries_per_level[-1] * page_size
+            start_vmem[PrivilegeStateEnum.MACHINE]      = start_vmem[PrivilegeStateEnum.USER]
+
+            if DEBUG_PRINT: 
+                print(f"base vmem: {[hex(x) for x in start_vmem.values()]}")
+                print(f"USER: {hex(start_vmem[PrivilegeStateEnum.USER])}")
+                print(f"SUPERVISOR: {hex(start_vmem[PrivilegeStateEnum.SUPERVISOR])}")
+                print(f"regdump_vaddr: {hex(regdump_vaddr)}")
+                print(f"stopsig_vaddr: {hex(stopsig_vaddr)}")
+
+            # Set variables for bookeeping
+            self.finalblock_sig_vaddr.append((regdump_vaddr, stopsig_vaddr))
+            self.n_entries_per_level.append(n_entries_per_level)
+            self.vmem_base_list.append(start_vmem)
+            self.ptr_pt_base_list_per_layout.append(pte_addr)
+            self.ppn_leaves.append(mem_start)
+            self.page_size_per_layout.append(page_size)
+
+        # Make a dictionary of layouts with the same base page
+        self.common_base_page = {i: [] for i in range(len(self.ptr_pt_base_list_per_layout))}
+        # Iterate over each pair of objects
+        for i in range(len(self.ptr_pt_base_list_per_layout)):
+            for j in range(len(self.ptr_pt_base_list_per_layout)):
+                if i != j:
+                    # Check if the first elements of self.ptr_pt_base_list_per_layout[i] and self.ptr_pt_base_list_per_layout[j] are the same
+                    if (self.ptr_pt_base_list_per_layout[i][0] & PAGE_ALIGNMENT_MASK) == (self.ptr_pt_base_list_per_layout[j][0] & PAGE_ALIGNMENT_MASK):
+                        self.common_base_page[i].append(j)
+
+        if DEBUG_PRINT: 
+            print("common base page dict")
+            print(self.common_base_page)
+            print("============ Page tables are created, will now populate ===============\n")
+
+        return True
+        
+    # @brief populate the mmu pte list with the value of the PTE for all layouts to write them already initialized in memory
+    # the program can later modify these lists to trigger page faults, etc 
+    def gen_pt_in_mem(self, fuzzerstate):
+        curr_layout_pt_content      = []
+        ppn_leaf                    = 0
+
+        # For non-leaf PTEs, the global setting implies that all mappings in the subsequent levels of the page table are global
+        # We thus randomize all levels, as every scenario is interesting. We must then handle entagled layouts
+
+        ##
+        # We initialize the upper level of the page tables here
+        ##
+        for layout_id, va_layout in enumerate(self.ptr_pt_base_list_per_layout):
+            self.global_from_level.append(None)
+            if DEBUG_PRINT: print(f"\n======== Filling top level pages for layout {layout_id} ============")
+            curr_layout_pt_content = []
+            is_curr_layout_global = 0
+            for level in range(0, len(va_layout)-1):
+                entries = []
+                pte_ppn = va_layout[level+1] #points to the next PT
+
+                # Check if the layout is entangled from this level on
+                if self.entangled_layouts[layout_id] != None:
+                    if self.entangled_layouts[layout_id][2] == level:
+                        if DEBUG_PRINT: print("Entry is part of an entangled layout, skipping")
+                        break
+                # Make all required entries
+                for i in range(self.n_entries_per_level[layout_id][level]):
+                    global_bit = random.randint(0, 1)
+                    is_curr_layout_global |= global_bit
+                    if is_curr_layout_global:
+                        self.global_from_level[layout_id] = level
+                    imm = self.gen_page_table_entry(pte_ppn, global_bit, is_node=True)
+                    entries.extend([imm])
+                    if DEBUG_PRINT: 
+                        print(f"setting layout {layout_id}, level {level} pte @addr: {hex((va_layout[level]+PHYSICAL_PAGE_SIZE*i))} with val: {hex(imm)} ({hex(pte_ppn)})")
+                    pte_ppn += PHYSICAL_PAGE_SIZE
+                curr_layout_pt_content.append(entries)
+
+            self.all_pt_entries.append(curr_layout_pt_content)
+            self.layout_is_global.append(is_curr_layout_global)
+
+        if DEBUG_PRINT: print("\n###\nLEAF MAPPINGS\n###\n")
+        
+        ##
+        # Initialize the leaves of page tables, duplicated for supivisor mode support
+        ##
+        for layout_id, va_layout in enumerate(self.ptr_pt_base_list_per_layout):
+            if DEBUG_PRINT: print(f"======== Filling leaf page for layout {layout_id} ============\n")
+            # Check if we didn't already writ something in the PTE, otherwise, we add it to the written list
+            if self.entangled_layouts[layout_id] != None:
+                if DEBUG_PRINT: print("Entry is part of an entangled layout, skipping")
+                continue
+            is_curr_layout_global = random.randint(0, 1)
+            if is_curr_layout_global:
+                self.global_from_level[layout_id] = len(va_layout)-1
+            ppn_leaf = self.ppn_leaves[layout_id]
+            if DEBUG_PRINT: 
+                print(f"curent layout is {[hex(x) for x in va_layout]}, with the base ppn of the page: {hex(ppn_leaf)}")
+            curr_layout_pt_content, curr_layout_pt_content_supervisor = [], []
+
+            for _ in range(self.n_entries_per_level[layout_id][-1]):
+                # Make user and supervisor
+                curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True)
+                curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False)
+                curr_layout_pt_content.append(curr_pte)
+                curr_layout_pt_content_supervisor.append(curr_pte_supervisor)
+                ppn_leaf += self.page_size_per_layout[layout_id]
+            # Coalesce the results and store bookeeping data
+            curr_layout_pt_content += curr_layout_pt_content_supervisor
+            self.all_pt_entries[layout_id].append(curr_layout_pt_content)
+            self.layout_is_global[layout_id] |= is_curr_layout_global
+
+        if DEBUG_PRINT: print("\n")
+
+        ##
+        # Handle global mappings for entangled layouts
+        ##
+
+        for cur_entry in self.entangled_layouts:
+            if cur_entry != None:
+                entangled_layout_id, entanlged_with, first_common_level = cur_entry
+                if DEBUG_PRINT: print(f"entangled with: {entanlged_with}, is_glb:{self.layout_is_global[entanlged_with]}, from lvl:{self.global_from_level[entanlged_with]}")
+                # If an entry in the reused layout is global, which is below the last unentangled pte, the current layout is gloabal as well
+                if self.layout_is_global[entanlged_with] and first_common_level >= self.global_from_level[entanlged_with]:
+                    self.layout_is_global[entangled_layout_id] |= 1
+                    self.global_from_level[entangled_layout_id] = self.global_from_level[entanlged_with]
+
+        if DEBUG_PRINT:
+            print("\nLIST OF GLOABL LAYOUTS")
+            for id, i in enumerate(self.layout_is_global):
+                if i:
+                    print(f"layout {id} is global")
+            print("\n")
+
+        ##
+        # Map the regdump and stopsig addr
+        ##
+        
+        for layout_id, va_layout in enumerate(self.ptr_pt_base_list_per_layout):
+            if self.entangled_layouts[layout_id] != None: continue
+            final_block_addr_ptes = []
+
+            # Get the PPN for the leaf PTEs
+            ppn_leaf_regdump = self.regdump_addr & (~(self.page_size_per_layout[layout_id] - 1))
+            ppn_leaf_stopsig = self.stopsig_addr & (~(self.page_size_per_layout[layout_id] - 1))
+            assert ppn_leaf_regdump + self.page_size_per_layout[layout_id] > self.regdump_addr
+            assert ppn_leaf_stopsig + self.page_size_per_layout[layout_id] > self.stopsig_addr
+
+            # Make supervisor regdump and stopsig
+            curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf_regdump, True, is_user=False)
+            curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf_stopsig, True, is_user=False)
+            final_block_addr_ptes.append(curr_pte_supervisor)
+            final_block_addr_ptes.append(curr_pte_supervisor)
+            self.all_pt_entries[layout_id][-1] += final_block_addr_ptes
+
+
+
+    
+
+    
+

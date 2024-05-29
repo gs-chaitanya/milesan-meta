@@ -543,10 +543,10 @@ def csrrwi(uimm: int, csr_val: int, is_design_64bit: bool):
 
 
 def csrrs_t0(rs1_val: int, rs1_val_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
-    return or_t0(rs1_val,rs1_val_t0,csr_val,csr_val_t0,is_design_64bit)
+    return or_t0(rs1_val,rs1_val_t0,csr_val,csr_val_t0, is_design_64bit)
 
 def csrrc_t0(rs1_val: int, rs1_val_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
-    return and_t0(csr_val,csr_val_t0, ~rs1_val, rs1_val_t0)
+    return and_t0(csr_val,csr_val_t0, ~rs1_val, rs1_val_t0, is_design_64bit)
 
 def csrrw_t0(rs1_val: int, rs1_val_t0: int, csr_val: int, csr_val_t0: int, is_design_64bit: bool):
     return rs1_val_t0

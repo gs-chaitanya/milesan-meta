@@ -1,6 +1,15 @@
 from params.runparams import DO_ASSERT
 import enum
 
+
+# MMU states
+class MmuState(enum.IntEnum):
+    IDLE         = enum.auto()
+    MMU_PROD_1   = enum.auto()
+    MMU_PROD_2   = enum.auto()
+    MMU_PROD_J   = enum.auto()
+    MMU_PROD_R   = enum.auto()
+
 # ISAInstrClass differs from CFInstrClass, because:
 # ISAInstrClass is sorted by ISA extension (for picking instruction)
 # CFInstrClass  is sorted by information flow (e.g., how many registers are taken as an input)
@@ -33,9 +42,12 @@ class ISAInstrClass(enum.IntEnum):
     RANDOM_CSR  = enum.auto() # Any CSR instruction that does not require a consumed register
     DESCEND_PRV = enum.auto() # mret and sret
     SPECIAL     = enum.auto() # fence, ecall, ebreak
+    MMU         = enum.auto() # mmu operations
+    MSTATUS     = enum.auto() # mstatus operations
 
 
 # Use this for taints
+# TODO: depricated. Remove this.
 class CFInstructionClass(enum.IntEnum):
     NONE = 0 # default, start at 0
     REGIMM = enum.auto()

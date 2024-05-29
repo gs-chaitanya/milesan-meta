@@ -5,6 +5,23 @@
 from enum import IntEnum, auto
 import numpy as np
 
+##
+# MMU
+##
+USE_MMU = False
+
+MAX_NUM_LAYOUTS = 1
+assert MAX_NUM_LAYOUTS == 1, f"Only one layout supported with taint."
+PROBA_ENTANGLE_LAYOUT = 0.5
+MAX_NUM_INSTR_IN_PRV = 100
+MAX_NUM_INSTR_IN_LAYOUT = 50
+PROBA_NEW_SATP_NOT_USED = 0.01
+PROBA_NEW_SATP_XEPC_POP = 0.0001
+PROBA_NEW_SATP_STVEC_POP = 0.1
+PROBA_SAME_BASE_PT = 0.5
+REGFSM_BIAS = 0.4
+
+
 ###
 # Basic blocks
 ###
@@ -60,12 +77,28 @@ LIMIT_MEM_SATURATION_RATIO = 0.8
 # When a register is produced, it gets this probability to be picked next. What is nice is that it immediately saturates: producing it twice does not increase picking proba.
 REGPICK_PROTUBERANCE_RATIO = 0.2 
 
-# There should always be at least this number of free or relocused registers
-NUM_MIN_FREE_INTREGS = 2
+if USE_MMU:
+    NUM_MIN_FREE_INTREGS = 3 # 3, we need at least 2 free regs which are not 0
+else:
+    NUM_MIN_FREE_INTREGS = 2
 
-# Reduce the registers that we allow ourselves to pick randomly
+if USE_MMU:
+    MAX_NUM_PICKABLE_REGS = 22
+else:
+    MAX_NUM_PICKABLE_REGS = 24
+
+def reset_reg_settings():
+    global MAX_NUM_PICKABLE_REGS
+    global MIN_NUM_PICKABLE_REGS
+    if USE_MMU:
+        MAX_NUM_PICKABLE_REGS = 22
+    else:
+        MAX_NUM_PICKABLE_REGS = 24
+    MIN_NUM_PICKABLE_REGS = 4
+
+# # Reduce the registers that we allow ourselves to pick randomly
 MIN_NUM_PICKABLE_REGS = 4
-MAX_NUM_PICKABLE_REGS = 25
+# MAX_NUM_PICKABLE_REGS = 25
 
 MIN_NUM_PICKABLE_FLOATING_REGS = 1
 MAX_NUM_PICKABLE_FLOATING_REGS = 14
@@ -77,6 +110,9 @@ MPP_BOTH_ENDIS_REGISTER_ID = 28 # The mask to switch both MPP bits
 MPP_TOP_ENDIS_REGISTER_ID = 27 # The mask to switch only the top MPP bit. We cannot do it for the bottom, because we could not go to supervisor mode reliably on a design that does not have user mode.
 SPP_ENDIS_REGISTER_ID = 26 # The mask to switch the (unique) SPP Bit
 REGDUMP_REGISTER_ID = 25 # Holds the address we write to when dumping registers.
+# ONLY USED FOR MMU
+RPROD_MASK_REGISTER_ID = 24 # Used to generate 64 bit long virtual addresses
+RDEP_MASK_REGISTER_ID_VIRT = 23 # A 31 bit mask for rprod, used in a virtualized memory setting
 
 assert RELOCATOR_REGISTER_ID < 32
 assert RDEP_MASK_REGISTER_ID < 32
@@ -97,7 +133,7 @@ assert REGDUMP_REGISTER_ID >= MAX_NUM_PICKABLE_REGS
 
 assert RDEP_MASK_REGISTER_ID != RELOCATOR_REGISTER_ID
 # Check that they are all distinct
-assert len({RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID}) == len([RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID])
+assert len({RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, RPROD_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT}) == len([RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, RPROD_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT])
 
 ###
 # Register FSM
@@ -128,7 +164,7 @@ USE_SPIKE_INTERM_ELF = False # When both this and INSERT_REGDUMPS are enabled, t
 
 ## TAINT PARAMETERS ##
 
-TAINT_EN = True
+TAINT_EN = True # The assumed value for function paramteres.
 P_TAINT_REG = 0.5
 MAX_NUM_INIT_TAINTED_REGS = 5
 
@@ -166,3 +202,4 @@ USE_TAINT_TANH = True
 USE_TAINT_HW = False
 USE_TAINT_BIN = False
 assert USE_TAINT_TANH or USE_TAINT_BIN or USE_TAINT_HW
+

@@ -4,6 +4,7 @@ from cascade.cfinstructionclasses import *
 from cascade.util import ExceptionCauseVal
 from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from cascade.registers import ABI_INAMES
+from rv.csrids import CSR_ABI_NAMES
 from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0
 import random
 import numpy as np
@@ -345,8 +346,8 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0, RDInstruction_t
 
 
 class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False):
-        super().__init__(fuzzerstate, instr_str, rd, imm, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, imm, priv_level, va_layout, iscompressed)
         self.rd_t0 = 0
 
     def execute_t0(self, res, is_spike_resolution):
@@ -561,8 +562,8 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
 
 
 class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
-        super().__init__(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed, is_rd_nonpickable_ok)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, imm, producer_id, priv_level, va_layout, iscompressed, is_rd_nonpickable_ok)
         self.rd_t0 = 0
         self.imm_t0 = 0
         self.rs1_t0 = 0
@@ -602,8 +603,8 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         self.writeback_t0(res_t0,res, is_spike_resolution) # We allow the rd field to be tainted, thus taint could be propagated to several destination registers.
 
 class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, iscompressed: bool = False):
-        super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout : int = -1, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, priv_level, va_layout, iscompressed)
         self.imm_t0 = 0
         self.rs1_t0 = 0
         self.rs2_t0 = 0
@@ -681,8 +682,8 @@ class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
         assert 0
 
 class BranchInstruction_t0(BranchInstruction, BaseInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, iscompressed: bool = False):
-        super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, priv_level, va_layout, iscompressed)
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         if not is_spike_resolution:
@@ -702,6 +703,8 @@ class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
         super().__init__(fuzzerstate, instr_str, rd, rs1, csr_id, iscompressed)
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+        # if self.csr_id == CSR_IDS.MEDELEG:
+        #     print(f"Executing {self.get_str()}: {hex(self.fuzzerstate.intregpickstate.regs[self.rd].get_val())}, {hex(self.fuzzerstate.csrfile.regs[self.csr_id].get_val())}, {hex(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val())}")
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
@@ -755,6 +758,14 @@ class CSRImmInstruction_t0(CSRImmInstruction, RDInstruction_t0):
 def has_taint_trace(obj):
     return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0, CSRImmInstruction_t0, CSRRegInstruction_t0)) and obj.instr_str != "auipc"
 
+class MstatusWriterInstruction_t0(MstatusWriterInstruction, BaseInstruction_t0):
+    def __init__(self, rd: int, rs1: int, producer_id: int, instr_str: str, mstatus_mask: int, old_sum_mprv=..., priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
+        super().__init__(rd, rs1, producer_id, instr_str, mstatus_mask, old_sum_mprv, priv_level, va_layout)
+        self.csr_instr = CSRRegInstruction_t0(instr_str, rd, rs1, CSR_IDS.MSTATUS)
+
+    def execute(self, taint_en, is_spike_resolution: bool = True):
+        self.csr_instr.execute(taint_en, is_spike_resolution)
+        
 class TvecWriterInstruction_t0(TvecWriterInstruction, BaseInstruction_t0):
     def __init__(self, fuzzerstate, is_mtvec: bool, rd: int, rs1: int, producer_id: int):
         super().__init__(fuzzerstate, is_mtvec, rd, rs1, producer_id)
@@ -788,22 +799,6 @@ class GenericCSRWriterInstruction_t0(GenericCSRWriterInstruction, BaseInstructio
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         self.csr_instr.execute(taint_en,is_spike_resolution)
 
-# TODO: implement MEDELEG
-class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstruction_t0):
-    def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr: BaseInstruction, exception_op_type: ExceptionCauseVal):
-        super().__init__(fuzzerstate, is_mtvec, producer_id, instr)
-        self.exception_op_type = exception_op_type
-        assert self.addr == self.instr.addr
-
-    def execute(self, taint_en, is_spike_resolution: bool = True):
-        if not is_spike_resolution:
-            self.assert_addr()
-            self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
-        # print(f"{self.get_str(is_spike_resolution)}, setting MCAUSE to {self.exception_op_type}")
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val_t0(0)
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val_t0(0)
 
 class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = True):
@@ -816,6 +811,19 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
         self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val_t0(0)
         self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val_t0(0)
 
+class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstruction_t0):
+    def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr: BaseInstruction, exception_op_type: ExceptionCauseVal, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1, old_privilege: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE):
+        super().__init__(fuzzerstate, is_mtvec, producer_id, instr, exception_op_type, priv_level_after_op, va_layout_after_op, old_privilege)
+        assert self.addr == self.instr.addr
+
+    def execute(self, taint_en, is_spike_resolution: bool = True):
+        if not is_spike_resolution:
+            self.assert_addr()
+            self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val_t0(0)
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val_t0(0)
 
 class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = True):

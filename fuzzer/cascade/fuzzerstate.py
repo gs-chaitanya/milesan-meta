@@ -8,7 +8,7 @@ from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
 
-from cascade.util import ISAInstrClass, ExceptionCauseVal
+from cascade.util import ISAInstrClass, ExceptionCauseVal, MmuState
 from cascade.cfinstructionclasses import is_placeholder
 from cascade.memview import MemoryView
 from cascade.csrfile import CSRFile
@@ -19,6 +19,7 @@ from cascade.randomize.pickreg import IntRegPickState, FloatRegPickState
 from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
 from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace
+from cascade.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen
 from rv.csrids import CSR_IDS, CSR_ABI_NAMES
 from cascade.registers import ABI_INAMES
 import random
@@ -74,7 +75,7 @@ class FuzzerState:
         self.ctxsv_size_upperbound: int = get_context_setter_max_size(self) # Can be called once is_design_64bit, design_has_fpu and design_has_fpud are set, and the number of store locations is known.
 
         self.memstorestate = MemStoreState()
-        self.csrfile = CSRFile()
+        self.csrfile = CSRFile(self)
         self.intregpickstate = IntRegPickState(self)
         self.floatregpickstate = FloatRegPickState(self)
         self.privilegestate = PrivilegeState()
@@ -121,6 +122,40 @@ class FuzzerState:
 
         self.curr_addr = -1 # keep track of current address during program generation
         self.curr_pc = -1 # to validate correctness of simulated control flow
+
+        ##
+        # MMU
+        ##
+
+        self.pagetablestate = PageTablesGen(self.is_design_64bit, self.design_name)
+
+        # Layout trackers, updated during generation
+        self.effective_curr_layout = -1 # The effective layout id, -1 is bare (is -1 if the current mode is machine)
+        self.real_curr_layout = -1 # The true layout id
+        self.target_layout = None # The next layout
+        
+        # list to transmit the effective layout id to producers once the program is generated
+        self.consumer_inst_va_layout = None
+
+        # MMU FSM helper, we do not change layouts before he last on is used
+        self.satp_set_not_used = False
+
+        # When traps are raised in supervisor mode, we need one extra r 1 to dump all PCs
+        self.n_mising_r_cmds = 0
+
+        # Instruction coordinates tracker
+        self.stvec_satp_op_coordinates = (None, None)
+        self.satp_op_coordinates = ((None, None), None) # Used to set the RPROD_MASK value, as we do not know the future priv level when creating RPROD
+        self.last_medeleg_coordinates = (None, None) # Saves the coordinate of the last medeleg operation, disables delegation for U/S transitions if pages are too large
+
+        # Keeps the current state of mstatus for SUM/MPRV
+        self.status_sum_mprv = (False, False)
+        self.curr_asid = 0
+        self.curr_satp_no_asid = 0
+        self.num_instr_to_stay_in_prv = 0
+        self.num_instr_to_stay_in_layout = 0
+
+        self.curr_mmu_state = MmuState.IDLE
 
     def init_new_bb(self):
         self.instr_objs_seq.append([])
@@ -169,6 +204,8 @@ class FuzzerState:
             ISAInstrClass.RANDOM_CSR:  (random.random() + 0.05) * ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.RANDOM_CSR],
             ISAInstrClass.DESCEND_PRV: (random.random() + 0.05) * ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.DESCEND_PRV],
             ISAInstrClass.SPECIAL:     (random.random() + 0.05) * ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.SPECIAL],
+            ISAInstrClass.MMU:         (random.random() + 0.05) * ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MMU],
+            ISAInstrClass.MSTATUS:     (random.random() + 0.05) * ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MSTATUS]
         }
         self.exceptionoppickweights = {
             ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED:        (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED],
