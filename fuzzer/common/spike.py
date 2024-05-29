@@ -164,7 +164,7 @@ def run_trace_regs_at_pc_locs(identifier_str: str, elfpath: str, rvflags: str, s
                 assert chr(addr_str_splitted[dumpreq_id+1][0]) in ('M', 'S', 'U'), f"Found a single character, but did not expect it to be {chr(addr_str_splitted[dumpreq_id+1][0])}."
             ret.append(chr(addr_str_splitted[dumpreq_id+1][0]))
         else:
-            raise NotImplementedError(f"Line not supported: {addr_str_splitted[dumpreq_id+1]} -- previous line is {addr_str_splitted[dumpreq_id]}.")
+            raise NotImplementedError(f"Line not supported: {addr_str_splitted[dumpreq_id+1]} -- previous line is {addr_str_splitted[dumpreq_id]}. {' '.join(spike_shell_command)}")
 
     # Potentially get the final register values
     if dump_final_reg_vals:
