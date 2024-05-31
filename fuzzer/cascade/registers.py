@@ -2,7 +2,8 @@ from abc import ABC
 
 from cascade.util import IntRegIndivState
 import enum
-from rv.csrids import CSR_IDS, CSRTypeEnum
+from rv.csrids import CSR_IDS, CSR_TYPES, CSRTypeEnum
+from rv.csrids import SSTATUS_SIE_BIT, SSTATUS_SPIE_BIT, SSTATUS_SPP_BIT, MSTATUS_MIE_BIT, MSTATUS_MPIE_BIT, MSTATUS_MPP_BIT, MSTATUS_SIE_BIT, MSTATUS_SPIE_BIT, MSTATUS_SPP_BIT
 from params.runparams import PRINT_CHECK_REGS_T0, CHECK_REGS_T0_PRECISE, PRINT_CHECK_REGS_T0_MISMATCH_OK, DO_ASSERT
 from params.fuzzparams import ALLOW_CSR_TAINT
 ABI_INAMES = ["zero","ra","sp","gp","tp","t0","t1","t2","s0/fp","s1","a0","a1","a2","a3","a4","a5","a6","a7"]
@@ -39,9 +40,10 @@ class __Register(ABC):
         self.val = 0
         self.val_t0 = 0
 
+# TODO: extend this to allow field masks if necessary.
 def _get_writeable_csr_value(value: int, csr_mask: int, csr_type: CSRTypeEnum):
     if csr_type == CSRTypeEnum.WLRL:
-        return value # mask is ignored, any value can be written or read
+        return value&csr_mask # we only write the bits that can be written legally
     elif csr_type == CSRTypeEnum.WARL:
         return value&csr_mask # we only write the bits that can be written legally
     elif csr_type == CSRTypeEnum.WPRI:
@@ -50,11 +52,12 @@ def _get_writeable_csr_value(value: int, csr_mask: int, csr_type: CSRTypeEnum):
         raise TypeError
 
 class CSR(__Register):
-    def __init__(self, id: CSR_IDS, csr_mask, csr_type: CSRTypeEnum, val: int = 0, val_t0: int = 0):
+    def __init__(self, csrfile, id: CSR_IDS, csr_mask, csr_type: CSRTypeEnum, val: int = 0, val_t0: int = 0):
         super().__init__(id, True, val, val_t0) # CSRs are always 64bit
         if DO_ASSERT:
             assert csr_type == CSRTypeEnum.WLRL or id == CSR_IDS.MEDELEG and csr_type == CSRTypeEnum.WARL, f"Only medeleg supported for other type than WLRL."
             assert csr_mask is not None, f"Got None as csr mask for {id.name}. Check if medeleg was profiled."
+        self.csrfile = csrfile
         self.abi_name = id.name
         self.val = val
         self.val_t0 = val_t0
@@ -80,6 +83,56 @@ class CSR(__Register):
     def reset(self):
         self.val = 0
         self.val_t0 = 0
+
+# SSTATUS is a subset from MSTATUS so we need special classes for them.
+class SStatus_CSR(CSR):
+    def __init__(self, csrfile, val: int = 0, val_t0: int = 0):
+        super().__init__(csrfile,CSR_IDS.SSTATUS,csrfile.csr_masks[CSR_IDS.SSTATUS],CSR_TYPES[CSR_IDS.MSTATUS], val, val_t0)
+    
+    def set_val(self, val):
+        super().set_val(val)
+        val = self.get_val()
+        mstatus = self.csrfile.regs[CSR_IDS.MSTATUS].get_val()
+        spp = (val>>SSTATUS_SPP_BIT)&1
+        sie = (val>>SSTATUS_SIE_BIT)&1
+        spie = (val>>SSTATUS_SPIE_BIT)&1
+
+        mstatus &= ~(1<<MSTATUS_SPP_BIT) # clear spie bit in mstatus
+        mstatus |= (spp<<MSTATUS_SPP_BIT) # set accordingly
+
+        mstatus &= ~(1<<MSTATUS_SPIE_BIT) # clear spie bit in mstatus
+        mstatus |= (spie<<MSTATUS_SPIE_BIT) # set accordingly
+
+        mstatus &= ~(1<<MSTATUS_SIE_BIT) # clear sie bit in mstatus
+        mstatus |= (sie<<MSTATUS_SIE_BIT) # set accordingly
+
+        self.csrfile.regs[CSR_IDS.MSTATUS].val = mstatus  # dont use setter here
+        # print(f"SSTATUS set to {hex(val)}, setting MMSTATUS to {hex(mstatus)}")
+
+class MStatus_CSR(CSR):
+    def __init__(self, csrfile, val: int = 0, val_t0: int = 0):
+        super().__init__(csrfile,CSR_IDS.MSTATUS,csrfile.csr_masks[CSR_IDS.MSTATUS],CSR_TYPES[CSR_IDS.MSTATUS], val, val_t0)
+
+    def set_val(self, val):
+        super().set_val(val)
+        val = self.get_val()
+        sstatus = self.csrfile.regs[CSR_IDS.SSTATUS].get_val()
+        spp = (val>>MSTATUS_SPP_BIT)&1
+        sie = (val>>MSTATUS_SIE_BIT)&1
+        spie = (val>>MSTATUS_SPIE_BIT)&1
+
+        sstatus &= ~(1<<SSTATUS_SPP_BIT) # clear spie bit in mstatus
+        sstatus |= (spp<<SSTATUS_SPP_BIT) # set accordingly
+
+        sstatus &= ~(1<<SSTATUS_SPIE_BIT) # clear spie bit in mstatus
+        sstatus |= (spie<<SSTATUS_SPIE_BIT) # set accordingly
+
+        sstatus &= ~(1<<SSTATUS_SIE_BIT) # clear sie bit in mstatus
+        sstatus |= (sie<<SSTATUS_SIE_BIT) # set accordingly
+
+        self.csrfile.regs[CSR_IDS.SSTATUS].val = sstatus # dont use setter here
+        # print(f"MSTATUS set to {hex(val)}, setting SSTATUS to {hex(sstatus)}")
+
 
 
 

@@ -135,13 +135,12 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
             
             curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MINSTRETH), insert_regdump = False)
             
+    # Prepare FPU_ENDIS_REGISTER_ID, which will be used across the program's execution, also required to setup MPP
+    curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", FPU_ENDIS_REGISTER_ID, 0b10), True, insert_regdump = False)
 
     # Start with enabled FPU, if the FPU exists.
     if fuzzerstate.design_has_fpu:
-        # FUTURE Create dependencies on FPU_ENDIS_REGISTER_ID
-        # Prepare FPU_ENDIS_REGISTER_ID, which will be used across the program's execution
-        curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", FPU_ENDIS_REGISTER_ID, 0b10), True, insert_regdump = False)
-        
+        # FUTURE Create dependencies on FPU_ENDIS_REGISTER_ID        
         # Enable the FPU
         curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, FPU_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), insert_regdump = False)
         

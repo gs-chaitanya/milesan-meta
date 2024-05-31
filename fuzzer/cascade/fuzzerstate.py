@@ -265,7 +265,8 @@ class FuzzerState:
     def append_and_execute_instr(self, instr, execute: bool= False, insert_regdump: bool = INSERT_REGDUMPS):
         instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
         if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
-            instr.print(is_spike_resolution=True)
+            # instr.print(is_spike_resolution=True)
+            print(f"{self.privilegestate.privstate.name[0]}: {instr.get_str(is_spike_resolution=True)}")
         self.instr_objs_seq[-1].append(instr)
         if insert_regdump:
             if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS:

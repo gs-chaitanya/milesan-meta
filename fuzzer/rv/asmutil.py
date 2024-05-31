@@ -677,7 +677,9 @@ INSTR_FUNCS = {
     "TvecWriterInstruction": None,
     "EPCWriterInstruction": None,
     "GenericCSRWriterInstruction": None,
-    "ExceptionInstruction": None
+    "ExceptionInstruction": None,
+    # mret has no function
+    "PrivilegeDescentInstruction": None
 }
 
 INSTR_FUNCS_T0 = {
@@ -751,7 +753,9 @@ INSTR_FUNCS_T0 = {
     "TvecWriterInstruction": None,
     "EPCWriterInstruction": None,
     "GenericCSRWriterInstruction": None,
-    "ExceptionInstruction": None
+    "ExceptionInstruction": None,
+    # mret has no function
+    "PrivilegeDescentInstruction": None
 }
 
 

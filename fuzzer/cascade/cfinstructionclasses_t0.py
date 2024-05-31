@@ -6,10 +6,10 @@ from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from cascade.registers import ABI_INAMES
 from rv.csrids import CSR_ABI_NAMES
 from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0
-import random
 import numpy as np
-
-
+from rv.csrids import MSTATUS_MPP_BIT, MSTATUS_MIE_BIT, MSTATUS_MPIE_BIT
+from rv.csrids import MSTATUS_SIE_BIT, MSTATUS_SPIE_BIT, MSTATUS_SPP_BIT
+from rv.csrids import SSTATUS_SIE_BIT, SSTATUS_SPIE_BIT, SSTATUS_SPP_BIT
 
 # Ensures that the register and its taint mask excludes some registers we don't want to get tainted
 def clean_reg_taint(reg, reg_t0, skip_regs):
@@ -677,7 +677,6 @@ class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
             self.fuzzerstate.curr_pc += 4
         self.fuzzerstate.advance_minstret()
 
-
     def execute_t0(self, res, is_spike_resolution):
         assert 0
 
@@ -800,6 +799,74 @@ class GenericCSRWriterInstruction_t0(GenericCSRWriterInstruction, BaseInstructio
         self.csr_instr.execute(taint_en,is_spike_resolution)
 
 
+class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstruction_t0):
+    def execute(self, taint_en, is_spike_resolution: bool = True):
+        if self.is_mret:
+            self.execute_mret(is_spike_resolution)
+        else:
+            self.execute_sret(is_spike_resolution)
+
+    def execute_mret(self, is_spike_resolution):
+        # print(f"Executing MRET {self.get_str()}")
+        mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
+        mstatus_cpy = mstatus
+        mstatus_t0 = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val_t0()
+        assert mstatus_t0 == 0
+
+        if not self.fuzzerstate.is_design_64bit:
+            mstatus |= self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUSH] << 32
+        mpp = PrivilegeStateEnum((mstatus>>MSTATUS_MPP_BIT)&0x3) # MPP has two bits
+        # if not is_spike_resolution:
+        #     assert mpp == self.fuzzerstate.privilegestate.curr_mstatus_mpp, f"{self.get_str()}: MPP mismatch: {mpp.name} != {self.fuzzerstate.privilegestate.curr_mstatus_mpp.name}: mstatus is {hex(mstatus)}"
+        mstatus &= ~(0x3<<MSTATUS_MPP_BIT) # set MPP bits to 0
+
+        mpie = (mstatus>>MSTATUS_MPIE_BIT)&1
+        mstatus = ~(1<<MSTATUS_MIE_BIT)&mstatus | (mpie<<MSTATUS_MIE_BIT)# set MIE bit to mpie
+
+        mstatus |= (1<<MSTATUS_MPIE_BIT)# set MPIE bit to 1
+        # print(f"{self.get_str()} MRET mstatus: {hex(mstatus_cpy)} -> {hex(mstatus)}")
+        self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
+
+        # The pc will not be correct during in-situ simulation as MEPC is only determined later.
+        self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val()
+        # self.fuzzerstate.privilegestate.privstate = mpp
+        # self.fuzzerstate.privilegestate.curr_mstatus_spp = PrivilegeStateEnum.USER
+        # self.fuzzerstate.privilegestate.curr_mstatus_mpp = PrivilegeStateEnum.USER
+
+        self.fuzzerstate.advance_minstret()
+
+    def execute_sret(self, is_spike_resolution):
+        # print(f"Executing SRET {self.get_str()}")
+        sstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].get_val()
+        sstatus_cpy = sstatus
+        sstatus_t0 = self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].get_val_t0()
+        assert sstatus_t0 == 0
+
+        spp = PrivilegeStateEnum((sstatus>>SSTATUS_SPP_BIT)&1)
+        spie = (sstatus>>SSTATUS_SPIE_BIT)&1
+
+        # if not is_spike_resolution:
+        #     assert spp == self.fuzzerstate.privilegestate.curr_mstatus_spp, f"{self.get_str()}: SPP mismatch: {spp.name} != {self.fuzzerstate.privilegestate.curr_mstatus_spp.name}: sstatus is {hex(sstatus)}"
+        
+        sstatus &= ~(1<<SSTATUS_SPP_BIT) # set MPV bit to 0
+        sstatus = ~(1<<SSTATUS_SIE_BIT)&sstatus | (spie<<SSTATUS_SPIE_BIT)# set SIE bit to SPIE
+        sstatus |= (1<<SSTATUS_SPIE_BIT)# set SIE bit to 1
+        # print(f"{self.get_str()} SRET status: {hex(sstatus_cpy)} -> {hex(sstatus)}")
+        self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].set_val(sstatus)
+
+        # The pc will not be correct during in-situ simulation as SEPC is only determined later.
+        self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].get_val()
+        # self.fuzzerstate.privilegestate.privstate = spp
+        # self.fuzzerstate.privilegestate.curr_mstatus_spp = PrivilegeStateEnum.USER
+        # if self.fuzzerstate.privilegestate.curr_mstatus_mpp == PrivilegeStateEnum.SUPERVISOR:
+        #     self.fuzzerstate.privilegestate.curr_mstatus_mpp = PrivilegeStateEnum.USER
+        # elif self.fuzzerstate.privilegestate.curr_mstatus_mpp == PrivilegeStateEnum.MACHINE:
+        #     self.fuzzerstate.privilegestate.curr_mstatus_mpp = PrivilegeStateEnum.SUPERVISOR
+        self.fuzzerstate.advance_minstret()
+
+
+
+
 class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = True):
         if not is_spike_resolution:
@@ -819,22 +886,47 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
     def execute(self, taint_en, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val_t0(0)
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val_t0(0)
+
+        medeleg = self.fuzzerstate.csrfile.regs[CSR_IDS.MEDELEG].get_val()
+        mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
+        mstatus_cpy = mstatus
+        if (medeleg>>self.exception_op_type)&1 and not self.instr.instr_str == "ebreak": # ebreak cannot be delegated (?)
+            self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(self.exception_op_type)
+            self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.addr)
+            sie = (mstatus>>MSTATUS_SIE_BIT)&1
+
+            mstatus &= ~(1<<MSTATUS_SPP_BIT)
+            # print(f"Priv at time of trap {self.fuzzerstate.privilegestate.privstate.name}")
+            mstatus |= (self.fuzzerstate.privilegestate.privstate&1 << MSTATUS_SPP_BIT) # set spp to current priv
+
+            mstatus &= ~(1<<MSTATUS_SPIE_BIT) # set spie to sie
+            mstatus |= (sie<<MSTATUS_SPIE_BIT)
+            mstatus &= ~(1<<MSTATUS_SIE_BIT) # clear sie bit
+
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
+            target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
+            # print(f"{self.get_str()} delegated to supervisor, sepc set to {hex(self.addr)}, {'scause' if self.instr.instr_str != 'ebreak' else 'mcause' } set to {hex(self.exception_op_type)}, mepc is {hex(self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val())}")
+        else:
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
+            target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
+            # print(f"{self.get_str()} setting mepc to {hex(self.addr)}, mcause to {hex(self.exception_op_type)}")
+
+        self.fuzzerstate.curr_pc = target_pc
+
+        # print(f"{self.get_str()}: mstatus: {hex(mstatus_cpy)} -> {hex(mstatus)}, medeleg: {hex(medeleg)}")
 
 class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
-        # print(f"{self.get_str(is_spike_resolution)}, setting MCAUSE to {self.exceptioncause_val}")
         self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
         self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+
         self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val_t0(0)
         self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val_t0(0)
+        # self.print()
 
 
 class RawDataWord_t0(RawDataWord):

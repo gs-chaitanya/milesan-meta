@@ -6,7 +6,7 @@
 
 from params.runparams import DO_ASSERT
 from cascade.privilegestate import PrivilegeStateEnum
-from cascade.cfinstructionclasses import PrivilegeDescentInstruction
+from cascade.cfinstructionclasses_t0 import PrivilegeDescentInstruction_t0
 
 # @brief Generate a privileged descent instruction or an mpp/spp write instruction.
 # @return a list of instructions
@@ -22,9 +22,10 @@ def gen_priv_descent_instr(fuzzerstate):
             assert fuzzerstate.privilegestate.curr_mstatus_spp is not None, "spp should be populated if we want to descend privileges from supervisor mode."
 
         is_mret = fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE
-
+        # print(f"Going to {fuzzerstate.privilegestate.curr_mstatus_mpp.name}")
         # Invalidate the corresponding epc and update the current privilege level.
         # Do not update or invalidate mpp/spp bits.
+
         if is_mret:
             fuzzerstate.privilegestate.is_mepc_populated = False
             fuzzerstate.privilegestate.privstate = fuzzerstate.privilegestate.curr_mstatus_mpp
@@ -33,5 +34,5 @@ def gen_priv_descent_instr(fuzzerstate):
             fuzzerstate.privilegestate.is_sepc_populated = False
             fuzzerstate.privilegestate.privstate = fuzzerstate.privilegestate.curr_mstatus_spp
             fuzzerstate.privilegestate.curr_mstatus_spp = PrivilegeStateEnum.USER
-
-        return PrivilegeDescentInstruction(fuzzerstate, is_mret)
+        
+        return PrivilegeDescentInstruction_t0(fuzzerstate, is_mret)

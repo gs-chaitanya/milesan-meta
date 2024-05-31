@@ -303,14 +303,19 @@ def gen_epcfill_instr(fuzzerstate):
 
     is_mepc = True # If True, then mepc, else sepc
 
-    # Choose between mepc and sepc
-    if can_populate_mepc:
-        if can_populate_sepc:
-            is_mepc = random.random() < 0.5
-        else:
-            is_mepc = True
+    # Choose between mepc and sepc, if one is already populated, make the other, we want to avoid making too many
+    if (fuzzerstate.privilegestate.is_mepc_populated or fuzzerstate.privilegestate.is_sepc_populated) and (can_populate_mepc and can_populate_sepc):
+        if fuzzerstate.privilegestate.is_mepc_populated:
+            is_mepc = False
     else:
-        is_mepc = False
+        if can_populate_mepc:
+            if can_populate_sepc:
+                is_mepc = random.random() < 0.5
+            else:
+                is_mepc = True
+        else:
+            is_mepc = False
+
 
     # Get some consumed register
     rs1 = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.CONSUMED)
@@ -349,8 +354,10 @@ def gen_ppfill_instrs(fuzzerstate):
     else:
         is_mpp = True
 
-    # Ignore the return value of mstatus for now
+        # Ignore the return value of mstatus for now
     rd = 0
+
+    # rd = fuzzerstate.intregpickstate.pick_int_outputreg()
 
     # Choose the target. It should be a valid target.
     if is_mpp:
@@ -368,21 +375,23 @@ def gen_ppfill_instrs(fuzzerstate):
         else:
             target_privlvl = PrivilegeStateEnum.SUPERVISOR
 
+    # print(f"Target priv is {target_privlvl.name}: is_mpp: {is_mpp}")
+
     if is_mpp:
         if target_privlvl == PrivilegeStateEnum.USER:
-            return [CSRRegInstruction_t0], [(fuzzerstate,"csrrc", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret = [CSRRegInstruction_t0], [(fuzzerstate,"csrrc", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
         elif target_privlvl == PrivilegeStateEnum.SUPERVISOR:
             # Could theretically be done in a single instruction if we had one more mask register.
-            return [CSRRegInstruction_t0, CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS),(fuzzerstate,"csrrc", rd, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret =  [CSRRegInstruction_t0, CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS),(fuzzerstate,"csrrc", rd, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
         elif target_privlvl == PrivilegeStateEnum.MACHINE:
             ret = [CSRRegInstruction_t0],[(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
         else:
             raise NotImplementedError("Hypervisor mode not implemented")
     else:
         if target_privlvl == PrivilegeStateEnum.USER:
-            ret = [CSRRegInstruction_t0,CSRRegInstruction_t0],[(fuzzerstate,"csrrc", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), (fuzzerstate,"csrrc", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret = [CSRRegInstruction_t0],[(fuzzerstate,"csrrc", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
         elif target_privlvl == PrivilegeStateEnum.SUPERVISOR:
-            ret = [CSRRegInstruction_t0,CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), (fuzzerstate,"csrrs", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret = [CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
         else:
             raise Exception("Invalid target privlvl when setting spp")
 
@@ -391,7 +400,6 @@ def gen_ppfill_instrs(fuzzerstate):
         fuzzerstate.privilegestate.curr_mstatus_mpp = target_privlvl
     else:
         fuzzerstate.privilegestate.curr_mstatus_spp = target_privlvl
-
     return ret
 
 # @brief this function generates an instruction that will fill medeleg with the provided value.

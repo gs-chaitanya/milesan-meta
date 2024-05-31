@@ -35,15 +35,15 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.FPUD:        0,
     ISAInstrClass.FPUD64:      0,
     ISAInstrClass.TVECFSM:     0.01,
-    ISAInstrClass.PPFSM:       0.1,
-    ISAInstrClass.EPCFSM:      0.01,
-    ISAInstrClass.MEDELEG:     0.1,
+    ISAInstrClass.PPFSM:       0.001,
+    ISAInstrClass.EPCFSM:      0.001,
+    ISAInstrClass.MEDELEG:     0.01,
     ISAInstrClass.EXCEPTION:   0.01,
     ISAInstrClass.RANDOM_CSR:  0.001,
-    ISAInstrClass.DESCEND_PRV: 0,
+    ISAInstrClass.DESCEND_PRV: 1,
     ISAInstrClass.SPECIAL:     0,
-    ISAInstrClass.MMU:         0.000,
-    ISAInstrClass.MSTATUS:     0.00000
+    ISAInstrClass.MMU:         0,
+    ISAInstrClass.MSTATUS:     0
 
 }
 
@@ -146,7 +146,7 @@ def _get_isainstrclass_filtered_weights(fuzzerstate):
         or "vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs():
         ret_dict[ISAInstrClass.TVECFSM] = 0
     # For now, do not populate the mepc/sepc more than necessary
-    if (not fuzzerstate.authorize_privileges) or not ((fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not (fuzzerstate.privilegestate.is_mepc_populated or fuzzerstate.privilegestate.is_sepc_populated)) or \
+    if (not fuzzerstate.authorize_privileges) or not ((fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not (fuzzerstate.privilegestate.is_mepc_populated and fuzzerstate.privilegestate.is_sepc_populated)) or \
         fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR and not fuzzerstate.privilegestate.is_sepc_populated) or \
         fuzzerstate.design_name == "picorv32" \
         or "vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs():

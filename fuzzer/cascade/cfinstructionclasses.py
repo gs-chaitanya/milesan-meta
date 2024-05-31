@@ -4,7 +4,7 @@
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, RPROD_MASK_REGISTER_ID
 from params.fuzzparams import USE_MMU, USE_SPIKE_INTERM_ELF
-from params.runparams import DO_ASSERT, PRINT_CHECK_REGS, PRINT_REG_TRACEBACK, PRINT_FILTERED_REG_TRACEBACK
+from params.runparams import DO_ASSERT, PRINT_CHECK_REGS, PRINT_REG_TRACEBACK, PRINT_FILTERED_REG_TRACEBACK, ASSERT_ADDR
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
 from cascade.util import CFInstructionClass
@@ -137,7 +137,9 @@ class BaseInstruction:
             assert not mismatch, f"{self.get_str()}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
     def assert_addr(self):
-        assert self.addr == self.fuzzerstate.curr_pc, f"Instruction address does not match pc: {self.get_str()}, {hex(self.fuzzerstate.curr_pc)}"
+        if ASSERT_ADDR:
+            medeleg = self.fuzzerstate.csrfile.regs[CSR_IDS.MEDELEG].get_val()
+            assert self.addr == self.fuzzerstate.curr_pc, f"Instruction address does not match pc: {self.get_str()}, {hex(self.fuzzerstate.curr_pc)}, medeleg: {hex(medeleg)}"
 
 class CFInstruction(BaseInstruction):
     # Could be any instruction
@@ -537,8 +539,6 @@ class EcallEbreakInstruction(CFInstruction):
     def __init__(self, fuzzerstate, instr_str: str, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
         
-        
-
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
         if self.instr_str == "ecall":
@@ -1564,16 +1564,12 @@ class MisalignedMemInstruction(ExceptionInstruction):
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_LWU:
             self.meminstr = IntLoadInstruction(fuzzerstate,"lwu", random_reg, rs1, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_LD:
-            if DO_ASSERT:
-                assert fuzzerstate.design_has_fpu
             self.meminstr = IntLoadInstruction(fuzzerstate,"ld", random_reg, rs1, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_SH:
             self.meminstr = IntStoreInstruction(fuzzerstate,"sh", rs1, random_reg, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_SW:
             self.meminstr = IntStoreInstruction(fuzzerstate,"sw", rs1, random_reg, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_SD:
-            if DO_ASSERT:
-                assert fuzzerstate.design_has_fpu
             self.meminstr = IntStoreInstruction(fuzzerstate,"sd", rs1, random_reg, imm, self.producer_id, iscompressed)
         elif meminstr_type == MisalignedMemInstruction.MISALIGNED_FLW:
             if DO_ASSERT:

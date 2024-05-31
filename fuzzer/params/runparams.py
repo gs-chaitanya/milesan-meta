@@ -39,7 +39,7 @@ PRINT_FILTERED_REG_TRACEBACK = True
 
 PRINT_ENVIRONMENT = False
 
-INSERT_REGDUMPS = False # Speculative bugs will diappear when enabled.
+INSERT_REGDUMPS = True # Speculative bugs will likely diappear when enabled.
 INSERT_FENCE = False # The stores should become architectually visible in order, so this should not be necessary
 
 PRINT_REGISTER_VALIDATION = False
@@ -52,6 +52,8 @@ PRINT_MEM_LOADS_T0 = False
 PRINT_MEM_STORES = False
 PRINT_MEM_STORES_T0 = False
 
-GET_DATA = True
-DEBUG_PRINT = True
+GET_DATA = False
+DEBUG_PRINT = False
+
+ASSERT_ADDR = True
 

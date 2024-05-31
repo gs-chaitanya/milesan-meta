@@ -67,6 +67,7 @@ def gen_basicblock(fuzzerstate):
 
         # If this is an MMU operation
         if curr_isa_class == ISAInstrClass.MMU:
+            raise NotImplementedError
             # Update MMU fsm
             if fuzzerstate.is_design_64bit:
                 new_instrobjs = update_mmu_fsm_rv64(fuzzerstate, curr_addr)
@@ -120,10 +121,9 @@ def gen_basicblock(fuzzerstate):
         # If this is a privilege descent instruction or an mpp/spp write instruction
         elif curr_isa_class == ISAInstrClass.DESCEND_PRV:
             # assert False, "not implemented"
-            # print('Priv descent at addr', hex(curr_addr), 'privstate', fuzzerstate.privilegestate.privstate)
+            # print('Priv descent at addr', hex(curr_addr+SPIKE_STARTADDR), 'privstate', fuzzerstate.privilegestate.privstate)
             new_instrobj = gen_priv_descent_instr(fuzzerstate)
             # print('  New privstate', fuzzerstate.privilegestate.privstate)
-
             # Create space for the next basic block.
             if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
                 # Abort the bb
@@ -160,6 +160,7 @@ def gen_basicblock(fuzzerstate):
                 return False
             # print('exception at addr', hex(curr_addr), 'privstate', fuzzerstate.privilegestate.privstate)
             new_instrobj = gen_exception_instr(fuzzerstate)
+            # new_instrobj.print()
             # print('  New priv:', fuzzerstate.privilegestate.privstate)
             # fuzzerstate.instr_objs_seq[-1].append(new_instrobj)
             fuzzerstate.append_and_execute_instr(new_instrobj, True)

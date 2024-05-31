@@ -32,7 +32,6 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         expected_regvals = fuzzerstate.expected_regvals
         rtl_elfpath = fuzzerstate.rtl_elfpath
         interm_elfpath = fuzzerstate.interm_elfpath
-        fuzzerstate.curr_pc = SPIKE_STARTADDR
 
     # n_tainted_bits, n_untainted_bits, n_tainted_writes, total_writes = fuzzerstate.intregpickstate.analyze_writeback_trace(use_final=False)
     # print(f"\t Ratio of tainted/total writeback bits {n_tainted_bits}/{n_untainted_bits+n_tainted_bits} -> {n_tainted_bits/(n_untainted_bits+n_tainted_bits)}")
@@ -53,6 +52,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(env, fuzzerstate.design_name)
     regstream_rtl_val, regstream_rtl_val_t0 = regstream_rtl
 
+    fuzzerstate.curr_pc = SPIKE_STARTADDR
+    fuzzerstate.privilegestate.privstate = PrivilegeStateEnum.MACHINE
     regdump_idx = 0
     try:
         for bb_id, bb_instrs in enumerate(fuzzerstate.instr_objs_seq):
@@ -68,10 +69,11 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 elif PRINT_SKIPPED_CHECKS:
                     print(f"Skipping check for {next_instr.get_str(USE_SPIKE_INTERM_ELF)}")
 
-                next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
                 if PRINT_INSTRUCTION_EXECUTION_FINAL:
                     next_instr.print(USE_SPIKE_INTERM_ELF)
-                
+
+                next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
+
             # if this bb is followed by a context saver block, execute it
             if bb_id in fuzzerstate.bb_id_to_ctxsv_id:
                 ctxsv_bb_id = fuzzerstate.bb_id_to_ctxsv_id[bb_id]
