@@ -120,7 +120,7 @@ class BaseInstruction:
         print(self.get_str(is_spike_resolution))
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{hex(self.addr)}: {self.instr_str}"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str}"
 
     def execute(self, taint_en, is_spike_resolution: bool = True):
         raise Exception(f"Function execute() called on abstract class BaseInstruction {self.get_str(is_spike_resolution)}.")
@@ -129,10 +129,10 @@ class BaseInstruction:
         for reg_id,reg_val in reg_cmp.items():
             if reg_id not in self.fuzzerstate.intregpickstate.regs:
                 if PRINT_CHECK_REGS:
-                    print(f"{hex(self.addr)}: Ignoring register value: {ABI_INAMES[reg_id]}")
+                    print(f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: Ignoring register value: {ABI_INAMES[reg_id]}")
                 continue
             if PRINT_CHECK_REGS:
-                print(f"{hex(self.addr)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
+                print(f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
             assert not mismatch, f"{self.get_str()}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
@@ -216,7 +216,7 @@ class R12DInstruction(CFInstruction):
         self.rd =  rd
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -305,7 +305,7 @@ class ImmRdInstruction(ImmInstruction):
         # self.compute_taints()
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -345,7 +345,7 @@ class RegImmInstruction(ImmInstruction):
             assert False
         
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def set_bytecode(self,bytecode):
         has_shamt = self.instr_str in RegImmShiftInstructions
@@ -409,7 +409,7 @@ class BranchInstruction(ImmInstruction):
 
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, {hex(self.imm)}"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, {hex(self.imm)}"
 
     # Choose an opcode that, given the values of rs1 and rs2, will comply with the required takenness
     def select_suitable_opcode(self, rs1_content: int, rs2_content: int):
@@ -471,7 +471,7 @@ class JALInstruction(ImmInstruction):
         self.priv_level = priv_level
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -500,7 +500,7 @@ class JALRInstruction(ImmInstruction):
         self.to_new_layout = to_new_layout
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -519,7 +519,7 @@ class SpecialInstruction(CFInstruction):
         self.rs1 = rs1
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -570,7 +570,7 @@ class IntLoadInstruction(ImmInstruction):
 
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.imm}({ABI_INAMES[self.rs1]}) "
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.imm}({ABI_INAMES[self.rs1]}) "
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -613,7 +613,7 @@ class IntStoreInstruction(ImmInstruction):
         self.va_layout = va_layout
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -640,9 +640,9 @@ class RegdumpInstruction(IntStoreInstruction):
 
     def get_str(self, is_spike_resolution):
         if not is_spike_resolution:
-            return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
+            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
         else:
-            return f"{hex(self.addr)}: nop"
+            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: nop"
 
 
 ###
@@ -716,8 +716,7 @@ class FloatToIntInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, frs1: int, rm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        
-        
+
 
         if DO_ASSERT:
             assert rm >= 0
@@ -1187,7 +1186,7 @@ class CSRRegInstruction(CSRInstruction):
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
     def get_str(self, is_spike_resolution: bool = True):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {ABI_INAMES[self.rs1]}"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {ABI_INAMES[self.rs1]}"
 
 # CSR operations with immediate
 CSRImmInstructions = "csrrwi", "csrrsi", "csrrci"
@@ -1217,7 +1216,7 @@ class CSRImmInstruction(CSRInstruction):
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
     def get_str(self, is_spike_resolution: bool = True):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {hex(self.uimm)}"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {hex(self.uimm)}"
 
 ###
 # Placeholder instructions
@@ -1247,13 +1246,13 @@ class PlaceholderProducerInstr0(BaseInstruction):
     def get_str(self, is_spike_resolution: bool = False):
         if is_spike_resolution:
             if self.spike_resolution_offset is not None:
-                return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
-            return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
+                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
+            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
         else:
             if self.rtl_offset is not None:
-                return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
+                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
             else:
-                return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
+                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using lui
@@ -1289,13 +1288,13 @@ class PlaceholderProducerInstr1(BaseInstruction):
     def get_str(self, is_spike_resolution: bool = True):
         if is_spike_resolution:
             if self.spike_resolution_offset is not None:
-                return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
-            return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
+                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
+            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
         else:
             if self.rtl_offset is not None:
-                return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
+                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
             else:
-                return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
+                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using addi
@@ -1325,7 +1324,7 @@ class PlaceholderPreConsumerInstr(BaseInstruction):
         
 
     def get_str(self, is_spike_resolution: bool = False):
-        return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rdep]}, {ABI_INAMES[RDEP_MASK_REGISTER_ID]}"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rdep]}, {ABI_INAMES[RDEP_MASK_REGISTER_ID]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # Reduce the size of the rdep id to 32 bits
@@ -1360,9 +1359,9 @@ class PlaceholderConsumerInstr(BaseInstruction):
 
     def get_str(self, is_spike_resolution: bool = False):
         if is_spike_resolution:
-            return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[RELOCATOR_REGISTER_ID]}"
+            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[RELOCATOR_REGISTER_ID]}"
         else:
-            return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[self.rdep]}"
+            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[self.rdep]}"
         
     def gen_bytecode_int(self, is_spike_resolution: bool):
         if DO_ASSERT:
@@ -1406,7 +1405,7 @@ class RawDataWord:
         return self.wordval
     
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{hex(self.addr)}: {hex(self.wordval)} (RAW DATA)"
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {hex(self.wordval)} (RAW DATA)"
 
     def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         print(self.get_str(is_spike_resolution))
@@ -1444,6 +1443,10 @@ class SimpleIllegalInstruction(ExceptionInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return 0x00000000
 
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: unimp (SimpleExceptionInstruction)"
+
+
 # Exception that encapsulates an instruction that causes an exception, such as a misaligned JAL.
 class SimpleExceptionEncapsulator(ExceptionInstruction):
     def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr, exception_op_type: ExceptionCauseVal, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1, old_privilege: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE):
@@ -1464,7 +1467,7 @@ class SimpleExceptionEncapsulator(ExceptionInstruction):
         return self.instr.gen_bytecode_int(is_spike_resolution)
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return self.instr.get_str(is_spike_resolution) + f" (SimpleExceptionInstruction)"
+        return f"{self.instr.get_str(is_spike_resolution)} (SimpleExceptionInstruction)"
 
 # This is a wrapper class for a misaligned load or store.
 # As opposed to usual load and store operations used above, this class chooses a consumed register by itself.
@@ -1595,7 +1598,7 @@ class MisalignedMemInstruction(ExceptionInstruction):
         return self.meminstr.gen_bytecode_int(is_spike_resolution)
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return self.meminstr.get_str(is_spike_resolution) + f" (MisalignedMemInstruction)"
+        return f"{self.meminstr.get_str(is_spike_resolution)} (MisalignedMemInstruction)"
 
 
 
