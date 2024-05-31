@@ -829,7 +829,7 @@ class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstructio
 
         # The pc will not be correct during in-situ simulation as MEPC is only determined later.
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val()
-        # self.fuzzerstate.privilegestate.privstate = mpp
+        self.fuzzerstate.privilegestate.privstate = mpp
         # self.fuzzerstate.privilegestate.curr_mstatus_spp = PrivilegeStateEnum.USER
         # self.fuzzerstate.privilegestate.curr_mstatus_mpp = PrivilegeStateEnum.USER
 
@@ -856,7 +856,7 @@ class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstructio
 
         # The pc will not be correct during in-situ simulation as SEPC is only determined later.
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].get_val()
-        # self.fuzzerstate.privilegestate.privstate = spp
+        self.fuzzerstate.privilegestate.privstate = spp
         # self.fuzzerstate.privilegestate.curr_mstatus_spp = PrivilegeStateEnum.USER
         # if self.fuzzerstate.privilegestate.curr_mstatus_mpp == PrivilegeStateEnum.SUPERVISOR:
         #     self.fuzzerstate.privilegestate.curr_mstatus_mpp = PrivilegeStateEnum.USER
@@ -871,12 +871,56 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
-        # print(f"{self.get_str(is_spike_resolution)}, setting MCAUSE to {ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION}")
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val_t0(0)
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val_t0(0)
+
+        medeleg = self.fuzzerstate.csrfile.regs[CSR_IDS.MEDELEG].get_val()
+        mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
+        mstatus_cpy = mstatus
+        
+        if (medeleg>>ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)&1:
+            if self.fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE:
+                self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
+                self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.addr)
+                sie = (mstatus>>MSTATUS_SIE_BIT)&1
+
+                mstatus &= ~(1<<MSTATUS_SPP_BIT)
+                # print(f"Priv at time of trap {self.fuzzerstate.privilegestate.privstate.name}")
+                mstatus |= (self.fuzzerstate.privilegestate.privstate&1 << MSTATUS_SPP_BIT) # set spp to current priv, TODO make sure priveleges work in final sim too
+
+                mstatus &= ~(1<<MSTATUS_SPIE_BIT) # set spie to sie
+                mstatus |= (sie<<MSTATUS_SPIE_BIT)
+                mstatus &= ~(1<<MSTATUS_SIE_BIT) # clear sie bit
+
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
+                target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
+                self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.SUPERVISOR
+            else: # Cant delegate so supervisor if in machine mode.
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+                sie = (mstatus>>MSTATUS_SIE_BIT)&1
+
+                mstatus &= ~(1<<MSTATUS_SPP_BIT)
+                # print(f"Priv at time of trap {self.fuzzerstate.privilegestate.privstate.name}")
+                mstatus |= (self.fuzzerstate.privilegestate.privstate&1 << MSTATUS_SPP_BIT) # set spp to current priv, TODO make sure priveleges work in final sim too
+
+                mstatus &= ~(1<<MSTATUS_SPIE_BIT) # set spie to sie
+                mstatus |= (sie<<MSTATUS_SPIE_BIT)
+                mstatus &= ~(1<<MSTATUS_SIE_BIT) # clear sie bit
+
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
+                target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
+                self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.SUPERVISOR
+
+            # print(f"{self.get_str()} delegated to supervisor, sepc set to {hex(self.addr)}, {'scause' if self.instr.instr_str != 'ebreak' else 'mcause' } set to {hex(self.exception_op_type)}, mepc is {hex(self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val())}")
+        else:
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
+            target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
+            # print(f"{self.get_str()} setting mepc to {hex(self.addr)}, mcause to {hex(self.exception_op_type)}")
+            # print(f"Going to {hex(target_pc)}")
+
+        self.fuzzerstate.curr_pc = target_pc
+
+        # print(f"{self.get_str()}: mstatus: {hex(mstatus_cpy)} -> {hex(mstatus)}, medeleg: {hex(medeleg)}")
 
 class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstruction_t0):
     def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr: BaseInstruction, exception_op_type: ExceptionCauseVal, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1, old_privilege: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE):
@@ -890,27 +934,48 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
         medeleg = self.fuzzerstate.csrfile.regs[CSR_IDS.MEDELEG].get_val()
         mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
         mstatus_cpy = mstatus
-        if (medeleg>>self.exception_op_type)&1 and not self.instr.instr_str == "ebreak": # ebreak cannot be delegated (?)
-            self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(self.exception_op_type)
-            self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.addr)
-            sie = (mstatus>>MSTATUS_SIE_BIT)&1
+        
+        if (medeleg>>self.exception_op_type)&1:
+            if self.fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE:
+                self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(self.exception_op_type)
+                self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.addr)
+                sie = (mstatus>>MSTATUS_SIE_BIT)&1
 
-            mstatus &= ~(1<<MSTATUS_SPP_BIT)
-            # print(f"Priv at time of trap {self.fuzzerstate.privilegestate.privstate.name}")
-            mstatus |= (self.fuzzerstate.privilegestate.privstate&1 << MSTATUS_SPP_BIT) # set spp to current priv
+                mstatus &= ~(1<<MSTATUS_SPP_BIT)
+                # print(f"Priv at time of trap {self.fuzzerstate.privilegestate.privstate.name}")
+                mstatus |= (self.fuzzerstate.privilegestate.privstate&1 << MSTATUS_SPP_BIT) # set spp to current priv, TODO make sure priveleges work in final sim too
 
-            mstatus &= ~(1<<MSTATUS_SPIE_BIT) # set spie to sie
-            mstatus |= (sie<<MSTATUS_SPIE_BIT)
-            mstatus &= ~(1<<MSTATUS_SIE_BIT) # clear sie bit
+                mstatus &= ~(1<<MSTATUS_SPIE_BIT) # set spie to sie
+                mstatus |= (sie<<MSTATUS_SPIE_BIT)
+                mstatus &= ~(1<<MSTATUS_SIE_BIT) # clear sie bit
 
-            self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
-            target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
+                target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
+                self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.SUPERVISOR
+            else: # Cant delegate so supervisor if in machine mode.
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+                sie = (mstatus>>MSTATUS_SIE_BIT)&1
+
+                mstatus &= ~(1<<MSTATUS_SPP_BIT)
+                # print(f"Priv at time of trap {self.fuzzerstate.privilegestate.privstate.name}")
+                mstatus |= (self.fuzzerstate.privilegestate.privstate&1 << MSTATUS_SPP_BIT) # set spp to current priv, TODO make sure priveleges work in final sim too
+
+                mstatus &= ~(1<<MSTATUS_SPIE_BIT) # set spie to sie
+                mstatus |= (sie<<MSTATUS_SPIE_BIT)
+                mstatus &= ~(1<<MSTATUS_SIE_BIT) # clear sie bit
+
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
+                target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
+                self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.SUPERVISOR
+
             # print(f"{self.get_str()} delegated to supervisor, sepc set to {hex(self.addr)}, {'scause' if self.instr.instr_str != 'ebreak' else 'mcause' } set to {hex(self.exception_op_type)}, mepc is {hex(self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val())}")
         else:
             self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
             target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
             # print(f"{self.get_str()} setting mepc to {hex(self.addr)}, mcause to {hex(self.exception_op_type)}")
+            # print(f"Going to {hex(target_pc)}")
 
         self.fuzzerstate.curr_pc = target_pc
 
@@ -920,13 +985,56 @@ class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
 
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val_t0(0)
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val_t0(0)
-        # self.print()
+        medeleg = self.fuzzerstate.csrfile.regs[CSR_IDS.MEDELEG].get_val()
+        mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
+        mstatus_cpy = mstatus
+        
+        if (medeleg>>self.exceptioncause_val)&1:
+            if self.fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE:
+                self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(self.exceptioncause_val)
+                self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.addr)
+                sie = (mstatus>>MSTATUS_SIE_BIT)&1
+
+                mstatus &= ~(1<<MSTATUS_SPP_BIT)
+                # print(f"Priv at time of trap {self.fuzzerstate.privilegestate.privstate.name}")
+                mstatus |= (self.fuzzerstate.privilegestate.privstate&1 << MSTATUS_SPP_BIT) # set spp to current priv, TODO make sure priveleges work in final sim too
+
+                mstatus &= ~(1<<MSTATUS_SPIE_BIT) # set spie to sie
+                mstatus |= (sie<<MSTATUS_SPIE_BIT)
+                mstatus &= ~(1<<MSTATUS_SIE_BIT) # clear sie bit
+
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
+                target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
+                self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.SUPERVISOR
+            else: # Cant delegate so supervisor if in machine mode.
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+                sie = (mstatus>>MSTATUS_SIE_BIT)&1
+
+                mstatus &= ~(1<<MSTATUS_SPP_BIT)
+                # print(f"Priv at time of trap {self.fuzzerstate.privilegestate.privstate.name}")
+                mstatus |= (self.fuzzerstate.privilegestate.privstate&1 << MSTATUS_SPP_BIT) # set spp to current priv, TODO make sure priveleges work in final sim too
+
+                mstatus &= ~(1<<MSTATUS_SPIE_BIT) # set spie to sie
+                mstatus |= (sie<<MSTATUS_SPIE_BIT)
+                mstatus &= ~(1<<MSTATUS_SIE_BIT) # clear sie bit
+
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
+                target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
+                self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.SUPERVISOR
+
+            # print(f"{self.get_str()} delegated to supervisor, sepc set to {hex(self.addr)}, {'scause' if self.instr.instr_str != 'ebreak' else 'mcause' } set to {hex(self.exception_op_type)}, mepc is {hex(self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val())}")
+        else:
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
+            target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
+            # print(f"{self.get_str()} setting mepc to {hex(self.addr)}, mcause to {hex(self.exception_op_type)}")
+            # print(f"Going to {hex(target_pc)}")
+
+        self.fuzzerstate.curr_pc = target_pc
+
+        # print(f"{self.get_str()}: mstatus: {hex(mstatus_cpy)} -> {hex(mstatus)}, medeleg: {hex(medeleg)}")
 
 
 class RawDataWord_t0(RawDataWord):
