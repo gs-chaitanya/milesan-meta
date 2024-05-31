@@ -915,6 +915,7 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
             self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
             target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
+            self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.MACHINE
             # print(f"{self.get_str()} setting mepc to {hex(self.addr)}, mcause to {hex(self.exception_op_type)}")
             # print(f"Going to {hex(target_pc)}")
 
@@ -974,6 +975,7 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
             self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
             target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
+            self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.MACHINE
             # print(f"{self.get_str()} setting mepc to {hex(self.addr)}, mcause to {hex(self.exception_op_type)}")
             # print(f"Going to {hex(target_pc)}")
 
@@ -1029,6 +1031,7 @@ class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
             self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
             target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
+            self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.MACHINE
             # print(f"{self.get_str()} setting mepc to {hex(self.addr)}, mcause to {hex(self.exception_op_type)}")
             # print(f"Going to {hex(target_pc)}")
 
