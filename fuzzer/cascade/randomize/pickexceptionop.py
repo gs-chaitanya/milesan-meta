@@ -5,13 +5,13 @@
 # This module is responsible for picking specific operations among exceptions.
 
 from cascade.cfinstructionclasses import JALInstruction, SimpleIllegalInstruction, SimpleExceptionEncapsulator, MisalignedMemInstruction, EcallEbreakInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, CSRRegInstruction, PrivilegeDescentInstruction, CSRRegInstructions, Float3Instruction, Float3Instructions
-from cascade.cfinstructionclasses_t0 import TvecWriterInstruction_t0, EPCWriterInstruction_t0, GenericCSRWriterInstruction_t0, SimpleExceptionEncapsulator_t0, CSRRegInstruction_t0, SimpleIllegalInstruction_t0, MisalignedMemInstruction_t0
+from cascade.cfinstructionclasses_t0 import TvecWriterInstruction_t0, EPCWriterInstruction_t0, GenericCSRWriterInstruction_t0, SimpleExceptionEncapsulator_t0, CSRRegInstruction_t0, SimpleIllegalInstruction_t0, MisalignedMemInstruction_t0, MstatusWriterInstruction_t0
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.randomize.createcfinstr import gen_random_rounding_mode
 from cascade.toleratebugs import is_tolerate_rocket_minstret, is_tolerate_kronos_readbadcsr, is_tolerate_picorv32_readnonimplcsr, is_forbid_vexriscv_csrs, is_tolerate_vexriscv_fpu_disabled, is_tolerate_vexriscv_fpu_leak
 from cascade.util import ExceptionCauseVal, IntRegIndivState
-from common.spike import SPIKE_MEDELEG_MASK
-from params.fuzzparams import MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, SIMPLE_ILLEGAL_INSTRUCTION_PROBA, PROBA_PICK_WRONG_FPU, MAX_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_REGS
+from common.spike import SPIKE_MEDELEG_MASK, SPIKE_STARTADDR
+from params.fuzzparams import MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, SIMPLE_ILLEGAL_INSTRUCTION_PROBA, PROBA_PICK_WRONG_FPU, MAX_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_REGS, USE_MMU
 from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS, INTERESTING_CSRS_INACCESSIBLE_FROM_SUPERVISOR, INTERESTING_CSRS_INACCESSIBLE_FROM_USER
 from copy import copy
@@ -80,8 +80,7 @@ def _get_exceptionoptype_filtered_weights(fuzzerstate):
 # Illegal instructions can result from either a simple non-existing instruction, or from an illegal CSR access.
 # Warning: the privilege state of fuzzerstate is already updated!!
 # @param old_privilege the privilege state before the exception
-def pick_illegal_instruction(is_mtvec, fuzzerstate, old_privilege):
-
+def pick_illegal_instruction(is_mtvec, fuzzerstate):
     if "vexriscv" in fuzzerstate.design_name and is_tolerate_vexriscv_fpu_disabled() and not fuzzerstate.is_fpu_activated:
         rm = gen_random_rounding_mode()
         frs1, frs2 = random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS), random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS)
@@ -107,7 +106,7 @@ def pick_illegal_instruction(is_mtvec, fuzzerstate, old_privilege):
             frd = random.randrange(MAX_NUM_PICKABLE_FLOATING_REGS)
             return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, Float3Instruction(random.choice(Float3Instructions), frd, frs1, frs2, rm, False), ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
 
-    if old_privilege == PrivilegeStateEnum.MACHINE:
+    if fuzzerstate.privilegestate.prev_privstate == PrivilegeStateEnum.MACHINE:
         if 'kronos' in fuzzerstate.design_name and not is_tolerate_kronos_readbadcsr() \
             or 'picorv32' in fuzzerstate.design_name and not is_tolerate_picorv32_readnonimplcsr():
             candidate_instructions = [
@@ -116,20 +115,20 @@ def pick_illegal_instruction(is_mtvec, fuzzerstate, old_privilege):
         else:
             candidate_instructions = [
                 SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, SimpleIllegalInstruction_t0(fuzzerstate, is_mtvec),  ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
-                SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, CSRRegInstruction_t0(fuzzerstate,"csrrw", random.randrange(fuzzerstate.num_pickable_regs), random.randrange(fuzzerstate.num_pickable_regs), 0xCCA),  ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
+                SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, CSRRegInstruction_t0(fuzzerstate,"csrrw", random.randrange(fuzzerstate.num_pickable_regs), random.randrange(fuzzerstate.num_pickable_regs), 0xCCA),  ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
             ]
-    elif old_privilege == PrivilegeStateEnum.SUPERVISOR:
+    elif fuzzerstate.privilegestate.prev_privstate == PrivilegeStateEnum.SUPERVISOR:
         candidate_instructions = [
-            SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, PrivilegeDescentInstruction(True)),
+            SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, PrivilegeDescentInstruction(True), ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
             SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, CSRRegInstruction_t0(fuzzerstate,"csrrw", random.randrange(fuzzerstate.num_pickable_regs), random.randrange(fuzzerstate.num_pickable_regs), random.choice(INTERESTING_CSRS_INACCESSIBLE_FROM_SUPERVISOR)),  ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
         ]
-    elif old_privilege == PrivilegeStateEnum.USER:
+    elif fuzzerstate.privilegestate.prev_privstate == PrivilegeStateEnum.USER:
         candidate_instructions = [
-            SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, random.choice([PrivilegeDescentInstruction(True), PrivilegeDescentInstruction(False)])),
+            SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, random.choice([PrivilegeDescentInstruction(True), PrivilegeDescentInstruction(False)]), ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
             SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, CSRRegInstruction_t0(fuzzerstate,"csrrw", random.randrange(fuzzerstate.num_pickable_regs), random.randrange(fuzzerstate.num_pickable_regs), random.choice(INTERESTING_CSRS_INACCESSIBLE_FROM_USER)),  ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
         ]
     else:
-        raise Exception("Unknown privilege state: " + str(old_privilege))
+        raise Exception("Unknown privilege state: " + str(fuzzerstate.privilegestate.prev_privstate))
     ret = random.choice(candidate_instructions)
     return ret
 
@@ -163,11 +162,21 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         fuzzerstate.privilegestate.is_stvec_populated = False
 
     # Update the privilege state
-    old_privilege = fuzzerstate.privilegestate.privstate
+    fuzzerstate.privilegestate.prev_privstate = fuzzerstate.privilegestate.privstate
     if is_mtvec:
         fuzzerstate.privilegestate.privstate = PrivilegeStateEnum.MACHINE
+        fuzzerstate.effective_curr_layout = -1
     else:
         fuzzerstate.privilegestate.privstate = PrivilegeStateEnum.SUPERVISOR
+        if USE_MMU: user_sup_offset = (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][fuzzerstate.privilegestate.privstate] | 0x7fffffff) - (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][fuzzerstate.privilegestate.prev_privstate] | 0x7fffffff)
+        if USE_MMU and fuzzerstate.privilegestate.prev_privstate == PrivilegeStateEnum.USER and user_sup_offset != 0:
+            # FIXME EXTEND this will not be 0 if we use only one level of pages
+            print(f"before raising a exception USER => SUP we must adjust the RPROD REG")
+            print(f"{hex(fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][fuzzerstate.privilegestate.prev_privstate] | 0x7fffffff)}")
+            print(f"{hex(fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][fuzzerstate.privilegestate.privstate] | 0x7fffffff)}")
+            print(f"offset in rprod will be: {hex(user_sup_offset)}")
+            assert False, f"We do not support deleguation if the top 32 bit of RPROD change from user to supervisor mode yet"
+
 
     # Generate depending on the exception type.
     if exception_op_type == ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED:
@@ -186,7 +195,7 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
     elif exception_op_type == ExceptionCauseVal.ID_INSTR_ACCESS_FAULT:
         raise NotImplementedError("ID_INSTR_ACCESS_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION:
-        return pick_illegal_instruction(is_mtvec, fuzzerstate, old_privilege)
+        return pick_illegal_instruction(is_mtvec, fuzzerstate)
     elif exception_op_type == ExceptionCauseVal.ID_BREAKPOINT:
         fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = ('rocket' in fuzzerstate.design_name and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
         return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, EcallEbreakInstruction(fuzzerstate,"ebreak"),exception_op_type)
@@ -204,17 +213,17 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         raise NotImplementedError("ID_STORE_AMO_ACCESS_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE:
         if DO_ASSERT:
-            assert old_privilege == PrivilegeStateEnum.USER
+            assert fuzzerstate.privilegestate.prev_privstate == PrivilegeStateEnum.USER
         fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = ('rocket' in fuzzerstate.design_name and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
         return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, EcallEbreakInstruction(fuzzerstate,"ecall"),exception_op_type)
     elif exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE:
         if DO_ASSERT:
-            assert old_privilege == PrivilegeStateEnum.SUPERVISOR
+            assert fuzzerstate.privilegestate.prev_privstate == PrivilegeStateEnum.SUPERVISOR
         fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = ('rocket' in fuzzerstate.design_name and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
         return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, EcallEbreakInstruction(fuzzerstate,"ecall"),exception_op_type)
     elif exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE:
         if DO_ASSERT:
-            assert old_privilege == PrivilegeStateEnum.MACHINE
+            assert fuzzerstate.privilegestate.prev_privstate == PrivilegeStateEnum.MACHINE
         fuzzerstate.is_minstret_inaccurate_because_ecall_ebreak = ('rocket' in fuzzerstate.design_name and not is_tolerate_rocket_minstret()) # rocket has minstret inaccurate because of ecall/ebreak
         return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, EcallEbreakInstruction(fuzzerstate,"ecall"),exception_op_type)
     elif exception_op_type == ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT:
@@ -292,6 +301,7 @@ def gen_tvecfill_instr(fuzzerstate):
 def gen_epcfill_instr(fuzzerstate):
     if DO_ASSERT:
         assert fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.USER
+        assert not (fuzzerstate.privilegestate.is_mepc_populated and fuzzerstate.privilegestate.is_sepc_populated)
 
     can_populate_mepc = fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not fuzzerstate.privilegestate.is_mepc_populated
     can_populate_sepc = ((fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR) or \
@@ -376,22 +386,23 @@ def gen_ppfill_instrs(fuzzerstate):
             target_privlvl = PrivilegeStateEnum.SUPERVISOR
 
     # print(f"Target priv is {target_privlvl.name}: is_mpp: {is_mpp}")
+    # def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False, is_satp_smode = (False, None), mpp_val = None):
 
     if is_mpp:
         if target_privlvl == PrivilegeStateEnum.USER:
-            ret = [CSRRegInstruction_t0], [(fuzzerstate,"csrrc", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret = [CSRRegInstruction_t0], [(fuzzerstate,"csrrc", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS, False, (False,None), PrivilegeStateEnum.USER)]
         elif target_privlvl == PrivilegeStateEnum.SUPERVISOR:
             # Could theretically be done in a single instruction if we had one more mask register.
-            ret =  [CSRRegInstruction_t0, CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS),(fuzzerstate,"csrrc", rd, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret =  [CSRRegInstruction_t0, CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS, False, (False,None), PrivilegeStateEnum.SUPERVISOR),(fuzzerstate,"csrrc", rd, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS,False, (False,None), PrivilegeStateEnum.SUPERVISOR)]
         elif target_privlvl == PrivilegeStateEnum.MACHINE:
-            ret = [CSRRegInstruction_t0],[(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret = [CSRRegInstruction_t0],[(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS,False, (False,None), PrivilegeStateEnum.MACHINE)]
         else:
             raise NotImplementedError("Hypervisor mode not implemented")
     else:
         if target_privlvl == PrivilegeStateEnum.USER:
-            ret = [CSRRegInstruction_t0],[(fuzzerstate,"csrrc", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret = [CSRRegInstruction_t0],[(fuzzerstate,"csrrc", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS, False, (False,None), PrivilegeStateEnum.USER)]
         elif target_privlvl == PrivilegeStateEnum.SUPERVISOR:
-            ret = [CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS)]
+            ret = [CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS,False, (False,None), PrivilegeStateEnum.SUPERVISOR)]
         else:
             raise Exception("Invalid target privlvl when setting spp")
 
@@ -446,3 +457,35 @@ def gen_medeleg_instr(fuzzerstate):
     if rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True) # MEDLEG changes between spike and final elf, so cannot be used for taint computation
     return GenericCSRWriterInstruction_t0(fuzzerstate, CSR_IDS.MEDELEG, rd, rs1, producer_id, val_to_write_spike, val_to_write_cpu)
+
+# @brief function to set/unsed the SUM/MPRV bits in mstatus
+def gen_sum_mprv_op(fuzzerstate):
+    # TODO, we can change the SUM bit in mstatus as well, we should randomly choose if we are in M mode, and use sstatus if in S mode
+
+    # First we randomly choose the state of SUM and MPRV, maybe we should set it to the opposite 
+    # Is it a clear or a set
+    if random.randint(0, 1) :
+        instr_str = "csrrc"
+        is_set = False
+    else:
+        instr_str = "csrrs"
+        is_set = True
+
+    old_sum, old_mprv = fuzzerstate.status_sum_mprv
+    if random.randint(0, 1):
+        mstatus_mask = (1 << 18) ^ SPIKE_STARTADDR # SUM, SPIKE_STARTADDR hack to avoid adding it later
+        fuzzerstate.status_sum_mprv = is_set, old_mprv
+    else:
+        mstatus_mask = (1 << 17) ^ SPIKE_STARTADDR # MPRV, SPIKE_STARTADDR hack to avoid adding it later
+        fuzzerstate.status_sum_mprv = old_sum, is_set
+
+    #TODO MXR (Make eXecutable Readable) not supported yet
+
+    # Pick register
+    #rd = fuzzerstate.intregpickstate.pick_int_outputreg()
+    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
+    producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
+    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+
+    # Create the instruction and set the state
+    return MstatusWriterInstruction_t0(0, rs1, producer_id, instr_str, mstatus_mask)

@@ -20,7 +20,7 @@ from cascade.randomize.pickrandomcsrop import gen_random_csr_op
 from cascade.randomize.pickprivilegedescentop import gen_priv_descent_instr
 from cascade.randomize.forbidden_random_value import is_forbidden_random_value
 from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator
-from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS
+from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
 from cascade.finalblock import get_finalblock_max_size,finalblock
 from cascade.initialblock import gen_initial_basic_block
 from cascade.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setters
@@ -28,6 +28,8 @@ from cascade.privilegestate import PrivilegeStateEnum
 from cascade.toleratebugs import is_tolerate_ras1
 from cascade.mmu_utils import phys2virt
 from cascade.randomize.pickmmuop import update_mmu_fsm_rv32, update_mmu_fsm_rv64
+
+from cascade.gen_ctxt_final_block import *
 
 import numpy as np
 import random
@@ -56,18 +58,21 @@ def gen_basicblock(fuzzerstate):
     # We stop the instruction generation either when there is no more space available, or when we encounter an end-of-state instruction
     while fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > BASIC_BLOCK_MIN_SPACE:
 
+        if fuzzerstate.num_instr_to_stay_in_prv > 0:
+            fuzzerstate.num_instr_to_stay_in_prv -= 1
+        if fuzzerstate.num_instr_to_stay_in_layout > 0:
+            fuzzerstate.num_instr_to_stay_in_layout -= 1
+
         # Allocate the next 4 bytes
         fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
         curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
         curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
 
         # Get the next instruction class
-        curr_isa_class = gen_next_isainstrclass(fuzzerstate)
-
+        curr_isa_class = gen_next_isainstrclass(fuzzerstate, curr_alloc_cursor)
 
         # If this is an MMU operation
         if curr_isa_class == ISAInstrClass.MMU:
-            raise NotImplementedError
             # Update MMU fsm
             if fuzzerstate.is_design_64bit:
                 new_instrobjs = update_mmu_fsm_rv64(fuzzerstate, curr_addr)
@@ -132,6 +137,8 @@ def gen_basicblock(fuzzerstate):
                 fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
                 return False
             fuzzerstate.append_and_execute_instr(new_instrobj, True)
+            if DEBUG_PRINT: print(f"priv change at addr: {hex(curr_addr+SPIKE_STARTADDR)} to ", fuzzerstate.privilegestate.privstate)
+
             del new_instrobj
             return True
 
@@ -222,8 +229,14 @@ def gen_basicblock(fuzzerstate):
     # This is reached if we need to urgently jump to the next basic block.
     # The algorithm is the following: if there is a possibility to jump immediately, then do so. Else, prepare the registers as fast as possible.
 
-    curr_isa_class = random.choices([ISAInstrClass.JAL, ISAInstrClass.JALR, ISAInstrClass.BRANCH], [1, 1, 1], k=1)[0]
-    curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+    # If the regfsm is not IDLE, we cannot use JALR. Bringing it to maturity would increase the minimal ammount of instr, 
+    # so we dont chhose JALR in this case
+    if fuzzerstate.curr_mmu_state != MmuState.IDLE:
+        curr_isa_class = random.choices([ISAInstrClass.JAL, ISAInstrClass.BRANCH], [1, 1], k=1)[0]
+        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+    else:
+        curr_isa_class = random.choices([ISAInstrClass.JAL, ISAInstrClass.JALR, ISAInstrClass.BRANCH], [1, 1, 1], k=1)[0]
+        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
 
     # No need for any preparation if jal, because it has no true dependency
     if curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.BRANCH):
@@ -333,6 +346,22 @@ def pop_last_bbs_to_connect_with_final_block(fuzzerstate):
         fuzzerstate.instr_objs_seq.pop()
         fuzzerstate.bb_start_addr_seq.pop()
         fuzzerstate.saved_reg_states.pop()
+
+    if USE_MMU:
+        if DEBUG_PRINT: print(f"Updating fuzzerstae after a pop, old layout: {fuzzerstate.effective_curr_layout}, old_priv: ",fuzzerstate.privilegestate.privstate)
+        bb_id, instr_id = len(fuzzerstate.instr_objs_seq)-1, len(fuzzerstate.instr_objs_seq[-1])-1
+        layout_id, priv_level = get_last_bb_layout_and_priv(fuzzerstate, bb_id, instr_id)
+        fuzzerstate.privilegestate.privstate = priv_level
+        fuzzerstate.effective_curr_layout = layout_id
+        if priv_level == PrivilegeStateEnum.MACHINE:
+            fuzzerstate.real_curr_layout = get_last_real_layout(fuzzerstate, bb_id, instr_id)
+        else:
+            fuzzerstate.real_curr_layout = fuzzerstate.effective_curr_layout
+        # Get the last mpp
+        fuzzerstate.privilegestate.curr_mstatus_mpp = get_last_mpp(fuzzerstate, bb_id, instr_id)
+        # Update sum and mprv bits
+        fuzzerstate.status_sum_mprv = get_last_sum_mprv(fuzzerstate, bb_id, instr_id)
+
     return False
 
 # @return a list of addresses for the memory operations, in their order of occurrence
@@ -572,7 +601,8 @@ def gen_basicblocks(fuzzerstate):
     while True:
 
         fuzzerstate.reset()
-        gen_initial_basic_block(fuzzerstate, SPIKE_STARTADDR)
+        if not gen_initial_basic_block(fuzzerstate, SPIKE_STARTADDR): continue
+        
         fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
 
         # Reserve space for the second basic block (whose address is already fixed).

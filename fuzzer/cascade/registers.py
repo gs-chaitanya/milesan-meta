@@ -116,6 +116,7 @@ class MStatus_CSR(CSR):
     def set_val(self, val):
         super().set_val(val)
         val = self.get_val()
+        
         sstatus = self.csrfile.regs[CSR_IDS.SSTATUS].get_val()
         spp = (val>>MSTATUS_SPP_BIT)&1
         sie = (val>>MSTATUS_SIE_BIT)&1

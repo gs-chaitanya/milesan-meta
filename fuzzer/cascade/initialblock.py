@@ -13,7 +13,7 @@ from cascade.randomize.createcfinstr import create_instr
 from cascade.randomize.pickisainstrclass import ISAInstrClass
 from cascade.randomize.forbidden_random_value import is_forbidden_random_value
 from cascade.util import get_range_bits_per_instrclass, BASIC_BLOCK_MIN_SPACE
-from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, USE_MMU
+from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, USE_MMU
 from params.runparams import INSERT_REGDUMPS
 from rv.asmutil import li_into_reg
 from common.spike import SPIKE_STARTADDR
@@ -41,9 +41,9 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
 
     # prepare the relocator register
     lui_imm, addi_imm = li_into_reg(offset_addr, False)
-    curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", RELOCATOR_REGISTER_ID, lui_imm), True, insert_regdump = False)
+    curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", RELOCATOR_REGISTER_ID, lui_imm, is_rd_nonpickable_ok=True), True, insert_regdump = False)
 
-    curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, addi_imm), True, insert_regdump = False)
+    curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, addi_imm, is_rd_nonpickable_ok=True), True, insert_regdump = False)
     
 
     if INSERT_REGDUMPS:
@@ -55,18 +55,18 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
             raise ValueError(f"Design `{fuzzerstate.design_name}` does not have the `regstreamaddr` attribute.")
 
         lui_imm, addi_imm = li_into_reg(regdump_addr, False)
-        curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", REGDUMP_REGISTER_ID, lui_imm), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", REGDUMP_REGISTER_ID, lui_imm, is_rd_nonpickable_ok=True), True, insert_regdump = False)
 
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", REGDUMP_REGISTER_ID, REGDUMP_REGISTER_ID, addi_imm), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", REGDUMP_REGISTER_ID, REGDUMP_REGISTER_ID, addi_imm, is_rd_nonpickable_ok=True), True, insert_regdump = False)
         
         if fuzzerstate.design_name == "kronos": # For kronos we need to add the spike offset, for e.g. rocket not.
-            curr_addr += fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"add", REGDUMP_REGISTER_ID, REGDUMP_REGISTER_ID, RELOCATOR_REGISTER_ID), True, insert_regdump = False)
+            curr_addr += fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"add", REGDUMP_REGISTER_ID, REGDUMP_REGISTER_ID, RELOCATOR_REGISTER_ID, is_rd_nonpickable_ok=True), True, insert_regdump = False)
 
     if fuzzerstate.is_design_64bit:
         # Clear the top 32 bits
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"slli", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, 32), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"slli", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, 32, is_rd_nonpickable_ok=True), True, insert_regdump = False)
         
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, 32), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, 32, is_rd_nonpickable_ok=True), True, insert_regdump = False)
         
     if DO_ASSERT:
         assert curr_addr == fuzzerstate.curr_bb_start_addr + len(fuzzerstate.instr_objs_seq[-1]) * 4 # NO_COMPRESSED
@@ -136,7 +136,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
             curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MINSTRETH), insert_regdump = False)
             
     # Prepare FPU_ENDIS_REGISTER_ID, which will be used across the program's execution, also required to setup MPP
-    curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", FPU_ENDIS_REGISTER_ID, 0b10), True, insert_regdump = False)
+    curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", FPU_ENDIS_REGISTER_ID, 0b10, is_rd_nonpickable_ok=True), True, insert_regdump = False)
 
     # Start with enabled FPU, if the FPU exists.
     if fuzzerstate.design_has_fpu:
@@ -151,11 +151,11 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         
 
     if fuzzerstate.design_has_supervisor_mode or fuzzerstate.design_has_user_mode:
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", MPP_TOP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 1), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", MPP_TOP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 1, is_rd_nonpickable_ok=True), True, insert_regdump = False)
         
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", MPP_BOTH_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 2), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", MPP_BOTH_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 2, is_rd_nonpickable_ok=True), True, insert_regdump = False)
         
-        curr_addr += fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"or", MPP_BOTH_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"or", MPP_BOTH_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID,is_rd_nonpickable_ok=True), True, insert_regdump = False)
         
         # Just for the alignment. Could be removed if we improved the alignment prediction. FUTURE.
         curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0), True, insert_regdump = False)
@@ -168,7 +168,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
 
     if not ("vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs()):
         if fuzzerstate.design_has_user_mode:
-            curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", SPP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 5), True, insert_regdump = False)
+            curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"srli", SPP_ENDIS_REGISTER_ID, FPU_ENDIS_REGISTER_ID, 5, is_rd_nonpickable_ok=True), True, insert_regdump = False)
              # NO_COMPRESSED
             # While it is not necesary to set the mpp initially, it is convenient to do so. If we don't, then we should adapt the initial values (typically to None) in privilegestate.py
             curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrs", 0, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), insert_regdump = False)
@@ -177,11 +177,11 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     # Set the rdep mask to the correct value
 
     if fuzzerstate.is_design_64bit:
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, 0, -1), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, 0, -1, is_rd_nonpickable_ok=True), True, insert_regdump = False)
         
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"slli", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, 32), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"slli", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, 32, is_rd_nonpickable_ok=True), True, insert_regdump = False)
         
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"xori", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, -1), True, insert_regdump = False)
+        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"xori", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, -1, is_rd_nonpickable_ok=True), True, insert_regdump = False)
         
         if DO_ASSERT:
             assert curr_addr == fuzzerstate.curr_bb_start_addr + len(fuzzerstate.instr_objs_seq[-1]) * 4 # NO_COMPRESSED
@@ -192,9 +192,8 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     
 
     if USE_MMU:
-        fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"sub", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID))
-        fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate, "csrrw", 0, 0, CSR_IDS.SATP)) # init satp to 0
-        curr_addr += 8
+        curr_addr += fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"sub", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, is_rd_nonpickable_ok=True))
+        curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate, "csrrw", 0, 0, CSR_IDS.SATP)) # init satp to 0
 
 
     if fuzzerstate.design_has_fpu:

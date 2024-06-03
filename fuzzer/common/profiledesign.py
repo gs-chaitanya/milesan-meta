@@ -11,6 +11,7 @@ from rv.csrids import CSR_IDS
 from rv.asmutil import li_into_reg
 from common.designcfgs import get_design_boot_addr, is_design_32bit, get_design_stop_sig_addr, get_design_reg_dump_addr, design_has_supervisor_mode
 from params.fuzzparams import RDEP_MASK_REGISTER_ID
+from params.runparams import DEBUG_PRINT
 from cascade.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, IntStoreInstruction, CSRImmInstruction, CSRRegInstruction, SpecialInstruction
 from cascade.fuzzerstate import FuzzerState
 from cascade.genelf import gen_elf_from_bbs
@@ -58,16 +59,73 @@ def __gen_medeleg_profiling_snippet(design_name: str):
 
     # Dump the register
     lui_imm, addi_imm = li_into_reg(regdump_addr)
-    fuzzerstate.instr_objs_seq[-1].append(ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm))
-    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate, "addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm))
+    fuzzerstate.instr_objs_seq[-1].append(ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm, is_rd_nonpickable_ok=True))
+    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate, "addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm, is_rd_nonpickable_ok=True))
     fuzzerstate.instr_objs_seq[-1].append(IntStoreInstruction(fuzzerstate,"sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, 1, 0, -1))
     fuzzerstate.instr_objs_seq[-1].append(SpecialInstruction(fuzzerstate,"fence"))
 
     # Quit the simulation
     lui_imm, addi_imm = li_into_reg(stopsig_addr)
-    fuzzerstate.instr_objs_seq[-1].append(ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm, False, False))
-    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm))
+    fuzzerstate.instr_objs_seq[-1].append(ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm, is_rd_nonpickable_ok=True))
+    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm, is_rd_nonpickable_ok=True))
     fuzzerstate.instr_objs_seq[-1].append(IntStoreInstruction(fuzzerstate, "sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, 1, 0, -1))
+    fuzzerstate.instr_objs_seq[-1].append(SpecialInstruction(fuzzerstate,"fence"))
+
+    return fuzzerstate
+
+def __gen_asid_profiling_snippet(design_name):
+    # Get some info about the design
+    try:
+        stopsig_addr = get_design_stop_sig_addr(design_name)
+    except:
+        raise ValueError(f"Design `{design_name}` does not have the `stopsigaddr` attribute.")
+    try:
+        regdump_addr = get_design_reg_dump_addr(design_name)
+    except:
+        raise ValueError(f"Design `{design_name}` does not have the `regdumpaddr` attribute.")
+
+    if DO_ASSERT:
+        assert regdump_addr < 0x80000000, f"For the destination address `{hex(regdump_addr)}`, we will need to manage sign extension, which is not yet implemented here."
+        assert stopsig_addr < 0x80000000, f"For the destination address `{hex(stopsig_addr)}`, we will need to manage sign extension, which is not yet implemented here."
+
+    # We use the fuzzerstate for convenience but use very few of its features for this function's purposes. In particular, we do not bother about memviews.
+    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, 1 << 16, 0, 1, True)
+
+    fuzzerstate.reset()
+    fuzzerstate.init_new_bb() # Update fuzzer state to support a new basic block
+
+    is_design_64bit = not is_design_32bit(design_name)
+
+    ###
+    # Write 1's in the asid field into satp, then read it back
+    ###
+
+    # Write full ones into the SATP register
+    if is_design_64bit:
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", 1, 0, 0xff))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"slli", 1, 1, 8))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", 1, 1, 0xff))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"slli", 1, 1, 44))
+    else:
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", 1, 0, 0x1ff))
+        fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"slli", 1, 1, 21))
+
+    fuzzerstate.instr_objs_seq[-1].append(CSRRegInstruction(fuzzerstate,"csrrw", 0, 1, CSR_IDS.SATP))
+    # Read SATP into register 1.
+    fuzzerstate.instr_objs_seq[-1].append(CSRImmInstruction(fuzzerstate,"csrrwi", 1, 0, CSR_IDS.SATP))
+
+    # Dump the register
+    lui_imm, addi_imm = li_into_reg(regdump_addr)
+    fuzzerstate.instr_objs_seq[-1].append(ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm, is_rd_nonpickable_ok=True))
+    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm, is_rd_nonpickable_ok=True))
+    fuzzerstate.instr_objs_seq[-1].append(IntStoreInstruction(fuzzerstate,"sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, 1, 0, -1))
+    fuzzerstate.instr_objs_seq[-1].append(SpecialInstruction(fuzzerstate,"fence"))
+
+    # Quit the simulation
+    lui_imm, addi_imm = li_into_reg(stopsig_addr)
+    fuzzerstate.instr_objs_seq[-1].append(ImmRdInstruction(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID, lui_imm, is_rd_nonpickable_ok=True))
+    fuzzerstate.instr_objs_seq[-1].append(RegImmInstruction(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID, addi_imm, is_rd_nonpickable_ok=True))
+    fuzzerstate.instr_objs_seq[-1].append(IntStoreInstruction(fuzzerstate,"sd" if is_design_64bit else "sw", RDEP_MASK_REGISTER_ID, 1, 0, -1))
     fuzzerstate.instr_objs_seq[-1].append(SpecialInstruction(fuzzerstate,"fence"))
 
     return fuzzerstate
@@ -79,11 +137,19 @@ def __get_medeleg_mask(design_name: str):
     rtl_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'medelegprofiling', design_name, fuzzerstate.design_base_addr)
     return runtest_verilator_forprofiling(fuzzerstate, rtl_elfpath, 1)
 
+def __get_asid_mask(design_name: str):
+    # The fuzzerstate contains the snippet that dumps a register value of 1 if an exception occurred, else a value of 0
+    fuzzerstate = __gen_asid_profiling_snippet(design_name)
+    rtl_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'asidprofiling', design_name, fuzzerstate.design_base_addr)
+    return runtest_verilator_forprofiling(fuzzerstate, rtl_elfpath, 1)
+
+
 ###
 # Exposed functions
 ###
 
 PROFILED_MEDELEG_MASK = None
+PROFILED_ASID_MASK = None
 
 def profile_get_medeleg_mask(design_name: str):
     if "picorv32" in design_name:
@@ -91,8 +157,22 @@ def profile_get_medeleg_mask(design_name: str):
     global PROFILED_MEDELEG_MASK
     PROFILED_MEDELEG_MASK = __get_medeleg_mask(design_name)
 
+def profile_get_asid_mask(design_name: str):
+    global PROFILED_ASID_MASK
+    if is_design_32bit(design_name):
+        PROFILED_ASID_MASK = __get_asid_mask(design_name) >> 21
+    else:
+        PROFILED_ASID_MASK = __get_asid_mask(design_name) >> 44
+
 # @return the mask of medeleg bits that are supported by the design
 def get_medeleg_mask(design_name: str):
     if PROFILED_MEDELEG_MASK is None:
         raise Exception("Error: get_medeleg_mask was called before profiling.")
     return PROFILED_MEDELEG_MASK
+
+# @return the mask of asid bits that are supported by the design
+def get_asid_mask(design_name: str):
+    if PROFILED_ASID_MASK is None:
+        raise Exception("Error: get_asid_mask was called before profiling.")
+    if DEBUG_PRINT: print(f"ASID MASK: {PROFILED_ASID_MASK}")
+    return PROFILED_ASID_MASK

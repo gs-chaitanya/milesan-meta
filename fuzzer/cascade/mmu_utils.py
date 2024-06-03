@@ -1,5 +1,6 @@
 from common.spike import SPIKE_STARTADDR
-from cascade.cfinstructionclasses import R12DInstruction, ImmRdInstruction, RegImmInstruction
+# from cascade.cfinstructionclasses import R12DInstruction, ImmRdInstruction, RegImmInstruction
+from cascade.cfinstructionclasses_t0 import R12DInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0
 from rv.asmutil import li_into_reg
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, PROBA_ENTANGLE_LAYOUT, PROBA_SAME_BASE_PT
 from params.runparams import DEBUG_PRINT
@@ -42,7 +43,7 @@ def phys2virt(paddr, priv_level, va_layout, fuzzerstate, absolute_addr = True):
         return vaddr
 
 # @brief Stores a 64 bit value into a 64 bit register. 
-def li_doubleword(value, rd, tmp, fuzzerstate):
+def li_doubleword(value, rd, tmp, fuzzerstate, is_rd_nonpickable_ok: bool = False):
     instrs = []
     imm_0_to_31 = value & 0xffffffff
     imm_63_to_31 = value >> 32
@@ -50,17 +51,17 @@ def li_doubleword(value, rd, tmp, fuzzerstate):
     assert rd != tmp
     #load the first 32 bits 
     lui_imm, addi_imm = li_into_reg(imm_0_to_31, False)
-    instrs.append(ImmRdInstruction("lui", tmp, lui_imm, fuzzerstate.is_design_64bit))
-    instrs.append(RegImmInstruction("addi", tmp, tmp, addi_imm, fuzzerstate.is_design_64bit))
+    instrs.append(ImmRdInstruction_t0(fuzzerstate, "lui", tmp, lui_imm, is_rd_nonpickable_ok=is_rd_nonpickable_ok))
+    instrs.append(RegImmInstruction_t0(fuzzerstate, "addi", tmp, tmp, addi_imm, is_rd_nonpickable_ok=is_rd_nonpickable_ok))
     #clear the top 32 bits
-    instrs.append(R12DInstruction("and", tmp, tmp, RDEP_MASK_REGISTER_ID))
+    instrs.append(R12DInstruction_t0(fuzzerstate, "and", tmp, tmp, RDEP_MASK_REGISTER_ID))
     #load the next 32 bits
     lui_imm_2, addi_imm_2 = li_into_reg(imm_63_to_31, False)
-    instrs.append(ImmRdInstruction("lui", rd, lui_imm_2, fuzzerstate.is_design_64bit))
-    instrs.append(RegImmInstruction("addi", rd, rd, addi_imm_2, fuzzerstate.is_design_64bit))
-    instrs.append(RegImmInstruction("slli", rd, rd, 32, fuzzerstate.is_design_64bit))
+    instrs.append(ImmRdInstruction_t0(fuzzerstate, "lui", rd, lui_imm_2, is_rd_nonpickable_ok=is_rd_nonpickable_ok))
+    instrs.append(RegImmInstruction_t0(fuzzerstate, "addi", rd, rd, addi_imm_2, is_rd_nonpickable_ok=is_rd_nonpickable_ok))
+    instrs.append(RegImmInstruction_t0(fuzzerstate, "slli", rd, rd, 32, is_rd_nonpickable_ok=is_rd_nonpickable_ok))
     #coalesce the result
-    instrs.append(R12DInstruction("or", rd, rd, tmp))
+    instrs.append(R12DInstruction_t0(fuzzerstate, "or", rd, rd, tmp, is_rd_nonpickable_ok=is_rd_nonpickable_ok))
         
     return instrs
 

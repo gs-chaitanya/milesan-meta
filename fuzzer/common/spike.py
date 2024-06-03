@@ -94,14 +94,15 @@ def __gen_spike_dbgcmd_file_for_trace_regs_at_pc_locs(identifier_str: str, start
 
 # @brief Generate the spike debug command file (as understood by spike --debug-cmd) and returns its path.
 # This command file will prompt the PC at every cycle
-def __gen_spike_dbgcmd_file_for_trace_pcs(identifier_str: str, numinstrs: int, startpc: int, dump_final_reg_vals: bool, num_fp_regs: int):
+def __gen_spike_dbgcmd_file_for_trace_pcs(identifier_str: str, numinstrs: int, startpc: int, dump_final_reg_vals: bool, num_fp_regs: int, n_mising_r_cmds: int = 0):
     path_to_debug_file = os.path.join(PATH_TO_TMP, 'dbgcmds', f"cmds_trace_pcs_{identifier_str}")
     # if not os.path.exists(path_to_debug_file):
     Path(os.path.dirname(path_to_debug_file)).mkdir(parents=True, exist_ok=True)
     spike_debug_commands = [
         f"until pc 0 0x{startpc:x}"
     ]
-    for _ in range(numinstrs):
+    #print(f"Using: {numinstrs} instr and an extra {n_mising_r_cmds}")
+    for _ in range(numinstrs+n_mising_r_cmds):
         spike_debug_commands.append('r 1')
         # spike_debug_commands.append('pc 0')
     if dump_final_reg_vals:
@@ -147,7 +148,6 @@ def run_trace_regs_at_pc_locs(identifier_str: str, elfpath: str, rvflags: str, s
         spike_out = subprocess.run(spike_shell_command, capture_output=True, timeout=get_spike_timeout_seconds()).stderr
     except Exception as e:
         raise Exception(f"Spike timeout (A) for identifier str: {identifier_str}. Command: {' '.join(filter(lambda s: '--debug-cmd' not in s, spike_shell_command))}  Debug file: {path_to_debug_file}")
-
     if not NO_REMOVE_TMPFILES:
         os.remove(path_to_debug_file)
         del path_to_debug_file
@@ -164,7 +164,7 @@ def run_trace_regs_at_pc_locs(identifier_str: str, elfpath: str, rvflags: str, s
                 assert chr(addr_str_splitted[dumpreq_id+1][0]) in ('M', 'S', 'U'), f"Found a single character, but did not expect it to be {chr(addr_str_splitted[dumpreq_id+1][0])}."
             ret.append(chr(addr_str_splitted[dumpreq_id+1][0]))
         else:
-            raise NotImplementedError(f"Line not supported: {addr_str_splitted[dumpreq_id+1]} -- previous line is {addr_str_splitted[dumpreq_id]}. {' '.join(spike_shell_command)}")
+            raise NotImplementedError(f"Line not supported: {addr_str_splitted[dumpreq_id+1]} -- previous line is {addr_str_splitted[dumpreq_id]}.")
 
     # Potentially get the final register values
     if dump_final_reg_vals:
@@ -193,7 +193,7 @@ def run_trace_regs_at_pc_locs(identifier_str: str, elfpath: str, rvflags: str, s
 # @return a list of PCs. If dump_final_reg_vals is True, then the output is a pair, whose second element is an array of final register values
 def run_trace_all_pcs(identifier_str: str, elfpath: str, rvflags: str, numinstrs: int, startpc: int, dump_final_reg_vals: bool, num_fp_regs: int, has_fpdouble_support: bool, fuzzerstate_for_debug: list) -> list:
     # First, create the file that contains the commands, if it does not already exist
-    path_to_debug_file = __gen_spike_dbgcmd_file_for_trace_pcs(identifier_str, numinstrs, startpc, dump_final_reg_vals, num_fp_regs)
+    path_to_debug_file = __gen_spike_dbgcmd_file_for_trace_pcs(identifier_str, numinstrs, startpc, dump_final_reg_vals, num_fp_regs, fuzzerstate_for_debug.n_mising_r_cmds)
     
     # Second, run the Spike command
     spike_shell_command = (

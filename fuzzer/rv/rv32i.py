@@ -110,3 +110,7 @@ def rv32i_ecall():
     return rvprotoinstrs.instruc_itype(RV32I_OPCODE_E, 0, 0b000, 0, 0)
 def rv32i_ebreak():
     return rvprotoinstrs.instruc_itype(RV32I_OPCODE_E, 0, 0b000, 0, 1)
+
+# FIXME move to correct file
+def rv32i_sfencevma(rs1: int = 0, rs2: int = 0):
+    return rvprotoinstrs.instruc_rtype(RV32I_OPCODE_E, 0, 0b000, rs1, rs2, 0b0001001)

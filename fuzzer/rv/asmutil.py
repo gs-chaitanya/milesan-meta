@@ -679,7 +679,8 @@ INSTR_FUNCS = {
     "GenericCSRWriterInstruction": None,
     "ExceptionInstruction": None,
     # mret has no function
-    "PrivilegeDescentInstruction": None
+    "PrivilegeDescentInstruction": None,
+    "sfence.vma": None
 }
 
 INSTR_FUNCS_T0 = {
@@ -755,7 +756,8 @@ INSTR_FUNCS_T0 = {
     "GenericCSRWriterInstruction": None,
     "ExceptionInstruction": None,
     # mret has no function
-    "PrivilegeDescentInstruction": None
+    "PrivilegeDescentInstruction": None,
+    "sfence.vma": None
 }
 
 

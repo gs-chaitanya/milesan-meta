@@ -12,7 +12,7 @@
 
 from drfuzz_mem.check_isa_sim_worker import check_isa_sims
 from common.spike import calibrate_spikespeed
-from common.profiledesign import profile_get_medeleg_mask
+from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask
 from cascade.toleratebugs import tolerate_bug_for_bug_timing
 
 import os
@@ -70,6 +70,7 @@ if __name__ == '__main__':
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
+    profile_get_asid_mask(design_name)
     # tolerate_bug_for_bug_timing(design_name, "r1", True)
     # tolerate_bug_for_bug_timing(design_name, "k4", True)
     # tolerate_bug_for_bug_timing(design_name, "k5", True)

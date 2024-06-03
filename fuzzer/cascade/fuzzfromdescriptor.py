@@ -12,7 +12,7 @@ from params.fuzzparams import PROBA_AUTHORIZE_PRIVILEGES, TAINT_EN
 from cascade.basicblock import gen_basicblocks
 from cascade.fuzzsim import SimulatorEnum, runtest_simulator
 from cascade.genelf import gen_elf_from_bbs
-from cascade.spikeresolution import spike_resolution, spike_resolution_return_interm
+from cascade.spikeresolution import spike_resolution
 import numpy as np
 import os
 import random
@@ -44,7 +44,7 @@ def gen_fuzzerstate_elf_expectedvals(memsize: int, design_name: str, randseed: i
 
     # spike resolution
     start = time.time()
-    expected_regvals, interm_elfpath = spike_resolution_return_interm(fuzzerstate, check_pc_spike_again)
+    expected_regvals, interm_elfpath = spike_resolution(fuzzerstate, check_pc_spike_again, return_interm = True)
     fuzzerstate.expected_regvals = expected_regvals
     fuzzerstate.interm_elfpath = interm_elfpath
     time_seconds_spent_in_spike_resol = time.time() - start
@@ -59,7 +59,7 @@ def gen_fuzzerstate_elf_expectedvals(memsize: int, design_name: str, randseed: i
 
 def gen_fuzzerstate_elf_flipped_bits(fuzzerstate):
     # spike resolution
-    expected_regvals, intem_elfpath = spike_resolution_return_interm(fuzzerstate, True)
+    expected_regvals, intem_elfpath = spike_resolution(fuzzerstate, True, return_interm=True)
     rtl_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'rtl', fuzzerstate.instance_to_str(), fuzzerstate.design_base_addr)
     return rtl_elfpath, expected_regvals
 
@@ -77,7 +77,7 @@ def gen_fuzzerstate_elf_expectedvals_interm(memsize: int, design_name: str, rand
 
     # spike resolution
     start = time.time()
-    expected_regvals, interm_elfpath = spike_resolution_return_interm(fuzzerstate, check_pc_spike_again)
+    expected_regvals, interm_elfpath = spike_resolution(fuzzerstate, check_pc_spike_again, return_interm=True)
     time_seconds_spent_in_gen_elf = time.time() - start
     
     return fuzzerstate, interm_elfpath, expected_regvals

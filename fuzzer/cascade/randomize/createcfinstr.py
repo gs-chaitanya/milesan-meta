@@ -7,7 +7,8 @@ import numpy as np
 
 from params.runparams import DO_ASSERT, PRINT_FSM_TRANSITIONS
 
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED
+from params.runparams import GET_DATA
 from cascade.util import IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS, ISAInstrClass
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import *
@@ -87,7 +88,8 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
     instr = ImmRdInstruction_t0(fuzzerstate,instr_str, rd, imm, imm_t0, iscompressed)
-    instr.write_t0(False)  # Write tainted bytecode to instruction memory
+    if fuzzerstate.taint_en:
+        instr.write_t0(False)  # Write tainted bytecode to instruction memory
     return instr
 
 def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
@@ -98,7 +100,8 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
     instr = RegImmInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, imm_t0, iscompressed)
-    instr.write_t0(False) # Write tainted bytecode to instruction memory if taint is enabled.
+    if fuzzerstate.taint_en:
+        instr.write_t0(False) # Write tainted bytecode to instruction memory if taint is enabled.
     return instr
 
 def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
@@ -177,6 +180,7 @@ def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
+
     return IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
 
 def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
@@ -189,6 +193,7 @@ def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool)
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
     if DO_ASSERT:
         assert producer_id > 0
+
     return IntStoreInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, iscompressed)
 
 # Floating-point instructions
@@ -333,14 +338,16 @@ def create_targeted_consumer_instrobj(fuzzerstate):
     if fuzzerstate.is_design_64bit:
         # return [PlaceholderPreConsumerInstr(rprod), PlaceholderPreConsumerInstr(rdep), PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
         # return [PlaceholderPreConsumerInstr_t0(fuzzerstate, rprod), PlaceholderPreConsumerInstr_t0(fuzzerstate, rdep), PlaceholderConsumerInstr_t0(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
-        return [PlaceholderPreConsumerInstr_t0, PlaceholderPreConsumerInstr_t0, PlaceholderConsumerInstr_t0], [(fuzzerstate, rprod), (fuzzerstate, rdep), (fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
+        return [PlaceholderPreConsumerInstr_t0, PlaceholderPreConsumerInstr_t0, PlaceholderConsumerInstr_t0], \
+        [(fuzzerstate, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod), True), (fuzzerstate, rdep, fuzzerstate.intregpickstate.get_producer_id(rprod)), (fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
 
     else:
         # return [PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
         return [PlaceholderConsumerInstr_t0], [(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
 
 # Creates the instruction sequence that prepares valid addresses for the load and stores. Returns the respective sequence of constructors and parameters as zip.
-# They objects cannot be created inside the class because their current address for the next instruction needs to be increased, which is done outside of this function. 
+# The objects cannot be created inside the class because their current address for the next instruction needs to be increased, which is done outside of this function. 
+# TODO use FSM for this
 def create_memop_instrobjs(fuzzerstate, instr_str):
     assert instr_str in IntLoadInstruction_t0.authorized_instr_strs or instr_str in IntStoreInstruction_t0.authorized_instr_strs, f"{instr_str} not in a valid memory operation."
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.

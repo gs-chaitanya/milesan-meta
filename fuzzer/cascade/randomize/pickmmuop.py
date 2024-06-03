@@ -376,7 +376,7 @@ def handle_idle_state_rv64(fuzzerstate, curr_addr):
     # Otherwise, if we are in S mode, and the virtual addresses changes, select the path to make STVEC, else just RPROD
     fuzzerstate.target_layout = target_layout
     if fuzzerstate.curr_mmu_state == MmuState.IDLE:
-        if will_satp_write_tarp(fuzzerstate): #if the virtual addresses are the same, we will not trap if the pages are gloabal
+        if will_satp_write_tarp(fuzzerstate): #if the virtual addresses are the same, we will not trap if the pages are global
             if GET_DATA:
                 fuzzerstate.satp_write_supervisor += 1
             if DEBUG_PRINT:
@@ -444,7 +444,7 @@ def gen_rprod_taget_layout(fuzzerstate):
     if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
         fuzzerstate.satp_op_coordinates = ((len(fuzzerstate.instr_objs_seq)-1, len(fuzzerstate.instr_objs_seq[-1]) + len(instr_objs)), fuzzerstate.target_layout)
     rdep_imm = fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.target_layout][fuzzerstate.privilegestate.privstate] | 0x7fffffff
-    instr_objs += li_doubleword(rdep_imm, RPROD_MASK_REGISTER_ID, tmp, fuzzerstate) #FUTURE use a CONSUMED reg to load the bottom 32 bits
+    instr_objs += li_doubleword(rdep_imm, RPROD_MASK_REGISTER_ID, tmp, fuzzerstate, is_rd_nonpickable_ok=True) #FUTURE use a CONSUMED reg to load the bottom 32 bits
     if GET_DATA:
         fuzzerstate.num_hardcoded_instr_mmufsm += len(instr_objs)
     return instr_objs
@@ -458,8 +458,8 @@ def gen_stvec_satp(fuzzerstate, curr_addr):
     fuzzerstate.stvec_satp_op_coordinates = (len(fuzzerstate.instr_objs_seq)-1, len(fuzzerstate.instr_objs_seq[-1]) + len(instr_objs))
     stvec_val_reg   = fuzzerstate.intregpickstate.pick_int_inputreg_nonzero()
     lui_imm, addi_imm = 0, 0
-    instr_objs.append(ImmRdInstruction_t0(fuzzerstate,"lui", stvec_val_reg, lui_imm, fuzzerstate.is_design_64bit))
-    instr_objs.append(RegImmInstruction_t0(fuzzerstate,"addi", stvec_val_reg, stvec_val_reg, addi_imm, fuzzerstate.is_design_64bit))
+    fuzzerstate.append(ImmRdInstruction_t0(fuzzerstate,"lui", stvec_val_reg, lui_imm))
+    instr_objs.append(RegImmInstruction_t0(fuzzerstate,"addi", stvec_val_reg, stvec_val_reg, addi_imm))
     if fuzzerstate.is_design_64bit and fuzzerstate.target_layout != -1:
         instr_objs.append(R12DInstruction_t0(fuzzerstate,"and", stvec_val_reg, stvec_val_reg, RPROD_MASK_REGISTER_ID))
     if fuzzerstate.is_design_64bit and fuzzerstate.target_layout == -1:
@@ -481,7 +481,7 @@ def gen_satp_write(fuzzerstate, curr_addr):
 
     # Set the destination of stvec if needed
     if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR and fuzzerstate.stvec_satp_op_coordinates != (None, None):
-        if DEBUG_PRINT: print(f"In supervisor mode, going to layout {fuzzerstate.target_layout}")
+        if DEBUG_PRINT: print(f"{hex(curr_addr+SPIKE_STARTADDR)}: In supervisor mode, going to layout {fuzzerstate.target_layout}")
         bb_id, instr_id = fuzzerstate.stvec_satp_op_coordinates
         if fuzzerstate.is_design_64bit: 
             if fuzzerstate.target_layout != -1:
@@ -503,7 +503,7 @@ def gen_satp_write(fuzzerstate, curr_addr):
         fuzzerstate.stvec_satp_op_coordinates = (None, None)
 
     if DEBUG_PRINT: 
-        print(f"going to layout {fuzzerstate.target_layout}, base: {hex(base_page_addr)}")
+        print(f"{hex(curr_addr+SPIKE_STARTADDR)}: going to layout {fuzzerstate.target_layout}, base: {hex(base_page_addr)}")
 
     # Generate the register which will hold the SATP value
     if fuzzerstate.target_layout != -1:

@@ -45,7 +45,6 @@ class ISAInstrClass(enum.IntEnum):
     MMU         = enum.auto() # mmu operations
     MSTATUS     = enum.auto() # mstatus operations
 
-
 # Use this for taints
 # TODO: depricated. Remove this.
 class CFInstructionClass(enum.IntEnum):

@@ -2,8 +2,8 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, RPROD_MASK_REGISTER_ID
-from params.fuzzparams import USE_MMU, USE_SPIKE_INTERM_ELF
+from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, RPROD_MASK_REGISTER_ID
+from params.fuzzparams import USE_MMU, USE_SPIKE_INTERM_ELF, NONPICKABLE_REGISTERS
 from params.runparams import DO_ASSERT, PRINT_CHECK_REGS, PRINT_REG_TRACEBACK, PRINT_FILTERED_REG_TRACEBACK, ASSERT_ADDR
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
@@ -115,12 +115,14 @@ class BaseInstruction:
         self.fuzzerstate = fuzzerstate
         self.instr_str = instr_str
         self.instr_func = INSTR_FUNCS[self.instr_str]
+        self.priv_level = fuzzerstate.privilegestate.privstate
+        self.va_layout = fuzzerstate.effective_curr_layout
 
     def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         print(self.get_str(is_spike_resolution))
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str}"
 
     def execute(self, taint_en, is_spike_resolution: bool = True):
         raise Exception(f"Function execute() called on abstract class BaseInstruction {self.get_str(is_spike_resolution)}.")
@@ -129,10 +131,10 @@ class BaseInstruction:
         for reg_id,reg_val in reg_cmp.items():
             if reg_id not in self.fuzzerstate.intregpickstate.regs:
                 if PRINT_CHECK_REGS:
-                    print(f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: Ignoring register value: {ABI_INAMES[reg_id]}")
+                    print(f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: Ignoring register value: {ABI_INAMES[reg_id]}")
                 continue
             if PRINT_CHECK_REGS:
-                print(f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
+                print(f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
             assert not mismatch, f"{self.get_str()}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
 
@@ -200,23 +202,21 @@ R12DInstructions = ("add", "sub", "sll", "slt", "sltu", "xor", "srl", "sra", "or
 class R12DInstruction(CFInstruction):
     authorized_instr_strs = R12DInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        
-        
         if DO_ASSERT:
             assert rs1 >= 0
-            assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID)
+            assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in NONPICKABLE_REGISTERS
             assert rs2 >= 0
-            assert rs2 < MAX_NUM_PICKABLE_REGS or rs2 in (RELOCATOR_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID)
+            assert rs2 < MAX_NUM_PICKABLE_REGS or rs2 in NONPICKABLE_REGISTERS
             assert rd >= 0
-            assert rd < MAX_NUM_PICKABLE_REGS or rd in (RELOCATOR_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID)
+            assert is_rd_nonpickable_ok and rd in NONPICKABLE_REGISTERS or rd < MAX_NUM_PICKABLE_REGS
         self.rs1 = rs1
         self.rs2 = rs2
         self.rd =  rd
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -296,16 +296,14 @@ class ImmRdInstruction(ImmInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        
-        
         if DO_ASSERT:
             assert rd >= 0
-            assert is_rd_nonpickable_ok or rd < MAX_NUM_PICKABLE_REGS or rd in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID)
+            assert is_rd_nonpickable_ok and rd in NONPICKABLE_REGISTERS or rd < MAX_NUM_PICKABLE_REGS, f"{rd} not in NONPICKABLE_REGISTERS " if is_rd_nonpickable_ok else f"{rd} > MAX_NUM_PICKABLE_REGS ({MAX_NUM_PICKABLE_REGS})"
         self.rd =  rd
         # self.compute_taints()
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -330,14 +328,11 @@ class RegImmInstruction(ImmInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        
-        
-
         if DO_ASSERT:
             assert rs1 >= 0
-            assert is_rd_nonpickable_ok or rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID), f"Got rs1 (select) =`{rs1}`"
+            assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in NONPICKABLE_REGISTERS
             assert rd >= 0
-            assert is_rd_nonpickable_ok or rd < MAX_NUM_PICKABLE_REGS or rd in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID), f"Got rd (select) =`{rd}`"
+            assert is_rd_nonpickable_ok and rd in NONPICKABLE_REGISTERS or rd < MAX_NUM_PICKABLE_REGS
         self.rs1 = rs1
         self.rd =  rd
 
@@ -345,7 +340,7 @@ class RegImmInstruction(ImmInstruction):
             assert False
         
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def set_bytecode(self,bytecode):
         has_shamt = self.instr_str in RegImmShiftInstructions
@@ -392,10 +387,8 @@ class BranchInstruction(ImmInstruction):
     authorized_instr_strs = BranchInstructions
 
     # @param plan_taken is True iff the branch instruction is planned to be taken.
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        
-        
         if DO_ASSERT:
             assert rs1 >= 0
             assert rs1 < MAX_NUM_PICKABLE_REGS
@@ -404,12 +397,9 @@ class BranchInstruction(ImmInstruction):
         self.rs1 = rs1
         self.rs2 = rs2
         self.plan_taken = plan_taken
-        self.va_layout = va_layout
-        self.priv_level = priv_level
-
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, {hex(self.imm)}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, {hex(self.imm)}"
 
     # Choose an opcode that, given the values of rs1 and rs2, will comply with the required takenness
     def select_suitable_opcode(self, rs1_content: int, rs2_content: int):
@@ -460,18 +450,16 @@ JALInstructions = ("jal",)
 class JALInstruction(ImmInstruction):
     authorized_instr_strs = JALInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         
         if DO_ASSERT:
             assert rd >= 0
             assert rd < MAX_NUM_PICKABLE_REGS
         self.rd  = rd
-        self.va_layout = va_layout
-        self.priv_level = priv_level
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -484,7 +472,7 @@ JALRInstructions = ("jalr",)
 class JALRInstruction(ImmInstruction):
     authorized_instr_strs = JALRInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, to_new_layout: bool = False, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, to_new_layout: bool = False, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         
         if DO_ASSERT:
@@ -495,31 +483,28 @@ class JALRInstruction(ImmInstruction):
         self.rd  = rd
         self.rs1 = rs1
         self.producer_id = producer_id
-        self.va_layout = va_layout
-        self.priv_level = priv_level
         self.to_new_layout = to_new_layout
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
         return rv32i_jalr(self.rd, self.rs1, self.imm)
 
 # Instructions that create no information flow
-SpecialInstructions = ("fence", "fence.i")
+SpecialInstructions = ("fence", "fence.i", "sfence.vma")
 class SpecialInstruction(CFInstruction):
     authorized_instr_strs = SpecialInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rd: int = 0, rs1: int = 0, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int = 0, rs1: int = 0, rs2: int = 0, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        
-        
         self.rd = rd
         self.rs1 = rs1
+        self.rs2 = rs2
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -528,6 +513,10 @@ class SpecialInstruction(CFInstruction):
         # zifencei
         elif self.instr_str == "fence.i":
             return zifencei_fencei(self.rd, self.rs1)
+        elif self.instr_str == "sfence.vma":
+            return rv32i_sfencevma(self.rs1, self.rs2)
+        # Default case
+
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
@@ -554,7 +543,7 @@ IntLoadInstructions = ("lb", "lh", "lw", "lbu", "lhu", "lwu", "ld")
 class IntLoadInstruction(ImmInstruction):
     authorized_instr_strs = IntLoadInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
     
         if DO_ASSERT:
@@ -565,12 +554,9 @@ class IntLoadInstruction(ImmInstruction):
         self.rd  = rd
         self.rs1 =  rs1
         self.producer_id = producer_id
-        self.va_layout = va_layout
-        self.priv_level = priv_level
-
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.imm}({ABI_INAMES[self.rs1]}) "
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.imm}({ABI_INAMES[self.rs1]}) "
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -598,22 +584,20 @@ IntStoreInstructions = ("sb", "sh", "sw", "sd")
 class IntStoreInstruction(ImmInstruction):
     authorized_instr_strs = IntStoreInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout : int = -1, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         
         if DO_ASSERT:
             assert rs1 >= 0
-            assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID)
+            assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in NONPICKABLE_REGISTERS
             assert rs2 >= 0
-            assert rs2 < MAX_NUM_PICKABLE_REGS
+            assert rs2 < MAX_NUM_PICKABLE_REGS or rs2 in NONPICKABLE_REGISTERS
         self.rs1 =  rs1
         self.rs2  = rs2
         self.producer_id = producer_id
-        self.priv_level = priv_level
-        self.va_layout = va_layout
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -640,9 +624,9 @@ class RegdumpInstruction(IntStoreInstruction):
 
     def get_str(self, is_spike_resolution):
         if not is_spike_resolution:
-            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
         else:
-            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: nop"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: nop"
 
 
 ###
@@ -654,7 +638,7 @@ FloatLoadInstructions = ("flw", "fld")
 class FloatLoadInstruction(ImmInstruction):
     authorized_instr_strs = FloatLoadInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout : int = -1, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
 
         if DO_ASSERT:
@@ -665,8 +649,6 @@ class FloatLoadInstruction(ImmInstruction):
         self.frd  = frd
         self.rs1 =  rs1
         self.producer_id = producer_id
-        self.va_layout = va_layout
-        self.priv_level = priv_level
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32f
@@ -684,7 +666,7 @@ FloatStoreInstructions = ("fsw", "fsd")
 class FloatStoreInstruction(ImmInstruction):
     authorized_instr_strs = FloatStoreInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, frs2: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout : int = -1, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, frs2: int, imm: int, producer_id: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
         
         if DO_ASSERT:
@@ -695,8 +677,6 @@ class FloatStoreInstruction(ImmInstruction):
         self.rs1  =  rs1
         self.frs2 = frs2
         self.producer_id = producer_id
-        self.va_layout = va_layout
-        self.priv_level = priv_level
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32f
@@ -716,7 +696,6 @@ class FloatToIntInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, frs1: int, rm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-
 
         if DO_ASSERT:
             assert rm >= 0
@@ -1163,7 +1142,7 @@ class CSRInstruction(CFInstruction):
 CSRRegInstructions = "csrrw", "csrrs", "csrrc"
 class CSRRegInstruction(CSRInstruction):
     authorized_instr_strs = CSRRegInstructions
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False, is_satp_smode = (False, None), mpp_val = None):
         super().__init__(fuzzerstate, instr_str, csr_id, iscompressed)
         if DO_ASSERT:
             assert rd >= 0
@@ -1172,6 +1151,9 @@ class CSRRegInstruction(CSRInstruction):
             assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID), f"rs1: {rs1}, MAX_NUM_PICKABLE_REGS: {MAX_NUM_PICKABLE_REGS}"
         self.rd  = rd
         self.rs1 =  rs1
+        self.is_satp_smode = is_satp_smode
+        self.mpp_val = mpp_val
+
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -1186,7 +1168,7 @@ class CSRRegInstruction(CSRInstruction):
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
     def get_str(self, is_spike_resolution: bool = True):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {ABI_INAMES[self.rs1]}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {ABI_INAMES[self.rs1]}"
 
 # CSR operations with immediate
 CSRImmInstructions = "csrrwi", "csrrsi", "csrrci"
@@ -1216,7 +1198,7 @@ class CSRImmInstruction(CSRInstruction):
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
     def get_str(self, is_spike_resolution: bool = True):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {hex(self.uimm)}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {hex(self.uimm)}"
 
 ###
 # Placeholder instructions
@@ -1246,13 +1228,13 @@ class PlaceholderProducerInstr0(BaseInstruction):
     def get_str(self, is_spike_resolution: bool = False):
         if is_spike_resolution:
             if self.spike_resolution_offset is not None:
-                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
-            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
         else:
             if self.rtl_offset is not None:
-                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
             else:
-                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using lui
@@ -1283,18 +1265,17 @@ class PlaceholderProducerInstr1(BaseInstruction):
         self.spike_resolution_offset = None # Is also the target address
         self.rtl_offset = None
         
-        
 
     def get_str(self, is_spike_resolution: bool = True):
         if is_spike_resolution:
             if self.spike_resolution_offset is not None:
-                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
-            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
         else:
             if self.rtl_offset is not None:
-                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
             else:
-                return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using addi
@@ -1317,14 +1298,14 @@ class PlaceholderProducerInstr1(BaseInstruction):
 # Does not inherit from CFInstruction.
 class PlaceholderPreConsumerInstr(BaseInstruction):
     # @param rdep: the register that creates the dependency
-    def __init__(self, fuzzerstate, rdep: int):
+    def __init__(self, fuzzerstate, rdep: int, producer_id: int, is_rprod: bool = False):
         super().__init__(fuzzerstate,"and (PlaceholderPreConsumerInstr)")
         self.rdep = rdep
-        
-        
+        self.is_rprod = is_rprod
+        self.producer_id = producer_id
 
     def get_str(self, is_spike_resolution: bool = False):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rdep]}, {ABI_INAMES[RDEP_MASK_REGISTER_ID]}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rdep]}, {ABI_INAMES[RDEP_MASK_REGISTER_ID]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # Reduce the size of the rdep id to 32 bits
@@ -1359,9 +1340,9 @@ class PlaceholderConsumerInstr(BaseInstruction):
 
     def get_str(self, is_spike_resolution: bool = False):
         if is_spike_resolution:
-            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[RELOCATOR_REGISTER_ID]}"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[RELOCATOR_REGISTER_ID]}"
         else:
-            return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[self.rdep]}"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[self.rdep]}"
         
     def gen_bytecode_int(self, is_spike_resolution: bool):
         if DO_ASSERT:
@@ -1405,7 +1386,7 @@ class RawDataWord:
         return self.wordval
     
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: {hex(self.addr)}: {hex(self.wordval)} (RAW DATA)"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {hex(self.wordval)} (RAW DATA)"
 
     def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         print(self.get_str(is_spike_resolution))
@@ -1429,39 +1410,31 @@ class ExceptionInstruction(BaseInstruction):
         super().__init__(fuzzerstate, 'ExceptionInstruction')
         self.is_mtvec = is_mtvec
         self.producer_id = producer_id
+        self.va_layout_after_op = fuzzerstate.effective_curr_layout # The layout that is entered after the exception is raised.
+        self.priv_level_after_op = fuzzerstate.privilegestate.privstate # The privstate has already been changed at this point.
+        self.old_privilege = fuzzerstate.privilegestate.prev_privstate # The privstate before it was changed i.e. at which the exception is raised during execution.
 
 class SimpleIllegalInstruction(ExceptionInstruction):
-    def __init__(self, fuzzerstate, is_mtvec, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1, old_privilege: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE):
+    def __init__(self, fuzzerstate, is_mtvec):
         super().__init__(fuzzerstate, is_mtvec, None)
-        self.va_layout_after_op = va_layout_after_op
-        self.priv_level_after_op = priv_level_after_op
-        # For the reduce program
-        self.va_layout = None
-        self.priv_level = None
-        self.old_privilege = old_privilege
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return 0x00000000
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"{self.fuzzerstate.privilegestate.privstate.name[0]}: unimp (SimpleExceptionInstruction)"
+        return f"({self.priv_level.name}/{self.va_layout}): unimp (SimpleExceptionInstruction)"
 
 
 # Exception that encapsulates an instruction that causes an exception, such as a misaligned JAL.
 class SimpleExceptionEncapsulator(ExceptionInstruction):
-    def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr, exception_op_type: ExceptionCauseVal, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1, old_privilege: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE):
+    def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr, exception_op_type: ExceptionCauseVal):
         super().__init__(fuzzerstate, is_mtvec, producer_id)
         if DO_ASSERT:
             assert producer_id is None, "SimpleExceptionEncapsulator does not support a producer_id. If we want to support it, then we need to adapt gen_producer_id_to_tgtaddr in basicblock.py."
+            assert exception_op_type in ExceptionCauseVal
+            assert self.addr == instr.addr
         self.instr = instr
         self.exception_op_type = exception_op_type
-
-        self.va_layout_after_op = va_layout_after_op
-        self.priv_level_after_op = priv_level_after_op
-        # For the reduce program
-        self.va_layout = None
-        self.priv_level = None
-        self.old_privilege = old_privilege
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.instr.gen_bytecode_int(is_spike_resolution)
@@ -1485,15 +1458,8 @@ class MisalignedMemInstruction(ExceptionInstruction):
     MISALIGNED_FLD = 10 # Requires D extension
     MISALIGNED_FSD = 11
 
-    def __init__(self,fuzzerstate, is_mtvec: bool, is_load: bool, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1, old_privilege: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, iscompressed: bool = False):
+    def __init__(self,fuzzerstate, is_mtvec: bool, is_load: bool, iscompressed: bool = False):
         super().__init__(fuzzerstate, is_mtvec, None) # We compute the producer id later
-
-        self.va_layout_after_op = va_layout_after_op
-        self.priv_level_after_op = priv_level_after_op
-        # For the reduce program
-        self.va_layout = None
-        self.priv_level = None
-        self.old_privilege = old_privilege
 
         from cascade.randomize.pickreg import IntRegIndivState
         # First, choose a consumed register.
@@ -1609,32 +1575,30 @@ class MisalignedMemInstruction(ExceptionInstruction):
 # @remark we use a specific instruction for mstatus to find them easily when an exception occurs, to transmit back the expected value to the producer
 # @brief this instruction writes to mtvec or stvec
 class MstatusWriterInstruction(BaseInstruction):
-    def __init__(self, fuzzerstate, rd: int, rs1: int, producer_id: int, instr_str: str, mstatus_mask: int, old_sum_mprv = (None, None), priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
+    def __init__(self, fuzzerstate, rd: int, rs1: int, producer_id: int, instr_str: str, mstatus_mask: int):
         super().__init__(fuzzerstate, instr_str)
         self.mstatus_mask = mstatus_mask
         self.producer_id = producer_id
 
-        self.va_layout = va_layout
-        self.priv_level = priv_level
-
-        self.old_sum_mprv = old_sum_mprv
+        self.old_sum_mprv = fuzzerstate.status_sum_mprv
 
         self.csr_instr = CSRRegInstruction(instr_str, rd, rs1, CSR_IDS.MSTATUS)
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
 
+    def get_str(self, is_spike_resolution: bool = False):
+        return self.csr_instr.get_str() + f" ({self.instr_str})"
+
+
 
 # @remark we use a specific instruction for xtvec to find them easily when an exception occurs, to transmit back the expected value to the producer
 # @brief this instruction writes to mtvec or stvec
 class TvecWriterInstruction(BaseInstruction):
-    def __init__(self, fuzzerstate, is_mtvec: bool, rd: int, rs1: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
+    def __init__(self, fuzzerstate, is_mtvec: bool, rd: int, rs1: int, producer_id: int):
         super().__init__(fuzzerstate,"TvecWriterInstruction")
         self.producer_id = producer_id
         self.is_mtvec = is_mtvec # A bit redundant with the content of csr_instr, but practical.
-
-        self.va_layout = va_layout
-        self.priv_level = priv_level
 
         csr_id = CSR_IDS.MTVEC if is_mtvec else CSR_IDS.STVEC
         self.csr_instr = CSRRegInstruction(fuzzerstate, "csrrw", rd, rs1, csr_id)
@@ -1650,13 +1614,10 @@ class TvecWriterInstruction(BaseInstruction):
 # @remark we use a specific instruction for xtvec to find them easily when an exception occurs, to transmit back the expected value to the producer
 # @brief this instruction writes to mepc or sepc
 class EPCWriterInstruction(BaseInstruction):
-    def __init__(self, fuzzerstate, is_mepc: bool, rd: int, rs1: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
+    def __init__(self, fuzzerstate, is_mepc: bool, rd: int, rs1: int, producer_id: int):
         super().__init__(fuzzerstate,'EPCWriterInstruction')
         self.producer_id = producer_id
         self.is_mepc = is_mepc # A bit redundant with the content of csr_instr, but practical.
-
-        self.va_layout = va_layout
-        self.priv_level = priv_level
 
         csr_id = CSR_IDS.MEPC if is_mepc else CSR_IDS.SEPC
         self.csr_instr = CSRRegInstruction(fuzzerstate, "csrrw", rd, rs1, csr_id)
@@ -1696,11 +1657,11 @@ class GenericCSRWriterInstruction(BaseInstruction):
 
 
 class PrivilegeDescentInstruction(BaseInstruction):
-    def __init__(self, fuzzerstate,is_mret: bool, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1):
+    def __init__(self, fuzzerstate,is_mret: bool):
         super().__init__(fuzzerstate, 'PrivilegeDescentInstruction')
         self.is_mret = is_mret
-        self.va_layout_after_op = va_layout_after_op
-        self.priv_level_after_op = priv_level_after_op
+        self.va_layout_after_op = fuzzerstate.effective_curr_layout # The layout that is entered after we descend privilege.
+        self.priv_level_after_op = fuzzerstate.privilegestate.privstate # The privstate has already been changed at this point.
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         if self.is_mret:

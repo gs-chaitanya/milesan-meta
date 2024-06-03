@@ -6,7 +6,7 @@
 
 from dataclasses import dataclass
 from params.runparams import DO_ASSERT
-from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MPP_TOP_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID
+from params.fuzzparams import MAX_NUM_PICKABLE_REGS
 from cascade.toleratebugs import is_tolerate_ras0
 from rv.csrids import CSR_IDS
 from common.spike import SPIKE_STARTADDR

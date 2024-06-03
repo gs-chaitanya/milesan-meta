@@ -156,42 +156,11 @@ class ImmInstruction_t0(CFInstruction_t0):
 ###
 
 class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False):
-        super().__init__(fuzzerstate, instr_str, rd, rs1, rs2, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, rs2, iscompressed, is_rd_nonpickable_ok)
         self.rs1_t0 = 0
         self.rs2_t0 = 0
         self.rd_t0 = 0
-        
-    # returns the taints for the bytecode. We use the existing gen_bytecode_int method while temporarily overwriting class attributes
-    def gen_bytecode_int_t0(self, is_spike_resolution: bool):
-        raise NotImplementedError
-        assert self.fuzzerstate.taint_en
-        rd = self.rd
-        rs1 = self.rs1
-        rs2 = self.rs2
-        self.rd = self.rd_t0
-        self.rs1 = self.rs1_t0
-        self.rs2 = self.rs2_t0
-        taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
-        
-        self.rd = 0x00
-        self.rs1 = 0x00
-        self.rs2 = 0x00
-        taint_bytecode_mask = self.gen_bytecode_int(is_spike_resolution)
-        
-        self.rd = rd
-        self.rs1 = rs1
-        self.rs2 = rs2
-        masked_taint = taint_bytecode ^ taint_bytecode_mask
-        assert(masked_taint), f"No taints injected: {hex(masked_taint)}, rd_t0: {hex(self.rd_t0)}, rs1_t0: {hex(self.rs1_t0)}, rs2_t0: {hex(self.rs2_t0)},  this should not happen."
-        
-        return masked_taint
-
-    def set_bytecode_t0(self, bytecode_t0):
-        raise NotImplementedError
-        self.rs1_t0 = (bytecode_t0>>OPCODE_FIELD_BITS["rs1"])&OPCODE_FIELD_MASKS["rs"]
-        self.rs2_t0 = (bytecode_t0>>OPCODE_FIELD_BITS["rs2"])&OPCODE_FIELD_MASKS["rs"]
-        self.rd_t0 =  (bytecode_t0>>OPCODE_FIELD_BITS["rd"])&OPCODE_FIELD_MASKS["rd"]
 
     def execute_t0(self, res, is_spike_resolution: bool):
         assert self.fuzzerstate.taint_en
@@ -346,8 +315,8 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0, RDInstruction_t
 
 
 class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False):
-        super().__init__(fuzzerstate, instr_str, rd, imm, priv_level, va_layout, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, imm, iscompressed)
         self.rd_t0 = 0
 
     def execute_t0(self, res, is_spike_resolution):
@@ -458,8 +427,8 @@ class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1, RDInstruction_t0):
 
 # Does not inherit from RDInstruction_t0 since it writes to rdep
 class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstruction_t0):
-    def __init__(self, fuzzerstate, rdep: int):
-        super().__init__(fuzzerstate, rdep)
+    def __init__(self, fuzzerstate, rdep: int, producer_id: int, is_rprod: bool = False):
+        super().__init__(fuzzerstate, rdep, producer_id, is_rprod)
         self.rdep_t0 = 0
 
     def execute_t0(self, res, is_spike_resolution):
@@ -562,8 +531,8 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
 
 
 class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
-        super().__init__(fuzzerstate, instr_str, rd, rs1, imm, producer_id, priv_level, va_layout, iscompressed, is_rd_nonpickable_ok)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed, is_rd_nonpickable_ok)
         self.rd_t0 = 0
         self.imm_t0 = 0
         self.rs1_t0 = 0
@@ -603,8 +572,8 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         self.writeback_t0(res_t0,res, is_spike_resolution) # We allow the rd field to be tainted, thus taint could be propagated to several destination registers.
 
 class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout : int = -1, iscompressed: bool = False):
-        super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, priv_level, va_layout, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, iscompressed)
         self.imm_t0 = 0
         self.rs1_t0 = 0
         self.rs2_t0 = 0
@@ -681,8 +650,8 @@ class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
         assert 0
 
 class BranchInstruction_t0(BranchInstruction, BaseInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1, iscompressed: bool = False):
-        super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, priv_level, va_layout, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         if not is_spike_resolution:
@@ -698,8 +667,8 @@ class BranchInstruction_t0(BranchInstruction, BaseInstruction_t0):
 
 
 class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False):
-        super().__init__(fuzzerstate, instr_str, rd, rs1, csr_id, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False, is_satp_smode = (False, None), mpp_val = None):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, csr_id, iscompressed, is_satp_smode, mpp_val)
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         # if self.csr_id == CSR_IDS.MEDELEG:
@@ -758,8 +727,8 @@ def has_taint_trace(obj):
     return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0, CSRImmInstruction_t0, CSRRegInstruction_t0)) and obj.instr_str != "auipc"
 
 class MstatusWriterInstruction_t0(MstatusWriterInstruction, BaseInstruction_t0):
-    def __init__(self, rd: int, rs1: int, producer_id: int, instr_str: str, mstatus_mask: int, old_sum_mprv=..., priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
-        super().__init__(rd, rs1, producer_id, instr_str, mstatus_mask, old_sum_mprv, priv_level, va_layout)
+    def __init__(self, rd: int, rs1: int, producer_id: int, instr_str: str, mstatus_mask: int, old_sum_mprv=...):
+        super().__init__(rd, rs1, producer_id, instr_str, mstatus_mask, old_sum_mprv)
         self.csr_instr = CSRRegInstruction_t0(instr_str, rd, rs1, CSR_IDS.MSTATUS)
 
     def execute(self, taint_en, is_spike_resolution: bool = True):
@@ -829,10 +798,8 @@ class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstructio
 
         # The pc will not be correct during in-situ simulation as MEPC is only determined later.
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val()
+        print(f"Descending from {self.fuzzerstate.privilegestate.privstate.name} to {mpp.name}")
         self.fuzzerstate.privilegestate.privstate = mpp
-        # self.fuzzerstate.privilegestate.curr_mstatus_spp = PrivilegeStateEnum.USER
-        # self.fuzzerstate.privilegestate.curr_mstatus_mpp = PrivilegeStateEnum.USER
-
         self.fuzzerstate.advance_minstret()
 
     def execute_sret(self, is_spike_resolution):
@@ -856,12 +823,8 @@ class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstructio
 
         # The pc will not be correct during in-situ simulation as SEPC is only determined later.
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].get_val()
+        print(f"Descending from {self.fuzzerstate.privilegestate.privstate.name} to {spp.name}")
         self.fuzzerstate.privilegestate.privstate = spp
-        # self.fuzzerstate.privilegestate.curr_mstatus_spp = PrivilegeStateEnum.USER
-        # if self.fuzzerstate.privilegestate.curr_mstatus_mpp == PrivilegeStateEnum.SUPERVISOR:
-        #     self.fuzzerstate.privilegestate.curr_mstatus_mpp = PrivilegeStateEnum.USER
-        # elif self.fuzzerstate.privilegestate.curr_mstatus_mpp == PrivilegeStateEnum.MACHINE:
-        #     self.fuzzerstate.privilegestate.curr_mstatus_mpp = PrivilegeStateEnum.SUPERVISOR
         self.fuzzerstate.advance_minstret()
 
 
@@ -924,10 +887,6 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
         # print(f"{self.get_str()}: mstatus: {hex(mstatus_cpy)} -> {hex(mstatus)}, medeleg: {hex(medeleg)}")
 
 class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstruction_t0):
-    def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr: BaseInstruction, exception_op_type: ExceptionCauseVal, priv_level_after_op: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout_after_op: int = -1, old_privilege: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE):
-        super().__init__(fuzzerstate, is_mtvec, producer_id, instr, exception_op_type, priv_level_after_op, va_layout_after_op, old_privilege)
-        assert self.addr == self.instr.addr
-
     def execute(self, taint_en, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
@@ -935,7 +894,7 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
         medeleg = self.fuzzerstate.csrfile.regs[CSR_IDS.MEDELEG].get_val()
         mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
         mstatus_cpy = mstatus
-        
+        pp = self.fuzzerstate.privilegestate.privstate
         if (medeleg>>self.exception_op_type)&1:
             if self.fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE:
                 self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(self.exception_op_type)

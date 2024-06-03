@@ -2,10 +2,11 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS
-from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF
-from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp
+from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS
+from params.fuzzparams import reset_reg_settings
+from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
 
 from cascade.util import ISAInstrClass, ExceptionCauseVal, MmuState
@@ -44,10 +45,35 @@ class FuzzerState:
         self.design_has_fpud                   : bool = design_has_double_support(design_name)
         self.design_has_muldiv                 : bool = design_has_muldiv_support(design_name)
         self.design_has_amo                    : bool = design_has_atop_support(design_name)
+        self.design_has_no_mmu                 : bool = design_has_only_bare(design_name)
         self.design_has_misaligned_data_support: bool = design_has_misaligned_data_support(design_name)
         self.design_has_supervisor_mode        : bool = design_has_supervisor_mode(design_name)
         self.design_has_user_mode              : bool = design_has_user_mode(design_name)
         self.design_has_pmp                    : bool = design_has_pmp(design_name)
+
+
+        # For benchmarks
+        if GET_DATA:
+            self.num_hardcoded_instr_mmufsm = 0
+            self.num_hardcoded_instr_regfsm = 0
+            self.num_mprv_memop = 0
+            self.num_virt_pc = 0
+            self.jump_to_new_layout = 0
+            self.machine_only_rprod = 0
+            self.satp_write_machine = 0
+            self.satp_write_supervisor = 0
+
+        if USE_MMU and not self.design_has_no_mmu:
+            if self.is_design_64bit:
+                reset_reg_settings()
+            self.mmu_capabilities = []
+            self.prog_mmu_params =  []
+            if self.is_design_64bit: 
+                self.ptesize = 8
+            else:
+                self.ptesize = 4
+            self.get_design_mmu(design_name)
+            self.select_prog_mmu_params()
 
         self.gen_pick_weights()
         self.reset()
@@ -60,6 +86,32 @@ class FuzzerState:
         
         self.tmp_dir = os.path.join(PATH_TO_TMP, self.design_name, self.instance_to_str())
         os.makedirs(self.tmp_dir,exist_ok=True)
+
+    # @brief return the MMU capabilities of the design 
+    # @return [bool] : [sv32, sv39, sv48]
+    def get_design_mmu(self, design_name):
+        if self.is_design_64bit:
+            
+            self.mmu_capabilities.append(design_has_sv39(design_name))
+            #self.mmu_capabilities.append(design_has_sv48(design_name))
+            self.mmu_capabilities.append(False)
+        else:
+            self.mmu_capabilities.append(design_has_sv32(design_name))
+
+    # @brief return the MODE and page sizes we will support in the current program
+    # @return [(MODE, #level_used)]
+    def select_prog_mmu_params(self):
+        num_layouts = random.randint(1, MAX_NUM_LAYOUTS)
+        if self.is_design_64bit:
+            allowed_params = MODES_PARAMS_RV64
+        else:
+            allowed_params = MODES_PARAM_RV32
+        for _ in range(num_layouts):
+            mode = random.choices(list(allowed_params.keys()), self.mmu_capabilities)[0]
+            n_level = random.randint(1, allowed_params[mode][2])
+            self.prog_mmu_params.append((mode, n_level))
+        if DEBUG_PRINT: print(f"generated parameters: {self.prog_mmu_params}")
+
        
 
     # @brief cleans up the fuzzerstate. Used in case of failed input generation.
@@ -84,6 +136,7 @@ class FuzzerState:
         self.instr_objs_seq = [] # List (queue) of (for each basic block) lists of instruction objects
         self.bb_start_addr_seq = [] # List (queue) of bb start addresses. Self-managed through init_new_bb.
         self.saved_reg_states = [] # List (queue) of register save objects, as saved by pickreg.py
+        self.saved_mmu_state  = []
 
         # Strictly increasing when we create new producer0, to ensure uniqueness
         self.next_producer_id = 0
@@ -265,12 +318,10 @@ class FuzzerState:
     def append_and_execute_instr(self, instr, execute: bool= False, insert_regdump: bool = INSERT_REGDUMPS):
         instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
         if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
-            # instr.print(is_spike_resolution=True)
-            print(f"{self.privilegestate.privstate.name[0]}: {instr.get_str(is_spike_resolution=True)}")
+            instr.print(is_spike_resolution=True)
         self.instr_objs_seq[-1].append(instr)
         if insert_regdump:
             if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS:
-                # fence_instr = SpecialInstruction_t0(self,"fence")
                 store_instr = RegdumpInstruction_t0(self,"sd" if self.is_design_64bit else "sw", REGDUMP_REGISTER_ID, instr.rd,0,-1)
                 store_instr.execute(taint_en=self.taint_en, is_spike_resolution=True)
                 if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 

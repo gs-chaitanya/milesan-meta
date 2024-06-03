@@ -1,4 +1,5 @@
 from params.runparams import DO_ASSERT
+from params.fuzzparams import USE_MMU
 from cascade.util import ExceptionCauseVal, IntRegIndivState
 from functools import reduce
 from enum import IntEnum
@@ -13,6 +14,7 @@ class PrivilegeStateEnum(IntEnum):
 class PrivilegeState:
     def __init__(self):
         self.privstate = PrivilegeStateEnum.MACHINE
+        self.prev_privstate = None
 
         # These values must be initialized because the corresponding [m/s]ret is executed.
         # The values are PrivilegeStateEnum values. We initialize them in the initial block.
@@ -46,11 +48,11 @@ class PrivilegeState:
             ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE: True,
             ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE: True,
             ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE: True,
-            ExceptionCauseVal.ID_INSTR_ACCESS_FAULT: False,
+            ExceptionCauseVal.ID_INSTR_ACCESS_FAULT: False, # TODO enable this
             ExceptionCauseVal.ID_LOAD_ACCESS_FAULT: False,
             ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT: False,
             ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT: False,
-            ExceptionCauseVal.ID_LOAD_PAGE_FAULT: False,
+            ExceptionCauseVal.ID_LOAD_PAGE_FAULT: False, # TODO enable this
             ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT: False
         }
 
@@ -82,10 +84,23 @@ class PrivilegeState:
             supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED] = False
             supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED] = False
 
+        # Will not cause an exception if translation is not used
+        if fuzzerstate.effective_curr_layout == -1:
+            supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
+
+        _, mprv_bit = fuzzerstate.status_sum_mprv
+        if not mprv_bit or fuzzerstate.privilegestate.curr_mstatus_mpp == PrivilegeStateEnum.MACHINE or fuzzerstate.real_curr_layout == -1:
+            # Without the mprv bit, we cannot generate page faults in machine mode
+            supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
+
+        # Cannot write to SATP in user mode
+        if self.privstate == PrivilegeStateEnum.USER:
+            supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
 
         if self.privstate == PrivilegeStateEnum.MACHINE:
             supported_exceptions_dict[ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE] = False
             supported_exceptions_dict[ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE] = False
+            supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
 
             if not self.is_mtvec_populated:
                 # Forbid all exceptions
@@ -96,6 +111,8 @@ class PrivilegeState:
                 supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED] = False
                 supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED] = False
                 supported_exceptions_dict[ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE] = False
+                supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
+                supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
 
             return supported_exceptions_dict
         else:
@@ -139,6 +156,9 @@ def is_ready_to_descend_privileges(fuzzerstate):
     if DO_ASSERT:
         assert fuzzerstate.privilegestate.medeleg_val is not None, "We don't expect medeleg to be None because we initialize it in the initial block."
 
+    if fuzzerstate.num_instr_to_stay_in_prv > 0:
+        return False
+
     # For the moment, we only support descending privileges on designs that have all of M, S and U modes.
     if not fuzzerstate.authorize_privileges:
         return False
@@ -148,6 +168,10 @@ def is_ready_to_descend_privileges(fuzzerstate):
 
     if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.USER:
         return False
+    # FIXME for large pages, we cannot change priv level if the layout does not allow it
+    elif USE_MMU and fuzzerstate.is_design_64bit and fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE and ((fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.SUPERVISOR] | 0x7fffffff) - (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.USER] | 0x7fffffff)) != 0:
+        return False
+
     # If the current state is machine, then we can descend privileges only if we can come back.
     # - If we go to supervisor, only if mtvec is required.
     # - If we go to user, we require mtvec, and stvec if all exceptions are delegated.

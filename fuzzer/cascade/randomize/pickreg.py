@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT, PRINT_FSM_TRANSITIONS, PRINT_WRITEBACK_T0
 from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG, NUM_MIN_TAINTED_REGS
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
-from params.fuzzparams import USE_TAINT_HW, USE_TAINT_TANH, USE_TAINT_BIN
+from params.fuzzparams import USE_TAINT_HW, USE_TAINT_TANH, USE_TAINT_BIN, NONPICKABLE_REGISTERS
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
 from cascade.util import IntRegIndivState
 from cascade.registers import IntRegister, ABI_INAMES
@@ -44,13 +44,8 @@ class IntRegPickState:
     def setup_registers(self):
         self.regs = {id:IntRegister(id,self.fuzzerstate.is_design_64bit,pickable=True) for id in range(self.num_pickable_regs)} # pickable registers
         # Below are non-pickable registers.
-        self.regs[RELOCATOR_REGISTER_ID] = IntRegister(RELOCATOR_REGISTER_ID,self.fuzzerstate.is_design_64bit)
-        self.regs[RDEP_MASK_REGISTER_ID] = IntRegister(RDEP_MASK_REGISTER_ID,self.fuzzerstate.is_design_64bit)
-        self.regs[FPU_ENDIS_REGISTER_ID] = IntRegister(FPU_ENDIS_REGISTER_ID,self.fuzzerstate.is_design_64bit)
-        self.regs[MPP_BOTH_ENDIS_REGISTER_ID] = IntRegister(MPP_BOTH_ENDIS_REGISTER_ID,self.fuzzerstate.is_design_64bit)
-        self.regs[MPP_TOP_ENDIS_REGISTER_ID] = IntRegister(MPP_TOP_ENDIS_REGISTER_ID,self.fuzzerstate.is_design_64bit)
-        self.regs[SPP_ENDIS_REGISTER_ID] = IntRegister(SPP_ENDIS_REGISTER_ID,self.fuzzerstate.is_design_64bit)
-        self.regs[REGDUMP_REGISTER_ID] = IntRegister(REGDUMP_REGISTER_ID,self.fuzzerstate.is_design_64bit)
+        for reg_id in NONPICKABLE_REGISTERS:
+            self.regs[reg_id] = IntRegister(reg_id,self.fuzzerstate.is_design_64bit)
         self.set_spike_boot_values()
 
     def set_initial_values(self, fuzzerstate): # Reset seed to starting value to ensure random values match if this function is called twice.
@@ -184,6 +179,25 @@ class IntRegPickState:
         if DO_ASSERT:
             assert self.regs[id].fsm_state == IntRegIndivState.FREE
         return id
+
+
+    # Pick 2 different nonzero free registers. Used for li_doubleword
+    def pick_int_inputregs_nonzero(self, n: int):
+        ret = []
+        authorized_regs_onehot = self.get_free_regs_onehot()
+        was_zero_authorized = authorized_regs_onehot[0]
+        authorized_regs_onehot[0] = 0
+        if DO_ASSERT:
+            assert n > 1, "The function pick_int_inputregs should not be used for n < 2. For n = 1, please use pick_int_inputreg."
+            assert sum(authorized_regs_onehot) >= 2, f"There is less than 2 free regs that are not zero"
+        #ret = random.sample(range(self.num_pickable_regs+1), k=n)
+        r1 = random.choices(range(self.num_pickable_regs), self.get_effective_weights(authorized_regs_onehot))[0]
+        ret.append(r1)
+        authorized_regs_onehot[r1] = 0
+        r2 = random.choices(range(self.num_pickable_regs), self.get_effective_weights(authorized_regs_onehot))[0]
+        ret.append(r2)
+        return ret
+
 
     # Excludes the zero register
     def pick_tainted_int_inputreg_nonzero(self, force: bool = False):
