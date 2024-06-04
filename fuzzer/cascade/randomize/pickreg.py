@@ -488,9 +488,9 @@ class IntRegPickState:
             row = [instr.get_str(is_spike_resolution), ABI_INAMES[reg], val_t0]
             print("WRITEBACK_T0: {: <75}: {: >5} <- 0x{:016x}".format(*row))
         if is_spike_resolution:
-            self.writeback_trace_in_situ[instr.addr] = (reg, val_t0)
+            self.writeback_trace_in_situ[instr.paddr] = (reg, val_t0)
         else:
-            self.writeback_trace_final[instr.addr] = (reg,val_t0)
+            self.writeback_trace_final[instr.paddr] = (reg,val_t0)
             
     def analyze_writeback_trace(self, use_final: bool = True):
         n_tainted_bits = 0

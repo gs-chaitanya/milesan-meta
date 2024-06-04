@@ -538,7 +538,7 @@ def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
                     if isinstance(bb_instr, MisalignedMemInstruction):
                         addr = bb_instr.misaligned_addr
                     elif isinstance(bb_instr, SimpleExceptionEncapsulator):
-                        addr = bb_instr.addr
+                        addr = bb_instr.paddr
                     else:
                         raise Exception("We expected only MisalignedMemInstruction to have a producer_id.")
 
@@ -602,7 +602,7 @@ def gen_basicblocks(fuzzerstate):
 
         fuzzerstate.reset()
         if not gen_initial_basic_block(fuzzerstate, SPIKE_STARTADDR): continue
-        
+
         fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
 
         # Reserve space for the second basic block (whose address is already fixed).

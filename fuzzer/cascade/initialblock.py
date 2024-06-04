@@ -42,7 +42,6 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     # prepare the relocator register
     lui_imm, addi_imm = li_into_reg(offset_addr, False)
     curr_addr += fuzzerstate.append_and_execute_instr(ImmRdInstruction_t0(fuzzerstate,"lui", RELOCATOR_REGISTER_ID, lui_imm, is_rd_nonpickable_ok=True), True, insert_regdump = False)
-
     curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", RELOCATOR_REGISTER_ID, RELOCATOR_REGISTER_ID, addi_imm, is_rd_nonpickable_ok=True), True, insert_regdump = False)
     
 

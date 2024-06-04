@@ -175,7 +175,7 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
     # Jump from the last basic block to the context setter. For the first context setter, the last block is the initial block.
     old_jump = fuzzerstate.instr_objs_seq[fuzzerstate.last_bb_id_before_next_ctxsv_bb][-1]
     new_jump = JALInstruction_t0(fuzzerstate,"jal", 0, fuzzerstate.curr_ctxsv_bb_start_addr - 4*(len(fuzzerstate.instr_objs_seq[fuzzerstate.last_bb_id_before_next_ctxsv_bb])-1)) # NO_COMPRESSED
-    new_jump.addr = old_jump.addr
+    new_jump.paddr = old_jump.addr
     fuzzerstate.instr_objs_seq[fuzzerstate.last_bb_id_before_next_ctxsv_bb][-1] = new_jump
     # print(f"Replacing {old_jump.get_str()} with {new_jump.get_str()}")
 
@@ -231,7 +231,7 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
         curr_addr = test_fuzzerstate.bb_start_addr_seq[max_bb_id_to_consider] + (max_instr_id_except_cf+1) * 4 # NO_COMPRESSED
         new_jal = JALInstruction_t0(test_fuzzerstate, "jal", 0, test_fuzzerstate.final_bb_base_addr-curr_addr)
         old_jal = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1]
-        new_jal.addr = old_jal.addr
+        new_jal.paddr = old_jal.addr
         test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1] = new_jal
         test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
         test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider] = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][:max_instr_id_except_cf+2]
@@ -239,7 +239,7 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
         curr_addr = test_fuzzerstate.bb_start_addr_seq[max_bb_id_to_consider] + (len(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider])-1) * 4 # NO_COMPRESSED
         new_jal = JALInstruction_t0(test_fuzzerstate, "jal", 0, test_fuzzerstate.final_bb_base_addr-curr_addr)
         old_jal = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1]
-        new_jal.addr = old_jal.addr
+        new_jal.paddr = old_jal.addr
         test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1] = new_jal
         test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
     
@@ -345,22 +345,22 @@ def _try_flatten_cf(fuzzerstate, failing_bb, failing_instr, pillar_bb, pillar_in
         if bb_id == 0:
             continue
         for instr in bb[:-1]:
-            instr.addr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
+            instr.paddr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
             new_flat_instrs += [instr]
 
         last_instr = bb[-1]
         # If the last instruction is a JAL/R, we set rd to address of the JAL/R with a lui+add sequence
         # Maybe add non-taken branches to have similar effect on BPU?
         if isinstance(last_instr, (JALInstruction_t0,JALRInstruction_t0)):
-            lui_imm,addi_imm = li_into_reg(last_instr.addr-SPIKE_STARTADDR, False) # need to remove the spike offset because of sign-extension
+            lui_imm,addi_imm = li_into_reg(last_instr.paddr-SPIKE_STARTADDR, False) # need to remove the spike offset because of sign-extension
             lui_instr = ImmRdInstruction_t0(flat_fuzzerstate,'lui',last_instr.rd,lui_imm)
-            lui_instr.addr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
+            lui_instr.paddr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
             new_flat_instrs += [lui_instr]
             addi_instr = RegImmInstruction_t0(flat_fuzzerstate, 'addi', last_instr.rd, last_instr.rd, addi_imm)
-            addi_instr.addr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
+            addi_instr.paddr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
             new_flat_instrs += [addi_instr]
             add_instr = R12DInstruction_t0(flat_fuzzerstate, 'add', last_instr.rd, last_instr.rd, RELOCATOR_REGISTER_ID)  # add the spike offset again
-            add_instr.addr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
+            add_instr.paddr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
             new_flat_instrs += [add_instr]
             if bb_id == failing_bb:
                 if failing_instr == len(bb)-1 and not quiet:
@@ -373,7 +373,7 @@ def _try_flatten_cf(fuzzerstate, failing_bb, failing_instr, pillar_bb, pillar_in
 
     # Jump to the final block
     jal_inst = JALInstruction_t0(flat_fuzzerstate, "jal", 0, flat_fuzzerstate.final_bb_base_addr - 4*(len(new_flat_instrs)) - addr_flat_instrs)
-    jal_inst.addr = addr_flat_instrs +  4*len(new_flat_instrs) + SPIKE_STARTADDR
+    jal_inst.paddr = addr_flat_instrs +  4*len(new_flat_instrs) + SPIKE_STARTADDR
     new_flat_instrs.append(jal_inst)
 
     if DO_ASSERT:
@@ -385,7 +385,7 @@ def _try_flatten_cf(fuzzerstate, failing_bb, failing_instr, pillar_bb, pillar_in
     # print('Base addr guessed', hex(flat_fuzzerstate.ctxsv_bb_base_addr + 4*flat_fuzzerstate.ctxsv_bb_jal_instr_id))
     # print('Tgt addr', hex(flat_fuzzerstate.bb_start_addr_seq[1]))
     jal_inst = JALInstruction_t0(flat_fuzzerstate, "jal", 0, flat_fuzzerstate.bb_start_addr_seq[1] - (flat_fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*flat_fuzzerstate.ctxsv_bb_jal_instr_id))
-    jal_inst.addr = flat_fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*flat_fuzzerstate.ctxsv_bb_jal_instr_id + SPIKE_STARTADDR
+    jal_inst.paddr = flat_fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*flat_fuzzerstate.ctxsv_bb_jal_instr_id + SPIKE_STARTADDR
     flat_fuzzerstate.ctxsv_bbs[0][flat_fuzzerstate.ctxsv_bb_jal_instr_id] = jal_inst
 
     is_flattening_success = is_mismatch(flat_fuzzerstate, 1)
@@ -659,7 +659,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
             saved_instr = copy(fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id]) # No deepcopy! Reference to fuzzerstate needs to be maintainted.
             # If this is already a nop, then pass
             nop_instr =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
-            nop_instr.addr = saved_instr.addr
+            nop_instr.paddr = saved_instr.addr
             if saved_instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF) == nop_instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF):
                 continue
             if is_placeholder(saved_instr):
@@ -669,7 +669,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
                 print(f"(A) Trying to replace {saved_instr.get_str()} with a nop.")
             # For debug printing
             curr_addr = fuzzerstate.bb_start_addr_seq[pillar_bb_id] + 4*instr_id # NO_COMPRESSED
-            assert curr_addr + SPIKE_STARTADDR == nop_instr.addr, f"{saved_instr.get_str()} replaced with {nop_instr.get_str()} not placed at right addr {hex(curr_addr + SPIKE_STARTADDR)}"
+            assert curr_addr + SPIKE_STARTADDR == nop_instr.paddr, f"{saved_instr.get_str()} replaced with {nop_instr.get_str()} not placed at right addr {hex(curr_addr + SPIKE_STARTADDR)}"
             try:
                 if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, quiet=quiet):
                     if not quiet:
@@ -700,7 +700,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
                 if is_placeholder(fuzzerstate.instr_objs_seq[bb_id][instr_id]): # Keep the placeholders as we risk tainting a source register for a cf ambiduous instruction otherwise.
                     continue
                 nop_instr =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
-                nop_instr.addr = fuzzerstate.instr_objs_seq[bb_id][instr_id].addr
+                nop_instr.paddr = fuzzerstate.instr_objs_seq[bb_id][instr_id].addr
                 fuzzerstate.instr_objs_seq[bb_id][instr_id] = nop_instr
             if not quiet:
                 print(f"(B) Trying to replace instructions in BB at {hex(fuzzerstate.bb_start_addr_seq[bb_id])} with nops.")
@@ -725,7 +725,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
             for instr_id in range(len(fuzzerstate.instr_objs_seq[bb_id])-1):
                 saved_instr = copy(fuzzerstate.instr_objs_seq[bb_id][instr_id])
                 nop_instr =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
-                nop_instr.addr = saved_instr.addr
+                nop_instr.paddr = saved_instr.addr
                 if saved_instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF) == nop_instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF):
                     continue
                 if is_placeholder(saved_instr):
@@ -735,7 +735,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
                     print(f"(B) Replacing {saved_instr.get_str()} with {nop_instr.get_str()}")
                 # For debug printing
                 curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + 4*instr_id # NO_COMPRESSED
-                assert curr_addr + SPIKE_STARTADDR == nop_instr.addr, f"{saved_instr.get_str()} replaced with {nop_instr.get_str()} not placed at right addr {hex(curr_addr + SPIKE_STARTADDR)}"
+                assert curr_addr + SPIKE_STARTADDR == nop_instr.paddr, f"{saved_instr.get_str()} replaced with {nop_instr.get_str()} not placed at right addr {hex(curr_addr + SPIKE_STARTADDR)}"
                 try:
                     if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, quiet=quiet):
                         if not quiet:
@@ -754,7 +754,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
         for instr_id in range(failing_instr_id-1):
             saved_instr = copy(fuzzerstate.instr_objs_seq[failing_bb_id][instr_id])
             nop_instr =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
-            nop_instr.addr = saved_instr.addr
+            nop_instr.paddr = saved_instr.addr
             if saved_instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF) == nop_instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF):
                 continue
             if is_placeholder(saved_instr):
@@ -968,11 +968,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             # Remove the instructions after and before
             fuzzerstate.instr_objs_seq[failing_bb_id] = fuzzerstate.instr_objs_seq[failing_bb_id][:failing_instr_id+2]
             jal_instr = JALInstruction_t0(fuzzerstate, "jal", 0, fuzzerstate.bb_start_addr_seq[1] + 4*(pillar_instr) - (fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*fuzzerstate.ctxsv_bb_jal_instr_id))
-            jal_instr.addr = fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*fuzzerstate.ctxsv_bb_jal_instr_id + SPIKE_STARTADDR
+            jal_instr.paddr = fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*fuzzerstate.ctxsv_bb_jal_instr_id + SPIKE_STARTADDR
             fuzzerstate.ctxsv_bbs[0][fuzzerstate.ctxsv_bb_jal_instr_id] = jal_instr
             for instr_id in range(pillar_instr):
                 nop_instr = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0) # RawDataWord(0)
-                nop_instr.addr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id + SPIKE_STARTADDR
+                nop_instr.paddr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id + SPIKE_STARTADDR
                 fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id] = nop_instr
 
             # We can do this one more time

@@ -180,6 +180,7 @@ class MemoryView:
         return None
 
 
+
     def is_addr_tainted(self,addr,n_bytes):
         is_tainted = False
         for i in range(n_bytes):

@@ -5,7 +5,8 @@ from cascade.util import ExceptionCauseVal
 from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from cascade.registers import ABI_INAMES
 from rv.csrids import CSR_ABI_NAMES
-from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0
+from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT
+from common.spike import SPIKE_STARTADDR
 import numpy as np
 from rv.csrids import MSTATUS_MPP_BIT, MSTATUS_MIE_BIT, MSTATUS_MPIE_BIT
 from rv.csrids import MSTATUS_SIE_BIT, MSTATUS_SPIE_BIT, MSTATUS_SPP_BIT
@@ -29,7 +30,7 @@ def filter_reg_t0_traceback(reg_id, addr, fuzzerstate, correct_val: int = None, 
     instr_stream = []
     for bb_instrs in reversed(fuzzerstate.instr_objs_seq):
         for instr_obj in reversed(bb_instrs):
-            if instr_obj.addr == last_instr.addr: # start collecting depending registers
+            if instr_obj.addr == last_instr.paddr: # start collecting depending registers
                 instr_stream += [instr_obj]
                 if hasattr(instr_obj,"rs1"):
                     dep_regs |= {instr_obj.rs1}
@@ -51,7 +52,7 @@ def filter_reg_t0_traceback(reg_id, addr, fuzzerstate, correct_val: int = None, 
                     dep_regs |= {instr_obj.rdep}
                 if hasattr(instr_obj,"rprod"):    
                     dep_regs |= {instr_obj.rprod}
-            elif isinstance(instr_obj, PlaceholderPreConsumerInstr) and instr_obj.rdep in dep_regs and instr_obj.addr in fuzzerstate.intregpickstate.writeback_trace_final:
+            elif isinstance(instr_obj, PlaceholderPreConsumerInstr) and instr_obj.rdep in dep_regs and instr_obj.paddr in fuzzerstate.intregpickstate.writeback_trace_final:
                 instr_stream += [instr_obj]
   
     
@@ -97,9 +98,9 @@ class BaseInstruction_t0(BaseInstruction):
                 # print(f"{hex(self.addr)}: Ignoring register taint: {ABI_INAMES[reg_id]}")
                 continue
             if reg_val and PRINT_CHECK_REGS_T0:
-                print(f"{hex(self.addr)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
+                print(f"{hex(self.paddr)}: Checking register taint: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check_t0(reg_val)
-            assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
+            assert not mismatch, f"{hex(self.paddr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.paddr,self.fuzzerstate,reg_val).get_str()}"
 
     def execute_t0(self):
         assert self.fuzzerstate.taint_en
@@ -130,7 +131,7 @@ class RDInstruction_t0(CFInstruction_t0):
             if (alt_rd_id^self.rd)&(~self.rd_t0) == 0: # only differ in the tainted bits, therefore this register will get tainted
                 taints = alt_rd.get_val()^res # the taint vector is one in the bits that differ
                 alt_rd.set_val_t0(taints | res_t0) # or with taint result from addition
-                self.fuzzerstate.intregpickstate.add_writeback_trace(self.addr, self.rd, taints | res_t0, is_spike_resolution)
+                self.fuzzerstate.intregpickstate.add_writeback_trace(self.paddr, self.rd, taints | res_t0, is_spike_resolution)
                 if PRINT_WRITEBACK_T0: 
                     print(f"writeback_t0: {self.get_str(is_spike_resolution)}: {ABI_INAMES[alt_rd_id]} <- {hex(taints | res_t0)} (= {hex(res_t0)} | ({hex(alt_rd.get_val())} ^ {hex(res)}) )")
 
@@ -143,9 +144,9 @@ class ImmInstruction_t0(CFInstruction_t0):
 
     def write_t0(self, is_spike_resolution: bool = False):
         if DO_ASSERT:
-            assert self.addr >= SPIKE_STARTADDR
-            assert self.addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
-        self.fuzzerstate.memview.write_t0(self.addr, self.gen_bytecode_int_t0(is_spike_resolution), 4)
+            assert self.paddr >= SPIKE_STARTADDR
+            assert self.paddr < SPIKE_STARTADDR + self.fuzzerstate.memsize
+        self.fuzzerstate.memview.write_t0(self.paddr, self.gen_bytecode_int_t0(is_spike_resolution), 4)
         # if self.imm_t0:
         #     print(f"{self.get_str()} adds taint extra with imm {hex(self.imm_t0)}")
         # else:
@@ -164,7 +165,7 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
 
     def execute_t0(self, res, is_spike_resolution: bool):
         assert self.fuzzerstate.taint_en
-        if self.addr == -1:
+        if self.paddr == -1:
             print(f"Skipping execution of {self.get_str()}")
             return
         assert self.instr_func_t0 is not None, f"Cannot execute {self.get_str()}: no instr_func_t0 found."
@@ -182,7 +183,7 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
 
     # Overrides function in R12DInstructionClass
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        if self.addr == -1:
+        if self.paddr == -1:
             print(f"Skipping execution of {self.get_str()}")
             return
         assert self.instr_func is not None, f"Cannot execute {self.get_str()}: no instr_func found."
@@ -240,7 +241,7 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
     def execute_t0(self, res, is_spike_resolution: bool):
         assert self.fuzzerstate.taint_en
         # Compute the taint results of the operation. The address is never tainted.
-        res_t0 = self.instr_func_t0(self.addr, 0x0, self.imm, self.imm_t0, self.fuzzerstate.is_design_64bit)
+        res_t0 = self.instr_func_t0(self.paddr, 0x0, self.imm, self.imm_t0, self.fuzzerstate.is_design_64bit)
         # Compute alternative results if other soruce registers had been choosen.
         res_t0 |= self.compute_alt_res_t0(res)
         # Writeback taints according to tainted bits in rd.
@@ -251,7 +252,10 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
-        res = self.instr_func(self.addr, self.imm, self.fuzzerstate.is_design_64bit)
+        if USE_MMU:
+            res = self.instr_func(self.vaddr, self.imm, self.fuzzerstate.is_design_64bit)
+        else:
+            res = self.instr_func(self.paddr, self.imm, self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
@@ -327,8 +331,14 @@ class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc = self.addr + self.imm
-        res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
+            if USE_MMU:
+                self.fuzzerstate.curr_pc = self.vaddr + self.imm
+            else:
+                self.fuzzerstate.curr_pc = self.paddr + self.imm
+        if USE_MMU:
+            res = self.instr_func(self.vaddr, 0x0, self.fuzzerstate.is_design_64bit)
+        else:
+            res = self.instr_func(self.paddr, 0x0, self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
@@ -351,7 +361,10 @@ class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() + self.imm
-        res = self.instr_func(self.addr, 0x0, self.fuzzerstate.is_design_64bit)
+        if USE_MMU:
+            res = self.instr_func(self.vaddr, 0x0, self.fuzzerstate.is_design_64bit)
+        else:
+            res = self.instr_func(self.paddr, 0x0, self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
@@ -377,12 +390,18 @@ class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0, RDInstruction_t0):
                     self.execute_t0(None,is_spike_resolution)
                 return
             else:
-                imm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0]
+                spike_res_off = self.spike_resolution_offset
+                if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1: 
+                    spike_res_off = (self.spike_resolution_offset | 0x80000000) & 0xffffffff # TODO double check if the check of the 64th bit is valid
+                imm = li_into_reg(to_unsigned(spike_res_off, self.fuzzerstate.is_design_64bit), False)[0]
         else:
             assert self.rtl_offset is not None
+            rtl_off = self.rtl_offset
+            if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1:
+                rtl_off = (self.rtl_offset | 0x80000000) & 0xffffffff # TODO double check if the check of the 64th bit is valid
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
-            imm = li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0]
+            imm = li_into_reg(to_unsigned(rtl_off, self.fuzzerstate.is_design_64bit), False)[0]
 
         res = self.instr_func(None,imm,self.fuzzerstate.is_design_64bit)
         if taint_en:
@@ -412,12 +431,17 @@ class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1, RDInstruction_t0):
                     self.execute_t0(None,is_spike_resolution)
                 return
             else:
-                uimm = li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1]
+                spike_res_off = self.spike_resolution_offset
+                if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1:
+                    spike_res_off = (self.spike_resolution_offset | 0x80000000) & 0xffffffff
+                uimm = li_into_reg(to_unsigned(spike_res_off, self.fuzzerstate.is_design_64bit), False)[1]
         else:
+            rtl_off = self.rtl_offset
+            if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1: 
+                rtl_off = (self.rtl_offset | 0x80000000) & 0xffffffff # TODO double check if the check of the 64th bit is valid
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
-            uimm = li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1]
-        
+            uimm = li_into_reg(to_unsigned(rtl_off, self.fuzzerstate.is_design_64bit), False)[1]
         rd_val = self.fuzzerstate.intregpickstate.regs[self.rd].get_val()
         res = self.instr_func(rd_val, uimm, self.fuzzerstate.is_design_64bit)
         if taint_en:
@@ -444,7 +468,12 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
         rdep_val = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val()
-        mask = self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
+        if USE_MMU and self.fuzzerstate.is_design_64bit and self.is_rprod and self.va_layout != -1:
+            mask = self.fuzzerstate.intregpickstate.regs[RPROD_MASK_REGISTER_ID].get_val()
+        elif USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1:
+            mask = self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID_VIRT].get_val()
+        else:
+            mask = self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
         res = self.instr_func(rdep_val,mask,self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res, is_spike_resolution)
@@ -466,7 +495,7 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
             if (alt_rdep_id^self.rdep)&(~self.rdep_t0) == 0 and self.rdep_t0 != 0: # only differ in the tainted bits, therefore this register will get tainted
                 taints = alt_rdep.get_val()^res # the taint vector is one in the bits that differ
                 alt_rdep.set_val_t0(taints | res_t0) # or with taint result from addition
-                self.fuzzerstate.intregpickstate.add_writeback_trace(self.addr, self.rdep, taints | res_t0, is_spike_resolution)
+                self.fuzzerstate.intregpickstate.add_writeback_trace(self.paddr, self.rdep, taints | res_t0, is_spike_resolution)
                 if PRINT_WRITEBACK_T0:
                     print(f"writeback_t0: {self.get_str(is_spike_resolution)}: {ABI_INAMES[alt_rdep_id]} <- {hex(taints | res_t0)} ({ABI_INAMES[alt_rdep_id]} ^ {ABI_INAMES[self.rdep]})")
 
@@ -491,7 +520,7 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
         else:
             rs2_val = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val()
             rs2_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val_t0()
-            assert rs2_val_t0 == 0, f"rdep {ABI_INAMES[self.rdep]} is tainted, this should not happen. {filter_reg_t0_traceback(self.rdep, self.addr,self.fuzzerstate,None, is_spike_resolution)}"
+            assert rs2_val_t0 == 0, f"rdep {ABI_INAMES[self.rdep]} is tainted, this should not happen. {filter_reg_t0_traceback(self.rdep, self.paddr,self.fuzzerstate,None, is_spike_resolution)}"
 
         assert rs1_val_t0 == 0, f"rprod is tainted, this should not happen."
         # Compute the taint results of the operation.
@@ -509,6 +538,11 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
             self.fuzzerstate.curr_pc += 4
         rprod_val = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val()
         if is_spike_resolution:
+            if USE_MMU and self.va_layout != -1:
+                self.fuzzerstate.advance_minstret()
+                # if taint_en:
+                #     self.execute_t0(res, is_spike_resolution)
+                # return
             rdep_val = self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val()
         else:
             rdep_val = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val()  
@@ -613,22 +647,22 @@ class RegdumpInstruction_t0(IntStoreInstruction_t0):
 
     def get_str(self, is_spike_resolution):
         if not is_spike_resolution:
-            return f"{hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
+            return f"{hex(self.paddr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
         else:
-            return f"{hex(self.addr)}: nop"
+            return f"{hex(self.paddr)}: nop"
 
     def check_regs_t0(self,val_t0):
         assert self.fuzzerstate.taint_en
         if PRINT_CHECK_REGS_T0:
-            print(f"{hex(self.addr)}: Checking register taint: {ABI_INAMES[self.rs2]}:{hex(val_t0)}")
+            print(f"{hex(self.paddr)}: Checking register taint: {ABI_INAMES[self.rs2]}:{hex(val_t0)}")
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check_t0(val_t0)
-        assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.addr,self.fuzzerstate,val_t0,False).get_str(False)}"
+        assert not mismatch, f"{hex(self.paddr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.paddr,self.fuzzerstate,val_t0,False).get_str(False)}"
 
     def check_regs(self,val):
         if PRINT_CHECK_REGS:
-            print(f"{hex(self.addr)}: Checking register value: {ABI_INAMES[self.rs2]}:{hex(val)}")
+            print(f"{hex(self.paddr)}: Checking register value: {ABI_INAMES[self.rs2]}:{hex(val)}")
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check(val)
-        assert not mismatch, f"{hex(self.addr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.addr,self.fuzzerstate,val,False).get_str(False)}"
+        assert not mismatch, f"{hex(self.paddr)}: {self.instr_str}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.paddr,self.fuzzerstate,val,False).get_str(False)}"
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         if is_spike_resolution:
@@ -648,6 +682,8 @@ class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
 
     def execute_t0(self, res, is_spike_resolution):
         assert 0
+
+
 
 class BranchInstruction_t0(BranchInstruction, BaseInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, iscompressed: bool = False):
@@ -739,7 +775,7 @@ class TvecWriterInstruction_t0(TvecWriterInstruction, BaseInstruction_t0):
         super().__init__(fuzzerstate, is_mtvec, rd, rs1, producer_id)
         csr_id = CSR_IDS.MTVEC if is_mtvec else CSR_IDS.STVEC
         self.csr_instr = CSRRegInstruction_t0(fuzzerstate, "csrrw", rd, rs1, csr_id)
-        assert self.addr == self.csr_instr.addr
+        assert self.paddr == self.csr_instr.paddr
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         self.csr_instr.execute(taint_en,is_spike_resolution)
@@ -751,7 +787,7 @@ class EPCWriterInstruction_t0(EPCWriterInstruction, BaseInstruction_t0):
         self.rs1 = rs1
         self.csr_id = CSR_IDS.MEPC if is_mepc else CSR_IDS.SEPC
         self.csr_instr = CSRRegInstruction_t0(fuzzerstate, "csrrw", rd, rs1, self.csr_id)
-        assert self.addr == self.csr_instr.addr
+        assert self.paddr == self.csr_instr.paddr
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         self.csr_instr.execute(taint_en,is_spike_resolution)
@@ -762,7 +798,7 @@ class GenericCSRWriterInstruction_t0(GenericCSRWriterInstruction, BaseInstructio
         self.rd = rd
         self.rs1 = rs1
         self.csr_instr = CSRRegInstruction_t0(fuzzerstate,"csrrw", rd, rs1, csr_id)
-        assert self.addr == self.csr_instr.addr
+        assert self.paddr == self.csr_instr.paddr
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         self.csr_instr.execute(taint_en,is_spike_resolution)
@@ -798,7 +834,7 @@ class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstructio
 
         # The pc will not be correct during in-situ simulation as MEPC is only determined later.
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val()
-        print(f"Descending from {self.fuzzerstate.privilegestate.privstate.name} to {mpp.name}")
+        # print(f"Descending from {self.fuzzerstate.privilegestate.privstate.name} to {mpp.name}")
         self.fuzzerstate.privilegestate.privstate = mpp
         self.fuzzerstate.advance_minstret()
 
@@ -823,7 +859,7 @@ class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstructio
 
         # The pc will not be correct during in-situ simulation as SEPC is only determined later.
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].get_val()
-        print(f"Descending from {self.fuzzerstate.privilegestate.privstate.name} to {spp.name}")
+        # print(f"Descending from {self.fuzzerstate.privilegestate.privstate.name} to {spp.name}")
         self.fuzzerstate.privilegestate.privstate = spp
         self.fuzzerstate.advance_minstret()
 
@@ -837,16 +873,17 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
 
         medeleg = self.fuzzerstate.csrfile.regs[CSR_IDS.MEDELEG].get_val()
         mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
-        mstatus_cpy = mstatus
         
         if (medeleg>>ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)&1:
-            if self.fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE:
+            if self.priv_level != PrivilegeStateEnum.MACHINE: # User and supervisor can delegate to supervisor.
                 self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
-                self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.addr)
+                if USE_MMU:
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr)
+                else:
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.paddr)
                 sie = (mstatus>>MSTATUS_SIE_BIT)&1
 
                 mstatus &= ~(1<<MSTATUS_SPP_BIT)
-                # print(f"Priv at time of trap {self.fuzzerstate.privilegestate.privstate.name}")
                 mstatus |= (self.fuzzerstate.privilegestate.privstate&1 << MSTATUS_SPP_BIT) # set spp to current priv, TODO make sure priveleges work in final sim too
 
                 mstatus &= ~(1<<MSTATUS_SPIE_BIT) # set spie to sie
@@ -856,13 +893,15 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
                 self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
                 target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
                 self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.SUPERVISOR
-            else: # Cant delegate so supervisor if in machine mode.
+            else: # Cant delegate to supervisor if in machine mode.
                 self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
-                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+                if USE_MMU:
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr)
+                else:
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.paddr)
                 sie = (mstatus>>MSTATUS_SIE_BIT)&1
 
                 mstatus &= ~(1<<MSTATUS_SPP_BIT)
-                # print(f"Priv at time of trap {self.fuzzerstate.privilegestate.privstate.name}")
                 mstatus |= (self.fuzzerstate.privilegestate.privstate&1 << MSTATUS_SPP_BIT) # set spp to current priv, TODO make sure priveleges work in final sim too
 
                 mstatus &= ~(1<<MSTATUS_SPIE_BIT) # set spie to sie
@@ -873,18 +912,16 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
                 target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
                 self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.SUPERVISOR
 
-            # print(f"{self.get_str()} delegated to supervisor, sepc set to {hex(self.addr)}, {'scause' if self.instr.instr_str != 'ebreak' else 'mcause' } set to {hex(self.exception_op_type)}, mepc is {hex(self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val())}")
         else:
-            self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+            if USE_MMU:
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr)
+            else:
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.paddr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
             target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
             self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.MACHINE
-            # print(f"{self.get_str()} setting mepc to {hex(self.addr)}, mcause to {hex(self.exception_op_type)}")
-            # print(f"Going to {hex(target_pc)}")
-
         self.fuzzerstate.curr_pc = target_pc
 
-        # print(f"{self.get_str()}: mstatus: {hex(mstatus_cpy)} -> {hex(mstatus)}, medeleg: {hex(medeleg)}")
 
 class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = True):
@@ -895,10 +932,14 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
         mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
         mstatus_cpy = mstatus
         pp = self.fuzzerstate.privilegestate.privstate
-        if (medeleg>>self.exception_op_type)&1:
+        if (medeleg>>self.exception_op_type)&1: # If its delegated
             if self.fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE:
                 self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(self.exception_op_type)
-                self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.addr)
+                if USE_MMU:
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr)
+                else:
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.paddr)
+
                 sie = (mstatus>>MSTATUS_SIE_BIT)&1
 
                 mstatus &= ~(1<<MSTATUS_SPP_BIT)
@@ -914,7 +955,10 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
                 self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.SUPERVISOR
             else: # Cant delegate so supervisor if in machine mode.
                 self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
-                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+                if USE_MMU:
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr)
+                else:
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.paddr)
                 sie = (mstatus>>MSTATUS_SIE_BIT)&1
 
                 mstatus &= ~(1<<MSTATUS_SPP_BIT)
@@ -931,7 +975,10 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
 
             # print(f"{self.get_str()} delegated to supervisor, sepc set to {hex(self.addr)}, {'scause' if self.instr.instr_str != 'ebreak' else 'mcause' } set to {hex(self.exception_op_type)}, mepc is {hex(self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val())}")
         else:
-            self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+            if USE_MMU:
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr)
+            else:
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.paddr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
             target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
             self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.MACHINE
@@ -954,7 +1001,7 @@ class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
         if (medeleg>>self.exceptioncause_val)&1:
             if self.fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE:
                 self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(self.exceptioncause_val)
-                self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.addr)
+                self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.paddr)
                 sie = (mstatus>>MSTATUS_SIE_BIT)&1
 
                 mstatus &= ~(1<<MSTATUS_SPP_BIT)
@@ -970,7 +1017,7 @@ class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
                 self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.SUPERVISOR
             else: # Cant delegate so supervisor if in machine mode.
                 self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
-                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.paddr)
                 sie = (mstatus>>MSTATUS_SIE_BIT)&1
 
                 mstatus &= ~(1<<MSTATUS_SPP_BIT)
@@ -987,7 +1034,7 @@ class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
 
             # print(f"{self.get_str()} delegated to supervisor, sepc set to {hex(self.addr)}, {'scause' if self.instr.instr_str != 'ebreak' else 'mcause' } set to {hex(self.exception_op_type)}, mepc is {hex(self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val())}")
         else:
-            self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.addr)
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.paddr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
             target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
             self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.MACHINE
@@ -1018,21 +1065,21 @@ class RawDataWord_t0(RawDataWord):
         return self.wordval_t0
     
     def get_str(self, is_spike_resolution: bool = True):
-        return f"{hex(self.addr)}: {hex(self.wordval)}, {hex(self.wordval_t0)} (RAW DATA)"
+        return f"{hex(self.paddr)}: {hex(self.wordval)}, {hex(self.wordval_t0)} (RAW DATA)"
     
     def execute(self, taint_en, is_spike_resolution: bool = True):
         return
 
     def write(self, is_spike_resolution: bool = False):
         if DO_ASSERT:
-            assert self.addr >= SPIKE_STARTADDR
-            assert self.addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
+            assert self.paddr >= SPIKE_STARTADDR
+            assert self.paddr < SPIKE_STARTADDR + self.fuzzerstate.memsize
         super().write(is_spike_resolution)
         self.write_t0(is_spike_resolution)
 
     def write_t0(self, is_spike_resolution: bool = False):
         if DO_ASSERT:
-            assert self.addr >= SPIKE_STARTADDR
-            assert self.addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
-        self.fuzzerstate.memview.write_t0(self.addr, self.gen_bytecode_int_t0(is_spike_resolution), 4)
+            assert self.paddr >= SPIKE_STARTADDR
+            assert self.paddr < SPIKE_STARTADDR + self.fuzzerstate.memsize
+        self.fuzzerstate.memview.write_t0(self.paddr, self.gen_bytecode_int_t0(is_spike_resolution), 4)
 

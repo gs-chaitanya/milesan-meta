@@ -137,9 +137,11 @@ def gen_regdump_reqs_all_rds(fuzzerstate, max_bb_id: int = None, max_instr_id: i
             if max_instr_id is not None and bb_instr_id >= max_instr_id and max_bb_id is not None and bb_id >= max_bb_id:
                 break
             curr_addr = bb_start_addr + 4*bb_instr_id # NO_COMPRESSED
-            assert bb_instr.addr == curr_addr + SPIKE_STARTADDR, f"Address mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}"
+            assert bb_instr.paddr == curr_addr + SPIKE_STARTADDR, f"Paddress mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}"
             if USE_MMU:
                 curr_addr = phys2virt(curr_addr, curr_priv_state, curr_addr_layout, bb_instr.fuzzerstate, False)
+                assert bb_instr.vaddr == curr_addr + SPIKE_STARTADDR, f"Vaddress mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}  ({curr_priv_state.name}/{curr_addr_layout})"
+
             assert curr_addr not in ret
             [ret.append(d) for d in get_dumps_from_instr(bb_instr, curr_addr)]
             curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)
@@ -148,9 +150,10 @@ def gen_regdump_reqs_all_rds(fuzzerstate, max_bb_id: int = None, max_instr_id: i
             for bb_instr_id, bb_instr in enumerate(fuzzerstate.ctxsv_bbs[ctxsv_bb_id]):
                 # print(f"{bb_instr.get_str()} (ctx)")
                 curr_addr = fuzzerstate.ctxsv_bb_start_addr_seq[ctxsv_bb_id] + 4*bb_instr_id # NO_COMPRESSED
-                assert bb_instr.addr == curr_addr + SPIKE_STARTADDR, f"Address mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}"
+                assert bb_instr.paddr == curr_addr + SPIKE_STARTADDR, f"Paddress mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}"
                 if USE_MMU:
                     curr_addr = phys2virt(curr_addr, curr_priv_state, curr_addr_layout, bb_instr.fuzzerstate, False)
+                    assert bb_instr.vaddr == curr_addr + SPIKE_STARTADDR, f"Vaddress mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)} ({curr_priv_state.name}/{curr_addr_layout})"
                 assert curr_addr not in ret
                 [ret.append(d) for d in get_dumps_from_instr(bb_instr, curr_addr)]
                 curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)

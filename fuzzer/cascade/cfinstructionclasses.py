@@ -8,6 +8,7 @@ from params.runparams import DO_ASSERT, PRINT_CHECK_REGS, PRINT_REG_TRACEBACK, P
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
 from cascade.util import CFInstructionClass
+from cascade.mmu_utils import phys2virt
 from rv.asmutil import li_into_reg, twos_complement, to_unsigned, INSTR_FUNCS, INSTR_FUNCS_T0
 from rv.rvprivileged import rvprivileged_mret, rvprivileged_sret
 from rv.zifencei import *
@@ -32,14 +33,14 @@ import numpy as np
 
 def compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val):
     if addr is None: # if no address is given, use address of last instruction in last basic block.
-        addr = fuzzerstate.instr_objs_seq[-1][-1].addr
+        addr = fuzzerstate.instr_objs_seq[-1][-1].paddr
 
     last_instr = None
     for bb_instrs in fuzzerstate.instr_objs_seq:
         for instr_obj in bb_instrs:
             if PRINT_REG_TRACEBACK:
                 instr_obj.print()
-            if instr_obj.addr == addr: # reached this instruction
+            if instr_obj.paddr == addr: # reached this instruction
                 assert last_instr is not None, f"Traceback computation for instruction at {hex(addr)} failed: No previous instruction modifying register {ABI_INAMES[reg_id]} with mismatch {hex(fuzzerstate.intregpickstate.regs[reg_id].get_val())} =! {hex(correct_val)} found."
                 return last_instr # reached address of calling instruction
             elif hasattr(instr_obj, "rd") and instr_obj.rd == reg_id:
@@ -57,7 +58,7 @@ def filter_reg_traceback(reg_id, addr, fuzzerstate, correct_val, is_spike_resolu
     instr_stream = []
     for bb_instrs in reversed(fuzzerstate.instr_objs_seq):
         for instr_obj in reversed(bb_instrs):
-            if instr_obj.addr == last_instr.addr: # start collecting depending registers
+            if instr_obj.paddr == last_instr.paddr: # start collecting depending registers
                 instr_stream += [instr_obj]
                 if hasattr(instr_obj,"rs1"):
                     dep_regs |= {instr_obj.rs1}
@@ -101,7 +102,9 @@ def filter_reg_traceback(reg_id, addr, fuzzerstate, correct_val, is_spike_resolu
 
 class BaseInstruction:
     fuzzerstate = None
-    addr = None
+    paddr = None
+    if USE_MMU:
+        vaddr = None
     instr_str = None
     instr_type = CFInstructionClass.NONE
     instr_func = None
@@ -111,18 +114,32 @@ class BaseInstruction:
 
     def __init__(self, fuzzerstate, instr_str):
         assert fuzzerstate is not None
-        self.addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1]) + SPIKE_STARTADDR
         self.fuzzerstate = fuzzerstate
         self.instr_str = instr_str
         self.instr_func = INSTR_FUNCS[self.instr_str]
-        self.priv_level = fuzzerstate.privilegestate.privstate
-        self.va_layout = fuzzerstate.effective_curr_layout
+        self.reset_addr()
+
+    def reset_addr(self):
+        from cascade.spikeresolution import get_current_layout
+        if not len(self.fuzzerstate.instr_objs_seq[0]): # this is the first instruction, special case.
+            self.priv_level = PrivilegeStateEnum.MACHINE
+            self.va_layout = -1
+        else:
+            if len(self.fuzzerstate.instr_objs_seq[-1]):
+                last_instr = self.fuzzerstate.instr_objs_seq[-1][-1] # We need the layout from the previous instruction
+            else: # In case its the first instruciton of a block.
+                last_instr = self.fuzzerstate.instr_objs_seq[-2][-1] # We need the layout from the previous instruction
+
+            self.va_layout, self.priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
+        
+        self.paddr = self.fuzzerstate.curr_bb_start_addr + 4*len(self.fuzzerstate.instr_objs_seq[-1]) + SPIKE_STARTADDR
+        self.vaddr = phys2virt(self.paddr, self.priv_level, self.va_layout,self.fuzzerstate,absolute_addr=False)
 
     def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         print(self.get_str(is_spike_resolution))
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str}"
 
     def execute(self, taint_en, is_spike_resolution: bool = True):
         raise Exception(f"Function execute() called on abstract class BaseInstruction {self.get_str(is_spike_resolution)}.")
@@ -131,17 +148,19 @@ class BaseInstruction:
         for reg_id,reg_val in reg_cmp.items():
             if reg_id not in self.fuzzerstate.intregpickstate.regs:
                 if PRINT_CHECK_REGS:
-                    print(f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: Ignoring register value: {ABI_INAMES[reg_id]}")
+                    print(f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: Ignoring register value: {ABI_INAMES[reg_id]}")
                 continue
             if PRINT_CHECK_REGS:
-                print(f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
+                print(f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
-            assert not mismatch, f"{self.get_str()}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.addr,self.fuzzerstate,reg_val).get_str()}"
+            assert not mismatch, f"{self.get_str()}: Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.paddr,self.fuzzerstate,reg_val).get_str()}"
 
     def assert_addr(self):
         if ASSERT_ADDR:
-            medeleg = self.fuzzerstate.csrfile.regs[CSR_IDS.MEDELEG].get_val()
-            assert self.addr == self.fuzzerstate.curr_pc, f"Instruction address does not match pc: {self.get_str()}, {hex(self.fuzzerstate.curr_pc)}, medeleg: {hex(medeleg)}"
+            if USE_MMU:
+                assert self.vaddr == self.fuzzerstate.curr_pc, f"Instruction  vaddress does not match pc: {self.get_str()}, {hex(self.fuzzerstate.curr_pc)}"
+            else:
+                assert self.paddr == self.fuzzerstate.curr_pc, f"Instruction paddress does not match pc: {self.get_str()}, {hex(self.fuzzerstate.curr_pc)}"
 
 class CFInstruction(BaseInstruction):
     # Could be any instruction
@@ -216,7 +235,7 @@ class R12DInstruction(CFInstruction):
         self.rd =  rd
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -303,7 +322,7 @@ class ImmRdInstruction(ImmInstruction):
         # self.compute_taints()
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -340,7 +359,7 @@ class RegImmInstruction(ImmInstruction):
             assert False
         
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def set_bytecode(self,bytecode):
         has_shamt = self.instr_str in RegImmShiftInstructions
@@ -399,7 +418,7 @@ class BranchInstruction(ImmInstruction):
         self.plan_taken = plan_taken
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, {hex(self.imm)}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, {hex(self.imm)}"
 
     # Choose an opcode that, given the values of rs1 and rs2, will comply with the required takenness
     def select_suitable_opcode(self, rs1_content: int, rs2_content: int):
@@ -459,7 +478,7 @@ class JALInstruction(ImmInstruction):
         self.rd  = rd
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -486,7 +505,7 @@ class JALRInstruction(ImmInstruction):
         self.to_new_layout = to_new_layout
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -504,7 +523,7 @@ class SpecialInstruction(CFInstruction):
         self.rs2 = rs2
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -527,7 +546,7 @@ class EcallEbreakInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        
+
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
         if self.instr_str == "ecall":
@@ -537,6 +556,7 @@ class EcallEbreakInstruction(CFInstruction):
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
+
 
 # Integer load instructions
 IntLoadInstructions = ("lb", "lh", "lw", "lbu", "lhu", "lwu", "ld")
@@ -556,7 +576,7 @@ class IntLoadInstruction(ImmInstruction):
         self.producer_id = producer_id
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.imm}({ABI_INAMES[self.rs1]}) "
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.imm}({ABI_INAMES[self.rs1]}) "
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -597,7 +617,7 @@ class IntStoreInstruction(ImmInstruction):
         self.producer_id = producer_id
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
@@ -624,9 +644,9 @@ class RegdumpInstruction(IntStoreInstruction):
 
     def get_str(self, is_spike_resolution):
         if not is_spike_resolution:
-            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
         else:
-            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: nop"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: nop"
 
 
 ###
@@ -1168,7 +1188,7 @@ class CSRRegInstruction(CSRInstruction):
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
     def get_str(self, is_spike_resolution: bool = True):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {ABI_INAMES[self.rs1]}"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {ABI_INAMES[self.rs1]}"
 
 # CSR operations with immediate
 CSRImmInstructions = "csrrwi", "csrrsi", "csrrci"
@@ -1197,8 +1217,8 @@ class CSRImmInstruction(CSRInstruction):
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
-    def get_str(self, is_spike_resolution: bool = True):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {hex(self.uimm)}"
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {hex(self.uimm)}"
 
 ###
 # Placeholder instructions
@@ -1225,16 +1245,22 @@ class PlaceholderProducerInstr0(BaseInstruction):
         self.spike_resolution_offset = None
         self.rtl_offset = None
 
-    def get_str(self, is_spike_resolution: bool = False):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         if is_spike_resolution:
             if self.spike_resolution_offset is not None:
-                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
-            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
+                spike_res_off = self.spike_resolution_offset
+                if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1: 
+                    spike_res_off = (self.spike_resolution_offset | 0x80000000) & 0xffffffff # TODO double check if the check of the 64th bit is valid
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(spike_res_off, self.fuzzerstate.is_design_64bit), False)[0])}"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
         else:
             if self.rtl_offset is not None:
-                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[0])}"
+                rtl_off = self.rtl_offset
+                if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1:
+                    rtl_off = (self.rtl_offset | 0x80000000) & 0xffffffff # TODO double check if the check of the 64th bit is valid
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(rtl_off, self.fuzzerstate.is_design_64bit), False)[0])}"
             else:
-                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using lui
@@ -1266,16 +1292,22 @@ class PlaceholderProducerInstr1(BaseInstruction):
         self.rtl_offset = None
         
 
-    def get_str(self, is_spike_resolution: bool = True):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         if is_spike_resolution:
             if self.spike_resolution_offset is not None:
-                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.spike_resolution_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
-            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, [undetermined]"
+                spike_res_off = self.spike_resolution_offset
+                if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1:
+                    spike_res_off = (self.spike_resolution_offset | 0x80000000) & 0xffffffff
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(spike_res_off, self.fuzzerstate.is_design_64bit), False)[1])}"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rd]}, [undetermined]"
         else:
             if self.rtl_offset is not None:
-                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(self.rtl_offset, self.fuzzerstate.is_design_64bit), False)[1])}"
+                rtl_off = self.rtl_offset
+                if USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1: 
+                    rtl_off = (self.rtl_offset | 0x80000000) & 0xffffffff # TODO double check if the check of the 64th bit is valid
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rd]}, {hex(li_into_reg(to_unsigned(rtl_off, self.fuzzerstate.is_design_64bit), False)[1])}"
             else:
-                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, (None)"
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rd]}, (None)"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # If this is the spike resolution, then load the target address using addi
@@ -1305,7 +1337,12 @@ class PlaceholderPreConsumerInstr(BaseInstruction):
         self.producer_id = producer_id
 
     def get_str(self, is_spike_resolution: bool = False):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rdep]}, {ABI_INAMES[RDEP_MASK_REGISTER_ID]}"
+        if USE_MMU and self.fuzzerstate.is_design_64bit and self.is_rprod and self.va_layout != -1:
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rdep]},  {ABI_INAMES[self.rdep]}, {ABI_INAMES[RPROD_MASK_REGISTER_ID]}"
+        elif USE_MMU and self.fuzzerstate.is_design_64bit and self.va_layout != -1:
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rdep]},  {ABI_INAMES[self.rdep]}, {ABI_INAMES[RDEP_MASK_REGISTER_ID_VIRT]}"
+        else:
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rdep]},  {ABI_INAMES[self.rdep]}, {ABI_INAMES[RDEP_MASK_REGISTER_ID]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # Reduce the size of the rdep id to 32 bits
@@ -1340,9 +1377,12 @@ class PlaceholderConsumerInstr(BaseInstruction):
 
     def get_str(self, is_spike_resolution: bool = False):
         if is_spike_resolution:
-            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[RELOCATOR_REGISTER_ID]}"
+            if USE_MMU and self.va_layout != -1:
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: nop (PlaceholderConsumerInstr)"
+            else:
+                return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[RELOCATOR_REGISTER_ID]}"
         else:
-            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rprod]}, {ABI_INAMES[self.rdep]}"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rdep]}, {ABI_INAMES[self.rprod]}"
         
     def gen_bytecode_int(self, is_spike_resolution: bool):
         if DO_ASSERT:
@@ -1369,7 +1409,8 @@ class RawDataWord:
     def __init__(self, fuzzerstate, wordval: int, signed: bool = False):
         
         self.fuzzerstate = fuzzerstate
-        self.addr = fuzzerstate.curr_ctxsv_bb_start_addr + 4*len(fuzzerstate.ctxsv_bbs[-1]) + SPIKE_STARTADDR
+        self.paddr = fuzzerstate.curr_ctxsv_bb_start_addr + 4*len(fuzzerstate.ctxsv_bbs[-1]) + SPIKE_STARTADDR
+        self.vaddr = phys2virt(self.paddr)
         if DO_ASSERT:
             if signed:
                 assert wordval >= -(1 << 31)
@@ -1386,13 +1427,13 @@ class RawDataWord:
         return self.wordval
     
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.addr)}: {hex(self.wordval)} (RAW DATA)"
+        return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: {hex(self.wordval)} (RAW DATA)"
 
     def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         print(self.get_str(is_spike_resolution))
 
     def write(self, is_spike_resolution: bool = False):
-        self.fuzzerstate.memview.write(self.addr, self.gen_bytecode_int(is_spike_resolution), 4)
+        self.fuzzerstate.memview.write(self.paddr, self.gen_bytecode_int(is_spike_resolution), 4)
 
 ###
 # For exceptions
@@ -1412,7 +1453,12 @@ class ExceptionInstruction(BaseInstruction):
         self.producer_id = producer_id
         self.va_layout_after_op = fuzzerstate.effective_curr_layout # The layout that is entered after the exception is raised.
         self.priv_level_after_op = fuzzerstate.privilegestate.privstate # The privstate has already been changed at this point.
-        self.old_privilege = fuzzerstate.privilegestate.prev_privstate # The privstate before it was changed i.e. at which the exception is raised during execution.
+        # self.old_privilege = fuzzerstate.privilegestate.prev_privstate # The privstate before it was changed i.e. at which the exception is raised during execution.
+        # if len(self.fuzzerstate.instr_objs_seq[-1]):
+        #     self.old_privelege = self.fuzzerstate.instr_objs_seq[-1][-1].priv_level
+        # else: # In case its the first instruciton of a block.
+        #     self.old_privelege = self.fuzzerstate.instr_objs_seq[-2][-1].priv_level
+
 
 class SimpleIllegalInstruction(ExceptionInstruction):
     def __init__(self, fuzzerstate, is_mtvec):
@@ -1422,7 +1468,7 @@ class SimpleIllegalInstruction(ExceptionInstruction):
         return 0x00000000
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        return f"({self.priv_level.name}/{self.va_layout}): unimp (SimpleExceptionInstruction)"
+            return f"({self.priv_level.name}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}: unimp (SimpleIllegalInstruction)"
 
 
 # Exception that encapsulates an instruction that causes an exception, such as a misaligned JAL.
@@ -1432,7 +1478,8 @@ class SimpleExceptionEncapsulator(ExceptionInstruction):
         if DO_ASSERT:
             assert producer_id is None, "SimpleExceptionEncapsulator does not support a producer_id. If we want to support it, then we need to adapt gen_producer_id_to_tgtaddr in basicblock.py."
             assert exception_op_type in ExceptionCauseVal
-            assert self.addr == instr.addr
+            assert self.paddr == instr.paddr
+
         self.instr = instr
         self.exception_op_type = exception_op_type
 
@@ -1441,6 +1488,8 @@ class SimpleExceptionEncapsulator(ExceptionInstruction):
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{self.instr.get_str(is_spike_resolution)} (SimpleExceptionInstruction)"
+
+
 
 # This is a wrapper class for a misaligned load or store.
 # As opposed to usual load and store operations used above, this class chooses a consumed register by itself.
@@ -1587,7 +1636,7 @@ class MstatusWriterInstruction(BaseInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
 
-    def get_str(self, is_spike_resolution: bool = False):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return self.csr_instr.get_str() + f" ({self.instr_str})"
 
 
@@ -1602,12 +1651,12 @@ class TvecWriterInstruction(BaseInstruction):
 
         csr_id = CSR_IDS.MTVEC if is_mtvec else CSR_IDS.STVEC
         self.csr_instr = CSRRegInstruction(fuzzerstate, "csrrw", rd, rs1, csr_id)
-        assert self.addr == self.csr_instr.addr
+        assert self.paddr == self.csr_instr.paddr
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
 
-    def get_str(self, is_spike_resolution: bool = False):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return self.csr_instr.get_str() + f" ({self.instr_str})"
 
 
@@ -1621,12 +1670,12 @@ class EPCWriterInstruction(BaseInstruction):
 
         csr_id = CSR_IDS.MEPC if is_mepc else CSR_IDS.SEPC
         self.csr_instr = CSRRegInstruction(fuzzerstate, "csrrw", rd, rs1, csr_id)
-        assert self.addr == self.csr_instr.addr
+        assert self.paddr == self.csr_instr.paddr
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
     
-    def get_str(self, is_spike_resolution: bool = False):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return self.csr_instr.get_str() + f" ({self.instr_str})"
 
 
@@ -1647,18 +1696,18 @@ class GenericCSRWriterInstruction(BaseInstruction):
         assert val_to_write_cpu == val_to_write_spike
 
         self.csr_instr = CSRRegInstruction(fuzzerstate,"csrrw", rd, rs1, csr_id)
-        assert self.addr == self.csr_instr.addr
+        assert self.paddr == self.csr_instr.paddr
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
     
-    def get_str(self, is_spike_resolution: bool = False):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return self.csr_instr.get_str() + f" ({self.instr_str})"
 
 
 class PrivilegeDescentInstruction(BaseInstruction):
     def __init__(self, fuzzerstate,is_mret: bool):
-        super().__init__(fuzzerstate, 'PrivilegeDescentInstruction')
+        super().__init__(fuzzerstate, "mret" if is_mret else "sret")
         self.is_mret = is_mret
         self.va_layout_after_op = fuzzerstate.effective_curr_layout # The layout that is entered after we descend privilege.
         self.priv_level_after_op = fuzzerstate.privilegestate.privstate # The privstate has already been changed at this point.
@@ -1668,5 +1717,6 @@ class PrivilegeDescentInstruction(BaseInstruction):
             return rvprivileged_mret()
         else:
             return rvprivileged_sret()
+
 
 

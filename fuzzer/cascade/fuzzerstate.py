@@ -184,6 +184,7 @@ class FuzzerState:
 
         # Layout trackers, updated during generation
         self.effective_curr_layout = -1 # The effective layout id, -1 is bare (is -1 if the current mode is machine)
+        self.effective_prev_layout = None
         self.real_curr_layout = -1 # The true layout id
         self.target_layout = None # The next layout
         
@@ -316,11 +317,12 @@ class FuzzerState:
         self.csrfile.regs[CSR_IDS.MINSTRET].set_val(curr_val+1)
 
     def append_and_execute_instr(self, instr, execute: bool= False, insert_regdump: bool = INSERT_REGDUMPS):
+        instr.reset_addr()
         instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
         if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
             instr.print(is_spike_resolution=True)
         self.instr_objs_seq[-1].append(instr)
-        if insert_regdump:
+        if insert_regdump: # TODO for vaddr, we need to bring the REGDUMP_REGISTER to the appropriate state for each layout.
             if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS:
                 store_instr = RegdumpInstruction_t0(self,"sd" if self.is_design_64bit else "sw", REGDUMP_REGISTER_ID, instr.rd,0,-1)
                 store_instr.execute(taint_en=self.taint_en, is_spike_resolution=True)
@@ -336,7 +338,6 @@ class FuzzerState:
                     return 12
                 return 8
         return 4
-
 
     def dump_instructions_t0(self):
         insts = {}

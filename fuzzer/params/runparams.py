@@ -1,5 +1,5 @@
 import os
-
+from params.fuzzparams import USE_MMU
 # tmpdir
 if "CASCADE_ENV_SOURCED" not in os.environ:
     raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
@@ -40,6 +40,7 @@ PRINT_FILTERED_REG_TRACEBACK = True
 PRINT_ENVIRONMENT = True
 
 INSERT_REGDUMPS = False # Speculative bugs will likely diappear when enabled.
+assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
 INSERT_FENCE = False # The stores should become architectually visible in order, so this should not be necessary
 
 PRINT_REGISTER_VALIDATION = False
@@ -53,7 +54,7 @@ PRINT_MEM_STORES = False
 PRINT_MEM_STORES_T0 = False
 
 GET_DATA = False
-DEBUG_PRINT = True
+DEBUG_PRINT = False
 
 ASSERT_ADDR = True
 

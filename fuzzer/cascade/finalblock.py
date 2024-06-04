@@ -187,5 +187,5 @@ def finalblock(fuzzerstate, design_name: str):
 def finalblock_spike_resolution(fuzzerstate):
     # Infinite loop in the end of the simulation
     jal_instr = JALInstruction(fuzzerstate,"jal", 0, 0)
-    jal_instr.addr = fuzzerstate.final_bb_base_addr
+    jal_instr.paddr = fuzzerstate.final_bb_base_addr
     return [jal_instr]

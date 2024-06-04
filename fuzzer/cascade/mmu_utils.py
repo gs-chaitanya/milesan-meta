@@ -1,11 +1,10 @@
 from common.spike import SPIKE_STARTADDR
 # from cascade.cfinstructionclasses import R12DInstruction, ImmRdInstruction, RegImmInstruction
-from cascade.cfinstructionclasses_t0 import R12DInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0
 from rv.asmutil import li_into_reg
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, PROBA_ENTANGLE_LAYOUT, PROBA_SAME_BASE_PT
-from params.runparams import DEBUG_PRINT
+from params.runparams import DEBUG_PRINT, INSERT_REGDUMPS
 from cascade.privilegestate import PrivilegeStateEnum
-from common.designcfgs import get_design_stop_sig_addr, get_design_reg_dump_addr
+from common.designcfgs import get_design_stop_sig_addr, get_design_reg_dump_addr, get_design_reg_stream_addr
 import random
 from math import ceil, floor
 
@@ -42,8 +41,22 @@ def phys2virt(paddr, priv_level, va_layout, fuzzerstate, absolute_addr = True):
             vaddr = paddr - (SPIKE_STARTADDR - fuzzerstate.pagetablestate.vmem_base_list[va_layout][priv_level])
         return vaddr
 
+# @brief reciprocal of above.
+def virt2phys(vaddr, priv_level, va_layout, fuzzerstate, absolute_addr = True):
+    #bare
+    if va_layout == -1: 
+        return vaddr
+    else:
+        if absolute_addr:
+            paddr = vaddr - fuzzerstate.pagetablestate.vmem_base_list[va_layout][priv_level]
+        else:
+            paddr = vaddr + (SPIKE_STARTADDR - fuzzerstate.pagetablestate.vmem_base_list[va_layout][priv_level])
+        return paddr
+
 # @brief Stores a 64 bit value into a 64 bit register. 
 def li_doubleword(value, rd, tmp, fuzzerstate, is_rd_nonpickable_ok: bool = False):
+    from cascade.cfinstructionclasses_t0 import R12DInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0
+
     instrs = []
     imm_0_to_31 = value & 0xffffffff
     imm_63_to_31 = value >> 32
@@ -85,7 +98,6 @@ class PageTablesGen:
         self.page_size_per_layout = [] # The page size for all layout
         self.all_pt_entries = [] # DATA BLOCK, saves all of the PTEs for all layouts, [[[ptel0], [ptel1], ...] ...]
         self.layout_is_global = [] # If the layout has global mappings, TLB entries need to be flushed even if ASID changes
-
         self.common_base_page = None #dict of layout with a common base page
 
         if not is_design_64bit:
@@ -273,6 +285,7 @@ class PageTablesGen:
             # Compute the regdump and stopsig virtual addresses before adding the start address offset
             regdump_vaddr                               = start_vmem[PrivilegeStateEnum.USER] + (n_entries_per_level[-1] * 2) * page_size + (self.regdump_addr & (page_size - 1))
             stopsig_vaddr                               = start_vmem[PrivilegeStateEnum.USER] + ((n_entries_per_level[-1] * 2) + 1) * page_size + (self.stopsig_addr & (page_size - 1))
+
             start_vmem[PrivilegeStateEnum.USER]         += (SPIKE_STARTADDR - mem_start) # Add offset if the pages start at address 0
             # Add the offset to get the base for the supervisor mappings
             start_vmem[PrivilegeStateEnum.SUPERVISOR]   = start_vmem[PrivilegeStateEnum.USER] + n_entries_per_level[-1] * page_size
@@ -284,8 +297,12 @@ class PageTablesGen:
                 print(f"SUPERVISOR: {hex(start_vmem[PrivilegeStateEnum.SUPERVISOR])}")
                 print(f"regdump_vaddr: {hex(regdump_vaddr)}")
                 print(f"stopsig_vaddr: {hex(stopsig_vaddr)}")
+                if INSERT_REGDUMPS:
+                    print(f"regstream_vaddr: {hex(regstream_vaddr)}")
+
 
             # Set variables for bookeeping
+
             self.finalblock_sig_vaddr.append((regdump_vaddr, stopsig_vaddr))
             self.n_entries_per_level.append(n_entries_per_level)
             self.vmem_base_list.append(start_vmem)

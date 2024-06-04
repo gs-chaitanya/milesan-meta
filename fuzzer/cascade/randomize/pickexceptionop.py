@@ -119,12 +119,12 @@ def pick_illegal_instruction(is_mtvec, fuzzerstate):
             ]
     elif fuzzerstate.privilegestate.prev_privstate == PrivilegeStateEnum.SUPERVISOR:
         candidate_instructions = [
-            SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, PrivilegeDescentInstruction(True), ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
+            SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, PrivilegeDescentInstruction(fuzzerstate, True), ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
             SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, CSRRegInstruction_t0(fuzzerstate,"csrrw", random.randrange(fuzzerstate.num_pickable_regs), random.randrange(fuzzerstate.num_pickable_regs), random.choice(INTERESTING_CSRS_INACCESSIBLE_FROM_SUPERVISOR)),  ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
         ]
     elif fuzzerstate.privilegestate.prev_privstate == PrivilegeStateEnum.USER:
         candidate_instructions = [
-            SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, random.choice([PrivilegeDescentInstruction(True), PrivilegeDescentInstruction(False)]), ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
+            SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, random.choice([PrivilegeDescentInstruction(fuzzerstate, True), PrivilegeDescentInstruction(fuzzerstate, False)]), ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
             SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, CSRRegInstruction_t0(fuzzerstate,"csrrw", random.randrange(fuzzerstate.num_pickable_regs), random.randrange(fuzzerstate.num_pickable_regs), random.choice(INTERESTING_CSRS_INACCESSIBLE_FROM_USER)),  ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
         ]
     else:
@@ -163,6 +163,8 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
 
     # Update the privilege state
     fuzzerstate.privilegestate.prev_privstate = fuzzerstate.privilegestate.privstate
+    # fuzzerstate.effective_prev_layout = fuzzerstate.effective_curr_layouts
+
     if is_mtvec:
         fuzzerstate.privilegestate.privstate = PrivilegeStateEnum.MACHINE
         fuzzerstate.effective_curr_layout = -1

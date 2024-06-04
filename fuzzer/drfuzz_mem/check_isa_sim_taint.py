@@ -42,9 +42,9 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     pc_reg_pairs = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
     for req, regval in zip(expected_regvals[2],expected_regvals[3]):
         pc_reg_pairs[req[0] + SPIKE_STARTADDR][req[2]] = regval
-
+        # print(f"{hex(req[0] + SPIKE_STARTADDR)}: {ABI_INAMES[req[2]]} = {hex(regval)}")
     expected_intregvals = expected_regvals[0]
-
+    
     env = fuzzerstate.setup_env(interm_elfpath if USE_SPIKE_INTERM_ELF else rtl_elfpath,seed)
 
     fuzzerstate.dump_memview_t0()
@@ -58,14 +58,17 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     try:
         for bb_id, bb_instrs in enumerate(fuzzerstate.instr_objs_seq):
             for next_instr in bb_instrs:
+                addr = next_instr.paddr if not USE_MMU else next_instr.vaddr
+                # RTL SIM CHECK
                 if isinstance(next_instr, RegdumpInstruction_t0) and INSERT_REGDUMPS:
                     if not USE_SPIKE_INTERM_ELF:
                         next_instr.check_regs(regstream_rtl_val[regdump_idx]) # check value before executing instruction
                         if fuzzerstate.taint_en:
                             next_instr.check_regs_t0(regstream_rtl_val_t0[regdump_idx]) # check value before executing instruction
                         regdump_idx += 1
-                elif not is_placeholder(next_instr) and next_instr.addr in pc_reg_pairs: # TODO: why use is_placeholder? Values should also match here i think.
-                    next_instr.check_regs(pc_reg_pairs[next_instr.addr]) # check value before executing instruction. Skip if placeholder as their values change between spikeresol and final elf.
+                # SPIKE SIM CHECK
+                elif not is_placeholder(next_instr) and addr in pc_reg_pairs: # TODO: why use is_placeholder? Values should also match here i think.
+                    next_instr.check_regs(pc_reg_pairs[addr]) # check value before executing instruction. Skip if placeholder as their values change between spikeresol and final elf.
                 elif PRINT_SKIPPED_CHECKS:
                     print(f"Skipping check for {next_instr.get_str(USE_SPIKE_INTERM_ELF)}")
 
