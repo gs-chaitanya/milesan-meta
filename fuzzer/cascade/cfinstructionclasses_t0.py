@@ -874,6 +874,7 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
                 assert self.priv_level_after_op == PrivilegeStateEnum.SUPERVISOR
                 self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
                 if USE_MMU:
+                    # print(f"{self.get_str()} setting SEPC to {hex(self.vaddr)}")
                     self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr)
                 else:
                     self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.paddr)
@@ -934,6 +935,7 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
                 assert not self.is_mtvec, f"{self.get_str()}: medeleg {hex(medeleg)}"
                 self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(self.exception_op_type)
                 if USE_MMU:
+                    # print(f"{self.get_str()} setting SEPC to {hex(self.vaddr)}")
                     self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr)
                 else:
                     self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.paddr)
@@ -1002,7 +1004,11 @@ class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
                 assert self.priv_level_after_op ==  PrivilegeStateEnum.SUPERVISOR, f"{self.get_str()}: medeleg {hex(medeleg)}"
                 assert not self.is_mtvec, f"{self.get_str()}"
                 self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(self.exceptioncause_val)
-                self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.paddr)
+                if USE_MMU:
+                    # print(f"{self.get_str()} setting SEPC to {hex(self.vaddr)}")
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr)
+                else:
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.paddr)
                 sie = (mstatus>>MSTATUS_SIE_BIT)&1
 
                 mstatus &= ~(1<<MSTATUS_SPP_BIT)
@@ -1020,7 +1026,10 @@ class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
                 assert self.priv_level_after_op ==  PrivilegeStateEnum.MACHINE, f"{self.get_str()}: medeleg {hex(medeleg)}"
                 assert self.is_mtvec, f"{self.get_str()}"
                 self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
-                self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.paddr)
+                if USE_MMU:
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr)
+                else:
+                    self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.paddr)
                 sie = (mstatus>>MSTATUS_SIE_BIT)&1
 
                 mstatus &= ~(1<<MSTATUS_SPP_BIT)

@@ -66,6 +66,8 @@ class CSR(__Register):
 
     def set_val(self, val):
         self.val = self.mask&_get_writeable_csr_value(val,self.csr_mask,self.csr_type)
+        # if self.id == CSR_IDS.SEPC:
+        #     print(f"Setting {self.abi_name} to {hex(self.val)} ({hex(val)})")
 
     def set_val_t0(self, val_t0):
         if not ALLOW_CSR_TAINT:
@@ -144,11 +146,6 @@ class Medeleg_CSR(CSR):
     def get_val(self):
         val = super().get_val()
         return val
-
-
-
-
-
 
 
 class CheckableRegister(__Register):
