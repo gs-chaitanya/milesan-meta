@@ -93,26 +93,28 @@ class SStatus_CSR(CSR):
         super().__init__(csrfile,CSR_IDS.SSTATUS,csrfile.csr_masks[CSR_IDS.SSTATUS],CSR_TYPES[CSR_IDS.MSTATUS], val, val_t0)
     
     def set_val(self, val):
+        cpy_val = self.get_val()
         super().set_val(val)
         assert self.val&~(SSTATUS_START_VAL | SSTATUS_MASK) == 0 
         mstatus = self.csrfile.regs[CSR_IDS.MSTATUS].get_val()
         mstatus &= ~(SSTATUS_MASK & MAX_64b) # clear the bits
         mstatus |= (SSTATUS_MASK & self.val)
         self.csrfile.regs[CSR_IDS.MSTATUS].val = mstatus  # dont use setter here
-        # print(f"SSTATUS WRITE {hex(val)} -> SSTATUS is {hex(self.val)} -> MSTATUS IS {hex(mstatus)}")
+        # print(f"SSTATUS WRITE {hex(cpy_val)} -> SSTATUS is {hex(self.val)} -> MSTATUS IS {hex(mstatus)}")
 
 class MStatus_CSR(CSR):
     def __init__(self, csrfile, val: int = 0, val_t0: int = 0):
         super().__init__(csrfile,CSR_IDS.MSTATUS,csrfile.csr_masks[CSR_IDS.MSTATUS],CSR_TYPES[CSR_IDS.MSTATUS], val, val_t0)
 
     def set_val(self, val):
+        cpy_val = self.get_val()
         super().set_val(val)
         assert self.val&~(MSTATUS_START_VAL | MSTATUS_MASK) == 0 
         sstatus = self.csrfile.regs[CSR_IDS.SSTATUS].get_val()
         sstatus &= ~(SSTATUS_MASK & MAX_64b) # clear the bits
         sstatus |= (SSTATUS_MASK & self.val)
         self.csrfile.regs[CSR_IDS.SSTATUS].val = sstatus # dont use setter here
-        # print(f"MSTATUS WRITE  {hex(val)} -> MSTATUS is {hex(self.val)} -> SSTATUS IS {hex(sstatus)}")
+        # print(f"MSTATUS WRITE  {hex(cpy_val)} -> MSTATUS is {hex(self.val)} -> SSTATUS IS {hex(sstatus)}")
 
 class Medeleg_CSR(CSR):
     def __init__(self, csrfile, val: int = 0, val_t0: int = 0):

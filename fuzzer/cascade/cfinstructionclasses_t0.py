@@ -813,39 +813,39 @@ class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstructio
             self.execute_sret()
 
     def execute_mret(self):
-        mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
-        mstatus_t0 = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val_t0()
-        assert mstatus_t0 == 0
+        # mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
+        # mstatus_t0 = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val_t0()
+        # assert mstatus_t0 == 0
 
-        if not self.fuzzerstate.is_design_64bit:
-            mstatus |= self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUSH] << 32
+        # if not self.fuzzerstate.is_design_64bit:
+        #     mstatus |= self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUSH] << 32
 
-        mpp = PrivilegeStateEnum((mstatus>>MPP_BIT)&0x3) # MPP has two bits
-        assert self.priv_level_after_op == mpp, f"{self.get_str()}: Returning into wrong privelege: mpp is {mpp.name}, should be {self.priv_level_after_op.name}, mstatus is {hex(mstatus)}"
-        mpie = (mstatus>>MPIE_BIT)&1
+        # mpp = PrivilegeStateEnum((mstatus>>MPP_BIT)&0x3) # MPP has two bits
+        # assert self.priv_level_after_op == mpp, f"{self.get_str()}: Returning into wrong privelege: mpp is {mpp.name}, should be {self.priv_level_after_op.name}, mstatus is {hex(mstatus)}"
+        # mpie = (mstatus>>MPIE_BIT)&1
 
-        mstatus &= ~(0x3<<MPP_BIT) # set MPP bits to 0
-        mstatus = ((~(1<<MIE_BIT))&mstatus) | (mpie<<MIE_BIT)# set MIE bit to mpie
-        mstatus |= (1<<MPIE_BIT)# set MPIE bit to 1
-        # print(f"{self.get_str()} MRET mstatus: {hex(mstatus_cpy)} -> {hex(mstatus)}")
-        self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
+        # mstatus &= ~(0x3<<MPP_BIT) # set MPP bits to 0
+        # mstatus = ((~(1<<MIE_BIT))&mstatus) | (mpie<<MIE_BIT)# set MIE bit to mpie
+        # mstatus |= (1<<MPIE_BIT)# set MPIE bit to 1
+        # # print(f"{self.get_str()} MRET mstatus: {hex(mstatus_cpy)} -> {hex(mstatus)}")
+        # self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
 
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val()
         self.fuzzerstate.advance_minstret()
 
     def execute_sret(self):
-        sstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].get_val()
-        sstatus_t0 = self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].get_val_t0()
-        assert sstatus_t0 == 0
+        # sstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].get_val()
+        # sstatus_t0 = self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].get_val_t0()
+        # assert sstatus_t0 == 0
 
-        spp = PrivilegeStateEnum((sstatus>>SPP_BIT)&1)
-        assert self.priv_level_after_op == spp,  f"{self.get_str()}: Returning into wrong privelege: spp is {spp.name}, should be {self.priv_level_after_op.name}: sstatus is {hex(sstatus)}"
-        spie = (sstatus>>SPIE_BIT)&1
+        # spp = PrivilegeStateEnum((sstatus>>SPP_BIT)&1)
+        # assert self.priv_level_after_op == spp,  f"{self.get_str()}: Returning into wrong privelege: spp is {spp.name}, should be {self.priv_level_after_op.name}: sstatus is {hex(sstatus)}"
+        # spie = (sstatus>>SPIE_BIT)&1
         
-        sstatus &= ~(1<<SPP_BIT) # set SPP bit to 0
-        sstatus = ((~(1<<SIE_BIT))&sstatus) | (spie<<SIE_BIT)# set SIE bit to SPIE
-        sstatus |= (1<<SPIE_BIT)# set SPIE bit to 1
-        self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].set_val(sstatus)
+        # sstatus &= ~(1<<SPP_BIT) # set SPP bit to 0
+        # sstatus = ((~(1<<SIE_BIT))&sstatus) | (spie<<SIE_BIT)# set SIE bit to SPIE
+        # sstatus |= (1<<SPIE_BIT)# set SPIE bit to 1
+        # self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].set_val(sstatus)
 
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].get_val()
         self.fuzzerstate.advance_minstret()
@@ -858,9 +858,16 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
         if is_spike_resolution:
             return
         self.assert_addr()
+        if self.is_mtvec:
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr if USE_MMU else self.paddr)
+        else:
+            self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr if USE_MMU else self.paddr)
+
+        self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val() if self.is_mtvec else self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
+        return
         medeleg = self.fuzzerstate.csrfile.regs[CSR_IDS.MEDELEG].get_val()
         mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
-        # assert self.fuzzerstate.privilegestate.medeleg_val == medeleg , f"MEDELEG in CSRFile not consistent with fuzzerstate.privelegestate: {hex(self.val)}, {hex(self.fuzzerstate.privilegestate.medeleg_val)}. {self.fuzzerstate.instr_objs_seq[-1][-1].get_str()}"
+        assert self.fuzzerstate.privilegestate.medeleg_val == medeleg , f"MEDELEG in CSRFile not consistent with fuzzerstate.privelegestate: {hex(self.val)}, {hex(self.fuzzerstate.privilegestate.medeleg_val)}. {self.fuzzerstate.instr_objs_seq[-1][-1].get_str()}"
         if (medeleg>>ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)&1:
             if self.priv_level != PrivilegeStateEnum.MACHINE: # User and supervisor can delegate to supervisor.
                 assert self.priv_level_after_op == PrivilegeStateEnum.SUPERVISOR
@@ -907,9 +914,9 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
                 self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.paddr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
             target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
-            # self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.MACHINE
+            self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.MACHINE
 
-        # assert self.priv_level_after_op == self.fuzzerstate.privilegestate.privstate, f"{self.get_str()}: Did not enter expected privelege: expected {self.priv_level_after_op.name}, entered {self.fuzzerstate.privilegestate.privstate.name} (delegated: {(medeleg>>ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)&1})"
+        assert self.priv_level_after_op == self.fuzzerstate.privilegestate.privstate, f"{self.get_str()}: Did not enter expected privelege: expected {self.priv_level_after_op.name}, entered {self.fuzzerstate.privilegestate.privstate.name} (delegated: {(medeleg>>ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)&1})"
         
         self.fuzzerstate.curr_pc = target_pc
 
@@ -919,6 +926,12 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
         if is_spike_resolution:
             return
         self.assert_addr()
+        if self.is_mtvec:
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr if USE_MMU else self.paddr)
+        else:
+            self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr if USE_MMU else self.paddr)
+        self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val() if self.is_mtvec else self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
+        return
         medeleg = self.fuzzerstate.csrfile.regs[CSR_IDS.MEDELEG].get_val()
         mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
         if (medeleg>>self.exception_op_type)&1: # If its delegated
@@ -973,6 +986,7 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
                 self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr)
             else:
                 self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.paddr)
+            
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
             target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
             # self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.MACHINE
@@ -987,8 +1001,13 @@ class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = True):
         if is_spike_resolution:
             return
-
         self.assert_addr()
+        if self.is_mtvec:
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr if USE_MMU else self.paddr)
+        else:
+            self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr if USE_MMU else self.paddr)
+        self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val() if self.is_mtvec else self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
+        return
         medeleg = self.fuzzerstate.csrfile.regs[CSR_IDS.MEDELEG].get_val()
         mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
         if (medeleg>>self.exceptioncause_val)&1:
@@ -1044,6 +1063,19 @@ class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
                 self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr)
             else:
                 self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.paddr)
+
+            sie = (mstatus>>SIE_BIT)&1
+
+            mstatus &= ~(1<<SPP_BIT)
+            # print(f"Priv at time of trap {self.fuzzerstate.privilegestate.privstate.name}")
+            mstatus |= (self.priv_level&1 << SPP_BIT) # set spp to current priv, TODO make sure priveleges work in final sim too
+
+            mstatus &= ~(1<<SPIE_BIT) # set spie to sie
+            mstatus |= (sie<<SPIE_BIT)
+            mstatus &= ~(1<<SIE_BIT) # clear sie bit
+
+            self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
+
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
             target_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val()
             # self.fuzzerstate.privilegestate.privstate =  PrivilegeStateEnum.MACHINE
