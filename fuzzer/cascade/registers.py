@@ -3,7 +3,7 @@ from abc import ABC
 from cascade.util import IntRegIndivState
 import enum
 from rv.csrids import CSR_IDS, CSR_TYPES, CSRTypeEnum
-from rv.csrids import SSTATUS_SIE_BIT, SSTATUS_SPIE_BIT, SSTATUS_SPP_BIT, MSTATUS_MIE_BIT, MSTATUS_MPIE_BIT, MSTATUS_MPP_BIT, MSTATUS_SIE_BIT, MSTATUS_SPIE_BIT, MSTATUS_SPP_BIT
+from rv.csrids import SSTATUS_MASK, MSTATUS_MASK, MSTATUS_START_VAL, SSTATUS_START_VAL
 from params.runparams import PRINT_CHECK_REGS_T0, CHECK_REGS_T0_PRECISE, PRINT_CHECK_REGS_T0_MISMATCH_OK, DO_ASSERT
 from params.fuzzparams import ALLOW_CSR_TAINT
 ABI_INAMES = ["zero","ra","sp","gp","tp","t0","t1","t2","s0/fp","s1","a0","a1","a2","a3","a4","a5","a6","a7"]
@@ -25,6 +25,7 @@ class __Register(ABC):
     def set_val(self, val):
         if(self.id != 0):
             self.val = val&self.mask
+        # print(f"Setting {ABI_INAMES[self.id]} to {hex(self.val)}")
 
     def set_val_t0(self, val_t0):
         if(self.id != 0):
@@ -93,25 +94,12 @@ class SStatus_CSR(CSR):
     
     def set_val(self, val):
         super().set_val(val)
-        val = self.get_val()
-        spp = (val>>SSTATUS_SPP_BIT)&1
-        sie = (val>>SSTATUS_SIE_BIT)&1
-        spie = (val>>SSTATUS_SPIE_BIT)&1
-
-
+        assert self.val&~(SSTATUS_START_VAL | SSTATUS_MASK) == 0 
         mstatus = self.csrfile.regs[CSR_IDS.MSTATUS].get_val()
-
-        mstatus &= ~(1<<MSTATUS_SPP_BIT) # clear spp bit in mstatus
-        mstatus |= (spp<<MSTATUS_SPP_BIT) # set accordingly
-
-        mstatus &= ~(1<<MSTATUS_SPIE_BIT) # clear spie bit in mstatus
-        mstatus |= (spie<<MSTATUS_SPIE_BIT) # set accordingly
-
-        mstatus &= ~(1<<MSTATUS_SIE_BIT) # clear sie bit in mstatus
-        mstatus |= (sie<<MSTATUS_SIE_BIT) # set accordingly
-
+        mstatus &= ~(SSTATUS_MASK & MAX_64b) # clear the bits
+        mstatus |= (SSTATUS_MASK & self.val)
         self.csrfile.regs[CSR_IDS.MSTATUS].val = mstatus  # dont use setter here
-        print(f"SSTATUS set to {hex(val)}, setting MMSTATUS to {hex(mstatus)}")
+        # print(f"SSTATUS WRITE {hex(val)} -> SSTATUS is {hex(self.val)} -> MSTATUS IS {hex(mstatus)}")
 
 class MStatus_CSR(CSR):
     def __init__(self, csrfile, val: int = 0, val_t0: int = 0):
@@ -119,26 +107,12 @@ class MStatus_CSR(CSR):
 
     def set_val(self, val):
         super().set_val(val)
-        val = self.get_val()
-        
-        spp = (val>>MSTATUS_SPP_BIT)&1
-        sie = (val>>MSTATUS_SIE_BIT)&1
-        spie = (val>>MSTATUS_SPIE_BIT)&1
-
-
+        assert self.val&~(MSTATUS_START_VAL | MSTATUS_MASK) == 0 
         sstatus = self.csrfile.regs[CSR_IDS.SSTATUS].get_val()
-
-        sstatus &= ~(1<<SSTATUS_SPP_BIT) # clear spp bit in mstatus
-        sstatus |= (spp<<SSTATUS_SPP_BIT) # set accordingly
-
-        sstatus &= ~(1<<SSTATUS_SPIE_BIT) # clear spie bit in mstatus
-        sstatus |= (spie<<SSTATUS_SPIE_BIT) # set accordingly
-
-        sstatus &= ~(1<<SSTATUS_SIE_BIT) # clear sie bit in mstatus
-        sstatus |= (sie<<SSTATUS_SIE_BIT) # set accordingly
-
+        sstatus &= ~(SSTATUS_MASK & MAX_64b) # clear the bits
+        sstatus |= (SSTATUS_MASK & self.val)
         self.csrfile.regs[CSR_IDS.SSTATUS].val = sstatus # dont use setter here
-        print(f"MSTATUS set to {hex(val)}, setting SSTATUS to {hex(sstatus)}")
+        # print(f"MSTATUS WRITE  {hex(val)} -> MSTATUS is {hex(self.val)} -> SSTATUS IS {hex(sstatus)}")
 
 class Medeleg_CSR(CSR):
     def __init__(self, csrfile, val: int = 0, val_t0: int = 0):

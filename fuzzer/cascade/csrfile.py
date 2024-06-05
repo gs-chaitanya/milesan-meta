@@ -1,5 +1,5 @@
 from cascade.registers import CSR, MStatus_CSR, SStatus_CSR, Medeleg_CSR, MAX_64b
-from rv.csrids import CSR_IDS, CSR_TYPES, CSRTypeEnum, MSCAUSE_MASK
+from rv.csrids import CSR_IDS, CSR_TYPES, CSRTypeEnum, MSCAUSE_MASK, MSTATUS_START_VAL, SSTATUS_START_VAL
 class CSRFile():
     fuzzerstate = None
     regs = None
@@ -16,8 +16,8 @@ class CSRFile():
         self.regs = {id:CSR(self,id,self.csr_masks[id], CSR_TYPES[id]) for id in CSR_IDS}
         self.regs[CSR_IDS.MSTATUS] = MStatus_CSR(self)
         self.regs[CSR_IDS.SSTATUS] = SStatus_CSR(self)
-        self.regs[CSR_IDS.MSTATUS].set_val(0xa00000000)
-        self.regs[CSR_IDS.SSTATUS].set_val(0x200000000)
+        self.regs[CSR_IDS.MSTATUS].set_val(MSTATUS_START_VAL)
+        self.regs[CSR_IDS.SSTATUS].set_val(SSTATUS_START_VAL)
         self.regs[CSR_IDS.MEDELEG] = Medeleg_CSR(self)
 
 

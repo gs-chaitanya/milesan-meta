@@ -457,13 +457,13 @@ def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
                 if bb_instr.is_mret:
                     epc_producer_id = fuzzerstate.instr_objs_seq[last_mepc[0]][last_mepc[1]].producer_id
                     # We have to set the layout id of the EPCWriterInstruction instruction based of the new layout
-                    fuzzerstate.instr_objs_seq[last_mepc[0]][last_mepc[1]].va_layout = bb_instr.va_layout_after_op
-                    fuzzerstate.instr_objs_seq[last_mepc[0]][last_mepc[1]].priv_level = bb_instr.priv_level_after_op
+                    # fuzzerstate.instr_objs_seq[last_mepc[0]][last_mepc[1]].va_layout = bb_instr.va_layout_after_op
+                    # fuzzerstate.instr_objs_seq[last_mepc[0]][last_mepc[1]].priv_level = bb_instr.priv_level_after_op
                 else:
                     epc_producer_id = fuzzerstate.instr_objs_seq[last_sepc[0]][last_sepc[1]].producer_id
                     # We have to set the layout id of the EPCWriterInstruction instruction based of the new layout
-                    fuzzerstate.instr_objs_seq[last_sepc[0]][last_sepc[1]].va_layout = bb_instr.va_layout_after_op
-                    fuzzerstate.instr_objs_seq[last_sepc[0]][last_sepc[1]].priv_level = bb_instr.priv_level_after_op
+                    # fuzzerstate.instr_objs_seq[last_sepc[0]][last_sepc[1]].va_layout = bb_instr.va_layout_after_op
+                    # fuzzerstate.instr_objs_seq[last_sepc[0]][last_sepc[1]].priv_level = bb_instr.priv_level_after_op
                 # Get the next bb's start address
                 if epc_producer_id > 0: # if -1 it is for the MMU
                     if index_in_bb_start_addr_seq == len(fuzzerstate.bb_start_addr_seq):
@@ -503,10 +503,10 @@ def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
                 # Get the tvec instr's producer id
                 if bb_instr.is_mtvec:
                     tvec_producer_id = fuzzerstate.instr_objs_seq[last_mtvec[0]][last_mtvec[1]].producer_id
-                    fuzzerstate.instr_objs_seq[last_mtvec[0]][last_mtvec[1]].va_layout = bb_instr.va_layout_after_op
+                    # fuzzerstate.instr_objs_seq[last_mtvec[0]][last_mtvec[1]].va_layout = bb_instr.va_layout_after_op
                 else:
                     tvec_producer_id = fuzzerstate.instr_objs_seq[last_stvec[0]][last_stvec[1]].producer_id
-                    fuzzerstate.instr_objs_seq[last_stvec[0]][last_stvec[1]].va_layout = bb_instr.va_layout_after_op
+                    # fuzzerstate.instr_objs_seq[last_stvec[0]][last_stvec[1]].va_layout = bb_instr.va_layout_after_op
 
                 # Get the next bb's start address
                 if index_in_bb_start_addr_seq == len(fuzzerstate.bb_start_addr_seq):

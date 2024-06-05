@@ -26,14 +26,14 @@ def get_current_layout(bb_instr, curr_addr_layout, curr_priv_state):
     if isinstance(bb_instr, PrivilegeDescentInstruction) or isinstance(bb_instr, ExceptionInstruction):
         curr_addr_layout = bb_instr.va_layout_after_op
         curr_priv_state = bb_instr.priv_level_after_op
-    if isinstance(bb_instr, CSRRegInstruction):
+    elif isinstance(bb_instr, CSRRegInstruction):
         is_satp_smode, layout = bb_instr.is_satp_smode
         if is_satp_smode: curr_addr_layout = layout
-    if isinstance(bb_instr, JALRInstruction):
+    elif isinstance(bb_instr, JALRInstruction):
         if bb_instr.to_new_layout:
             curr_addr_layout = bb_instr.va_layout
             curr_priv_state = bb_instr.priv_level
-
+    
     return curr_addr_layout, curr_priv_state
 
 
