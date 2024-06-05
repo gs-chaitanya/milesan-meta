@@ -94,12 +94,14 @@ class SStatus_CSR(CSR):
     def set_val(self, val):
         super().set_val(val)
         val = self.get_val()
-        mstatus = self.csrfile.regs[CSR_IDS.MSTATUS].get_val()
         spp = (val>>SSTATUS_SPP_BIT)&1
         sie = (val>>SSTATUS_SIE_BIT)&1
         spie = (val>>SSTATUS_SPIE_BIT)&1
 
-        mstatus &= ~(1<<MSTATUS_SPP_BIT) # clear spie bit in mstatus
+
+        mstatus = self.csrfile.regs[CSR_IDS.MSTATUS].get_val()
+
+        mstatus &= ~(1<<MSTATUS_SPP_BIT) # clear spp bit in mstatus
         mstatus |= (spp<<MSTATUS_SPP_BIT) # set accordingly
 
         mstatus &= ~(1<<MSTATUS_SPIE_BIT) # clear spie bit in mstatus
@@ -109,7 +111,7 @@ class SStatus_CSR(CSR):
         mstatus |= (sie<<MSTATUS_SIE_BIT) # set accordingly
 
         self.csrfile.regs[CSR_IDS.MSTATUS].val = mstatus  # dont use setter here
-        # print(f"SSTATUS set to {hex(val)}, setting MMSTATUS to {hex(mstatus)}")
+        print(f"SSTATUS set to {hex(val)}, setting MMSTATUS to {hex(mstatus)}")
 
 class MStatus_CSR(CSR):
     def __init__(self, csrfile, val: int = 0, val_t0: int = 0):
@@ -119,12 +121,14 @@ class MStatus_CSR(CSR):
         super().set_val(val)
         val = self.get_val()
         
-        sstatus = self.csrfile.regs[CSR_IDS.SSTATUS].get_val()
         spp = (val>>MSTATUS_SPP_BIT)&1
         sie = (val>>MSTATUS_SIE_BIT)&1
         spie = (val>>MSTATUS_SPIE_BIT)&1
 
-        sstatus &= ~(1<<SSTATUS_SPP_BIT) # clear spie bit in mstatus
+
+        sstatus = self.csrfile.regs[CSR_IDS.SSTATUS].get_val()
+
+        sstatus &= ~(1<<SSTATUS_SPP_BIT) # clear spp bit in mstatus
         sstatus |= (spp<<SSTATUS_SPP_BIT) # set accordingly
 
         sstatus &= ~(1<<SSTATUS_SPIE_BIT) # clear spie bit in mstatus
@@ -134,19 +138,12 @@ class MStatus_CSR(CSR):
         sstatus |= (sie<<SSTATUS_SIE_BIT) # set accordingly
 
         self.csrfile.regs[CSR_IDS.SSTATUS].val = sstatus # dont use setter here
-        # print(f"MSTATUS set to {hex(val)}, setting SSTATUS to {hex(sstatus)}")
+        print(f"MSTATUS set to {hex(val)}, setting SSTATUS to {hex(sstatus)}")
 
 class Medeleg_CSR(CSR):
     def __init__(self, csrfile, val: int = 0, val_t0: int = 0):
         super().__init__(csrfile,CSR_IDS.MEDELEG,csrfile.csr_masks[CSR_IDS.MEDELEG],CSR_TYPES[CSR_IDS.MEDELEG], val, val_t0)
     
-    def set_val(self, val):
-        super().set_val(val)
-
-    def get_val(self):
-        val = super().get_val()
-        return val
-
 
 class CheckableRegister(__Register):
     def __init__(self, id: int, abi_name: str,is_design_64bit: bool, val: int = 0, val_t0: int = 0, pickable: bool = False):

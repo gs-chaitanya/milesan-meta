@@ -805,25 +805,22 @@ class GenericCSRWriterInstruction_t0(GenericCSRWriterInstruction, BaseInstructio
 
 class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstruction_t0):
     def execute(self, taint_en, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        if self.is_mret:
-            self.execute_mret(is_spike_resolution)
-        else:
-            self.execute_sret(is_spike_resolution)
-
-    def execute_mret(self, is_spike_resolution):
         if is_spike_resolution:
             return
+        if self.is_mret:
+            self.execute_mret()
+        else:
+            self.execute_sret()
+
+    def execute_mret(self):
         mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
-        mstatus_cpy = mstatus
         mstatus_t0 = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val_t0()
         assert mstatus_t0 == 0
 
         if not self.fuzzerstate.is_design_64bit:
             mstatus |= self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUSH] << 32
         mpp = PrivilegeStateEnum((mstatus>>MSTATUS_MPP_BIT)&0x3) # MPP has two bits
-        assert self.priv_level_after_op == mpp
-        # if not is_spike_resolution:
-        #     assert mpp == self.fuzzerstate.privilegestate.curr_mstatus_mpp, f"{self.get_str()}: MPP mismatch: {mpp.name} != {self.fuzzerstate.privilegestate.curr_mstatus_mpp.name}: mstatus is {hex(mstatus)}"
+        assert self.priv_level_after_op == mpp, f"{self.get_str()}: Returning into wrong privelege: mpp is {mpp.name}, should be {self.priv_level_after_op.name}, mstatus is {hex(mstatus)}"
         mstatus &= ~(0x3<<MSTATUS_MPP_BIT) # set MPP bits to 0
 
         mpie = (mstatus>>MSTATUS_MPIE_BIT)&1
@@ -835,18 +832,15 @@ class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstructio
 
         # The pc will not be correct during in-situ simulation as MEPC is only determined later.
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val()
-        # print(f"Descending from {self.fuzzerstate.privilegestate.privstate.name} to {mpp.name}")
-        # self.fuzzerstate.privilegestate.privstate = mpp
         self.fuzzerstate.advance_minstret()
 
-    def execute_sret(self, is_spike_resolution):
-        # print(f"Executing SRET {self.get_str()}")
+    def execute_sret(self):
         sstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].get_val()
         sstatus_t0 = self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].get_val_t0()
         assert sstatus_t0 == 0
 
         spp = PrivilegeStateEnum((sstatus>>SSTATUS_SPP_BIT)&1)
-        assert self.priv_level_after_op == spp
+        assert self.priv_level_after_op == spp,  f"{self.get_str()}: Returning into wrong privelege: spp is {spp.name}, should be {self.priv_level_after_op.name}: sstatus is {hex(sstatus)}"
         spie = (sstatus>>SSTATUS_SPIE_BIT)&1
         
         sstatus &= ~(1<<SSTATUS_SPP_BIT) # set MPV bit to 0
