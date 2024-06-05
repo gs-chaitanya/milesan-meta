@@ -204,7 +204,8 @@ def run_trace_all_pcs(identifier_str: str, elfpath: str, rvflags: str, numinstrs
         f"--pc={startpc}",
         elfpath
     )
-
+    
+    print(" ".join(spike_shell_command))
     try:
         spike_out = subprocess.run(spike_shell_command, capture_output=True, timeout=get_spike_timeout_seconds()).stderr
     except Exception as e:
@@ -219,6 +220,7 @@ def run_trace_all_pcs(identifier_str: str, elfpath: str, rvflags: str, numinstrs
     ret = []
     for instr_id in range(numinstrs):
         # If there is no exception.
+        # print(addr_str_splitted[instr_id+1])
         if addr_str_splitted[instr_id+1][10:12] == b"0x":
             ret.append(int(addr_str_splitted[instr_id+1][12:20+8*int('64' in rvflags)], base=16))
         else:

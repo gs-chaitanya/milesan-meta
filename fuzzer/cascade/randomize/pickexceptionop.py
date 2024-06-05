@@ -142,6 +142,8 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
             assert fuzzerstate.privilegestate.medeleg_val is not None
         is_mtvec = not (fuzzerstate.privilegestate.medeleg_val & (1 << exception_op_type.value))
 
+
+
     # Pollutes the corresponding epc and updates xpp
     if is_mtvec:
         fuzzerstate.privilegestate.is_mepc_populated = False
@@ -163,7 +165,7 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
 
     # Update the privilege state
     fuzzerstate.privilegestate.prev_privstate = fuzzerstate.privilegestate.privstate
-    # fuzzerstate.effective_prev_layout = fuzzerstate.effective_curr_layouts
+    fuzzerstate.effective_prev_layout = fuzzerstate.effective_curr_layout
 
     if is_mtvec:
         fuzzerstate.privilegestate.privstate = PrivilegeStateEnum.MACHINE
@@ -437,7 +439,7 @@ def gen_medeleg_instr(fuzzerstate):
     for bit_id, bit_val in enumerate(supported_medeleg_bits_arr):
         # The line below is a cool idea but makes the analysis more difficult, so we don't do it for now and we AND with bit_val
         # random_bit = random.randint(0, 1) # If this exception type is supported by the CPU, then the bit must be the same in Spike and in the CPU
-        random_bit = bit_val and random.randint(0, 1)
+        random_bit = random.randint(0, 1)
         # If the bit is not supported by the CPU, set it to 0 for Spike, but set it randomly for the CPU.
         if bit_val == 1:
             val_to_write_spike |= random_bit << bit_id
@@ -454,7 +456,7 @@ def gen_medeleg_instr(fuzzerstate):
     else:
         rd = fuzzerstate.intregpickstate.pick_int_outputreg()
 
-    # Update the delegated state in our model
+    # Update the delegated state in our model, -> this is now updated when the instruction is executed.
     fuzzerstate.privilegestate.medeleg_val = val_to_write_spike
     if rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True) # MEDLEG changes between spike and final elf, so cannot be used for taint computation

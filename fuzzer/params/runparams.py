@@ -16,9 +16,9 @@ PATH_TO_FIGURES = os.environ['CASCADE_PATH_TO_FIGURES']
 DO_ASSERT = True
 DO_EXPENSIVE_ASSERT = False # More expensive assertions
 
-NO_REMOVE_TMPFILES = False # Used for debugging purposes.
+NO_REMOVE_TMPFILES = True # Used for debugging purposes.
 
-RUN_TIMEOUT_SECONDS = 60*60*2 # A program is not supposed to run longer than this in RTL simulation.
+RUN_TIMEOUT_SECONDS = 60*3 # A program is not supposed to run longer than this in RTL simulation.
 
 PRINT_FSM_TRANSITIONS = False # Print transitions between states for register FSM instructions.
 
@@ -41,6 +41,8 @@ PRINT_ENVIRONMENT = True
 
 INSERT_REGDUMPS = False # Speculative bugs will likely diappear when enabled.
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
+CHECK_PC_SPIKE_AGAIN = False
+assert not (INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN)
 INSERT_FENCE = False # The stores should become architectually visible in order, so this should not be necessary
 
 PRINT_REGISTER_VALIDATION = False

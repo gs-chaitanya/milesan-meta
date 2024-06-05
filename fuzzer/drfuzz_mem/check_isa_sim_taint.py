@@ -3,9 +3,9 @@ import shutil
 import glob
 import json
 
-from params.runparams import PATH_TO_TMP, PATH_TO_COV, PRINT_INSTRUCTION_EXECUTION_FINAL, PRINT_ENVIRONMENT, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE
+from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN
-from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
+from cascade.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, filter_reg_t0_traceback
 from cascade.fuzzsim import run_rtl_and_load_regstream
@@ -23,7 +23,7 @@ class FuzzerStateException(Exception):
 def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None, taint_en: bool = TAINT_EN):   
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
-        fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), not INSERT_REGDUMPS, taint_en) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
+        fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN, taint_en) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
         fuzzerstate.intregpickstate.setup_registers()
         fuzzerstate.memview.restore()
         fuzzerstate.csrfile.reset()
@@ -74,7 +74,6 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
 
                 if PRINT_INSTRUCTION_EXECUTION_FINAL:
                     next_instr.print(USE_SPIKE_INTERM_ELF)
-
                 next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
 
             # if this bb is followed by a context saver block, execute it

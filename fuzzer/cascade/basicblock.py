@@ -451,6 +451,7 @@ def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
                 # Check that a corresponding xepc has been setup
                 if DO_ASSERT:
                     assert (bb_instr.is_mret and last_mepc) or (not bb_instr.is_mret and last_sepc), "No epc found for privilege descent instruction. Values are: last_mepc = {}, last_sepc = {}, bb_instr.is_mret = {}".format(last_mepc, last_sepc, bb_instr.is_mret)
+                
 
                 # Get the epc instr's producer id
                 if bb_instr.is_mret:
@@ -463,7 +464,6 @@ def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
                     # We have to set the layout id of the EPCWriterInstruction instruction based of the new layout
                     fuzzerstate.instr_objs_seq[last_sepc[0]][last_sepc[1]].va_layout = bb_instr.va_layout_after_op
                     fuzzerstate.instr_objs_seq[last_sepc[0]][last_sepc[1]].priv_level = bb_instr.priv_level_after_op
-
                 # Get the next bb's start address
                 if epc_producer_id > 0: # if -1 it is for the MMU
                     if index_in_bb_start_addr_seq == len(fuzzerstate.bb_start_addr_seq):

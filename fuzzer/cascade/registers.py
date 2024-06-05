@@ -81,8 +81,8 @@ class CSR(__Register):
         return self.val_t0
 
     def reset(self):
-        self.val = 0
-        self.val_t0 = 0
+        self.set_val(0)
+        self.set_val_t0(0)
 
 # SSTATUS is a subset from MSTATUS so we need special classes for them.
 class SStatus_CSR(CSR):
@@ -133,6 +133,17 @@ class MStatus_CSR(CSR):
 
         self.csrfile.regs[CSR_IDS.SSTATUS].val = sstatus # dont use setter here
         # print(f"MSTATUS set to {hex(val)}, setting SSTATUS to {hex(sstatus)}")
+
+class Medeleg_CSR(CSR):
+    def __init__(self, csrfile, val: int = 0, val_t0: int = 0):
+        super().__init__(csrfile,CSR_IDS.MEDELEG,csrfile.csr_masks[CSR_IDS.MEDELEG],CSR_TYPES[CSR_IDS.MEDELEG], val, val_t0)
+    
+    def set_val(self, val):
+        super().set_val(val)
+
+    def get_val(self):
+        val = super().get_val()
+        return val
 
 
 

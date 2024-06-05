@@ -144,7 +144,8 @@ def gen_regdump_reqs_all_rds(fuzzerstate, max_bb_id: int = None, max_instr_id: i
 
             assert curr_addr not in ret
             [ret.append(d) for d in get_dumps_from_instr(bb_instr, curr_addr)]
-            curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)
+            if USE_MMU:
+                curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)
         if bb_id in fuzzerstate.bb_id_to_ctxsv_id:
             ctxsv_bb_id = fuzzerstate.bb_id_to_ctxsv_id[bb_id]
             for bb_instr_id, bb_instr in enumerate(fuzzerstate.ctxsv_bbs[ctxsv_bb_id]):
@@ -156,7 +157,8 @@ def gen_regdump_reqs_all_rds(fuzzerstate, max_bb_id: int = None, max_instr_id: i
                     assert bb_instr.vaddr == curr_addr + SPIKE_STARTADDR, f"Vaddress mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)} ({curr_priv_state.name}/{curr_addr_layout})"
                 assert curr_addr not in ret
                 [ret.append(d) for d in get_dumps_from_instr(bb_instr, curr_addr)]
-                curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)
+                if USE_MMU:
+                    curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)
 
     return ret
 
@@ -312,7 +314,7 @@ def _feed_regdump_to_instrs(fuzzerstate, regdumps: list):
             if isinstance(bb_instr, PlaceholderProducerInstr0) or isinstance(bb_instr, PlaceholderProducerInstr1):
                 if bb_instr.producer_id in producer_id_to_rdepval:
                     # Rationale: target_addr = rdep ^ rprod, where target_addr is spike_resolution_offset
-                    if bb_instr.va_layout != -1:
+                    if bb_instr.produce_va_layout != -1:
                         # No need for spike base address offset in virtual memory
                         bb_instr.rtl_offset = producer_id_to_rdepval[bb_instr.producer_id] ^ bb_instr.spike_resolution_offset
                     else:
@@ -332,15 +334,15 @@ def _transmit_addrs_to_producers_for_spike_resolution(fuzzerstate):
                     fuzzerstate.producer_id_to_tgtaddr[bb_instr.producer_id] = random.randrange(1 << 30) << 2
                     fuzzerstate.consumer_inst_va_layout[bb_instr.producer_id] = (-1, PrivilegeStateEnum.MACHINE)
                 bb_instr.spike_resolution_offset = fuzzerstate.producer_id_to_tgtaddr[bb_instr.producer_id]
-                bb_instr.va_layout, bb_instr.priv_level = fuzzerstate.consumer_inst_va_layout[bb_instr.producer_id]
+                bb_instr.produce_va_layout, bb_instr.produce_priv_level = fuzzerstate.consumer_inst_va_layout[bb_instr.producer_id]
             elif isinstance(bb_instr, PlaceholderProducerInstr1):
                 # print('Determ for prod id', bb_instr.producer_id, hex(fuzzerstate.producer_id_to_tgtaddr[bb_instr.producer_id]))
-                bb_instr.va_layout, bb_instr.priv_level = fuzzerstate.consumer_inst_va_layout[bb_instr.producer_id]
+                bb_instr.produce_va_layout, bb_instr.produce_priv_level = fuzzerstate.consumer_inst_va_layout[bb_instr.producer_id]
                 bb_instr.spike_resolution_offset = fuzzerstate.producer_id_to_tgtaddr[bb_instr.producer_id]
             elif isinstance(bb_instr, PlaceholderConsumerInstr):
-                bb_instr.va_layout, bb_instr.priv_level = fuzzerstate.consumer_inst_va_layout[bb_instr.producer_id]
+                bb_instr.produce_va_layout, bb_instr.produce_priv_level = fuzzerstate.consumer_inst_va_layout[bb_instr.producer_id]
             elif isinstance(bb_instr, PlaceholderPreConsumerInstr):
-                bb_instr.va_layout, bb_instr.priv_level = fuzzerstate.consumer_inst_va_layout[bb_instr.producer_id]
+                bb_instr.produce_va_layout, bb_instr.produce_priv_level = fuzzerstate.consumer_inst_va_layout[bb_instr.producer_id]
 
 # Check that the PC trace from spike matches with the expected PC trace
 def _check_pc_trace_from_spike(fuzzerstate, spike_pc_seq):
@@ -357,6 +359,7 @@ def _check_pc_trace_from_spike(fuzzerstate, spike_pc_seq):
             expected_pc = SPIKE_STARTADDR + fuzzerstate.bb_start_addr_seq[bb_id] + 4*bb_instr_id # NO_COMPRESSED
             if curr_addr_layout != -1: expected_pc = phys2virt(expected_pc, curr_priv_state, curr_addr_layout, fuzzerstate, False)
 
+            print(f"{hex(spike_pc)}/{hex(expected_pc)}")
             if spike_pc != expected_pc:
                 raise ValueError(f"PC mismatch: spike said `{hex(spike_pc)}`, but we expected `{hex(expected_pc)}`. BB id: `{hex(bb_id)}`, instr id: `{hex(bb_instr_id)}`. Prev pc: `{hex(prev_pc)}`. Spike instr id: {curr_id_in_spike_pc_seq}. Fuzzerstate identification: {fuzzerstate.instance_to_str()}")
             prev_pc = expected_pc
