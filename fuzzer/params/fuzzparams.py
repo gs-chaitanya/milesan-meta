@@ -8,7 +8,7 @@ import numpy as np
 ##
 # MMU
 ##
-USE_MMU = True
+USE_MMU = False
 
 MAX_NUM_LAYOUTS = 1
 PROBA_ENTANGLE_LAYOUT = 0

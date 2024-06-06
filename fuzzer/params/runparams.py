@@ -37,7 +37,7 @@ PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS = False
 PRINT_REG_TRACEBACK = False
 PRINT_FILTERED_REG_TRACEBACK = True
 
-PRINT_ENVIRONMENT = False
+PRINT_ENVIRONMENT = True
 
 INSERT_REGDUMPS = False # Speculative bugs will likely diappear when enabled.
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."

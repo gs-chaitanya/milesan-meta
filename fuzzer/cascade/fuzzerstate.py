@@ -469,33 +469,10 @@ class FuzzerState:
 
     
     def print_writebacks_t0(self, final_addr: int = None):
-        if DO_ASSERT:
-            len_in_situ =  len(self.intregpickstate.writeback_trace_in_situ.items())
-            len_final = len(self.intregpickstate.writeback_trace_final.items())
-            assert len_in_situ != 0
-            assert len_final != 0
-            assert len_in_situ == len_final
-        for (addr_insitu,trace_insitu),(addr_final, trace_final) in zip(self.intregpickstate.writeback_trace_in_situ.items(),self.intregpickstate.writeback_trace_final.items()):
-            row = [hex(addr_insitu),ABI_INAMES[trace_insitu[0]],hex(trace_insitu[1])]
-            print("{: >20}: {: >20} <- {: >20}".format(*row))
-            if final_addr is not None and final_addr == addr_insitu:
-                return
-        if DO_ASSERT:
-            assert final_addr is None, f"Final address not reached {hex(final_addr)}."
-
+        self.intregpickstate.print_writebacks_t0(final_addr)
+        
     def verify_writeback_t0(self,final_addr: int = None, print_trace: bool = False):
-        for (addr_insitu,trace_insitu),(addr_final, trace_final) in zip(self.intregpickstate.writeback_trace_in_situ.items(),self.intregpickstate.writeback_trace_final.items()):
-            assert addr_insitu == addr_final, f"Address mismatch between insitu and final taint simulation {hex(addr_insitu)} != {hex(addr_final)}"
-            assert trace_insitu[0] == trace_final[0], f"Register mismatch between insitu and final simulation {ABI_INAMES[trace_insitu[0]]} != {ABI_INAMES[trace_final[0]]}"
-            assert trace_insitu[1] == trace_final[1], f"Taint mismatch between insitu and final simulation: {hex(addr_insitu)}: {ABI_INAMES[trace_insitu[0]]} <- {ABI_INAMES[trace_insitu[1]]} != {ABI_INAMES[trace_final[1]]}"
-            if print_trace:
-                row = [hex(addr_insitu),ABI_INAMES[trace_insitu[0]],hex(trace_insitu[1])]
-                print("{: >20}: {: >20} <- {: >20}".format(*row))
-            if final_addr is not None and final_addr == addr_insitu:
-                return
-        if DO_ASSERT:
-            assert final_addr is None, f"Final address not reached {hex(final_addr)}."
-
+        self.intregpickstate.verify_writeback_t0(final_addr,print_trace)
 
     def simulate_execution(self, is_spike_resolution: bool = True, final_addr: int = None, print_execution: bool = False, reset_after_execution: bool = False):
         # Retrieve the register values from the requests

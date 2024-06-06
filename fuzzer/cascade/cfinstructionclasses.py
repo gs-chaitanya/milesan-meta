@@ -1243,7 +1243,10 @@ class PlaceholderProducerInstr0(BaseInstruction):
         self.produce_priv_level = None
 
     def get_preamble(self):
-        return super().get_preamble() +  f": {int(self.producer_id)}/{self.produce_priv_level.name[0]}/{self.produce_va_layout}"
+        if self.produce_priv_level is not None and self.produce_va_layout is not None:
+            return super().get_preamble() +  f": {int(self.producer_id)}/{self.produce_priv_level.name[0]}/{self.produce_va_layout}"
+        else:
+            return super().get_preamble() +  f": {int(self.producer_id)}/None/None"
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         if is_spike_resolution:
@@ -1294,7 +1297,10 @@ class PlaceholderProducerInstr1(BaseInstruction):
         self.produce_priv_level = None
 
     def get_preamble(self):
-        return super().get_preamble() +  f": {int(self.producer_id)}/{self.produce_priv_level.name[0]}/{self.produce_va_layout}"
+        if self.produce_priv_level is not None and self.produce_va_layout is not None:
+            return super().get_preamble() +  f": {int(self.producer_id)}/{self.produce_priv_level.name[0]}/{self.produce_va_layout}"
+        else:
+            return super().get_preamble() +  f": {int(self.producer_id)}/None/None"
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         if is_spike_resolution:
@@ -1343,7 +1349,10 @@ class PlaceholderPreConsumerInstr(BaseInstruction):
         self.produce_priv_level = None
 
     def get_preamble(self):
-        return super().get_preamble() +  f": {int(self.producer_id)}/{self.produce_priv_level.name[0]}/{self.produce_va_layout}"
+        if self.produce_priv_level is not None and self.produce_va_layout is not None:
+            return super().get_preamble() +  f": {int(self.producer_id)}/{self.produce_priv_level.name[0]}/{self.produce_va_layout}"
+        else:
+            return super().get_preamble() +  f": {int(self.producer_id)}/None/None"
 
     def get_str(self, is_spike_resolution: bool = False):
         if USE_MMU and self.fuzzerstate.is_design_64bit and self.is_rprod and self.produce_va_layout != -1:
@@ -1387,7 +1396,10 @@ class PlaceholderConsumerInstr(BaseInstruction):
         self.produce_priv_level = None
 
     def get_preamble(self):
-        return super().get_preamble() +  f": {int(self.producer_id)}/{self.produce_priv_level.name[0]}/{self.produce_va_layout}"
+        if self.produce_priv_level is not None and self.produce_va_layout is not None:
+            return super().get_preamble() +  f": {int(self.producer_id)}/{self.produce_priv_level.name[0]}/{self.produce_va_layout}"
+        else:
+            return super().get_preamble() +  f": {int(self.producer_id)}/None/None"
 
     def get_str(self, is_spike_resolution: bool = False):
         if is_spike_resolution:

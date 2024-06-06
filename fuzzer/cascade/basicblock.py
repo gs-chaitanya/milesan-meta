@@ -348,7 +348,7 @@ def pop_last_bbs_to_connect_with_final_block(fuzzerstate):
         fuzzerstate.saved_reg_states.pop()
 
     if USE_MMU:
-        if DEBUG_PRINT: print(f"Updating fuzzerstae after a pop, old layout: {fuzzerstate.effective_curr_layout}, old_priv: ",fuzzerstate.privilegestate.privstate)
+        if DEBUG_PRINT: print(f"Updating fuzzerstate after a pop, old layout: {fuzzerstate.effective_curr_layout}, old_priv: ",fuzzerstate.privilegestate.privstate)
         bb_id, instr_id = len(fuzzerstate.instr_objs_seq)-1, len(fuzzerstate.instr_objs_seq[-1])-1
         layout_id, priv_level = get_last_bb_layout_and_priv(fuzzerstate, bb_id, instr_id)
         fuzzerstate.privilegestate.privstate = priv_level

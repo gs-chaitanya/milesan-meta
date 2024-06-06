@@ -297,8 +297,6 @@ class PageTablesGen:
                 print(f"SUPERVISOR: {hex(start_vmem[PrivilegeStateEnum.SUPERVISOR])}")
                 print(f"regdump_vaddr: {hex(regdump_vaddr)}")
                 print(f"stopsig_vaddr: {hex(stopsig_vaddr)}")
-                if INSERT_REGDUMPS:
-                    print(f"regstream_vaddr: {hex(regstream_vaddr)}")
 
 
             # Set variables for bookeeping

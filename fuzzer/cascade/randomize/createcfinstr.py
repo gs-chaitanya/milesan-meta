@@ -335,6 +335,8 @@ def create_targeted_consumer_instrobj(fuzzerstate):
     # WARNING: We CANNOT throw a PRODUCEDX into the nature because its value will change between spike and RTL.
     rd = rprod
     fuzzerstate.intregpickstate.set_regstate(rprod, IntRegIndivState.CONSUMED)
+    if USE_MMU:
+        fuzzerstate.intregpickstate.set_regstate(rdep, IntRegIndivState.RELOCUSED, force=True)
     if fuzzerstate.is_design_64bit:
         # return [PlaceholderPreConsumerInstr(rprod), PlaceholderPreConsumerInstr(rdep), PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
         # return [PlaceholderPreConsumerInstr_t0(fuzzerstate, rprod), PlaceholderPreConsumerInstr_t0(fuzzerstate, rdep), PlaceholderConsumerInstr_t0(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]

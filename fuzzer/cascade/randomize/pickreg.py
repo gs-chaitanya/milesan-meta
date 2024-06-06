@@ -38,8 +38,6 @@ class IntRegPickState:
         # Will ignore x0 if line below is uncommented. This is a design decision.
         # self.__reg_weights[0] = 0
 
-        self.writeback_trace_in_situ = {}
-        self.writeback_trace_final = {}
 
     def setup_registers(self):
         self.regs = {id:IntRegister(id,self.fuzzerstate.is_design_64bit,pickable=True) for id in range(self.num_pickable_regs)} # pickable registers
@@ -74,6 +72,9 @@ class IntRegPickState:
     def get_free_regs_onehot(self):
         ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
+            # if sum(ret) < NUM_MIN_FREE_INTREGS:
+            #     self.print()
+            #     assert False, f"There are less than {NUM_MIN_FREE_INTREGS} free integer registers available. ({ret})"
             assert sum(ret) >= NUM_MIN_FREE_INTREGS, f"There are less than {NUM_MIN_FREE_INTREGS} free integer registers available."
         return np.asarray(ret)
 
@@ -483,15 +484,43 @@ class IntRegPickState:
             value_t0 = int(regdumps_rtl[reg_id]["value_t0"],16)
             self.regs[reg_id+1].print_and_compare(value,value_t0)
 
-    def add_writeback_trace(self, instr, reg, val_t0, is_spike_resolution):
-        if PRINT_WRITEBACK_T0: 
-            row = [instr.get_str(is_spike_resolution), ABI_INAMES[reg], val_t0]
-            print("WRITEBACK_T0: {: <75}: {: >5} <- 0x{:016x}".format(*row))
-        if is_spike_resolution:
-            self.writeback_trace_in_situ[instr.paddr] = (reg, val_t0)
-        else:
-            self.writeback_trace_final[instr.paddr] = (reg,val_t0)
-            
+    # def add_writeback_trace(self, instr, reg, val_t0, is_spike_resolution):
+    #     if PRINT_WRITEBACK_T0: 
+    #         row = [instr.get_str(is_spike_resolution), ABI_INAMES[reg], val_t0]
+    #         print("WRITEBACK_T0: {: <75}: {: >5} <- 0x{:016x}".format(*row))
+    #     if is_spike_resolution:
+    #         self.writeback_trace_in_situ[instr.paddr] = (reg, val_t0)
+    #     else:
+    #         self.writeback_trace_final[instr.paddr] = (reg,val_t0)
+
+    # def verify_writeback_t0(self,final_addr: int = None, print_trace: bool = False):
+    #     for (addr_insitu,trace_insitu),(addr_final, trace_final) in zip(self.writeback_trace_in_situ.items(),self.writeback_trace_final.items()):
+    #         assert addr_insitu == addr_final, f"Address mismatch between insitu and final taint simulation {hex(addr_insitu)} != {hex(addr_final)}"
+    #         assert trace_insitu[0] == trace_final[0], f"Register mismatch between insitu and final simulation {ABI_INAMES[trace_insitu[0]]} != {ABI_INAMES[trace_final[0]]}"
+    #         assert trace_insitu[1] == trace_final[1], f"Mismatch in taint trace between in-situ simulation and final elf: {hex(addr_final)}: {ABI_INAMES[trace_insitu[0]]} <- {hex(trace_insitu[1])}/{hex(trace_final[1])} (in-situ/final)."
+    #         if print_trace:
+    #             row = [hex(addr_insitu),ABI_INAMES[trace_insitu[0]],hex(trace_insitu[1])]
+    #             print("{: >20}: {: >20} <- {: >20}".format(*row))
+    #         if final_addr is not None and final_addr == addr_insitu:
+    #             return
+    #     if DO_ASSERT:
+    #         assert final_addr is None, f"Final address not reached {hex(final_addr)}."
+
+    # def print_writebacks_t0(self, final_addr: int = None):
+    #     if DO_ASSERT:
+    #         len_in_situ =  len(self.writeback_trace_in_situ.items())
+    #         len_final = len(self.writeback_trace_final.items())
+    #         assert len_in_situ != 0
+    #         assert len_final != 0
+    #         assert len_in_situ == len_final
+    #     for (addr_insitu,trace_insitu),(addr_final, trace_final) in zip(self.writeback_trace_in_situ.items(),self.writeback_trace_final.items()):
+    #         row = [hex(addr_insitu),ABI_INAMES[trace_insitu[0]],hex(trace_insitu[1])]
+    #         print("{: >20}: {: >20} <- {: >20}".format(*row))
+    #         if final_addr is not None and final_addr == addr_insitu:
+    #             return
+    #     if DO_ASSERT:
+    #         assert final_addr is None, f"Final address not reached {hex(final_addr)}."
+
     def analyze_writeback_trace(self, use_final: bool = True):
         n_tainted_bits = 0
         n_untainted_bits = 0
