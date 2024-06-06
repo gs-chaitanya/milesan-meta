@@ -136,6 +136,8 @@ class FuzzerState:
         self.instr_objs_seq = [] # List (queue) of (for each basic block) lists of instruction objects
         self.bb_start_addr_seq = [] # List (queue) of bb start addresses. Self-managed through init_new_bb.
         self.saved_reg_states = [] # List (queue) of register save objects, as saved by pickreg.py
+        self.saved_csr_states = [] # List (queue) of register save objects, as saved by csrflile.py
+        self.saved_mem_states = [] # List (queue) of mem save objects, as saved by mem
         self.saved_mmu_state  = []
 
         # Strictly increasing when we create new producer0, to ensure uniqueness
@@ -227,6 +229,22 @@ class FuzzerState:
         self.bb_id_to_ctxsv_id[self.last_bb_id_before_next_ctxsv_bb] = len(self.ctxsv_bbs)-1
         self.next_ctxsv_bb_start_addr = None
         self.ctxsv_bb_start_addr_seq.append(self.curr_ctxsv_bb_start_addr)
+
+
+    def save_states(self):
+        self.saved_reg_states.append(self.intregpickstate.save_curr_state())
+        self.saved_csr_states.append(self.csrfile.save_curr_state())
+        self.memview.store_state() # special case since also used for reduction
+
+    def restore_states(self, bb_id: int = -1):
+        self.intregpickstate.restore_state(self.saved_reg_states[bb_id])
+        self.csrfile.restore_state(self.saved_csr_states[bb_id])
+        self.memview.restore(bb_id)
+
+    def pop_states(self):
+        self.saved_reg_states.pop()
+        self.saved_csr_states.pop()
+        self.memview.states.pop()
 
     def gen_pick_weights(self):
         self.fpuweight = random.random() # Can decrease the overall FPU load to favor other types of instructions
@@ -470,7 +488,7 @@ class FuzzerState:
     
     def print_writebacks_t0(self, final_addr: int = None):
         self.intregpickstate.print_writebacks_t0(final_addr)
-        
+
     def verify_writeback_t0(self,final_addr: int = None, print_trace: bool = False):
         self.intregpickstate.verify_writeback_t0(final_addr,print_trace)
 

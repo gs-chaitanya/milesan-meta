@@ -134,8 +134,8 @@ class RDInstruction_t0(CFInstruction_t0):
         if not is_spike_resolution:
             self.assert_writeback_trace()
 
-    def assert_writeback_trace(self):
-        assert self.writeback_trace["in-situ"] == self.writeback_trace["final"], f"Writeback trace mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'])} !=  {hex(self.writeback_trace['final'])}"
+    def assert_writeback_trace(self): # This will fail when reducing.
+        assert self.writeback_trace["in-situ"] == self.writeback_trace["final"], f"Writeback trace mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'])} !=  {hex(self.writeback_trace['final'])} (Are we reducing?)"
 # does not inherit from ImmInstruction
 class ImmInstruction_t0(CFInstruction_t0):
     imm_t0: int

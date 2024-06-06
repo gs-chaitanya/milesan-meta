@@ -75,6 +75,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 if PRINT_INSTRUCTION_EXECUTION_FINAL:
                     next_instr.print(USE_SPIKE_INTERM_ELF)
                 next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
+                
             # if this bb is followed by a context saver block, execute it
             if bb_id in fuzzerstate.bb_id_to_ctxsv_id:
                 ctxsv_bb_id = fuzzerstate.bb_id_to_ctxsv_id[bb_id]
@@ -82,17 +83,6 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
                     if PRINT_INSTRUCTION_EXECUTION_FINAL:
                         print(f"{next_instr.get_str(USE_SPIKE_INTERM_ELF)} (ctx)")
-
-        # If we generated the fuzzerstate and are therefore not reducing, the taint propagation between in-situ simulation (i.e. generation)
-        # and the simulation of the final program must match => the taint propagation must be an invariant.
-        if generate_fuzzerstate:
-            # for (addr_in_situ,trace_in_situ),(addr_final, trace_final) in zip(fuzzerstate.intregpickstate.writeback_trace_in_situ.items(),fuzzerstate.intregpickstate.writeback_trace_final.items()):
-            #     assert addr_in_situ == addr_final
-            #     assert trace_in_situ[0] == trace_final[0]
-            #     assert trace_in_situ[1] == trace_final[1], f"Mismatch in taint trace between in-situ simulation and final elf: {hex(addr_final)}: {ABI_INAMES[trace_in_situ[0]]} <- {hex(trace_in_situ[1])}/{hex(trace_final[1])} (in-situ/final)."
-            #     # else:
-            #     #     print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}")
-            fuzzerstate.verify_writeback_t0()
         
         if PRINT_REGISTER_VALIDATION:
             print("*** REGISTER VALIDATION ***:")

@@ -215,8 +215,9 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     test_fuzzerstate = deepcopy(fuzzerstate)
     del fuzzerstate # Just for safety. We will not need fuzzerstate anymore in this function
 
-    test_fuzzerstate.intregpickstate.restore_state(test_fuzzerstate.saved_reg_states[max_bb_id_to_consider])
-    test_fuzzerstate.reset_after_execution()
+    # test_fuzzerstate.intregpickstate.restore_state(test_fuzzerstate.saved_reg_states[max_bb_id_to_consider])
+    test_fuzzerstate.restore_state(max_bb_id_to_consider)
+    # test_fuzzerstate.reset_after_execution()
 
     if DO_ASSERT:
         if isinstance(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1], JALInstruction_t0):

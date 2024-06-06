@@ -443,3 +443,27 @@ SIE_BIT = 1
 SSTATUS_MASK = (1<<SPP_BIT) | (1<<SPIE_BIT) | (1<<SIE_BIT) # The transparent bits between MSTATUS and SSTATUS
 MSTATUS_MASK = SSTATUS_MASK | (3<<MPP_BIT) | (1<<MPIE_BIT) | (1<<MIE_BIT)
 
+
+FUZZED_CSRS = [
+            CSR_IDS.MCAUSE, 
+            CSR_IDS.SCAUSE, 
+            CSR_IDS.STVEC, 
+            CSR_IDS.MTVEC, 
+            CSR_IDS.MINSTRET, 
+            CSR_IDS.MSCRATCH, 
+            CSR_IDS.SSCRATCH, 
+            CSR_IDS.MHPMCOUNTER3, 
+            CSR_IDS.MHPMEVENT31,
+            CSR_IDS.PMPCFG0,
+            CSR_IDS.PMPADDR0,
+            CSR_IDS.MCYCLE,
+            CSR_IDS.MEDELEG,
+            CSR_IDS.MCYCLE,
+            CSR_IDS.MCYCLEH,
+            CSR_IDS.MINSTRETH,
+            CSR_IDS.SATP,
+            CSR_IDS.MTVAL,
+            CSR_IDS.STVAL,
+            CSR_IDS.SEPC,
+            CSR_IDS.MEPC
+            ]

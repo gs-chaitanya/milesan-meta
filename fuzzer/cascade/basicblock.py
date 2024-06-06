@@ -134,7 +134,8 @@ def gen_basicblock(fuzzerstate):
                 # Abort the bb
                 fuzzerstate.instr_objs_seq.pop()
                 fuzzerstate.bb_start_addr_seq.pop()
-                fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+                # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+                fuzzerstate.restore_states()
                 return False
             fuzzerstate.append_and_execute_instr(new_instrobj, True)
             if DEBUG_PRINT: print(f"priv change at addr: {hex(curr_addr+SPIKE_STARTADDR)} to ", fuzzerstate.privilegestate.privstate)
@@ -163,7 +164,8 @@ def gen_basicblock(fuzzerstate):
                 # Abort the bb
                 fuzzerstate.instr_objs_seq.pop()
                 fuzzerstate.bb_start_addr_seq.pop()
-                fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+                # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+                fuzzerstate.restore_states()
                 return False
             # print('exception at addr', hex(curr_addr), 'privstate', fuzzerstate.privilegestate.privstate)
             new_instrobj = gen_exception_instr(fuzzerstate)
@@ -198,7 +200,8 @@ def gen_basicblock(fuzzerstate):
                 # Abort the bb
                 fuzzerstate.instr_objs_seq.pop()
                 fuzzerstate.bb_start_addr_seq.pop()
-                fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+                # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+                fuzzerstate.restore_states()
                 return False
 
         # Get an instruction string for this ISA class
@@ -245,7 +248,8 @@ def gen_basicblock(fuzzerstate):
             # Abort the bb
             fuzzerstate.instr_objs_seq.pop()
             fuzzerstate.bb_start_addr_seq.pop()
-            fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+            # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+            fuzzerstate.restore_states()
             return False
         if curr_isa_class == ISAInstrClass.JAL:
             next_instr = create_instr('jal', fuzzerstate, curr_addr)
@@ -271,7 +275,8 @@ def gen_basicblock(fuzzerstate):
             # Abort the bb
             fuzzerstate.instr_objs_seq.pop()
             fuzzerstate.bb_start_addr_seq.pop()
-            fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+            # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+            fuzzerstate.restore_states()
             return False
 
         next_instr = create_instr('jalr', fuzzerstate, curr_addr)
@@ -339,13 +344,15 @@ def pop_last_bbs_to_connect_with_final_block(fuzzerstate):
             # The last basic block of the series is a candidate for jumping to the final block.
             # The target address of the last cf instruction will be injected later.
             if popped_at_least_once:
-                fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+                # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+                fuzzerstate.restore_states()
             return True
         # else, in case the last block could not reach the final block, then we discard it and try with the previous one.
         popped_at_least_once = True
         fuzzerstate.instr_objs_seq.pop()
         fuzzerstate.bb_start_addr_seq.pop()
-        fuzzerstate.saved_reg_states.pop()
+        # fuzzerstate.saved_reg_states.pop()
+        fuzzerstate.pop_states()
 
     if USE_MMU:
         if DEBUG_PRINT: print(f"Updating fuzzerstate after a pop, old layout: {fuzzerstate.effective_curr_layout}, old_priv: ",fuzzerstate.privilegestate.privstate)
@@ -603,7 +610,8 @@ def gen_basicblocks(fuzzerstate):
         fuzzerstate.reset()
         if not gen_initial_basic_block(fuzzerstate, SPIKE_STARTADDR): continue
 
-        fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
+        # fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
+        fuzzerstate.save_states()
 
         # Reserve space for the second basic block (whose address is already fixed).
         fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
@@ -635,7 +643,8 @@ def gen_basicblocks(fuzzerstate):
                 # This corresponds to failing to find space for a new basic block. In this case, this block may also not have completed, and we drop it.
                 break
             # Save the register states
-            fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
+            # fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
+            fuzzerstate.save_states()
             if fuzzerstate.nmax_bbs is not None and len(fuzzerstate.instr_objs_seq) >= fuzzerstate.nmax_bbs or fuzzerstate.memview.get_allocated_ratio() >= LIMIT_MEM_SATURATION_RATIO:
                 break
             fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
