@@ -90,7 +90,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             # value validation between in-situ simulation and spike
             mismatch = fuzzerstate.intregpickstate.regs[id+1].check(expected_intregvals[id])
             if mismatch:
-                raise ValueError(f"Value mismatch between in-situ and spike for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}")
+                raise ValueError(f"(SPIKE) Value mismatch between in-situ and spike for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}")
 
             # value validation between in-situ simulation and RTL
             mismatch = fuzzerstate.intregpickstate.regs[id+1].check(value)
@@ -99,12 +99,12 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 if isinstance(last_instr, EPCWriterInstruction) and last_instr.csr_instr.csr_id == CSR_IDS.SEPC:
                     pass # If the responsible instruction was an SEPC write, we ignore the mismatch as exception priority order is ambiguous.
                 else:    
-                    raise ValueError(f"Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}")
+                    raise ValueError(f"(RTL) Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}")
 
             if fuzzerstate.taint_en:
                 mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
                 if mismatch:
-                    raise ValueError(f"Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}")
+                    raise ValueError(f"(RTL) mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}")
 
         if PRINT_MEMORY_VALIDATION:
             print("*** MEMORY VALIDATION ***:")
