@@ -9,6 +9,7 @@ from cascade.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals_interm, 
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, RDInstruction_t0
 from cascade.fuzzsim import run_rtl_and_load_regstream
+from cascade.util import IntRegIndivState
 from common.spike import SPIKE_STARTADDR
 from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
 from cascade.registers import ABI_INAMES,MAX_32b
@@ -85,13 +86,25 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         for id in range(fuzzerstate.num_pickable_regs-1):
             value = int(final_regvals_rtl[id]["value"],16)
             value_t0 = int(final_regvals_rtl[id]["value_t0"],16)
-            mismatch = fuzzerstate.intregpickstate.regs[id+1].check(value)
-            assert not mismatch, f"Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}"
+
+            # value validation between in-situ simulation and spike
             mismatch = fuzzerstate.intregpickstate.regs[id+1].check(expected_intregvals[id])
-            assert not mismatch, f"Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}"
+            if mismatch:
+                raise ValueError(f"Value mismatch between in-situ and spike for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}")
+
+            # value validation between in-situ simulation and RTL
+            mismatch = fuzzerstate.intregpickstate.regs[id+1].check(value)
+            if mismatch:
+                last_instr = filter_reg_traceback(id+1, None, fuzzerstate, None, False)
+                if isinstance(last_instr, EPCWriterInstruction) and last_instr.csr_instr.csr_id == CSR_IDS.SEPC:
+                    pass # If the responsible instruction was an SEPC write, we ignore the mismatch as exception priority order is ambiguous.
+                else:    
+                    raise ValueError(f"Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}")
+
             if fuzzerstate.taint_en:
                 mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
-                assert not mismatch, f"Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}"
+                if mismatch:
+                    raise ValueError(f"Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}")
 
         if PRINT_MEMORY_VALIDATION:
             print("*** MEMORY VALIDATION ***:")

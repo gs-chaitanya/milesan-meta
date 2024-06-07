@@ -7,6 +7,7 @@ from cascade.registers import ABI_INAMES
 from rv.csrids import CSR_ABI_NAMES
 from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT
 from common.spike import SPIKE_STARTADDR
+from cascade.registers import IntRegIndivState
 import numpy as np
 from rv.csrids import MPP_BIT, MIE_BIT, MPIE_BIT
 from rv.csrids import SIE_BIT, SPIE_BIT, SPP_BIT
@@ -117,25 +118,29 @@ class RDInstruction_t0(CFInstruction_t0):
     def __init__(self, fuzzerstate, instr_str):
         super().__init__(fuzzerstate, instr_str)
         self.rd_t0 = 0
-        self.writeback_trace = {}
+        self.writeback_trace = {"in-situ":(0,0), "final": (0,0)}
+        self.rd_unreliable = False
 
     # This function writes back the tainted value to the destination register. Since the fields for the source and destination registers
     # could also be tainted, the alternative values for those executions (i.e. where the registers were chosen differently according to their taints)
     # are computed and written back to the set of registers derived from the taints in the rd field.
     def writeback_t0(self, res_t0, res, is_spike_resolution: bool):
         assert self.fuzzerstate.taint_en
-        if self.rd_t0 == 0:
-            self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(res_t0)
-            self.add_writeback_trace(res_t0, is_spike_resolution)
-            return
+        assert self.rd_t0 == 0
+        self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(res_t0)
+        self.add_writeback_trace(res, res_t0, is_spike_resolution)
 
-    def add_writeback_trace(self, res_t0, is_spike_resolution: bool):
-        self.writeback_trace["in-situ" if is_spike_resolution else "final"] = res_t0
+    def add_writeback_trace(self, res, res_t0, is_spike_resolution: bool):
+        if is_spike_resolution and self.fuzzerstate.intregpickstate.regs[self.rd].fsm_state !=  IntRegIndivState.FREE:
+            self.rd_unreliable = True
+        self.writeback_trace["in-situ" if is_spike_resolution else "final"] = (res, res_t0)
         if not is_spike_resolution:
             self.assert_writeback_trace()
 
     def assert_writeback_trace(self): # This will fail when reducing.
-        assert self.writeback_trace["in-situ"] == self.writeback_trace["final"], f"Writeback trace mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'])} !=  {hex(self.writeback_trace['final'])} (Are we reducing?)"
+        if not is_placeholder(self) and self.rd >0 and not self.rd_unreliable: # The placeholders will result in different values by construction.
+            assert self.writeback_trace["in-situ"][0] == self.writeback_trace["final"][0], f"Writeback trace value mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'][0])} !=  {hex(self.writeback_trace['final'][0])}"
+        assert self.writeback_trace["in-situ"][1] == self.writeback_trace["final"][1], f"Writeback trace taint mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'][1])} !=  {hex(self.writeback_trace['final'][1])}"
 
 # does not inherit from ImmInstruction
 class ImmInstruction_t0(CFInstruction_t0):
@@ -327,6 +332,16 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0, RDInstruction_t
         self.fuzzerstate.advance_minstret()
 
 
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+        CRED = '\033[91m'
+        CEND = '\033[0m'
+        if self.imm_t0:
+            return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, " + CRED + f"{hex(self.imm)}" + CEND
+        else:
+            return super().get_str(is_spike_resolution)
+
+
+
 
 class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False):
@@ -395,10 +410,9 @@ class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0, RDInstruction_t0):
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         if is_spike_resolution:
             if self.spike_resolution_offset is None:
-                # if PRINT_INSTRUCTION_EXECUTION_IN_SITU:
-                #     print(f"{self.get_str(is_spike_resolution)}: spike_resolution_offset not yet determined. Setting rd_t0 to 0.")
                 if taint_en:
-                    self.execute_t0(None,is_spike_resolution)
+                    self.execute_t0(0x0,is_spike_resolution)
+                    self.fuzzerstate.advance_minstret()
                 return
             else:
                 spike_res_off = self.spike_resolution_offset
@@ -437,7 +451,8 @@ class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1, RDInstruction_t0):
             if self.spike_resolution_offset is None:
                 assert self.fuzzerstate.intregpickstate.regs[self.rd].get_val_t0() == 0
                 if taint_en:
-                    self.execute_t0(None,is_spike_resolution)
+                    self.execute_t0(0x0,is_spike_resolution)
+                    self.fuzzerstate.advance_minstret()
                 return
             else:
                 spike_res_off = self.spike_resolution_offset
@@ -463,7 +478,7 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
     def __init__(self, fuzzerstate, rdep: int, producer_id: int, is_rprod: bool = False):
         super().__init__(fuzzerstate, rdep, producer_id, is_rprod)
         self.rdep_t0 = 0
-        self.writeback_trace = {}
+        self.writeback_trace = {"in-situ":0, "final": 0}
 
     def execute_t0(self, res, is_spike_resolution):
         assert self.fuzzerstate.taint_en
@@ -501,10 +516,9 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
     # are computed and written back to the set of registers derived from the taints in the rdep field.
     def writeback_t0(self, res_t0, res, is_spike_resolution):
         assert self.fuzzerstate.taint_en
-        if self.rdep_t0 == 0:
-            self.fuzzerstate.intregpickstate.regs[self.rdep].set_val_t0(res_t0)
-            self.add_writeback_trace(res_t0, is_spike_resolution)
-            return
+        assert self.rdep_t0 == 0
+        self.fuzzerstate.intregpickstate.regs[self.rdep].set_val_t0(res_t0)
+        self.add_writeback_trace(res_t0, is_spike_resolution)
 
     def add_writeback_trace(self, res_t0, is_spike_resolution: bool):
         assert res_t0 == 0
@@ -556,7 +570,7 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
             if USE_MMU and self.produce_va_layout != -1:
                 self.fuzzerstate.advance_minstret()
                 if taint_en:
-                    self.execute_t0(0, is_spike_resolution)
+                    self.execute_t0(0x0, is_spike_resolution)
                     self.fuzzerstate.advance_minstret()
                 return
             rdep_val = self.fuzzerstate.intregpickstate.regs[RELOCATOR_REGISTER_ID].get_val()
@@ -607,7 +621,6 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
 
-
     def execute_t0(self, res, is_spike_resolution):
         assert self.fuzzerstate.taint_en
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
@@ -617,8 +630,6 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         addr = INSTR_FUNCS["addi"](rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
         res_t0 = self.fuzzerstate.memview.read_t0(addr,self.n_bytes, self.priv_level, self.va_layout)
         res_t0 = self.instr_func_t0(res_t0,self.fuzzerstate.is_design_64bit)
-        # if res_t0:
-        #     print(f"{self.get_str()} loaded tainted value from {hex(addr)}")
         self.writeback_t0(res_t0,res, is_spike_resolution) # We allow the rd field to be tainted, thus taint could be propagated to several destination registers.
 
 class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
@@ -700,7 +711,6 @@ class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
         assert 0
 
 
-
 class BranchInstruction_t0(BranchInstruction, BaseInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
@@ -742,6 +752,8 @@ class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
             self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT)
             self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr+4)
 
+        if self.paddr == 0x800057a8 or self.paddr == 0x800057a4:
+            print(f"{self.get_str()}: res: {hex(res)}, csr: {hex(csr_val)}")
         if self.csr_id == CSR_IDS.MINSTRET and self.instr_str == "csrrw":
             return
         self.fuzzerstate.advance_minstret()
@@ -837,43 +849,12 @@ class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstructio
             self.execute_sret()
 
     def execute_mret(self):
-        # mstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val()
-        # mstatus_t0 = self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].get_val_t0()
-        # assert mstatus_t0 == 0
-
-        # if not self.fuzzerstate.is_design_64bit:
-        #     mstatus |= self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUSH] << 32
-
-        # mpp = PrivilegeStateEnum((mstatus>>MPP_BIT)&0x3) # MPP has two bits
-        # assert self.priv_level_after_op == mpp, f"{self.get_str()}: Returning into wrong privelege: mpp is {mpp.name}, should be {self.priv_level_after_op.name}, mstatus is {hex(mstatus)}"
-        # mpie = (mstatus>>MPIE_BIT)&1
-
-        # mstatus &= ~(0x3<<MPP_BIT) # set MPP bits to 0
-        # mstatus = ((~(1<<MIE_BIT))&mstatus) | (mpie<<MIE_BIT)# set MIE bit to mpie
-        # mstatus |= (1<<MPIE_BIT)# set MPIE bit to 1
-        # # print(f"{self.get_str()} MRET mstatus: {hex(mstatus_cpy)} -> {hex(mstatus)}")
-        # self.fuzzerstate.csrfile.regs[CSR_IDS.MSTATUS].set_val(mstatus)
-
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val()
         self.fuzzerstate.advance_minstret()
 
     def execute_sret(self):
-        # sstatus = self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].get_val()
-        # sstatus_t0 = self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].get_val_t0()
-        # assert sstatus_t0 == 0
-
-        # spp = PrivilegeStateEnum((sstatus>>SPP_BIT)&1)
-        # assert self.priv_level_after_op == spp,  f"{self.get_str()}: Returning into wrong privelege: spp is {spp.name}, should be {self.priv_level_after_op.name}: sstatus is {hex(sstatus)}"
-        # spie = (sstatus>>SPIE_BIT)&1
-        
-        # sstatus &= ~(1<<SPP_BIT) # set SPP bit to 0
-        # sstatus = ((~(1<<SIE_BIT))&sstatus) | (spie<<SIE_BIT)# set SIE bit to SPIE
-        # sstatus |= (1<<SPIE_BIT)# set SPIE bit to 1
-        # self.fuzzerstate.csrfile.regs[CSR_IDS.SSTATUS].set_val(sstatus)
-
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].get_val()
         self.fuzzerstate.advance_minstret()
-
 
 
 

@@ -206,12 +206,20 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
+        # Misaligned memory accesses trigger a page fault and a misaligned address exception. Their priority and order of 
+        # handling is open to the platform, therefore we can't rely on the STVEC and SCAUSE values.
+        fuzzerstate.csrfile.regs[CSR_IDS.STVEC].unreliable = True
+        fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
         return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, True)
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
         raise NotImplementedError("ID_LOAD_ACCESS_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
+        # Misaligned memory accesses trigger a page fault and a misaligned address exception. Their priority and order of 
+        # handling is open to the platform, therefore we can't rely on the STVEC and SCAUSE values.
+        fuzzerstate.csrfile.regs[CSR_IDS.STVEC].unreliable = True
+        fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
         return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, False)
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
         raise NotImplementedError("ID_STORE_AMO_ACCESS_FAULT not yet supported")

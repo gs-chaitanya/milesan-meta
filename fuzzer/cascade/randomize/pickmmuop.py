@@ -524,7 +524,7 @@ def gen_satp_write(fuzzerstate, curr_addr):
     # Write to SATP
     is_satp_smode = ((fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR), fuzzerstate.target_layout)
     instr_objs.append(CSRRegInstruction_t0(fuzzerstate, "csrrw", satp_val_reg, satp_val_reg, CSR_IDS.SATP, is_satp_smode=is_satp_smode))
-
+    fuzzerstate.intregpickstate.set_regstate(satp_val_reg, IntRegIndivState.RELOCUSED, force=True)
 
     # On satp write, if the ASID is recycled, we need an sfence
     # FIXME this is still buggy, as we still rely on traps currently
@@ -563,7 +563,8 @@ def gen_jump_new_layout(fuzzerstate, curr_addr):
         instr_objs.append(R12DInstruction_t0(fuzzerstate,"and", tmp, tmp, RPROD_MASK_REGISTER_ID))
     # Finally, we jump to the new layout
     instr_objs.append(JALRInstruction_t0(fuzzerstate,"jalr", tmp, tmp, 0, -1, True))
-    
+    # fuzzerstate.intregpickstate.set_regstate(tmp, IntRegIndivState.RELOCUSED, force=True)
+
     if GET_DATA:
         fuzzerstate.num_hardcoded_instr_mmufsm += len(instr_objs)
 

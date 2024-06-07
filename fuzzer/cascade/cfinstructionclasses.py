@@ -137,8 +137,10 @@ class BaseInstruction:
         print(self.get_str(is_spike_resolution))
 
     def get_preamble(self):
-        return f"({self.priv_level.name[0]}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}"
-
+        if self.priv_level is not None and self.va_layout is not None and self.paddr is not None and self.vaddr is not None:
+            return f"({self.priv_level.name[0]}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}"
+        else:
+            return "(Undetermined)"
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{self.get_preamble()}: {self.instr_str}"
 
@@ -1547,7 +1549,7 @@ class MisalignedMemInstruction(ExceptionInstruction):
         # Here, in principle no need for "self." in producer_id because it is already known by the wrapped instance.
         # But it is practical to have it here to discriminate between exceptions that require a consumed register and those that do not.
         self.producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCUSED)
 
         # Second, choose a random memory instruction type that can be misaligned.
         meminstr_type_weights = [

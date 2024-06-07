@@ -64,7 +64,7 @@ class CSR(__Register):
         self.val_t0 = val_t0
         self.csr_mask = csr_mask
         self.csr_type = csr_type
-        self.reliable = True # Used for e.g. SEPC/SCAUSE, when the order of exception handling is not strictly determined by the spec and thus the value is ambiguous until overwritten.
+        self.unreliable = False # Used for e.g. SEPC/SCAUSE, when the order of exception handling is not strictly determined by the spec and thus the value is ambiguous until overwritten.
 
     def set_val(self, val):
         self.val = self.mask&_get_writeable_csr_value(val,self.csr_mask,self.csr_type)

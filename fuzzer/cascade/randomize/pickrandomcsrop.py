@@ -55,7 +55,11 @@ def gen_random_csr_op(fuzzerstate):
 
             if target_csr == MachineCSROpCandidates64.SCAUSE:
                 # According to the spec, the SCAUSE CSR must be able to hold bits 0 to 4. mret is not required to.
-                ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), random.randrange(32), CSR_IDS.SCAUSE)
+                rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False)
+                # The scause is unreliable if there was a MisalignedMemInstruction before and therefore the scause can be either the value from a page fault or from misaligned access.
+                if fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable and rd>0:
+                    fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
+                ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", rd, random.randrange(32), CSR_IDS.SCAUSE)
             elif target_csr == MachineCSROpCandidates64.MCAUSE:
                 ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), random.randrange(16), CSR_IDS.MCAUSE)
             elif target_csr == MachineCSROpCandidates64.SSCRATCH:
@@ -92,16 +96,25 @@ def gen_random_csr_op(fuzzerstate):
                     or (not fuzzerstate.design_has_supervisor_mode and (target_csr in (MachineCSROpCandidates32.SCAUSE, MachineCSROpCandidates32.SSCRATCH))):
                     target_csr = random.choice(list(MachineCSROpCandidates32))
             if target_csr == MachineCSROpCandidates32.SCAUSE:
+                rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False)
+                # The scause is unreliable if there was a MisalignedMemInstruction before and therefore the scause can be either the value from a page fault or from misaligned access.
+                if fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable and rd>0:
+                        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
                 # According to the spec, the SCAUSE CSR must be able to hold bits 0 to 4. mret is not required to.
                 if "vexriscv" in fuzzerstate.design_name: # vexriscv complies with the privileged spec v1.10, which does not require scause to hold the 5th bit. Similarly, kronos implements privileged spec v1.11
                     randval = random.randrange(16)
-                    ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), randval, CSR_IDS.SCAUSE)
+                # The scause is unreliable if there was a MisalignedMemInstruction before and therefore the scause can be either the value from a page fault or from misaligned access.
+                    ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", rd, randval, CSR_IDS.SCAUSE)
                 else:
-                    ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), random.randrange(32), CSR_IDS.SCAUSE)
+                    ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", rd, random.randrange(32), CSR_IDS.SCAUSE)
             elif target_csr == MachineCSROpCandidates32.MCAUSE:
+                # It is important that rs is chosen first, otherwise it could be that as we choose rd, we set it from RELOCUSED->free, and then choose it mistakenly as rs.
                 ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), random.randrange(16), CSR_IDS.MCAUSE)
             elif target_csr == MachineCSROpCandidates32.SSCRATCH:
-                ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.SSCRATCH)
+                # It is important that rs is chosen first, otherwise it could be that as we choose rd, we set it from RELOCUSED->free, and then choose it mistakenly as rs.
+                rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
+                rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force=False)
+                ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", rd, rs, CSR_IDS.SSCRATCH)
             elif target_csr == MachineCSROpCandidates32.MSCRATCH:
                 # It is important that rs is chosen first, otherwise it could be that as we choose rd, we set it from RELOCUSED->free, and then choose it mistakenly as rs.
                 rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
@@ -129,10 +142,14 @@ def gen_random_csr_op(fuzzerstate):
     else:
         target_csr = random.choice(list(SupervisorCSROpCandidates))
         if target_csr == SupervisorCSROpCandidates.SCAUSE:
+            rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False)
+            # The scause is unreliable if there was a MisalignedMemInstruction before and therefore the scause can be either the value from a page fault or from misaligned access.
+            if fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable and rd>0:
+                fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
             if "vexriscv" in fuzzerstate.design_name: # vexriscv complies with the privileged spec v1.10, which does not require scause to hold the 5th bit. Similarly, kronos implements privileged spec v1.11
-                ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), random.randrange(16), CSR_IDS.SCAUSE)
+                ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", rd, random.randrange(16), CSR_IDS.SCAUSE)
             else:
-                ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), random.randrange(32), CSR_IDS.SCAUSE)
+                ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", rd, random.randrange(32), CSR_IDS.SCAUSE)
         elif target_csr == SupervisorCSROpCandidates.SSCRATCH:
             # It is important that rs is chosen first, otherwise it could be that as we choose rd, we set it from RELOCUSED->free, and then choose it mistakenly as rs.
             rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
