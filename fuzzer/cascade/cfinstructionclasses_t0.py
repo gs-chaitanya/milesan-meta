@@ -752,8 +752,6 @@ class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
             self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT)
             self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr+4)
 
-        if self.paddr == 0x800057a8 or self.paddr == 0x800057a4:
-            print(f"{self.get_str()}: res: {hex(res)}, csr: {hex(csr_val)}")
         if self.csr_id == CSR_IDS.MINSTRET and self.instr_str == "csrrw":
             return
         self.fuzzerstate.advance_minstret()
