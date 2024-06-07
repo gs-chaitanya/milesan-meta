@@ -283,6 +283,25 @@ class IntRegPickState:
             if rd:
                 self.set_regstate(rd, IntRegIndivState.FREE)
         return rd
+
+    def pick_untainted_int_outputregs_nonzero(self, n:int, authorize_sideeffects: bool = True, force: bool = False):
+        authorized_regs_onehot = self.get_free_or_relocused_regs_onehot() # We could use any, but let's not waste the generated ones
+        was_zero_authorized = authorized_regs_onehot[0]
+        authorized_regs_onehot[0] = 0
+        if DO_ASSERT:
+            assert np.max(authorized_regs_onehot) == 1, "Unexpectedly, some register was registered in two states at a time."
+        regs = None
+        assert sum(authorized_regs_onehot) >= n
+        while regs is None or len(set(regs)) != n:
+            regs = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, True, force), k=n)
+        if authorize_sideeffects:
+            for rd in regs:
+                self._update_probaweights(rd)
+                if rd:
+                    self.set_regstate(rd, IntRegIndivState.FREE)
+        authorized_regs_onehot[0] = was_zero_authorized
+        return regs
+
   
     def pick_int_outputreg_nonzero(self, authorize_sideeffects: bool = True):
         authorized_regs_onehot = self.get_free_or_relocused_regs_onehot() # We could use any, but let's not waste the generated ones

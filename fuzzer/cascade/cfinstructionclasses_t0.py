@@ -136,6 +136,7 @@ class RDInstruction_t0(CFInstruction_t0):
 
     def assert_writeback_trace(self): # This will fail when reducing.
         assert self.writeback_trace["in-situ"] == self.writeback_trace["final"], f"Writeback trace mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'])} !=  {hex(self.writeback_trace['final'])} (Are we reducing?)"
+
 # does not inherit from ImmInstruction
 class ImmInstruction_t0(CFInstruction_t0):
     imm_t0: int
@@ -147,7 +148,7 @@ class ImmInstruction_t0(CFInstruction_t0):
         if DO_ASSERT:
             assert self.paddr >= SPIKE_STARTADDR
             assert self.paddr < SPIKE_STARTADDR + self.fuzzerstate.memsize
-        self.fuzzerstate.memview.write_t0(self.paddr, self.gen_bytecode_int_t0(is_spike_resolution), 4)
+            self.fuzzerstate.memview.write_t0(self.paddr, self.gen_bytecode_int_t0(is_spike_resolution), 4)
         # if self.imm_t0:
         #     print(f"{self.get_str()} adds taint extra with imm {hex(self.imm_t0)}")
         # else:
@@ -248,6 +249,14 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         # Writeback taints according to tainted bits in rd.
         self.writeback_t0(res_t0, res, is_spike_resolution)
 
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+        CRED = '\033[91m'
+        CEND = '\033[0m'
+        if self.imm_t0:
+            return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}," + CRED + f"{hex(self.imm)}" + CEND
+        else:
+            return super().get_str(is_spike_resolution)
+
     # Overrides function in ImmRdInstructionClass
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         if not is_spike_resolution:
@@ -342,13 +351,14 @@ class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
             res = self.instr_func(self.paddr, 0x0, self.fuzzerstate.is_design_64bit)
         if taint_en:
             self.execute_t0(res, is_spike_resolution)
+        
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
 
 
 class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False):
-        super().__init__(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, to_new_layout: bool = False, iscompressed: bool = False):
+        super().__init__(fuzzerstate, instr_str, rd, rs1, imm, producer_id, to_new_layout, iscompressed)
         self.rd_t0 = 0
         self.rs1_t0 = 0
 
@@ -587,7 +597,7 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         addr = INSTR_FUNCS["addi"](rs1_val,self.imm, self.fuzzerstate.is_design_64bit)
         try:
-            res = self.fuzzerstate.memview.read(addr,self.n_bytes)
+            res = self.fuzzerstate.memview.read(addr,self.n_bytes, self.priv_level, self.va_layout)
         except Exception as e:
             print(f"{self.get_str()} failed to read from addr {hex(addr)}. {ABI_INAMES[self.rs1]}:{hex(rs1_val)}")
             raise e
@@ -605,7 +615,7 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         assert rs1_val_t0 == 0, f"Source register {ABI_INAMES[self.rs1]} is tainted ({hex(rs1_val_t0)}), this is not allowed."
         assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
         addr = INSTR_FUNCS["addi"](rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
-        res_t0 = self.fuzzerstate.memview.read_t0(addr,self.n_bytes)
+        res_t0 = self.fuzzerstate.memview.read_t0(addr,self.n_bytes, self.priv_level, self.va_layout)
         res_t0 = self.instr_func_t0(res_t0,self.fuzzerstate.is_design_64bit)
         # if res_t0:
         #     print(f"{self.get_str()} loaded tainted value from {hex(addr)}")
@@ -629,7 +639,7 @@ class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
         res = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
         if taint_en:
             self.execute_t0(res, is_spike_resolution)
-        self.fuzzerstate.memview.write(addr, res&self.mask, self.n_bytes)
+        self.fuzzerstate.memview.write(addr, res&self.mask, self.n_bytes, self.priv_level, self.va_layout)
         self.fuzzerstate.advance_minstret()
 
 
@@ -641,7 +651,7 @@ class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
         assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
         addr = INSTR_FUNCS["addi"](rs1_val,self.imm, self.fuzzerstate.is_design_64bit)
         rs2_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
-        self.fuzzerstate.memview.write_t0(addr,rs2_val_t0&self.mask, self.n_bytes) # We don't allow addresses to be tainted, thus we don't need a writeback here.
+        self.fuzzerstate.memview.write_t0(addr,rs2_val_t0&self.mask, self.n_bytes, self.priv_level, self.va_layout) # We don't allow addresses to be tainted, thus we don't need a writeback here.
 
 
 class RegdumpInstruction_t0(IntStoreInstruction_t0):
@@ -713,11 +723,12 @@ class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
         super().__init__(fuzzerstate, instr_str, rd, rs1, csr_id, iscompressed, is_satp_smode, mpp_val)
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        # if self.csr_id == CSR_IDS.MEDELEG:
-        #     print(f"Executing {self.get_str()}: {hex(self.fuzzerstate.intregpickstate.regs[self.rd].get_val())}, {hex(self.fuzzerstate.csrfile.regs[self.csr_id].get_val())}, {hex(self.fuzzerstate.intregpickstate.regs[self.rs1].get_val())}")
+        is_satp_smode, va_layout = self.is_satp_smode
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
+            if USE_MMU and is_satp_smode:
+                self.fuzzerstate.curr_pc = phys2virt(self.paddr+4, PrivilegeStateEnum.SUPERVISOR, va_layout,self.fuzzerstate,absolute_addr=False)
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         csr_val = self.fuzzerstate.csrfile.regs[self.csr_id].get_val()
         res = self.instr_func(rs1_val, csr_val, self.fuzzerstate.is_design_64bit)
@@ -725,6 +736,12 @@ class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
             self.execute_t0(res,is_spike_resolution)
         self.fuzzerstate.csrfile.regs[self.csr_id].set_val(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(csr_val)
+
+        if USE_MMU and is_satp_smode:
+            # The SATP write is followed by an SFENCE.VMA, which causes the page fault.
+            self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT)
+            self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr+4)
+
         if self.csr_id == CSR_IDS.MINSTRET and self.instr_str == "csrrw":
             return
         self.fuzzerstate.advance_minstret()

@@ -68,7 +68,7 @@ def __gen_spike_dbgcmd_file_for_trace_regs_at_pc_locs(identifier_str: str, start
     for next_pc, is_float_req, reg_to_dump in regdump_reqs:
         # The surrounding condition on permits to get multiple registers in the same PC, without issuing an useless `until`. This is useful for non-taken branches, for example, in which we need to know the values of both operands.
         if prev_req_pc != next_pc:
-            spike_debug_commands.append(f"until pc 0 0x{startpc+next_pc:x}")
+            spike_debug_commands.append(f"until pc 0 0x{next_pc:x}")
             prev_req_pc = next_pc
         # No elif here!
         if reg_to_dump == 'priv':
@@ -205,7 +205,6 @@ def run_trace_all_pcs(identifier_str: str, elfpath: str, rvflags: str, numinstrs
         elfpath
     )
     
-    print(" ".join(spike_shell_command))
     try:
         spike_out = subprocess.run(spike_shell_command, capture_output=True, timeout=get_spike_timeout_seconds()).stderr
     except Exception as e:

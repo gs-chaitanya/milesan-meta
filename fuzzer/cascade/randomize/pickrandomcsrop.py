@@ -59,10 +59,12 @@ def gen_random_csr_op(fuzzerstate):
             elif target_csr == MachineCSROpCandidates64.MCAUSE:
                 ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), random.randrange(16), CSR_IDS.MCAUSE)
             elif target_csr == MachineCSROpCandidates64.SSCRATCH:
+                    # It is important that rs is chosen first, otherwise it could be that as we choose rd, we set it from RELOCUSED->free, and then choose it mistakenly as rs.
                     rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
                     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force=False)
                     ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", rd, rs, CSR_IDS.SSCRATCH)
             elif target_csr == MachineCSROpCandidates64.MSCRATCH:
+                # It is important that rs is chosen first, otherwise it could be that as we choose rd, we set it from RELOCUSED->free, and then choose it mistakenly as rs.
                 rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
                 rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force=False)
                 ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", rd, rs, CSR_IDS.MSCRATCH)
@@ -101,6 +103,7 @@ def gen_random_csr_op(fuzzerstate):
             elif target_csr == MachineCSROpCandidates32.SSCRATCH:
                 ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.SSCRATCH)
             elif target_csr == MachineCSROpCandidates32.MSCRATCH:
+                # It is important that rs is chosen first, otherwise it could be that as we choose rd, we set it from RELOCUSED->free, and then choose it mistakenly as rs.
                 rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
                 rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force=False)
                 ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", rd, rs, CSR_IDS.MSCRATCH)
@@ -131,7 +134,10 @@ def gen_random_csr_op(fuzzerstate):
             else:
                 ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), random.randrange(32), CSR_IDS.SCAUSE)
         elif target_csr == SupervisorCSROpCandidates.SSCRATCH:
-            ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False), fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True), CSR_IDS.SSCRATCH)
+            # It is important that rs is chosen first, otherwise it could be that as we choose rd, we set it from RELOCUSED->free, and then choose it mistakenly as rs.
+            rs = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
+            rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False)
+            ret = CSRRegInstruction_t0(fuzzerstate,"csrrw", rd, rs, CSR_IDS.SSCRATCH)
         else:
             raise Exception("Unexpected target_csr: {}".format(target_csr))
     return ret

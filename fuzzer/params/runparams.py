@@ -41,7 +41,7 @@ PRINT_ENVIRONMENT = False
 
 INSERT_REGDUMPS = False # Speculative bugs will likely diappear when enabled.
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
-CHECK_PC_SPIKE_AGAIN = False
+CHECK_PC_SPIKE_AGAIN = True
 assert not (INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN)
 INSERT_FENCE = False # The stores should become architectually visible in order, so this should not be necessary
 

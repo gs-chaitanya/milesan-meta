@@ -13,6 +13,8 @@ from cascade.util import IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS, ISAInstrCl
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import *
 from cascade.toleratebugs import is_tolerate_branchpred
+from cascade.spikeresolution import get_current_layout
+from cascade.mmu_utils import li_doubleword
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
 # This module creates an instruction from its instruction string, and some state which will condition which registers and immediates will be picked, and with which probability.
 
@@ -88,8 +90,6 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
     instr = ImmRdInstruction_t0(fuzzerstate,instr_str, rd, imm, imm_t0, iscompressed)
-    if fuzzerstate.taint_en:
-        instr.write_t0(False)  # Write tainted bytecode to instruction memory
     return instr
 
 def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
@@ -100,8 +100,6 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
     instr = RegImmInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, imm_t0, iscompressed)
-    if fuzzerstate.taint_en:
-        instr.write_t0(False) # Write tainted bytecode to instruction memory if taint is enabled.
     return instr
 
 def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
@@ -352,7 +350,6 @@ def create_targeted_consumer_instrobj(fuzzerstate):
 # TODO use FSM for this
 def create_memop_instrobjs(fuzzerstate, instr_str):
     assert instr_str in IntLoadInstruction_t0.authorized_instr_strs or instr_str in IntStoreInstruction_t0.authorized_instr_strs, f"{instr_str} not in a valid memory operation."
-    rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.
     if instr_str in ["lb","sb","lbu"]:
         alignment_bits = 0
         min_space = 1
@@ -362,26 +359,46 @@ def create_memop_instrobjs(fuzzerstate, instr_str):
     elif instr_str in ["lw","sw"]:
         alignment_bits = 2
         min_space = 4
-    
+
+    if len(fuzzerstate.instr_objs_seq[-1]):
+        last_instr = fuzzerstate.instr_objs_seq[-1][-1] # We need the layout from the previous instruction
+    else: # In case its the first instruciton of a block.
+        last_instr = fuzzerstate.instr_objs_seq[-2][-1] # We need the layout from the previous instruction
+
+    va_layout, priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
+
+
     addr  = fuzzerstate.memview.gen_random_addr_from_randomblock(alignment_bits,min_space)
     assert addr is not None
-    uimm0, uimm1 = li_into_reg(to_unsigned(addr, fuzzerstate.is_design_64bit), False)
-    if instr_str in ["sb","sh","sw"]:
-        rs2 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg(force = False)
-        return [
-            ImmRdInstruction_t0,
-            RegImmInstruction_t0,
-            R12DInstruction_t0,
-            IntStoreInstruction_t0
-        ],[(fuzzerstate, "lui", rd, uimm0),(fuzzerstate, "addi",rd,rd,uimm1),(fuzzerstate, "xor",rd,rd,RELOCATOR_REGISTER_ID),(fuzzerstate, instr_str, rd, rs2, 0x0, None)]
-    else:
-        return [
-            ImmRdInstruction_t0,
-            RegImmInstruction_t0,
-            R12DInstruction_t0,
-            IntLoadInstruction_t0
-        ], [(fuzzerstate, "lui", rd, uimm0),(fuzzerstate,"addi",rd,rd,uimm1),(fuzzerstate, "xor",rd,rd ,RELOCATOR_REGISTER_ID),(fuzzerstate, instr_str, rd, rd, 0x0, None)]
+    if not USE_MMU or va_layout == -1: # Dont need 64bit value in bare
+        rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.
+        uimm0, uimm1 = li_into_reg(to_unsigned(addr, fuzzerstate.is_design_64bit), False)
+        if instr_str in ["sb","sh","sw"]:
+            rs2 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg(force = False)
+            return [
+                ImmRdInstruction_t0(fuzzerstate, "lui", rd, uimm0),
+                RegImmInstruction_t0(fuzzerstate, "addi",rd,rd,uimm1),
+                R12DInstruction_t0(fuzzerstate, "xor",rd,rd,RELOCATOR_REGISTER_ID),
+                IntStoreInstruction_t0(fuzzerstate, instr_str, rd, rs2, 0x0, None)
+            ]
+        else:
+            return [
+                ImmRdInstruction_t0(fuzzerstate, "lui", rd, uimm0),
+                RegImmInstruction_t0(fuzzerstate,"addi",rd,rd,uimm1),
+                R12DInstruction_t0(fuzzerstate, "xor",rd,rd ,RELOCATOR_REGISTER_ID),
+                IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rd, 0x0, None)
+            ]
 
+    else: # if we use the MMU, we need to get the virtual address and use a sequence to set up a 64 bit address
+        (rd,tmp) = fuzzerstate.intregpickstate.pick_untainted_int_outputregs_nonzero(2,force = False) # Rd and tmp will be untainted after execution.
+        addr = phys2virt(addr, priv_level, va_layout,fuzzerstate,absolute_addr=True)
+        instr_objs = li_doubleword(addr, rd, tmp, fuzzerstate)
+        if instr_str in ["sb","sh","sw"]:
+            rs2 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg(force = False)
+            instr_objs += [IntStoreInstruction_t0(fuzzerstate, instr_str, rd, rs2, 0x0, None)]
+        else:
+            instr_objs += [IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rd, 0x0, None)]
+        return instr_objs
 # The reservation in the MemoryView is already done ahead and should not be reiterated here.
 # @param jalr_addr_reg: only meaningful if a jalr is present (in the latter case, it should be the next instruction)
 def create_instr(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool = False):

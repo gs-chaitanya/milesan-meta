@@ -295,7 +295,7 @@ def gen_tvecfill_instr(fuzzerstate):
         else:
             rd = fuzzerstate.intregpickstate.pick_int_outputreg()
         fuzzerstate.privilegestate.is_stvec_populated = True
-
+    
     if rd>0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
     return TvecWriterInstruction_t0(fuzzerstate,is_mtvec, rd, rs1, producer_id)

@@ -7,6 +7,7 @@ from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_
 from cascade.util import ISAInstrClass, IntRegIndivState, MmuState, BASIC_BLOCK_MIN_SPACE
 from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, USE_MMU, REGFSM_BIAS, MAX_NUM_FENCES_PER_EXECUTION
 from cascade.privilegestate import PrivilegeStateEnum, is_ready_to_descend_privileges
+from cascade.util import IntRegIndivState
 import random
 from copy import copy
 
@@ -29,7 +30,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.JAL :        0.01,
     ISAInstrClass.JALR:        0.1,
     ISAInstrClass.BRANCH:      0.01,
-    ISAInstrClass.MEM:         0,
+    ISAInstrClass.MEM:         0.1,
     ISAInstrClass.MEM64:       0,
     ISAInstrClass.MEMFPU:      0,
     ISAInstrClass.FPU:         0,
@@ -153,6 +154,8 @@ def _get_isainstrclass_filtered_weights(fuzzerstate, curr_alloc_cursor):
         or (((fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.SUPERVISOR] | 0x7fffffff) - (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.USER] | 0x7fffffff)) != 0 and fuzzerstate.is_design_64bit) \
         or "cva6" in fuzzerstate.design_name: #cva6 does not use the same ISA than spike, hard to change
         ret_dict[ISAInstrClass.MSTATUS] = 0
+    if USE_MMU and (fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) + fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.RELOCUSED)) < 3: # we need two and theres always the zero reg
+        ret_dict[ISAInstrClass.MEM] = 0
 
     # Normalize the weights
     if DO_ASSERT:

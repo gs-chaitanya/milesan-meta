@@ -19,7 +19,7 @@ from cascade.randomize.pickstoreaddr import MemStoreState
 from cascade.randomize.pickreg import IntRegPickState, FloatRegPickState
 from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
-from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace
+from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0
 from cascade.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen
 from rv.csrids import CSR_IDS, CSR_ABI_NAMES
 from cascade.registers import ABI_INAMES
@@ -334,8 +334,10 @@ class FuzzerState:
         curr_val = self.csrfile.regs[CSR_IDS.MINSTRET].get_val()
         self.csrfile.regs[CSR_IDS.MINSTRET].set_val(curr_val+1)
 
-    def append_and_execute_instr(self, instr, execute: bool= False, insert_regdump: bool = INSERT_REGDUMPS):
+    def append_and_execute_instr(self, instr, insert_regdump: bool = INSERT_REGDUMPS):
         instr.reset_addr()
+        if self.taint_en and isinstance(instr, ImmRdInstruction_t0):
+            instr.write_t0() # Write tainted bytecode to instruction memory if taint is enabled.
         if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
             instr.print(is_spike_resolution=True)
         self.instr_objs_seq[-1].append(instr)

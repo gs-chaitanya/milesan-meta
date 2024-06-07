@@ -458,13 +458,14 @@ def gen_stvec_satp(fuzzerstate, curr_addr):
     fuzzerstate.stvec_satp_op_coordinates = (len(fuzzerstate.instr_objs_seq)-1, len(fuzzerstate.instr_objs_seq[-1]) + len(instr_objs))
     stvec_val_reg   = fuzzerstate.intregpickstate.pick_int_inputreg_nonzero()
     lui_imm, addi_imm = 0, 0
-    fuzzerstate.append(ImmRdInstruction_t0(fuzzerstate,"lui", stvec_val_reg, lui_imm))
+    instr_objs.append(ImmRdInstruction_t0(fuzzerstate,"lui", stvec_val_reg, lui_imm))
     instr_objs.append(RegImmInstruction_t0(fuzzerstate,"addi", stvec_val_reg, stvec_val_reg, addi_imm))
     if fuzzerstate.is_design_64bit and fuzzerstate.target_layout != -1:
         instr_objs.append(R12DInstruction_t0(fuzzerstate,"and", stvec_val_reg, stvec_val_reg, RPROD_MASK_REGISTER_ID))
     if fuzzerstate.is_design_64bit and fuzzerstate.target_layout == -1:
         instr_objs.append(R12DInstruction_t0(fuzzerstate,"and", stvec_val_reg, stvec_val_reg, RDEP_MASK_REGISTER_ID))
     instr_objs.append(TvecWriterInstruction_t0(fuzzerstate,False, stvec_val_reg, stvec_val_reg, -1))
+    fuzzerstate.intregpickstate.set_regstate(stvec_val_reg, IntRegIndivState.RELOCUSED, force=True)
     fuzzerstate.n_mising_r_cmds += 1
 
     if GET_DATA:
@@ -517,12 +518,13 @@ def gen_satp_write(fuzzerstate, curr_addr):
     else:
         satp_val_reg = fuzzerstate.intregpickstate.pick_int_inputreg_nonzero()
         lui_imm, addi_imm = li_into_reg(satp_val, False)
-        instr_objs.append(ImmRdInstruction_t0(fuzzerstate,"lui", satp_val_reg, lui_imm, fuzzerstate.is_design_64bit))
-        instr_objs.append(RegImmInstruction_t0(fuzzerstate,"addi", satp_val_reg, satp_val_reg, addi_imm, fuzzerstate.is_design_64bit))
+        instr_objs.append(ImmRdInstruction_t0(fuzzerstate,"lui", satp_val_reg, lui_imm, fuzzerstate))
+        instr_objs.append(RegImmInstruction_t0(fuzzerstate,"addi", satp_val_reg, satp_val_reg, addi_imm))
 
     # Write to SATP
     is_satp_smode = ((fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR), fuzzerstate.target_layout)
     instr_objs.append(CSRRegInstruction_t0(fuzzerstate, "csrrw", satp_val_reg, satp_val_reg, CSR_IDS.SATP, is_satp_smode=is_satp_smode))
+
 
     # On satp write, if the ASID is recycled, we need an sfence
     # FIXME this is still buggy, as we still rely on traps currently
@@ -555,12 +557,12 @@ def gen_jump_new_layout(fuzzerstate, curr_addr):
         target = fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.target_layout][fuzzerstate.privilegestate.privstate] + curr_addr + 3*4
         lui_imm, addi_imm = li_into_reg(target, False)
     
-    instr_objs.append(ImmRdInstruction_t0(fuzzerstate,"lui", tmp, lui_imm, fuzzerstate.is_design_64bit)) # Cannot produce, rely on freshly generated RPROD
-    instr_objs.append(RegImmInstruction_t0(fuzzerstate,"addi", tmp, tmp, addi_imm, fuzzerstate.is_design_64bit))
+    instr_objs.append(ImmRdInstruction_t0(fuzzerstate,"lui", tmp, lui_imm)) # Cannot produce, rely on freshly generated RPROD
+    instr_objs.append(RegImmInstruction_t0(fuzzerstate,"addi", tmp, tmp, addi_imm))
     if fuzzerstate.is_design_64bit: 
         instr_objs.append(R12DInstruction_t0(fuzzerstate,"and", tmp, tmp, RPROD_MASK_REGISTER_ID))
     # Finally, we jump to the new layout
-    instr_objs.append(JALRInstruction_t0(fuzzerstate,"jalr", tmp, tmp, 0, -1, fuzzerstate.is_design_64bit, fuzzerstate.privilegestate.privstate, fuzzerstate.target_layout, True))
+    instr_objs.append(JALRInstruction_t0(fuzzerstate,"jalr", tmp, tmp, 0, -1, True))
     
     if GET_DATA:
         fuzzerstate.num_hardcoded_instr_mmufsm += len(instr_objs)

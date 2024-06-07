@@ -26,12 +26,12 @@ def get_current_layout(bb_instr, curr_addr_layout, curr_priv_state):
     if isinstance(bb_instr, PrivilegeDescentInstruction) or isinstance(bb_instr, ExceptionInstruction):
         curr_addr_layout = bb_instr.va_layout_after_op
         curr_priv_state = bb_instr.priv_level_after_op
-    elif isinstance(bb_instr, CSRRegInstruction):
+    elif isinstance(bb_instr, CSRRegInstruction): # when we write to SATP
         is_satp_smode, layout = bb_instr.is_satp_smode
         if is_satp_smode: curr_addr_layout = layout
-    elif isinstance(bb_instr, JALRInstruction):
+    elif isinstance(bb_instr, JALRInstruction): # when the JALR jumps to a new layout
         if bb_instr.to_new_layout:
-            curr_addr_layout = bb_instr.va_layout
+            curr_addr_layout = bb_instr.va_layout_after_op
             curr_priv_state = bb_instr.priv_level
     
     return curr_addr_layout, curr_priv_state
@@ -48,27 +48,30 @@ def gen_regdump_reqs(fuzzerstate):
     curr_priv_state = PrivilegeStateEnum.MACHINE
     for bb_start_addr, bb_instrs in zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq):
         for bb_instr_id, bb_instr in enumerate(bb_instrs):
-            curr_addr = bb_start_addr + 4*bb_instr_id # NO_COMPRESSED
+            # curr_addr = bb_start_addr + 4*bb_instr_id # NO_COMPRESSED
 
             # All we need is the value of the dependent register at consumption time.
             if isinstance(bb_instr, PlaceholderConsumerInstr):
-                if USE_MMU:
-                    curr_addr = phys2virt(curr_addr, curr_priv_state, curr_addr_layout, fuzzerstate, False)
+                # if USE_MMU:
+                #     curr_addr = phys2virt(curr_addr, curr_priv_state, curr_addr_layout, fuzzerstate, False)
+                curr_addr = bb_instr.vaddr if USE_MMU  and bb_instr.va_layout != -1 else bb_instr.paddr
                 ret.append((curr_addr, False, bb_instr.rdep))
             # For branches, we need to know the val of both operands to generate a suitable opcode later.
             if isinstance(bb_instr, BranchInstruction):
-                if USE_MMU:
-                    curr_addr = phys2virt(curr_addr, curr_priv_state, curr_addr_layout, fuzzerstate, False)
+                # if USE_MMU:
+                #     curr_addr = phys2virt(curr_addr, curr_priv_state, curr_addr_layout, fuzzerstate, False)
                 # if not bb_instr.plan_taken:
+                curr_addr = bb_instr.vaddr if USE_MMU  and bb_instr.va_layout != -1 else bb_instr.paddr
                 ret.append((curr_addr, False, bb_instr.rs1)) # rs1 is the first  dependent register.
                 ret.append((curr_addr, False, bb_instr.rs2)) # rs2 is the second dependent register.
-            
+
             # We have to keep track of the current address space layout
-            curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)
+            # curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)
     return ret
 
-def get_dumps_from_instr(bb_instr, addr):
+def get_dumps_from_instr(bb_instr):
     ret = []
+    addr = bb_instr.vaddr if USE_MMU and bb_instr.va_layout != -1 else bb_instr.vaddr
     if isinstance(bb_instr, R12DInstruction):
         ret.append((addr, False, bb_instr.rd))
         ret.append((addr, False, bb_instr.rs1))
@@ -136,27 +139,13 @@ def gen_regdump_reqs_all_rds(fuzzerstate, max_bb_id: int = None, max_instr_id: i
                 continue
             if max_instr_id is not None and bb_instr_id >= max_instr_id and max_bb_id is not None and bb_id >= max_bb_id:
                 break
-            curr_addr = bb_start_addr + 4*bb_instr_id # NO_COMPRESSED
-            assert bb_instr.paddr == curr_addr + SPIKE_STARTADDR, f"Paddress mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}"
-            if USE_MMU:
-                curr_addr = phys2virt(curr_addr, curr_priv_state, curr_addr_layout, bb_instr.fuzzerstate, False)
-                assert bb_instr.vaddr == curr_addr + SPIKE_STARTADDR, f"Vaddress mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}  ({curr_priv_state.name}/{curr_addr_layout})"
-
-            assert curr_addr not in ret
-            [ret.append(d) for d in get_dumps_from_instr(bb_instr, curr_addr)]
+            [ret.append(d) for d in get_dumps_from_instr(bb_instr)]
             if USE_MMU:
                 curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)
         if bb_id in fuzzerstate.bb_id_to_ctxsv_id:
             ctxsv_bb_id = fuzzerstate.bb_id_to_ctxsv_id[bb_id]
             for bb_instr_id, bb_instr in enumerate(fuzzerstate.ctxsv_bbs[ctxsv_bb_id]):
-                # print(f"{bb_instr.get_str()} (ctx)")
-                curr_addr = fuzzerstate.ctxsv_bb_start_addr_seq[ctxsv_bb_id] + 4*bb_instr_id # NO_COMPRESSED
-                assert bb_instr.paddr == curr_addr + SPIKE_STARTADDR, f"Paddress mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)}"
-                if USE_MMU:
-                    curr_addr = phys2virt(curr_addr, curr_priv_state, curr_addr_layout, bb_instr.fuzzerstate, False)
-                    assert bb_instr.vaddr == curr_addr + SPIKE_STARTADDR, f"Vaddress mismatch for instruction {bb_instr.get_str()}, should be {hex(curr_addr + SPIKE_STARTADDR)} ({curr_priv_state.name}/{curr_addr_layout})"
-                assert curr_addr not in ret
-                [ret.append(d) for d in get_dumps_from_instr(bb_instr, curr_addr)]
+                [ret.append(d) for d in get_dumps_from_instr(bb_instr)]
                 if USE_MMU:
                     curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)
 
@@ -359,7 +348,7 @@ def _check_pc_trace_from_spike(fuzzerstate, spike_pc_seq):
             expected_pc = SPIKE_STARTADDR + fuzzerstate.bb_start_addr_seq[bb_id] + 4*bb_instr_id # NO_COMPRESSED
             if curr_addr_layout != -1: expected_pc = phys2virt(expected_pc, curr_priv_state, curr_addr_layout, fuzzerstate, False)
 
-            print(f"{hex(spike_pc)}/{hex(expected_pc)}")
+            # print(f"{hex(spike_pc)}/{hex(expected_pc)}")
             if spike_pc != expected_pc:
                 raise ValueError(f"PC mismatch: spike said `{hex(spike_pc)}`, but we expected `{hex(expected_pc)}`. BB id: `{hex(bb_id)}`, instr id: `{hex(bb_instr_id)}`. Prev pc: `{hex(prev_pc)}`. Spike instr id: {curr_id_in_spike_pc_seq}. Fuzzerstate identification: {fuzzerstate.instance_to_str()}")
             prev_pc = expected_pc
@@ -387,15 +376,20 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False, return_int
 
     final_addr = fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR
     last_instr = fuzzerstate.instr_objs_seq[-1][-1]
-    if USE_MMU and hasattr(last_instr, "va_layout_after_op") and fuzzerstate.instr_objs_seq[-1][-1].va_layout_after_op != -1:
-        final_addr = phys2virt(fuzzerstate.final_bb_base_addr, fuzzerstate.instr_objs_seq[-1][-1].priv_level_after_op, fuzzerstate.instr_objs_seq[-1][-1].va_layout_after_op, fuzzerstate, True)
-    if USE_MMU and not hasattr(last_instr, "va_layout_after_op") and hasattr(last_instr, "va_layout") and fuzzerstate.instr_objs_seq[-1][-1].va_layout != -1:
-        final_addr = phys2virt(fuzzerstate.final_bb_base_addr, fuzzerstate.instr_objs_seq[-1][-1].priv_level, fuzzerstate.instr_objs_seq[-1][-1].va_layout, fuzzerstate, True)
+    if USE_MMU:
+        va_layout, priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
+        if va_layout != -1:
+            final_addr = phys2virt(fuzzerstate.final_bb_base_addr, priv_level, va_layout, fuzzerstate, True)
 
-    # len(flat_instr_objs)+1: the +1 is to reach the final basic block and thereby overwrite the potential destination register of a jal/jalr
+    # # len(flat_instr_objs)+1: the +1 is to reach the final basic block and thereby overwrite the potential destination register of a jal/jalr
+    # for i in range(len(regdump_reqs)):
+    #     print(f"until {hex(regdump_reqs[i][0])}")
+    #     run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags_nocompressed(design_name), SPIKE_STARTADDR, regdump_reqs[:i+1], False, final_addr, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
+
+
     regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags_nocompressed(design_name), SPIKE_STARTADDR, regdump_reqs, True, final_addr, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
-    # retrieves the rd stream throughout execution to compare to cascade sim
+    # retrieves the register value stream throughout execution to compare to in-situ sim
     rd_regdump_reqs = gen_regdump_reqs_all_rds(fuzzerstate)
     rd_regvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags_nocompressed(design_name), SPIKE_STARTADDR, rd_regdump_reqs, False, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
@@ -412,8 +406,6 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False, return_int
     if check_pc_spike_again:
         # Generate the RTL ELF, but located for spike at SPIKE_STARTADDR
         rtl_spike_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'spikedoublecheck', fuzzerstate.instance_to_str(), SPIKE_STARTADDR)
-        if NO_REMOVE_TMPFILES:
-            print('rtl_spike_elfpath:', rtl_spike_elfpath)
         rtl_spike_pc_seq, (finalintregvals_spikecheck, finalfpuregvals_spikecheck) = run_trace_all_pcs(fuzzerstate.instance_to_str(), rtl_spike_elfpath, get_design_march_flags_nocompressed(design_name), len(flat_instr_objs)+1, SPIKE_STARTADDR, True,  fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud, fuzzerstate)
         if not NO_REMOVE_TMPFILES:
             os.remove(rtl_spike_elfpath)

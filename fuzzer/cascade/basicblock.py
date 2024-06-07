@@ -97,7 +97,7 @@ def gen_basicblock(fuzzerstate):
         # If this is an instruction that influences offset register states
         if curr_isa_class == ISAInstrClass.REGFSM:
             new_instrobjs_constructors, new_instrobjs_params = create_regfsm_instrobjs(fuzzerstate)
-            fuzzerstate.append_and_execute_instr(new_instrobjs_constructors[0](*new_instrobjs_params[0]), True)
+            fuzzerstate.append_and_execute_instr(new_instrobjs_constructors[0](*new_instrobjs_params[0]))
             curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
 
             # For consumers, we may need to insert one more instruction
@@ -105,7 +105,7 @@ def gen_basicblock(fuzzerstate):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
                 curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 # fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[next_instrobj_id])
-                fuzzerstate.append_and_execute_instr(new_instrobjs_constructors[next_instrobj_id](*new_instrobjs_params[next_instrobj_id]), True)
+                fuzzerstate.append_and_execute_instr(new_instrobjs_constructors[next_instrobj_id](*new_instrobjs_params[next_instrobj_id]))
             continue
         # If this is an FPU enable-disable instruction or a rounding mode change
         elif curr_isa_class == ISAInstrClass.FPUFSM:
@@ -137,7 +137,7 @@ def gen_basicblock(fuzzerstate):
                 # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
                 fuzzerstate.restore_states()
                 return False
-            fuzzerstate.append_and_execute_instr(new_instrobj, True)
+            fuzzerstate.append_and_execute_instr(new_instrobj)
             if DEBUG_PRINT: print(f"priv change at addr: {hex(curr_addr+SPIKE_STARTADDR)} to ", fuzzerstate.privilegestate.privstate)
 
             del new_instrobj
@@ -152,7 +152,7 @@ def gen_basicblock(fuzzerstate):
             for new_instrobj_constructor, new_instrobj_param in zip(constructors, params):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
                 new_instrobj = new_instrobj_constructor(*new_instrobj_param)
-                fuzzerstate.append_and_execute_instr(new_instrobj, True)
+                fuzzerstate.append_and_execute_instr(new_instrobj)
                 curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
             del new_instrobj_constructor # For safety, we prevent accidental reuse of this variable
             del new_instrobj_param
@@ -172,20 +172,18 @@ def gen_basicblock(fuzzerstate):
             # new_instrobj.print()
             # print('  New priv:', fuzzerstate.privilegestate.privstate)
             # fuzzerstate.instr_objs_seq[-1].append(new_instrobj)
-            fuzzerstate.append_and_execute_instr(new_instrobj, True)
+            fuzzerstate.append_and_execute_instr(new_instrobj)
             del new_instrobj # For safety, we prevent accidental reuse of this variable
             return True
         
         elif curr_isa_class == ISAInstrClass.MEM:
             instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
-            constructors, params = create_memop_instrobjs(fuzzerstate, instr_str)
-            for new_instrobj_constructor, new_instrobj_param in zip(constructors, params):
+            new_instrobjs = create_memop_instrobjs(fuzzerstate, instr_str)
+            for new_instrobj in new_instrobjs: # TODO change loop, were allocating one extra instruction than intended
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                new_instrobj = new_instrobj_constructor(*new_instrobj_param)
-                fuzzerstate.append_and_execute_instr(new_instrobj, True)
+                fuzzerstate.append_and_execute_instr(new_instrobj)
                 curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
-            del new_instrobj_constructor # For safety, we prevent accidental reuse of this variable
-            del new_instrobj_param
+            del new_instrobjs
             continue
 
         # Discriminate non-taken branches
@@ -223,7 +221,7 @@ def gen_basicblock(fuzzerstate):
             instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
             next_instr = create_instr(instr_str, fuzzerstate, curr_addr)
 
-        fuzzerstate.append_and_execute_instr(next_instr, True)
+        fuzzerstate.append_and_execute_instr(next_instr)
 
         if curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.JALR) or fuzzerstate.curr_branch_taken:
             return True
@@ -253,12 +251,12 @@ def gen_basicblock(fuzzerstate):
             return False
         if curr_isa_class == ISAInstrClass.JAL:
             next_instr = create_instr('jal', fuzzerstate, curr_addr)
-            fuzzerstate.append_and_execute_instr(next_instr, True)
+            fuzzerstate.append_and_execute_instr(next_instr)
         elif curr_isa_class == ISAInstrClass.BRANCH:
             fuzzerstate.curr_branch_taken = True
             # The branch type does not batter because it will be re-determined once the operand values are known
             next_instr = create_instr('bne', fuzzerstate, curr_addr)
-            fuzzerstate.append_and_execute_instr(next_instr, False) # BNEs not executed
+            fuzzerstate.append_and_execute_instr(next_instr)
         else:
             raise ValueError(f"Unexpected isa class `{curr_isa_class}`")
 
@@ -280,7 +278,7 @@ def gen_basicblock(fuzzerstate):
             return False
 
         next_instr = create_instr('jalr', fuzzerstate, curr_addr)
-        fuzzerstate.append_and_execute_instr(next_instr, True)
+        fuzzerstate.append_and_execute_instr(next_instr)
 
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
 def gen_random_data_block(fuzzerstate):
@@ -610,17 +608,14 @@ def gen_basicblocks(fuzzerstate):
         fuzzerstate.reset()
         if not gen_initial_basic_block(fuzzerstate, SPIKE_STARTADDR): continue
 
-        # fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
-        fuzzerstate.save_states()
-
         # Reserve space for the second basic block (whose address is already fixed).
         fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
 
         # Generate the random data block
         gen_random_data_block(fuzzerstate)
 
-        # Store the state after the inital register values and random data block are determined.
-        fuzzerstate.memview.store_state()
+        # fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
+        fuzzerstate.save_states()
 
         # Reserve space for the final basic block.
         alloc_final_basic_block(fuzzerstate)

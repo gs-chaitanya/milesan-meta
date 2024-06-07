@@ -17,10 +17,12 @@ import random
 from copy import deepcopy
 import numpy as np
 # from params.runparams import DO_ASSERT
-from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS, P_UNTAINT_BIT
+from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS, P_UNTAINT_BIT, USE_MMU
 from params.runparams import CHECK_MEM_T0_PRECISE, PRINT_MEM_STORES, PRINT_MEM_STORES_T0, PRINT_MEM_LOADS, PRINT_MEM_LOADS_T0, INSERT_REGDUMPS
 from cascade.spikeresolution import SPIKE_STARTADDR
 from cascade.registers import MAX_32b, MAX_64b
+from cascade.privilegestate import PrivilegeStateEnum
+from cascade.mmu_utils import virt2phys
 from common.designcfgs import get_design_reg_dump_addr, get_design_fpreg_dump_addr, get_design_reg_stream_addr, get_design_cl_size
 
 DO_ASSERT = True
@@ -198,7 +200,9 @@ class MemoryView:
     def to_string(self):
         return str(self.freepairs)
 
-    def read(self, addr, n_bytes: int = 4):
+    def read(self, addr, n_bytes: int = 4, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
+        if USE_MMU:
+            addr = virt2phys(addr, priv_level, va_layout, self.fuzzerstate,absolute_addr=False)
         if DO_ASSERT:
             assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
             assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
@@ -212,7 +216,9 @@ class MemoryView:
             print(f"VAL: Reading {n_bytes} bytes {hex(val)} from {hex(addr)}")
         return val
 
-    def read_t0(self, addr, n_bytes: int = 4):
+    def read_t0(self, addr, n_bytes: int = 4, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
+        if USE_MMU:
+            addr = virt2phys(addr, priv_level, va_layout, self.fuzzerstate,absolute_addr=False)
         if DO_ASSERT:
             assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
             assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
@@ -226,7 +232,9 @@ class MemoryView:
             print(f"TAINT: Reading {n_bytes} bytes {hex(val_t0)} from {hex(addr)}")
         return val_t0
 
-    def write(self, addr, val, n_bytes):
+    def write(self, addr, val, n_bytes, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
+        if USE_MMU:
+            addr = virt2phys(addr, priv_level, va_layout, self.fuzzerstate,absolute_addr=False)
         if DO_ASSERT:
             assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
             assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
@@ -239,7 +247,10 @@ class MemoryView:
             if addr+i not in self.data_t0:
                 self.data_t0[addr+i] = 0
 
-    def write_t0(self, addr, val_t0, n_bytes):
+    def write_t0(self, addr, val_t0, n_bytes, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
+        if USE_MMU:
+            addr = virt2phys(addr, priv_level, va_layout, self.fuzzerstate,absolute_addr=False)
+
         if DO_ASSERT:
             assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
             assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
@@ -265,7 +276,7 @@ class MemoryView:
             else:
                 self.write_t0(addr, 0, n_bytes)
 
-    def store_state(self):
+    def store_state(self): 
         self.states += [(deepcopy(self.data), deepcopy(self.data_t0))]
 
     def restore_and_reduce_taint(self, mismatch):
@@ -295,7 +306,7 @@ class MemoryView:
         self.states.append((deepcopy(self.data), deepcopy(self.data_t0)))
         return n_total_tainted_bits
 
-    def restore(self, bb_id: int = -1):
+    def restore(self, bb_id: int = -1):# TODO: the index wont correspond to bb_id as we store before that already
         self.data = self.states[bb_id][0]
         self.data_t0 = self.states[bb_id][1]
 

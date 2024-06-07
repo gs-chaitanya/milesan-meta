@@ -117,7 +117,6 @@ class BaseInstruction:
         self.fuzzerstate = fuzzerstate
         self.instr_str = instr_str
         self.instr_func = INSTR_FUNCS[self.instr_str]
-        self.reset_addr()
 
     def reset_addr(self):
         from cascade.spikeresolution import get_current_layout
@@ -505,6 +504,7 @@ class JALRInstruction(ImmInstruction):
         self.rs1 = rs1
         self.producer_id = producer_id
         self.to_new_layout = to_new_layout
+        self.va_layout_after_op = fuzzerstate.target_layout
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
@@ -513,7 +513,7 @@ class JALRInstruction(ImmInstruction):
         # rv32i
         return rv32i_jalr(self.rd, self.rs1, self.imm)
 
-# Instructions that create no information flow
+# Instructions that create no (explicit) information flow
 SpecialInstructions = ("fence", "fence.i", "sfence.vma")
 class SpecialInstruction(CFInstruction):
     authorized_instr_strs = SpecialInstructions
@@ -536,8 +536,6 @@ class SpecialInstruction(CFInstruction):
             return zifencei_fencei(self.rd, self.rs1)
         elif self.instr_str == "sfence.vma":
             return rv32i_sfencevma(self.rs1, self.rs2)
-        # Default case
-
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
@@ -1516,7 +1514,10 @@ class SimpleExceptionEncapsulator(ExceptionInstruction):
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{self.instr.get_str(is_spike_resolution)} (SimpleExceptionEncapsulator for {self.producer_id})"
-
+    
+    def reset_addr(self):
+        self.instr.reset_addr()
+        return super().reset_addr()
 
 
 # This is a wrapper class for a misaligned load or store.
@@ -1643,7 +1644,9 @@ class MisalignedMemInstruction(ExceptionInstruction):
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{self.meminstr.get_str(is_spike_resolution)} (MisalignedMemInstruction for {self.producer_id})"
 
-
+    def reset_addr(self):
+        self.meminstr.reset_addr()
+        return super().reset_addr()
 
 ###
 # CSR writers
@@ -1667,6 +1670,10 @@ class MstatusWriterInstruction(BaseInstruction):
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return self.csr_instr.get_str() + f" ({self.instr_str})"
 
+    def reset_addr(self):
+        self.csr_instr.reset_addr()
+        return super().reset_addr()
+
 
 # @remark we use a specific instruction for xtvec to find them easily when an exception occurs, to transmit back the expected value to the producer
 # @brief this instruction writes to mtvec or stvec
@@ -1685,6 +1692,9 @@ class TvecWriterInstruction(BaseInstruction):
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return self.csr_instr.get_str() + f" ({self.instr_str} for {self.producer_id})"
 
+    def reset_addr(self):
+        self.csr_instr.reset_addr()
+        return super().reset_addr()
 
 # @remark we use a specific instruction for xtvec to find them easily when an exception occurs, to transmit back the expected value to the producer
 # @brief this instruction writes to mepc or sepc
@@ -1704,6 +1714,9 @@ class EPCWriterInstruction(BaseInstruction):
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return self.csr_instr.get_str() + f" ({self.instr_str} for {self.producer_id})"
 
+    def reset_addr(self):
+        self.csr_instr.reset_addr()
+        return super().reset_addr()
 
 # @brief this instruction writes to mtvec or stvec
 # @The value written may differ between Spike and CPU
@@ -1730,6 +1743,9 @@ class GenericCSRWriterInstruction(BaseInstruction):
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return self.csr_instr.get_str() + f" ({self.instr_str} for {self.producer_id})"
 
+    def reset_addr(self):
+        self.csr_instr.reset_addr()
+        return super().reset_addr()
 
 class PrivilegeDescentInstruction(BaseInstruction):
     def __init__(self, fuzzerstate,is_mret: bool):

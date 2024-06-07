@@ -24,20 +24,15 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
         fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN, taint_en) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
-        fuzzerstate.intregpickstate.setup_registers()
-        fuzzerstate.memview.restore()
-        fuzzerstate.csrfile.reset()
+        fuzzerstate.intregpickstate.setup_registers() # Restore registers to before anything was executed.
+        fuzzerstate.memview.restore(0) # Restore contents before anything was executed.
+        fuzzerstate.csrfile.reset() # Reset all CSRs to zero.
     else:
         assert fuzzerstate is not None, "fuzzerstate needs to be provided when generate_fuzzerstate is disabled."
         expected_regvals = fuzzerstate.expected_regvals
         rtl_elfpath = fuzzerstate.rtl_elfpath
         interm_elfpath = fuzzerstate.interm_elfpath
 
-    # n_tainted_bits, n_untainted_bits, n_tainted_writes, total_writes = fuzzerstate.intregpickstate.analyze_writeback_trace(use_final=False)
-    # print(f"\t Ratio of tainted/total writeback bits {n_tainted_bits}/{n_untainted_bits+n_tainted_bits} -> {n_tainted_bits/(n_untainted_bits+n_tainted_bits)}")
-    # print(f"\t Ratio of tainted/total writebacks {n_tainted_writes}/{total_writes} -> {n_tainted_writes/total_writes}")
-
-    # return fuzzerstate
     # Retrieve register stream and final intregvals from spike.
     pc_reg_pairs = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
     for req, regval in zip(expected_regvals[2],expected_regvals[3]):
