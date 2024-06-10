@@ -19,6 +19,7 @@ import numpy as np
 # from params.runparams import DO_ASSERT
 from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS, P_UNTAINT_BIT, USE_MMU
 from params.runparams import CHECK_MEM_T0_PRECISE, PRINT_MEM_STORES, PRINT_MEM_STORES_T0, PRINT_MEM_LOADS, PRINT_MEM_LOADS_T0, INSERT_REGDUMPS
+from cascade.mmu_utils import PAGE_ALIGNMENT_MASK
 from cascade.spikeresolution import SPIKE_STARTADDR
 from cascade.registers import MAX_32b, MAX_64b
 from cascade.privilegestate import PrivilegeStateEnum
@@ -157,10 +158,10 @@ class MemoryView:
                 return picked_addr
         return None
 
-    def gen_random_addr_from_randomblock(self, alignment_bits: int = 2, min_space: int = 4, max_attempts: int = MEMVIEW_ALLOC_MAX_ATTEMPTS):
+    def gen_random_addr_from_randomblock(self, alignment_bits: int = 2, min_space: int = 4, max_attempts: int = MEMVIEW_ALLOC_MAX_ATTEMPTS, tainted_ok = True):
         for _ in range(max_attempts):
             picked_addr = random.choice([addr for addr in self.data.keys() if addr % (1 << alignment_bits) == 0])-SPIKE_STARTADDR
-            if min_space == 0 or all([addr+SPIKE_STARTADDR in self.data for addr in range(picked_addr,picked_addr+min_space-1)]):
+            if min_space == 0 or all([addr+SPIKE_STARTADDR in self.data for addr in range(picked_addr,picked_addr+min_space-1)]) and not (not tainted_ok and self.fuzzerstate.random_data_block_has_taint[picked_addr&PAGE_ALIGNMENT_MASK]):
                 if DO_ASSERT:
                     assert picked_addr >= 0
                     assert picked_addr + min_space <= self.memsize, f"{hex(picked_addr+min_space)} exceeds memsize {hex(self.memsize)}"
@@ -169,10 +170,10 @@ class MemoryView:
                 return picked_addr
         return None
 
-    def gen_random_addr_from_randomblock_from_rng(self,rng: np.random.RandomState, alignment_bits: int = 2, min_space: int = 4, max_attempts: int = MEMVIEW_ALLOC_MAX_ATTEMPTS):
+    def gen_random_addr_from_randomblock_from_rng(self,rng: np.random.RandomState, alignment_bits: int = 2, min_space: int = 4, max_attempts: int = MEMVIEW_ALLOC_MAX_ATTEMPTS, tainted_ok = True):
         for _ in range(max_attempts):
             picked_addr = int(rng.choice([addr for addr in self.data.keys() if addr % (1 << alignment_bits) == 0]))-SPIKE_STARTADDR
-            if min_space == 0 or all([addr+SPIKE_STARTADDR in self.data for addr in range(picked_addr,picked_addr+min_space-1)]):
+            if min_space == 0 or all([addr+SPIKE_STARTADDR in self.data for addr in range(picked_addr,picked_addr+min_space-1)]) and not (not tainted_ok and self.fuzzerstate.random_data_block_has_taint[picked_addr&PAGE_ALIGNMENT_MASK]):
                 if DO_ASSERT:
                     assert picked_addr >= 0
                     assert picked_addr + min_space <= self.memsize, f"{hex(picked_addr+min_space)} exceeds memsize {hex(self.memsize)}"
@@ -180,7 +181,6 @@ class MemoryView:
                 # print(f"Returning addr {hex(picked_addr)}, min_space: {min_space}, align: {alignment_bits}")
                 return picked_addr
         return None
-
 
 
     def is_addr_tainted(self,addr,n_bytes):

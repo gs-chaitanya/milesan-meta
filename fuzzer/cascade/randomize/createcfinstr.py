@@ -115,14 +115,12 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
         # print('A', flush=True)
         imm = fuzzerstate.next_bb_addr-curr_addr
     else: # The non-taken branches still have microarchitectual effects we need to account for.
-        # Select whether to direct toward the random data basic block
-        is_random_data_block_in_reach = abs(fuzzerstate.random_data_block_start_addr - curr_addr) < (1<<11) and abs(fuzzerstate.random_data_block_end_addr-4 - curr_addr) < (1<<11)
+        # Select whether to direct toward a random data basic block. This might (speculatively) load
+        # random data into the BPUs.
+        is_random_data_block_in_reach = False
+        for addr_pair in fuzzerstate.random_data_block_ranges:
+            is_random_data_block_in_reach |= abs(addr_pair[0] - curr_addr) < (1<<11) and abs(addr_pair[1] - 4 - curr_addr) < (1<<11)
         if is_random_data_block_in_reach and random.random() < NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA:
-            # lowest_random_data_reachable_addr = max(fuzzerstate.random_data_block_start_addr+4, curr_addr - (1<<11))
-            # highest_random_data_reachable_addr = min(fuzzerstate.random_data_block_end_addr-4, curr_addr + (1<<11))
-
-            # target_addr_in_random_data_block = random.randrange(lowest_random_data_reachable_addr//2, highest_random_data_reachable_addr//2)*2
-            # imm = target_addr_in_random_data_block-curr_addr
             target_addr =  None
             if fuzzerstate.is_design_64bit:
                 curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1]

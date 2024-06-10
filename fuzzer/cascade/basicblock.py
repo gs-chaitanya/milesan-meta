@@ -8,8 +8,8 @@ from params.runparams import DO_ASSERT
 from common.spike import SPIKE_STARTADDR
 from rv.csrids import CSR_IDS
 from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES
-from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED
-from params.runparams import INSERT_REGDUMPS, GET_DATA, DEBUG_PRINT
+from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN
+from params.runparams import INSERT_REGDUMPS, INSERT_FENCE, GET_DATA, DEBUG_PRINT
 from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memop_instrobjs
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 from cascade.randomize.pickisainstrclass import gen_next_isainstrclass, ISAInstrClass
@@ -28,12 +28,13 @@ from cascade.privilegestate import PrivilegeStateEnum
 from cascade.toleratebugs import is_tolerate_ras1
 from cascade.mmu_utils import phys2virt
 from cascade.randomize.pickmmuop import update_mmu_fsm_rv32, update_mmu_fsm_rv64
+from cascade.mmu_utils import PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_BITS
 
 from cascade.gen_ctxt_final_block import *
 
 import numpy as np
 import random
-CURR_ALLOC_CURSOR_INC = 8 if INSERT_REGDUMPS else 4
+CURR_ALLOC_CURSOR_INC = 12 if INSERT_FENCE else 8 if INSERT_REGDUMPS else 4
 
 # Given the provided control flow instruction, finds a location for a new block, but does not allocate it.
 # @return False if could not find a next bb address
@@ -285,22 +286,33 @@ def gen_random_data_block(fuzzerstate):
     # The rng should have randomness that follows from the system random state but not have any reciprocal effects
     # This is necessary s.t. the bugs can be enabled/disabled without further influencing program construction 
     rng = np.random.RandomState(random.randrange(0,2**31)) 
-    lenbytes = random.randrange(RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES)
-    fuzzerstate.random_data_block_start_addr = fuzzerstate.memview.gen_random_free_addr(2, lenbytes, 0, fuzzerstate.memsize)
-    fuzzerstate.random_data_block_end_addr = fuzzerstate.random_data_block_start_addr + lenbytes
-    if DO_ASSERT:
-        assert fuzzerstate.random_data_block_start_addr is not None, f"Maybe you should create the random data block earlier in the creation of the test case."
-    fuzzerstate.memview.alloc_mem_range(fuzzerstate.random_data_block_start_addr, fuzzerstate.random_data_block_end_addr)
+    # lenbytes = random.randrange(RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES)
+    lenbytes = PHYSICAL_PAGE_SIZE
+    # fuzzerstate.random_data_block_start_addr = fuzzerstate.memview.gen_random_free_addr(2, lenbytes, 0, fuzzerstate.memsize)
+    # fuzzerstate.random_data_block_end_addr = fuzzerstate.random_data_block_start_addr + lenbytes
+    random_data_block_start_addr = fuzzerstate.memview.gen_random_free_addr(PAGE_ALIGNMENT_SHIFT, lenbytes, 0, fuzzerstate.memsize)
+    assert random_data_block_start_addr is not None, f"Could not allocate random block of size {hex(lenbytes)} bytes."
+    random_data_block_end_addr = random_data_block_start_addr + lenbytes
+    if TAINT_EN:
+        page_has_taint = random.random() < P_PAGE_HAS_TAINT
+        fuzzerstate.random_data_block_has_taint[random_data_block_start_addr&PAGE_ALIGNMENT_MASK]= page_has_taint
+    fuzzerstate.random_data_block_ranges += [(random_data_block_start_addr, random_data_block_end_addr)]
+    
+    random_block_content4by4bytes = []
+    # if DO_ASSERT:
+    #     assert fuzzerstate.random_data_block_start_addr is not None, f"Maybe you should create the random data block earlier in the creation of the test case."
+    fuzzerstate.memview.alloc_mem_range(random_data_block_start_addr, random_data_block_end_addr)
     # Generate the random data
-    for addr in range(fuzzerstate.random_data_block_start_addr, fuzzerstate.random_data_block_end_addr, 4):
+    for addr in range(random_data_block_start_addr, random_data_block_end_addr, 4):
         rand_val = None
         while rand_val is None or is_forbidden_random_value(rand_val, 4) and not is_tolerate_ras1(fuzzerstate.design_name):
             rand_val = rng.randint(0, 2**32)
-        fuzzerstate.random_block_content4by4bytes.append(rand_val)
+        random_block_content4by4bytes.append(rand_val)
         fuzzerstate.memview.write(addr+SPIKE_STARTADDR, rand_val, 4)
-        if random.random() < P_RANDOM_DATA_TAINTED:
+        if TAINT_EN and page_has_taint and random.random() < P_RANDOM_DATA_TAINTED:
             rand_val_t0 = rng.randint(0, 2**32)
             fuzzerstate.memview.write_t0(addr+SPIKE_STARTADDR, rand_val_t0, 4)
+    fuzzerstate.random_block_contents4by4bytes.append(random_block_content4by4bytes)
 
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
 def alloc_final_basic_block(fuzzerstate):
@@ -571,6 +583,10 @@ def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
                     producer_id_to_tgtaddr[bb_instr.producer_id] = phys2virt(addr, bb_instr.priv_level, bb_instr.va_layout, fuzzerstate)
                     consumer_inst_va_layout[bb_instr.producer_id] = (bb_instr.va_layout, bb_instr.priv_level)
 
+            # Since we include the memory reads and writes in the data and taint flow, we can't retrospectively
+            # feed the addresses back, but have to compute them in-situ.
+            # Alternatively, we could 'tag' each load and store, and only later allocate an address for each tag. However,
+            # then the concrete address values must be exluded from the data flow.
             # elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM64] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPU] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPUD]:
             #     if DO_ASSERT:
             #         assert bb_instr.producer_id == -1 or not bb_instr.producer_id in producer_id_to_tgtaddr, "producer_id `{}` of instruction `{}` already of in producer_id_to_tgtaddr".format(bb_instr.producer_id, bb_instr.get_str())
@@ -611,9 +627,12 @@ def gen_basicblocks(fuzzerstate):
         # Reserve space for the second basic block (whose address is already fixed).
         fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
 
-        # Generate the random data block
-        gen_random_data_block(fuzzerstate)
-
+        # Generate the random data blocks
+        for _ in range(random.randint(MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS)):
+            gen_random_data_block(fuzzerstate)
+        # print(f"Generated {len(fuzzerstate.random_data_block_ranges)} random blocks: memsize: {hex(fuzzerstate.memsize)}")
+        # for start_addr, end_addr in fuzzerstate.random_data_block_ranges:
+        #     print(f"{hex(start_addr)}:{hex(end_addr)}: {hex(end_addr-start_addr)}")
         # fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
         fuzzerstate.save_states()
 

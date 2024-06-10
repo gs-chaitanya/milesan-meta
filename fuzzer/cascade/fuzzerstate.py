@@ -51,6 +51,10 @@ class FuzzerState:
         self.design_has_user_mode              : bool = design_has_user_mode(design_name)
         self.design_has_pmp                    : bool = design_has_pmp(design_name)
 
+        self.random_block_contents4by4bytes = []
+        self.random_data_block_ranges = []
+        if TAINT_EN:
+            self.random_data_block_has_taint = {} # Is true if the random data block at that page can have taint.
 
         # For benchmarks
         if GET_DATA:
@@ -108,7 +112,8 @@ class FuzzerState:
             allowed_params = MODES_PARAM_RV32
         for _ in range(num_layouts):
             mode = random.choices(list(allowed_params.keys()), self.mmu_capabilities)[0]
-            n_level = random.randint(1, allowed_params[mode][2])
+            # n_level = random.randint(1, allowed_params[mode][2])
+            n_level = allowed_params[mode][2]
             self.prog_mmu_params.append((mode, n_level))
         if DEBUG_PRINT: print(f"generated parameters: {self.prog_mmu_params}")
 
@@ -117,11 +122,13 @@ class FuzzerState:
     # @brief cleans up the fuzzerstate. Used in case of failed input generation.
     def reset(self):
         self.initial_block_data_start, self.initial_block_data_end = None, None
-        self.random_block_content4by4bytes = []
-
+        self.random_block_contents4by4bytes = []
+        self.random_data_block_ranges = []
+        if TAINT_EN:
+            self.random_data_block_has_taint = {} # Is true if the random data block at that page can have taint.
         self.next_bb_addr = 0
         self.memview = MemoryView(self)
-        self.memview_blacklist = MemoryView(self) # For load blacklist
+        self.memview_blacklist = MemoryView(self) # For load blacklis
 
         self.num_store_locations = random.randint(1, MAX_NUM_STORE_LOCATIONS)
         self.ctxsv_size_upperbound: int = get_context_setter_max_size(self) # Can be called once is_design_64bit, design_has_fpu and design_has_fpud are set, and the number of store locations is known.

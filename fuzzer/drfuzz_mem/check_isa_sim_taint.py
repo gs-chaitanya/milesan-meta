@@ -7,7 +7,7 @@ from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_F
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN
 from cascade.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 from cascade.cfinstructionclasses import *
-from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, RDInstruction_t0
+from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0
 from cascade.fuzzsim import run_rtl_and_load_regstream
 from cascade.util import IntRegIndivState
 from common.spike import SPIKE_STARTADDR
@@ -97,14 +97,18 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             if mismatch:
                 last_instr = filter_reg_traceback(id+1, None, fuzzerstate, None, False)
                 if isinstance(last_instr, EPCWriterInstruction) and last_instr.csr_instr.csr_id == CSR_IDS.SEPC:
-                    pass # If the responsible instruction was an SEPC write, we ignore the mismatch as exception priority order is ambiguous.
+                    pass # If the responsible instruction was an SEPC write, we ignore the mismatch as exception priority order is ambiguous when a msialigned memory instruction casues the exception, which also triggers a page fault.
+                elif isinstance(last_instr, CSRInstruction) and last_instr.csr_id in (CSR_IDS.SCAUSE, CSR_IDS.MCAUSE):
+                    pass # TODO check that *cause values are either misaligned/pagefault
+                elif isinstance(last_instr, GenericCSRWriterInstruction) and last_instr.csr_instr.csr_id in (CSR_IDS.SCAUSE, CSR_IDS.MCAUSE):
+                    pass
                 else:    
                     raise ValueError(f"(RTL) Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}")
 
             if fuzzerstate.taint_en:
                 mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
                 if mismatch:
-                    raise ValueError(f"(RTL) mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}")
+                    raise ValueError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}")
 
         if PRINT_MEMORY_VALIDATION:
             print("*** MEMORY VALIDATION ***:")

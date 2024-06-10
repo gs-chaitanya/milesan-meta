@@ -28,6 +28,11 @@ PAGE_ALIGNMENT_SHIFT = 12
 VPN_WIDTH = 9
 PHYSICAL_ADDRESS_WIDTH = 64
 
+R_PTE_BIT = 1
+W_PTE_BIT = 2
+X_PTE_BIT = 3
+U_PTE_BIT = 4 
+
 # @brief compute the virtual address
 # TODO we can now randomly choose between layouts with the same base page
 def phys2virt(paddr, priv_level, va_layout, fuzzerstate, absolute_addr = True):
@@ -167,12 +172,17 @@ class PageTablesGen:
         return ret
     
     # @brief makes a page table entry
-    def gen_page_table_entry(self, ppn, is_global, is_user: bool = False, is_node: bool = False):
+    def gen_page_table_entry(self, ppn, is_global, is_user: bool = False, is_node: bool = False, is_executable: bool = True):
         if not is_node:
             if is_user:
                 flags = self.flags_leaf_pte_user
             else:
                 flags = self.flags_leaf_pte_supervisor
+            if not is_executable:
+                flags &= ~(1<<X_PTE_BIT)
+                if DEBUG_PRINT:
+                    print(f"Page at {hex(ppn)} not executable.")
+
         else:
             flags = self.flags_node_pte
         return ((ppn >> PAGE_ALIGNMENT_SHIFT) << 10) | (flags | (is_global << 5))
@@ -331,6 +341,7 @@ class PageTablesGen:
         curr_layout_pt_content      = []
         ppn_leaf                    = 0
 
+
         # For non-leaf PTEs, the global setting implies that all mappings in the subsequent levels of the page table are global
         # We thus randomize all levels, as every scenario is interesting. We must then handle entagled layouts
 
@@ -370,7 +381,7 @@ class PageTablesGen:
         if DEBUG_PRINT: print("\n###\nLEAF MAPPINGS\n###\n")
         
         ##
-        # Initialize the leaves of page tables, duplicated for supivisor mode support
+        # Initialize the leaves of page tables, duplicated for supervisor mode support
         ##
         for layout_id, va_layout in enumerate(self.ptr_pt_base_list_per_layout):
             if DEBUG_PRINT: print(f"======== Filling leaf page for layout {layout_id} ============\n")
@@ -385,11 +396,13 @@ class PageTablesGen:
             if DEBUG_PRINT: 
                 print(f"curent layout is {[hex(x) for x in va_layout]}, with the base ppn of the page: {hex(ppn_leaf)}")
             curr_layout_pt_content, curr_layout_pt_content_supervisor = [], []
-
+            if DEBUG_PRINT:
+                print(f"Generating {self.n_entries_per_level[layout_id][-1]} leaves for layout {layout_id}")
             for _ in range(self.n_entries_per_level[layout_id][-1]):
                 # Make user and supervisor
-                curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True)
-                curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False)
+                is_random_data_block = ppn_leaf-SPIKE_STARTADDR in [addr[0] for addr in fuzzerstate.random_data_block_ranges]
+                curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=not is_random_data_block)
+                curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=not is_random_data_block)
                 curr_layout_pt_content.append(curr_pte)
                 curr_layout_pt_content_supervisor.append(curr_pte_supervisor)
                 ppn_leaf += self.page_size_per_layout[layout_id]
