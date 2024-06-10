@@ -121,12 +121,17 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
         for addr_pair in fuzzerstate.random_data_block_ranges:
             is_random_data_block_in_reach |= abs(addr_pair[0] - curr_addr) < (1<<11) and abs(addr_pair[1] - 4 - curr_addr) < (1<<11)
         if is_random_data_block_in_reach and random.random() < NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA:
+            # lowest_random_data_reachable_addr = max(fuzzerstate.random_data_block_start_addr+4, curr_addr - (1<<11))
+            # highest_random_data_reachable_addr = min(fuzzerstate.random_data_block_end_addr-4, curr_addr + (1<<11))
+
+            # target_addr_in_random_data_block = random.randrange(lowest_random_data_reachable_addr//2, highest_random_data_reachable_addr//2)*2
+            # imm = target_addr_in_random_data_block-curr_addr
             target_addr =  None
             if fuzzerstate.is_design_64bit:
                 curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1]
             else:
                 curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[instr_str]][-1]
-
+            # TODO do we need to modify this for virtual addresses? Think not since we can't jump further than a page anyway
             while target_addr is None or (fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR) and not is_tolerate_branchpred(fuzzerstate.design_name)):
                 target_addr = fuzzerstate.memview.gen_random_addr_from_randomblock_from_rng(rng,2,4)
                 imm = (target_addr - curr_addr)&((1<<curr_param_size-1)-1)
