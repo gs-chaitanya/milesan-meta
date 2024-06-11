@@ -1,7 +1,7 @@
 from common.spike import SPIKE_STARTADDR
 # from cascade.cfinstructionclasses import R12DInstruction, ImmRdInstruction, RegImmInstruction
 from rv.asmutil import li_into_reg
-from params.fuzzparams import RDEP_MASK_REGISTER_ID, PROBA_ENTANGLE_LAYOUT, PROBA_SAME_BASE_PT
+from params.fuzzparams import RDEP_MASK_REGISTER_ID, PROBA_ENTANGLE_LAYOUT, PROBA_SAME_BASE_PT, TAINT_EN
 from params.runparams import DEBUG_PRINT, INSERT_REGDUMPS
 from cascade.privilegestate import PrivilegeStateEnum
 from common.designcfgs import get_design_stop_sig_addr, get_design_reg_dump_addr, get_design_reg_stream_addr
@@ -179,10 +179,9 @@ class PageTablesGen:
             else:
                 flags = self.flags_leaf_pte_supervisor
             if not is_executable:
-                flags &= ~(1<<X_PTE_BIT)
-                if DEBUG_PRINT:
-                    print(f"Page at {hex(ppn)} not executable.")
-
+                flags &= ~(1<<X_PTE_BIT) # clear executable bit.
+                # print(f"{hex(ppn)} not executable.")
+                
         else:
             flags = self.flags_node_pte
         return ((ppn >> PAGE_ALIGNMENT_SHIFT) << 10) | (flags | (is_global << 5))
@@ -401,8 +400,14 @@ class PageTablesGen:
             for _ in range(self.n_entries_per_level[layout_id][-1]):
                 # Make user and supervisor
                 is_random_data_block = ppn_leaf-SPIKE_STARTADDR in [addr[0] for addr in fuzzerstate.random_data_block_ranges]
-                curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=not is_random_data_block)
-                curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=not is_random_data_block)
+                if fuzzerstate.taint_en and is_random_data_block and fuzzerstate.random_data_block_has_taint[ppn_leaf-SPIKE_STARTADDR]:
+                    # If this is a random data block with taint and we only allow taint in one privilege, we map it accordingly s.t. only that privelege has access.
+                    # We then need to ensure that tainted data is also only written to pages that were tainted initially.
+                    curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_in_priv, is_executable=False)
+                    curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_in_priv, is_executable=False)
+                else:
+                    curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=True)
+                    curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=True)
                 curr_layout_pt_content.append(curr_pte)
                 curr_layout_pt_content_supervisor.append(curr_pte_supervisor)
                 ppn_leaf += self.page_size_per_layout[layout_id]

@@ -367,7 +367,10 @@ class IntRegPickState:
                 elif self.regs[reg_id].fsm_state == IntRegIndivState.PRODUCED1:
                     assert new_state in (IntRegIndivState.CONSUMED, IntRegIndivState.UNRELIABLE)
                 elif self.regs[reg_id].fsm_state == IntRegIndivState.CONSUMED:
-                    assert new_state == IntRegIndivState.FREE or new_state == IntRegIndivState.RELOCUSED
+                    assert new_state == IntRegIndivState.RELOCUSED
+                elif self.regs[reg_id].fsm_state == IntRegIndivState.RELOCUSED:
+                    assert new_state in (IntRegIndivState.FREE, IntRegIndivState.PRODUCED0, IntRegIndivState.CONSUMED)
+
                 if DO_EXPENSIVE_ASSERT:
                     # Check that the register is registered in exactly one state
                     for s in IntRegIndivState:
@@ -432,6 +435,15 @@ class IntRegPickState:
     # Getters for registers in a certain state
     def exists_reg_in_state(self, req_state: IntRegIndivState) -> bool:
         return np.any(self.__regs_in_state_onehot[req_state])
+    
+    def exists_tainted_reg(self):
+        return any([r.get_val_t0() for r in self.regs.values()])
+
+    def get_tainted_free_regs(self):
+        return [reg_id for reg_id, r in self.regs.items() if r.get_val_t0() and r.fsm_state == IntRegIndivState.FREE]
+
+    def get_untainted_free_regs(self):
+        return [reg_id for reg_id, r in self.regs.items() if r.get_val_t0() == 0 and r.fsm_state == IntRegIndivState.FREE] 
 
     def exists_untainted_reg_in_state(self, req_state: IntRegIndivState, allow_zero = False) -> bool:
         untainted_regs_oneshot = self.get_untainted_regs_onehot()

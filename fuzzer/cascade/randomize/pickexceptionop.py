@@ -5,9 +5,10 @@
 # This module is responsible for picking specific operations among exceptions.
 
 from cascade.cfinstructionclasses import JALInstruction, SimpleIllegalInstruction, SimpleExceptionEncapsulator, MisalignedMemInstruction, EcallEbreakInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, CSRRegInstruction, PrivilegeDescentInstruction, CSRRegInstructions, Float3Instruction, Float3Instructions
-from cascade.cfinstructionclasses_t0 import TvecWriterInstruction_t0, EPCWriterInstruction_t0, GenericCSRWriterInstruction_t0, SimpleExceptionEncapsulator_t0, CSRRegInstruction_t0, SimpleIllegalInstruction_t0, MisalignedMemInstruction_t0, MstatusWriterInstruction_t0
+from cascade.cfinstructionclasses_t0 import TvecWriterInstruction_t0, EPCWriterInstruction_t0, GenericCSRWriterInstruction_t0, SimpleExceptionEncapsulator_t0, CSRRegInstruction_t0, SimpleIllegalInstruction_t0, MisalignedMemInstruction_t0, MstatusWriterInstruction_t0, R12DInstruction_t0, RegImmInstruction_t0, ImmRdInstruction_t0
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.randomize.createcfinstr import gen_random_rounding_mode
+from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
 from cascade.toleratebugs import is_tolerate_rocket_minstret, is_tolerate_kronos_readbadcsr, is_tolerate_picorv32_readnonimplcsr, is_forbid_vexriscv_csrs, is_tolerate_vexriscv_fpu_disabled, is_tolerate_vexriscv_fpu_leak
 from cascade.util import ExceptionCauseVal, IntRegIndivState
 from common.spike import SPIKE_MEDELEG_MASK, SPIKE_STARTADDR
@@ -253,7 +254,19 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
 # @return a CFInstructionType that will cause an exception on this design.
 def gen_exception_instr(fuzzerstate):
     exception_op_type = _gen_next_exceptionoptype(fuzzerstate)
-    return gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type)
+    instr_objs = []
+    if fuzzerstate.taint_en:
+        if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
+            is_mtvec = True
+        else:
+            if DO_ASSERT:
+                assert fuzzerstate.privilegestate.medeleg_val is not None
+            is_mtvec = not (fuzzerstate.privilegestate.medeleg_val & (1 << exception_op_type.value))
+        if not is_mtvec and PrivilegeStateEnum.SUPERVISOR not in fuzzerstate.taint_in_priv: # We return to supervisor, but don't allow taint in that mode.
+            instr_objs += clear_taints_with_random_instructions(fuzzerstate)
+            
+    return instr_objs + [gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type)]
+
 
 ###
 # Other exposed functions
@@ -304,7 +317,16 @@ def gen_tvecfill_instr(fuzzerstate):
             rd = fuzzerstate.intregpickstate.pick_int_outputreg()
         fuzzerstate.privilegestate.is_stvec_populated = True
     
-    if rd>0:
+    # if rd > 0 and fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].unreliable and is_mtvec or fuzzerstate.csrfile.regs[CSR_IDS.STVEC].unreliable and not is_mtvec:
+    #     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
+    # if rs1 > 0:
+    #     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCUSED, force=True)
+    #     if is_mtvec:
+    #         fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].unreliable = True
+    #     else:
+    #         fuzzerstate.csrfile.regs[CSR_IDS.STVEC].unreliable = True
+    # TODO: use above, would be cleaner
+    if rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
     return TvecWriterInstruction_t0(fuzzerstate,is_mtvec, rd, rs1, producer_id)
 
@@ -360,8 +382,19 @@ def gen_epcfill_instr(fuzzerstate):
             rd = fuzzerstate.intregpickstate.pick_int_outputreg()
         fuzzerstate.privilegestate.is_sepc_populated = True
 
-    if rd>0:
+    # if rd > 0 and fuzzerstate.csrfile.regs[CSR_IDS.MEPC].unreliable and is_mepc or fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable and not is_mepc:
+    #     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
+    # if rs1 > 0:
+    #     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCUSED, force=True)
+    #     if is_mepc:
+    #         fuzzerstate.csrfile.regs[CSR_IDS.MEPC].unreliable = True
+    #     else:
+    #         fuzzerstate.csrfile.regs[CSR_IDS.MEPC].unreliable = True
+
+    # TODO: use above, would be cleaner
+    if rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
+
     return EPCWriterInstruction_t0(fuzzerstate, is_mepc, rd, rs1, producer_id)
 
 # @brief this function generates an instruction that will fill the xPP field of mstatus with the provided value.
@@ -497,7 +530,7 @@ def gen_sum_mprv_op(fuzzerstate):
     #rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
+    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCUSED)
 
     # Create the instruction and set the state
     return MstatusWriterInstruction_t0(0, rs1, producer_id, instr_str, mstatus_mask)

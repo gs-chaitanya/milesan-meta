@@ -120,13 +120,13 @@ class BaseInstruction:
 
     def reset_addr(self):
         from cascade.spikeresolution import get_current_layout
-        if not len(self.fuzzerstate.instr_objs_seq[0]): # this is the first instruction, special case.
+        if not len(self.fuzzerstate.instr_objs_seq[0]): # This is the first instruction, special case.
             self.priv_level = PrivilegeStateEnum.MACHINE
             self.va_layout = -1
         else:
             if len(self.fuzzerstate.instr_objs_seq[-1]):
                 last_instr = self.fuzzerstate.instr_objs_seq[-1][-1] # We need the layout from the previous instruction
-            else: # In case its the first instruciton of a block.
+            else: # In case it's the first instruction of a block.
                 last_instr = self.fuzzerstate.instr_objs_seq[-2][-1] # We need the layout from the previous instruction
 
             self.va_layout, self.priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)

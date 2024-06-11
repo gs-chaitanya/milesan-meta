@@ -131,8 +131,11 @@ class RDInstruction_t0(CFInstruction_t0):
         self.add_writeback_trace(res, res_t0, is_spike_resolution)
 
     def add_writeback_trace(self, res, res_t0, is_spike_resolution: bool):
-        if is_spike_resolution and self.fuzzerstate.intregpickstate.regs[self.rd].fsm_state !=  IntRegIndivState.FREE:
-            self.rd_unreliable = True
+        if is_spike_resolution:
+            if self.fuzzerstate.intregpickstate.regs[self.rd].fsm_state !=  IntRegIndivState.FREE:
+                self.rd_unreliable = True
+        if DO_ASSERT:
+            assert res_t0 == 0 or self.priv_level in self.fuzzerstate.taint_in_priv, f"{self.get_str()}: Taint detected in forbidden privelege: allowed are {[p.name for p in self.fuzzerstate.taint_in_priv]}. Taint is {hex(res_t0)}"
         self.writeback_trace["in-situ" if is_spike_resolution else "final"] = (res, res_t0)
         if not is_spike_resolution:
             self.assert_writeback_trace()

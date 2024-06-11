@@ -29,8 +29,9 @@ BLOCK_HEADER_RANDOM_DATA_BYTES = 12
 RANDOM_DATA_BLOCK_MIN_SIZE_BYTES = 12
 RANDOM_DATA_BLOCK_MAX_SIZE_BYTES = 64
 
-MIN_N_RANDOM_DATA_BLOCKS = 1
+MIN_N_RANDOM_DATA_BLOCKS = 3
 MAX_N_RANDOM_DATA_BLOCKS = 10
+assert MIN_N_RANDOM_DATA_BLOCKS >=2, "We need at least two random data blocks when taint is enabled." # TODO only assert when taint is enabled.
 
 ###
 # Branches
@@ -172,6 +173,7 @@ USE_SPIKE_INTERM_ELF = False # When both this and INSERT_REGDUMPS are enabled, t
 
 TAINT_EN = True # The assumed value for function paramteres.
 P_TAINT_REG = 0.5
+P_TAINT_IN_MACHINE = 1
 MAX_NUM_INIT_TAINTED_REGS = 5
 
 # There should be at least this number of untainted regs

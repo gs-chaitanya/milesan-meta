@@ -126,9 +126,7 @@ def gen_basicblock(fuzzerstate):
 
         # If this is a privilege descent instruction or an mpp/spp write instruction
         elif curr_isa_class == ISAInstrClass.DESCEND_PRV:
-            # assert False, "not implemented"
             # print('Priv descent at addr', hex(curr_addr+SPIKE_STARTADDR), 'privstate', fuzzerstate.privilegestate.privstate)
-            new_instrobj = gen_priv_descent_instr(fuzzerstate)
             # print('  New privstate', fuzzerstate.privilegestate.privstate)
             # Create space for the next basic block.
             if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
@@ -138,10 +136,17 @@ def gen_basicblock(fuzzerstate):
                 # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
                 fuzzerstate.restore_states()
                 return False
-            fuzzerstate.append_and_execute_instr(new_instrobj)
+
+            new_instrobjs = gen_priv_descent_instr(fuzzerstate)
+            fuzzerstate.append_and_execute_instr(new_instrobjs[0])
+            for next_instrobj_id in range(1, len(new_instrobjs)):
+                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                fuzzerstate.append_and_execute_instr(new_instrobjs[next_instrobj_id])
+                
             if DEBUG_PRINT: print(f"priv change at addr: {hex(curr_addr+SPIKE_STARTADDR)} to ", fuzzerstate.privilegestate.privstate)
 
-            del new_instrobj
+            del new_instrobjs
             return True
 
         elif curr_isa_class == ISAInstrClass.PPFSM:
@@ -169,12 +174,15 @@ def gen_basicblock(fuzzerstate):
                 fuzzerstate.restore_states()
                 return False
             # print('exception at addr', hex(curr_addr), 'privstate', fuzzerstate.privilegestate.privstate)
-            new_instrobj = gen_exception_instr(fuzzerstate)
-            # new_instrobj.print()
+            new_instrobjs = gen_exception_instr(fuzzerstate)
             # print('  New priv:', fuzzerstate.privilegestate.privstate)
-            # fuzzerstate.instr_objs_seq[-1].append(new_instrobj)
-            fuzzerstate.append_and_execute_instr(new_instrobj)
-            del new_instrobj # For safety, we prevent accidental reuse of this variable
+            fuzzerstate.append_and_execute_instr(new_instrobjs[0])
+            for next_instrobj_id in range(1, len(new_instrobjs)):
+                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                fuzzerstate.append_and_execute_instr(new_instrobjs[next_instrobj_id])
+
+            del new_instrobjs # For safety, we prevent accidental reuse of this variable
             return True
         
         elif curr_isa_class == ISAInstrClass.MEM:
@@ -282,25 +290,25 @@ def gen_basicblock(fuzzerstate):
         fuzzerstate.append_and_execute_instr(next_instr)
 
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
-def gen_random_data_block(fuzzerstate):
+# @param: page_has_taint: allow that this page contains tainted data. Parameter is ignored if taint is disabled.
+def gen_random_data_block(fuzzerstate, page_has_taint = False):
     # The rng should have randomness that follows from the system random state but not have any reciprocal effects
     # This is necessary s.t. the bugs can be enabled/disabled without further influencing program construction 
     rng = np.random.RandomState(random.randrange(0,2**31)) 
     # lenbytes = random.randrange(RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES)
-    lenbytes = PHYSICAL_PAGE_SIZE
+    lenbytes = PHYSICAL_PAGE_SIZE # We only allocate pages the size of a frame (i.e. physical page) for now.
     # fuzzerstate.random_data_block_start_addr = fuzzerstate.memview.gen_random_free_addr(2, lenbytes, 0, fuzzerstate.memsize)
     # fuzzerstate.random_data_block_end_addr = fuzzerstate.random_data_block_start_addr + lenbytes
     random_data_block_start_addr = fuzzerstate.memview.gen_random_free_addr(PAGE_ALIGNMENT_SHIFT, lenbytes, 0, fuzzerstate.memsize)
-    assert random_data_block_start_addr is not None, f"Could not allocate random block of size {hex(lenbytes)} bytes."
+    if DO_ASSERT:
+        assert random_data_block_start_addr is not None, f"Could not allocate random block of size {hex(lenbytes)} bytes."
+        assert random_data_block_start_addr&PAGE_ALIGNMENT_BITS == 0 ,"Random data block needs to be page aligned."
     random_data_block_end_addr = random_data_block_start_addr + lenbytes
     if TAINT_EN:
-        page_has_taint = random.random() < P_PAGE_HAS_TAINT
-        fuzzerstate.random_data_block_has_taint[random_data_block_start_addr&PAGE_ALIGNMENT_MASK]= page_has_taint
+        fuzzerstate.random_data_block_has_taint[random_data_block_start_addr] = page_has_taint
     fuzzerstate.random_data_block_ranges += [(random_data_block_start_addr, random_data_block_end_addr)]
     
     random_block_content4by4bytes = []
-    # if DO_ASSERT:
-    #     assert fuzzerstate.random_data_block_start_addr is not None, f"Maybe you should create the random data block earlier in the creation of the test case."
     fuzzerstate.memview.alloc_mem_range(random_data_block_start_addr, random_data_block_end_addr)
     # Generate the random data
     for addr in range(random_data_block_start_addr, random_data_block_end_addr, 4):
@@ -627,9 +635,13 @@ def gen_basicblocks(fuzzerstate):
         # Reserve space for the second basic block (whose address is already fixed).
         fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
 
+        # We need at least one random data block with taint and one without
+        gen_random_data_block(fuzzerstate, False)
+        gen_random_data_block(fuzzerstate, True)
         # Generate the random data blocks
-        for _ in range(random.randint(MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS)):
-            gen_random_data_block(fuzzerstate)
+        for _ in range(2, random.randint(MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS)):
+            gen_random_data_block(fuzzerstate, random.random() < P_PAGE_HAS_TAINT)
+
         # print(f"Generated {len(fuzzerstate.random_data_block_ranges)} random blocks: memsize: {hex(fuzzerstate.memsize)}")
         # for start_addr, end_addr in fuzzerstate.random_data_block_ranges:
         #     print(f"{hex(start_addr)}:{hex(end_addr)}: {hex(end_addr-start_addr)}")

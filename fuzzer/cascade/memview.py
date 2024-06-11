@@ -158,10 +158,19 @@ class MemoryView:
                 return picked_addr
         return None
 
-    def gen_random_addr_from_randomblock(self, alignment_bits: int = 2, min_space: int = 4, max_attempts: int = MEMVIEW_ALLOC_MAX_ATTEMPTS, tainted_ok = True):
+    def gen_random_addr_from_randomblock(self, alignment_bits: int = 2, min_space: int = 4, max_attempts: int = MEMVIEW_ALLOC_MAX_ATTEMPTS, tainted_ok: bool = True, not_tainted_ok: bool = True):
         for _ in range(max_attempts):
-            picked_addr = random.choice([addr for addr in self.data.keys() if addr % (1 << alignment_bits) == 0])-SPIKE_STARTADDR
-            if min_space == 0 or all([addr+SPIKE_STARTADDR in self.data for addr in range(picked_addr,picked_addr+min_space-1)]) and not (not tainted_ok and self.fuzzerstate.random_data_block_has_taint[picked_addr&PAGE_ALIGNMENT_MASK]):
+            allowed_pages = [addr for addr in self.fuzzerstate.random_data_block_ranges] # All pages
+            assert tainted_ok or not_tainted_ok, f"At least one must be true."
+            if not tainted_ok: # Remove tainted pages
+                allowed_pages = [page_start_end_addr for page_start_end_addr in allowed_pages if not self.fuzzerstate.random_data_block_has_taint[page_start_end_addr[0]]]
+            if not not_tainted_ok: # Remove untainted pages
+                allowed_pages = [page_start_end_addr for page_start_end_addr in allowed_pages if self.fuzzerstate.random_data_block_has_taint[page_start_end_addr[0]]]
+            assert len(allowed_pages), f"No pages matched required criteria: tainted_ok: {tainted_ok}, not_tainted_ok: {not_tainted_ok}"
+            page_start_end_addr = random.choice(allowed_pages)
+            picked_addr = random.choice([addr for addr in range(page_start_end_addr[0], page_start_end_addr[1]) if addr % (1 << alignment_bits) == 0])
+            # print(f"Picked addr {hex(picked_addr)} in page {hex(page_start_end_addr[0])}")
+            if min_space == 0 or picked_addr+min_space<page_start_end_addr[1]:
                 if DO_ASSERT:
                     assert picked_addr >= 0
                     assert picked_addr + min_space <= self.memsize, f"{hex(picked_addr+min_space)} exceeds memsize {hex(self.memsize)}"
@@ -170,10 +179,18 @@ class MemoryView:
                 return picked_addr
         return None
 
-    def gen_random_addr_from_randomblock_from_rng(self,rng: np.random.RandomState, alignment_bits: int = 2, min_space: int = 4, max_attempts: int = MEMVIEW_ALLOC_MAX_ATTEMPTS, tainted_ok = True):
+    def gen_random_addr_from_randomblock_from_rng(self,rng: np.random.RandomState, alignment_bits: int = 2, min_space: int = 4, max_attempts: int = MEMVIEW_ALLOC_MAX_ATTEMPTS, tainted_ok: bool = True, not_tainted_ok: bool = True):
         for _ in range(max_attempts):
-            picked_addr = int(rng.choice([addr for addr in self.data.keys() if addr % (1 << alignment_bits) == 0]))-SPIKE_STARTADDR
-            if min_space == 0 or all([addr+SPIKE_STARTADDR in self.data for addr in range(picked_addr,picked_addr+min_space-1)]) and not (not tainted_ok and self.fuzzerstate.random_data_block_has_taint[picked_addr&PAGE_ALIGNMENT_MASK]):
+            allowed_pages = [addr for addr in self.fuzzerstate.random_data_block_ranges] # All pages
+            assert tainted_ok or not_tainted_ok, f"At least one must be true."
+            if not tainted_ok: # Remove tainted pages
+                allowed_pages = [page_start_end_addr for page_start_end_addr in allowed_pages if not self.fuzzerstate.random_data_block_has_taint[page_start_end_addr[0]]]
+            if not not_tainted_ok: # Remove untainted pages
+                allowed_pages = [page_start_end_addr for page_start_end_addr in allowed_pages if self.fuzzerstate.random_data_block_has_taint[page_start_end_addr[0]]]
+            page_start_end_addr = rng.choice(allowed_pages)
+            picked_addr = int(rng.choice([addr for addr in range(page_start_end_addr[0], page_start_end_addr[1]) if addr % (1 << alignment_bits) == 0]))
+            # print(f"Picked addr {hex(picked_addr)} in page {hex(page_start_end_addr[0])}")
+            if min_space == 0 or picked_addr+min_space<page_start_end_addr[1]:
                 if DO_ASSERT:
                     assert picked_addr >= 0
                     assert picked_addr + min_space <= self.memsize, f"{hex(picked_addr+min_space)} exceeds memsize {hex(self.memsize)}"
@@ -181,7 +198,6 @@ class MemoryView:
                 # print(f"Returning addr {hex(picked_addr)}, min_space: {min_space}, align: {alignment_bits}")
                 return picked_addr
         return None
-
 
     def is_addr_tainted(self,addr,n_bytes):
         is_tainted = False
@@ -192,6 +208,7 @@ class MemoryView:
     def is_cl_tainted(self, addr):
         cl_addr = addr - addr%self.cl_size
         return self.is_addr_tainted(cl_addr,self.cl_size)
+
     # @brief Computes the percentage of the memory that is allocated
     def get_allocated_ratio(self):
         free_sum = sum(map(lambda p: p[1] - p[0], self.freepairs))

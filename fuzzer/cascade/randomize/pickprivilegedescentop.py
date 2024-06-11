@@ -8,6 +8,7 @@ from params.runparams import DO_ASSERT,DEBUG_PRINT
 from params.fuzzparams import USE_MMU, MAX_NUM_INSTR_IN_PRV
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.cfinstructionclasses_t0 import PrivilegeDescentInstruction_t0
+from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
 from cascade.util import MmuState
 from rv.asmutil import li_into_reg
 from rv.csrids import CSR_IDS
@@ -17,6 +18,7 @@ import random
 # @brief Generate a privileged descent instruction or an mpp/spp write instruction.
 # @return a list of instructions
 def gen_priv_descent_instr(fuzzerstate):
+    instr_objs = []
     old_priv_state = fuzzerstate.privilegestate.privstate
     if DO_ASSERT:
         if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
@@ -30,6 +32,11 @@ def gen_priv_descent_instr(fuzzerstate):
 
     is_mret = fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE
 
+
+    # If there should not be any taint propagation from the privelege were in to the one we are returning to.
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and fuzzerstate.privilegestate.curr_mstatus_mpp not in fuzzerstate.taint_in_priv:
+        instr_objs += clear_taints_with_random_instructions(fuzzerstate)
+
     # Invalidate the corresponding epc and update the current privilege level.
     # Do not update or invalidate mpp/spp bits.
     if is_mret:
@@ -41,6 +48,7 @@ def gen_priv_descent_instr(fuzzerstate):
         fuzzerstate.privilegestate.is_sepc_populated = False
         fuzzerstate.privilegestate.privstate = fuzzerstate.privilegestate.curr_mstatus_spp
         fuzzerstate.privilegestate.curr_mstatus_spp = PrivilegeStateEnum.USER
+
 
     if USE_MMU:
         if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
@@ -91,5 +99,5 @@ def gen_priv_descent_instr(fuzzerstate):
     if USE_MMU:
         fuzzerstate.num_instr_to_stay_in_prv = random.randint(0, MAX_NUM_INSTR_IN_PRV)
         if DEBUG_PRINT: print(f"will stay in this mode for {fuzzerstate.num_instr_to_stay_in_prv} instructions")
-    return PrivilegeDescentInstruction_t0(fuzzerstate, is_mret)
+    return instr_objs + [PrivilegeDescentInstruction_t0(fuzzerstate, is_mret)]
 

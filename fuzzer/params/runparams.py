@@ -16,7 +16,7 @@ PATH_TO_FIGURES = os.environ['CASCADE_PATH_TO_FIGURES']
 DO_ASSERT = True
 DO_EXPENSIVE_ASSERT = False # More expensive assertions
 
-NO_REMOVE_TMPFILES = True # Used for debugging purposes.
+NO_REMOVE_TMPFILES = False # Used for debugging purposes.
 
 RUN_TIMEOUT_SECONDS = 60*3 # A program is not supposed to run longer than this in RTL simulation.
 
@@ -37,7 +37,7 @@ PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS = False
 PRINT_REG_TRACEBACK = False
 PRINT_FILTERED_REG_TRACEBACK = False
 
-PRINT_ENVIRONMENT = True
+PRINT_ENVIRONMENT = False
 
 INSERT_REGDUMPS = False # Speculative bugs will likely diappear when enabled.
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
@@ -56,7 +56,7 @@ PRINT_MEM_STORES = False
 PRINT_MEM_STORES_T0 = False
 
 GET_DATA = False
-DEBUG_PRINT = True
+DEBUG_PRINT = False
 
 ASSERT_ADDR = True
 

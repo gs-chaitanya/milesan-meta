@@ -467,7 +467,6 @@ def gen_stvec_satp(fuzzerstate, curr_addr):
     instr_objs.append(TvecWriterInstruction_t0(fuzzerstate,False, stvec_val_reg, stvec_val_reg, -1))
     fuzzerstate.intregpickstate.set_regstate(stvec_val_reg, IntRegIndivState.RELOCUSED, force=True)
     fuzzerstate.n_mising_r_cmds += 1
-
     if GET_DATA:
         fuzzerstate.num_hardcoded_instr_mmufsm += len(instr_objs)
 

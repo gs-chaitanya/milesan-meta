@@ -88,7 +88,7 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
     if instr_str == "auipc" and rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
-    imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
+    imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate) if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv else 0
     instr = ImmRdInstruction_t0(fuzzerstate,instr_str, rd, imm, imm_t0, iscompressed)
     return instr
 
@@ -98,7 +98,7 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     rs1 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg()
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
-    imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
+    imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate) if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv else 0
     instr = RegImmInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, imm_t0, iscompressed)
     return instr
 
@@ -370,10 +370,10 @@ def create_memop_instrobjs(fuzzerstate, instr_str):
 
     va_layout, priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
 
-
-    addr  = fuzzerstate.memview.gen_random_addr_from_randomblock(alignment_bits,min_space)
-    assert addr is not None
     if not USE_MMU or va_layout == -1: # Dont need 64bit value in bare
+        assert fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE, f"We need to be in machine mode to use bare translation."
+        addr  = fuzzerstate.memview.gen_random_addr_from_randomblock(alignment_bits,min_space)
+        assert addr is not None
         rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.
         uimm0, uimm1 = li_into_reg(to_unsigned(addr, fuzzerstate.is_design_64bit), False)
         if instr_str in ["sb","sh","sw"]:
@@ -392,12 +392,23 @@ def create_memop_instrobjs(fuzzerstate, instr_str):
                 IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rd, 0x0, None)
             ]
 
-    else: # if we use the MMU, we need to get the virtual address and use a sequence to set up a 64 bit address
+    else: # if we use the MMU, we need to get the virtual address and use a sequence to set up a 64 bit address.
         (rd,tmp) = fuzzerstate.intregpickstate.pick_untainted_int_outputregs_nonzero(2,force = False) # Rd and tmp will be untainted after execution.
+        rs2 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg(force = False)
+        is_store = instr_str in ["sb","sh","sw"]
+        assert fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE
+        if fuzzerstate.privilegestate.privstate not in fuzzerstate.taint_in_priv: # We are not in the privelege that can process taints, so only non-tainted pages are allowed.
+            tainted_ok = False
+            not_tainted_ok = True
+        else:
+            tainted_ok = True # We can read from or write to tainted pages
+            not_tainted_ok = not is_store or not fuzzerstate.intregpickstate.regs[rs2].get_val_t0() # We can only write tainted values to tainted pages, untainted values can go anywhere
+
+        addr  = fuzzerstate.memview.gen_random_addr_from_randomblock(alignment_bits,min_space,tainted_ok=tainted_ok, not_tainted_ok=not_tainted_ok)
+        assert addr is not None
         addr = phys2virt(addr, priv_level, va_layout,fuzzerstate,absolute_addr=True)
         instr_objs = li_doubleword(addr, rd, tmp, fuzzerstate)
-        if instr_str in ["sb","sh","sw"]:
-            rs2 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg(force = False)
+        if is_store:
             instr_objs += [IntStoreInstruction_t0(fuzzerstate, instr_str, rd, rs2, 0x0, None)]
         else:
             instr_objs += [IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rd, 0x0, None)]

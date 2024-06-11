@@ -212,9 +212,14 @@ def _filter_taint(fuzzerstate, filtered_weights: list):
         filtered_weights = dict.fromkeys(filtered_weights,0)
         filtered_weights[ISAInstrClass.ALU] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU]
         filtered_weights[ISAInstrClass.ALU64] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU64]
-    elif n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2:
-        filtered_weights[ISAInstrClass.ALU] *= TAINT_IMM_PROTURBANCE_FACTOR
+    elif n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+        filtered_weights[ISAInstrClass.ALU] *= TAINT_IMM_PROTURBANCE_FACTOR # Add taint with immediates if we are in the alowed priveleges only.
         filtered_weights[ISAInstrClass.ALU64] *= TAINT_IMM_PROTURBANCE_FACTOR
+
+    if DO_ASSERT:
+        if not (fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv or not fuzzerstate.intregpickstate.exists_tainted_reg()):
+            fuzzerstate.intregpickstate.print()
+            assert False, f"There should not be any taint in { fuzzerstate.privilegestate.privstate.name}. Allowed are {[p.name for p in fuzzerstate.taint_in_priv]}"
 
 
 ###
