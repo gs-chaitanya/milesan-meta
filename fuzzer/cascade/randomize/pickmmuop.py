@@ -72,6 +72,8 @@ def gen_weights_mmu(fuzzerstate):
                 weights[layout + 1] = 1
         # bare is always 0 in S mode, as it is an exception
         weights[0] = 0
+    # if fuzzerstate.privilegestate.curr_mstatus_mpp !=  PrivilegeStateEnum.MACHINE:
+    #     weights[-1] = 0
             
     return weights
 

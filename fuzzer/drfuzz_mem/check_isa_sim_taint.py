@@ -108,7 +108,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             if fuzzerstate.taint_en:
                 mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
                 if mismatch:
-                    raise ValueError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}")
+                    raise ValueError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}.\n\t Taint allowed in {[p.name for p in fuzzerstate.taint_in_priv]}.")
 
         if PRINT_MEMORY_VALIDATION:
             print("*** MEMORY VALIDATION ***:")

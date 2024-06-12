@@ -33,6 +33,7 @@ PRINT_INSTRUCTION_EXECUTION_IN_SITU = False # Prints execution during program ge
 PRINT_INSTRUCTION_EXECUTION_FINAL = False # Prints execution during register value checks.
 PRINT_INSTRUCTION_EXECUTION_REDUCE = False # Prints execution during program reduction.
 PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS = False
+PRINT_COLOR_TAINT = True
 
 PRINT_REG_TRACEBACK = False
 PRINT_FILTERED_REG_TRACEBACK = False

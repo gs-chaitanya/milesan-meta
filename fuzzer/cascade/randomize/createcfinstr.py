@@ -7,7 +7,7 @@ import numpy as np
 
 from params.runparams import DO_ASSERT, PRINT_FSM_TRANSITIONS
 
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED, NUM_MAX_PRODUCED0_REGS, NUM_MAX_PRODUCED1_REGS
 from params.runparams import GET_DATA
 from cascade.util import IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS, ISAInstrClass
 from cascade.cfinstructionclasses import *
@@ -320,9 +320,13 @@ def create_regfsm_instrobjs(fuzzerstate):
     #     fuzzerstate.intregpickstate.print()
     #     print(f"n_free_or_relocused: {n_free_or_relocused_regs}")
     assert np.any(effective_weights), f"No FSM operation possible! {doable_fsm_ops}"
-    choice = None
-    while choice is None or not doable_fsm_ops[choice]:
-        choice = random.choices(range(3), effective_weights, k=1)[0]
+
+    if fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.PRODUCED0) >= NUM_MAX_PRODUCED0_REGS:
+        return create_targeted_producer1_instrobj(fuzzerstate)
+    elif fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.PRODUCED1) >= NUM_MAX_PRODUCED1_REGS:
+        return create_targeted_consumer_instrobj(fuzzerstate)
+
+    choice = random.choices(range(len(effective_weights)), weights=effective_weights, k=1)[0]
 
     if choice == 0: # FREE -> PRODUCED0
         return create_targeted_producer0_instrobj(fuzzerstate)
@@ -402,8 +406,8 @@ def create_memop_instrobjs(fuzzerstate, instr_str):
     addr  = fuzzerstate.memview.gen_random_addr_from_randomblock(alignment_bits,min_space,tainted_ok=tainted_ok, not_tainted_ok=not_tainted_ok)
     assert addr is not None
 
-    if not USE_MMU or va_layout == -1: # Dont need 64bit value in bare
-        # assert priv_level == PrivilegeStateEnum.MACHINE, f"We need to be in machine mode to use bare translation."
+    if not USE_MMU or va_layout == -1: # We don't need 64bit values in bare.
+        assert priv_level == PrivilegeStateEnum.MACHINE, f"We need to be in machine mode to use bare translation."
         rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.
         uimm0, uimm1 = li_into_reg(to_unsigned(addr, fuzzerstate.is_design_64bit), False)
         if is_store:
@@ -421,7 +425,7 @@ def create_memop_instrobjs(fuzzerstate, instr_str):
                 IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rd, 0x0, None)
             ]
 
-    else: # if we use the MMU, we need to get the virtual address and use a sequence to set up a 64 bit address.
+    else: # if we use the MMU, we need to get the virtual address and use one extra instruction to set up the 64 bit vaddress.
         assert priv_level != PrivilegeStateEnum.MACHINE, f"We can't be in machine mode and use vaddr translation."
         (rd,tmp) = fuzzerstate.intregpickstate.pick_untainted_int_outputregs_nonzero(2,force = False) # Rd and tmp will be untainted after execution.
         addr = phys2virt(addr, priv_level, va_layout,fuzzerstate,absolute_addr=True)

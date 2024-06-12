@@ -22,9 +22,12 @@ def clear_taints_with_random_instructions(fuzzerstate):
         else:
             curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[instr_str]][-1]
         if PARAM_IS_SIGNED[INSTRUCTION_IDS[instr_str]][-1]:
-            imm = random.randint( -(1<<(curr_param_size-1)),1<<(curr_param_size-1))
+            imm = random.randint(- (1<<(curr_param_size-2)),1<<(curr_param_size-2))
         else:
             imm = random.randint(0,1<<(curr_param_size-1))
+
+        del curr_param_size
+
         if instr_str in R12DInstruction_t0.authorized_instr_strs:
             rs1 = random.choice(untainted_reg_ids)
             rs2 = random.choice(untainted_reg_ids)

@@ -409,7 +409,7 @@ def gen_ppfill_instrs(fuzzerstate):
     else:
         is_mpp = True
 
-        # Ignore the return value of mstatus for now
+    # Ignore the return value of mstatus for now
     rd = 0
 
     # rd = fuzzerstate.intregpickstate.pick_int_outputreg()
@@ -429,9 +429,6 @@ def gen_ppfill_instrs(fuzzerstate):
             target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR])
         else:
             target_privlvl = PrivilegeStateEnum.SUPERVISOR
-        
-    # print(f"Target priv is {target_privlvl.name}: is_mpp: {is_mpp}")
-    # def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False, is_satp_smode = (False, None), mpp_val = None):
 
     if is_mpp:
         if target_privlvl == PrivilegeStateEnum.USER:

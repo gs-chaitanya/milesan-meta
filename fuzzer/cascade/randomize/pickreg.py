@@ -72,9 +72,9 @@ class IntRegPickState:
     def get_free_regs_onehot(self):
         ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
-            # if sum(ret) < NUM_MIN_FREE_INTREGS:
-            #     self.print()
-            #     assert False, f"There are less than {NUM_MIN_FREE_INTREGS} free integer registers available. ({ret})"
+            if sum(ret) < NUM_MIN_FREE_INTREGS:
+                # self.print()
+                assert False, f"There are less than {NUM_MIN_FREE_INTREGS} free integer registers available. ({ret})"
             assert sum(ret) >= NUM_MIN_FREE_INTREGS, f"There are less than {NUM_MIN_FREE_INTREGS} free integer registers available."
         return np.asarray(ret)
 
@@ -86,7 +86,7 @@ class IntRegPickState:
         ret = [int(self.regs[reg_id].get_val_t0() == 0) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
             if sum(ret) < NUM_MIN_UNTAINTED_INTREGS:
-                self.print()
+                # self.print()
                 assert False,f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
             assert sum(ret) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
         return np.asarray(ret)
@@ -226,8 +226,8 @@ class IntRegPickState:
         was_zero_authorized = authorized_regs_onehot[0]
         authorized_regs_onehot[0] = 0
         if DO_ASSERT:
-            if self.get_num_untainted_regs_in_state(IntRegIndivState.FREE) < NUM_MIN_UNTAINTED_INTREGS:
-                self.print()
+            # if self.get_num_untainted_regs_in_state(IntRegIndivState.FREE) < NUM_MIN_UNTAINTED_INTREGS:
+                # self.print()
             assert self.get_num_untainted_regs_in_state(IntRegIndivState.FREE) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, True, force))[0]
         authorized_regs_onehot[0] = was_zero_authorized

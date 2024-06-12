@@ -13,7 +13,9 @@ USE_MMU = True
 MAX_NUM_LAYOUTS = 5
 PROBA_ENTANGLE_LAYOUT = 0
 MAX_NUM_INSTR_IN_PRV = 100
+MIN_NUM_INSTR_IN_PRV = 20
 MAX_NUM_INSTR_IN_LAYOUT = 100
+MIN_NUM_INSTR_IN_LAYOUT = 20
 PROBA_NEW_SATP_NOT_USED = 0.01
 PROBA_NEW_SATP_XEPC_POP = 0.0001
 PROBA_NEW_SATP_STVEC_POP = 0.1
@@ -98,11 +100,13 @@ def reset_reg_settings():
         MAX_NUM_PICKABLE_REGS = 22
     else:
         MAX_NUM_PICKABLE_REGS = 24
-    MIN_NUM_PICKABLE_REGS = 4
+    MIN_NUM_PICKABLE_REGS = 8
 
 # # Reduce the registers that we allow ourselves to pick randomly
-MIN_NUM_PICKABLE_REGS = 4
-# MAX_NUM_PICKABLE_REGS = 25
+MIN_NUM_PICKABLE_REGS = 8
+NUM_MAX_CONSUMED_INTREGS = 3
+NUM_MAX_PRODUCED0_REGS = 2
+NUM_MAX_PRODUCED1_REGS = 2
 
 MIN_NUM_PICKABLE_FLOATING_REGS = 1
 MAX_NUM_PICKABLE_FLOATING_REGS = 14
@@ -146,8 +150,8 @@ assert len(set(NONPICKABLE_REGISTERS)) == len(NONPICKABLE_REGISTERS)
 
 REG_FSM_WEIGHTS = np.array([
     1,  # FREE           -> PRODUCED0
-    10, # PRODUCED0      -> PRODUCED1
-    10, # PRODUCED1      -> FREE/CONSUMED
+    50, # PRODUCED0      -> PRODUCED1
+    50, # PRODUCED1      -> FREE/CONSUMED
 ])
 
 PROBA_CONSUME_PRODUCED1_SAME = 0.05 # The proba to output the same register as PRODUCED1 at the output of a CONSUME op
@@ -189,7 +193,7 @@ MAX_WEIGHT_T0 = 1
 
 # The maximal probability proturbance introduced when a register is fully tainted i.e. relative taint hamming weight is one.
 REGPICK_PROTUBERANCE_RATIO_T0_POS = 0.3
-REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.2
+REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.05
 
 
 ALLOW_CSR_TAINT = False
@@ -202,8 +206,8 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MAX_BBS_UPPERBOUND = 100
-NUM_MIN_BBS_LOWERBOUND = 20
+NUM_MAX_BBS_UPPERBOUND = 200
+NUM_MIN_BBS_LOWERBOUND = 50
 NUM_BBS = 0
 
 # The tanh saturates, so that we don't neglect registers that have only few bits tainted when there are regs that have much more bits tainted

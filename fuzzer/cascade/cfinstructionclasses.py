@@ -130,6 +130,12 @@ class BaseInstruction:
                 last_instr = self.fuzzerstate.instr_objs_seq[-2][-1] # We need the layout from the previous instruction
 
             self.va_layout, self.priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
+        
+        if DO_ASSERT:
+            if self.va_layout == -1:
+                assert self.priv_level == PrivilegeStateEnum.MACHINE, f"Need to be in MACHINE mode to use bare translation."
+            if self.priv_level == PrivilegeStateEnum.MACHINE:
+                assert self.va_layout == -1,  f"Need to use bare translation when in MACHINE mode."
         self.paddr = self.fuzzerstate.curr_bb_start_addr + 4*len(self.fuzzerstate.instr_objs_seq[-1]) + SPIKE_STARTADDR
         self.vaddr = phys2virt(self.paddr, self.priv_level, self.va_layout,self.fuzzerstate,absolute_addr=False)
 
@@ -202,11 +208,11 @@ class ImmInstruction(CFInstruction):
             else:
                 curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[self.instr_str]][-1]
             if PARAM_IS_SIGNED[INSTRUCTION_IDS[self.instr_str]][-1]:
-                assert self.imm >= -(1<<(curr_param_size-1)), f"{hex(self.imm)}"
-                assert self.imm <  1<<(curr_param_size-1),  f"{hex(self.imm)}"
+                assert self.imm >= -(1<<(curr_param_size-1)), f"{hex(self.imm)} not within paramsize: (signed, {curr_param_size})"
+                assert self.imm <  1<<(curr_param_size-1),  f"{hex(self.imm)} not within paramsize: (signed, {curr_param_size})"
             else:
                 assert self.imm >= 0
-                assert self.imm <  1<<curr_param_size
+                assert self.imm <  1<<curr_param_size, f"{hex(self.imm)} not within paramsize: (unsigned, {curr_param_size})"
 
     def __init__(self, fuzzerstate, instr_str: str, imm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
