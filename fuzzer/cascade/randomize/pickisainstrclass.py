@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT
 from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_fence, is_forbid_vexriscv_csrs, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_picorv32_writehpm, is_tolerate_picorv32_readnonimplcsr
 from cascade.util import ISAInstrClass, IntRegIndivState, MmuState, BASIC_BLOCK_MIN_SPACE
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, USE_MMU, REGFSM_BIAS, MAX_NUM_FENCES_PER_EXECUTION
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, USE_MMU, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION
 from cascade.privilegestate import PrivilegeStateEnum, is_ready_to_descend_privileges
 from cascade.util import IntRegIndivState
 import random
@@ -19,7 +19,7 @@ from cascade.randomize.pickmmuop import is_mmu_op_not_possible
 
 # Must not all be 0. Must be filtered according to the capabilities of the different CPUs.
 ISAINSTRCLASS_INITIAL_BOOSTERS = {
-    ISAInstrClass.REGFSM:      0.1,
+    ISAInstrClass.REGFSM:      0.01,
     ISAInstrClass.FPUFSM:      0,
     ISAInstrClass.ALU:         0.1,
     ISAInstrClass.ALU64:       0,
@@ -39,14 +39,14 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.FPUD:        0,
     ISAInstrClass.FPUD64:      0,
     ISAInstrClass.TVECFSM:     0.01,
-    ISAInstrClass.PPFSM:       0.001,
-    ISAInstrClass.EPCFSM:      0.001,
+    ISAInstrClass.PPFSM:       0.1,
+    ISAInstrClass.EPCFSM:      0.01,
     ISAInstrClass.MEDELEG:     0.01,
     ISAInstrClass.EXCEPTION:   0.01,
-    ISAInstrClass.RANDOM_CSR:  0.001,
-    ISAInstrClass.DESCEND_PRV: 1,
+    ISAInstrClass.RANDOM_CSR:  0.05,
+    ISAInstrClass.DESCEND_PRV: 0.1,
     ISAInstrClass.SPECIAL:     0,
-    ISAInstrClass.MMU:         0.01,
+    ISAInstrClass.MMU:         0.1,
     ISAInstrClass.MSTATUS:     0
 }
 
@@ -59,11 +59,8 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
 # return a ISAInstrClass
 # Do NOT @cache this function, as it is a random function.
 def _gen_next_isainstrclass_from_weights(weights: list = None) -> ISAInstrClass:
-    ret = None
-    if random.random() < REGFSM_BIAS and weights[ISAInstrClass.REGFSM] != 0:
-        return ISAInstrClass.REGFSM
-    while ret is None or weights[ret] == 0:
-        ret = random.choices(list(ISAInstrClass), weights=weights)[0]
+    ret = random.choices(list(weights.keys()), weights.values(), k=1)[0]
+    assert weights[ret] != 0
     return ret
 
 # @brief For now, the weights used for choosing instructions are fixed over time.
@@ -208,11 +205,11 @@ def _filter_sensitive_instr_weights(fuzzerstate, filtered_weights: list):
 # When there's only little taint, we increase chance for RegImm or ImmRd to add taint.
 def _filter_taint(fuzzerstate, filtered_weights: list):
     n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
-    if n_free_untainted_regs < NUM_MIN_FREE_INTREGS:
+    if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS:
         filtered_weights = dict.fromkeys(filtered_weights,0)
         filtered_weights[ISAInstrClass.ALU] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU]
         filtered_weights[ISAInstrClass.ALU64] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU64]
-    elif n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+    elif n_free_untainted_regs > NUM_MIN_UNTAINTED_INTREGS*2 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
         filtered_weights[ISAInstrClass.ALU] *= TAINT_IMM_PROTURBANCE_FACTOR # Add taint with immediates if we are in the alowed priveleges only.
         filtered_weights[ISAInstrClass.ALU64] *= TAINT_IMM_PROTURBANCE_FACTOR
 
