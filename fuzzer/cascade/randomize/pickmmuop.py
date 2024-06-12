@@ -1,6 +1,6 @@
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.cfinstructionclasses_t0 import R12DInstruction_t0, CSRRegInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0, TvecWriterInstruction_t0, SpecialInstruction_t0, JALRInstruction_t0
-from params.fuzzparams import RPROD_MASK_REGISTER_ID, MAX_NUM_INSTR_IN_LAYOUT, PROBA_NEW_SATP_NOT_USED, PROBA_NEW_SATP_XEPC_POP, PROBA_NEW_SATP_STVEC_POP, RDEP_MASK_REGISTER_ID
+from params.fuzzparams import RPROD_MASK_REGISTER_ID, MAX_NUM_INSTR_IN_LAYOUT, MIN_NUM_INSTR_IN_LAYOUT, PROBA_NEW_SATP_NOT_USED, PROBA_NEW_SATP_XEPC_POP, PROBA_NEW_SATP_STVEC_POP, RDEP_MASK_REGISTER_ID
 from params.runparams import DEBUG_PRINT, GET_DATA
 from common.spike import SPIKE_STARTADDR
 from cascade.mmu_utils import li_doubleword, MODES_PARAM_RV32, MODES_PARAMS_RV64, PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_SHIFT
@@ -249,7 +249,7 @@ def update_mmu_fsm_rv32(fuzzerstate, curr_addr):
         fuzzerstate.real_curr_layout                = fuzzerstate.target_layout
         fuzzerstate.effective_curr_layout           = fuzzerstate.target_layout
         fuzzerstate.target_layout                   = None
-        fuzzerstate.num_instr_to_stay_in_layout     = random.randint(0, MAX_NUM_INSTR_IN_LAYOUT)
+        fuzzerstate.num_instr_to_stay_in_layout     = random.randint(MIN_NUM_INSTR_IN_LAYOUT, MAX_NUM_INSTR_IN_LAYOUT)
         return ret
     
     # MMU_PRODUCER1 => MMU_PRODUCER_2, generate the stvec if needed (we are supervisor currently), if this step is taken, we cannot leave supervisor mode
@@ -272,7 +272,7 @@ def update_mmu_fsm_rv32(fuzzerstate, curr_addr):
             fuzzerstate.privilegestate.is_sepc_populated    = False #The trap will pollute it
             fuzzerstate.privilegestate.curr_mstatus_spp     = fuzzerstate.privilegestate.privstate
             fuzzerstate.effective_curr_layout               = fuzzerstate.target_layout
-            fuzzerstate.num_instr_to_stay_in_layout         = random.randint(0, MAX_NUM_INSTR_IN_LAYOUT)
+            fuzzerstate.num_instr_to_stay_in_layout         = random.randint(MIN_NUM_INSTR_IN_LAYOUT, MAX_NUM_INSTR_IN_LAYOUT)
         elif fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
             if DEBUG_PRINT: print(f"==> Set SATP in machine mode to {fuzzerstate.target_layout}")
             fuzzerstate.satp_set_not_used = True # In machine mode, we use bare independantly from the layout, so we only set the real layout
@@ -346,7 +346,7 @@ def handle_idle_state_rv64(fuzzerstate, curr_addr):
             if DEBUG_PRINT: 
                 print("MACHINE, ONLY SETTING RPROD")
             # here, we only need to make the new rprod, we saty idle
-            update_fuzzerstate(fuzzerstate, target_layout=target_layout, real_layout=target_layout, num_instr_to_stay_in_layout=random.randint(0, MAX_NUM_INSTR_IN_LAYOUT))
+            update_fuzzerstate(fuzzerstate, target_layout=target_layout, real_layout=target_layout, num_instr_to_stay_in_layout=random.randint(MIN_NUM_INSTR_IN_LAYOUT, MAX_NUM_INSTR_IN_LAYOUT))
             ret = gen_rprod_taget_layout(fuzzerstate)
             fuzzerstate.target_layout = None
             return ret
@@ -401,7 +401,7 @@ def handle_producer_jump_state(fuzzerstate, curr_addr):
     fuzzerstate.curr_mmu_state = MmuState.IDLE
     ret = gen_jump_new_layout(fuzzerstate, curr_addr)
     # Update tracking values
-    update_fuzzerstate(fuzzerstate, real_layout=fuzzerstate.target_layout, effective_layout=fuzzerstate.target_layout, num_instr_to_stay_in_layout=random.randint(0, MAX_NUM_INSTR_IN_LAYOUT))
+    update_fuzzerstate(fuzzerstate, real_layout=fuzzerstate.target_layout, effective_layout=fuzzerstate.target_layout, num_instr_to_stay_in_layout=random.randint(MIN_NUM_INSTR_IN_LAYOUT, MAX_NUM_INSTR_IN_LAYOUT))
     fuzzerstate.target_layout = None
     return ret
 
@@ -423,7 +423,7 @@ def handle_producer2_state(fuzzerstate, curr_addr):
     ret = gen_satp_write(fuzzerstate, curr_addr)
     # Update bookeeping
     if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR:
-        update_fuzzerstate(fuzzerstate, is_sepc_pop=False, curr_mstatus_spp=fuzzerstate.privilegestate.privstate, effective_layout=fuzzerstate.target_layout, num_instr_to_stay_in_layout=random.randint(0, MAX_NUM_INSTR_IN_LAYOUT))
+        update_fuzzerstate(fuzzerstate, is_sepc_pop=False, curr_mstatus_spp=fuzzerstate.privilegestate.privstate, effective_layout=fuzzerstate.target_layout, num_instr_to_stay_in_layout=random.randint(MIN_NUM_INSTR_IN_LAYOUT, MAX_NUM_INSTR_IN_LAYOUT))
     elif fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
         if DEBUG_PRINT: print(f"==> Set SATP in machine mode to {fuzzerstate.target_layout}")
         fuzzerstate.satp_set_not_used = True # In machine mode, we use bare independantly from the layout, so we only set the real layout

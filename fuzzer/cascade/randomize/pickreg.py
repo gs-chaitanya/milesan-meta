@@ -78,9 +78,16 @@ class IntRegPickState:
             assert sum(ret) >= NUM_MIN_FREE_INTREGS, f"There are less than {NUM_MIN_FREE_INTREGS} free integer registers available."
         return np.asarray(ret)
 
+    def get_relocused_regs_onehot(self):
+        ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.RELOCUSED) for reg_id in range(self.num_pickable_regs)]
+        return np.asarray(ret)
+
     def get_untainted_regs_onehot(self):
         ret = [int(self.regs[reg_id].get_val_t0() == 0) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
+            if sum(ret) < NUM_MIN_UNTAINTED_INTREGS:
+                self.print()
+                assert False,f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
             assert sum(ret) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
         return np.asarray(ret)
 
@@ -90,11 +97,13 @@ class IntRegPickState:
         #     assert sum(ret) >= NUM_MIN_TAINTED_REGS
         return np.asarray(ret)
 
-    def get_free_or_relocused_regs_onehot(self): # WARNING: Use those only for outputs, not for inputs.
-        ret = [int(self.regs[reg_id].fsm_state in [IntRegIndivState.FREE, IntRegIndivState.RELOCUSED]) for reg_id in range(self.num_pickable_regs)]
-        if DO_ASSERT:
-            assert sum(ret) >= NUM_MIN_FREE_INTREGS
-        return ret
+    # If there are relocused regs, prioritize those as output. This way they return to the free state and can be used in the dataflow asap.
+    # WARNING: Use those only for outputs, not for inputs, as the relocused registers change values between in-situ simulation and spike/final.
+    def get_free_or_relocused_regs_onehot(self): 
+        ret = self.get_relocused_regs_onehot()
+        if sum(ret) > 1: # if theres more than one relocused register, prioritize it to be used as output register.
+            return ret
+        return ret + self.get_free_regs_onehot()
 
     # Weights after deducting the forbidden registers
     def get_effective_weights(self, authorized_regs_onehot):
@@ -209,10 +218,6 @@ class IntRegPickState:
         authorized_regs_onehot[0] = was_zero_authorized
         if DO_ASSERT:
             assert self.regs[id].fsm_state == IntRegIndivState.FREE
-        # if self.regs[id].get_val_t0() == 0:
-        #     print(f"WANT TAINTED: Did not get tainted reg.")
-        # else:
-            # print(f"WANT TAINTED: Got tainted reg.")
         return id
 
     # Excludes the zero register. When force is enabled, will either throw an exception or return an untainted register.
@@ -221,15 +226,13 @@ class IntRegPickState:
         was_zero_authorized = authorized_regs_onehot[0]
         authorized_regs_onehot[0] = 0
         if DO_ASSERT:
+            if self.get_num_untainted_regs_in_state(IntRegIndivState.FREE) < NUM_MIN_UNTAINTED_INTREGS:
+                self.print()
             assert self.get_num_untainted_regs_in_state(IntRegIndivState.FREE) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
         id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, True, force))[0]
         authorized_regs_onehot[0] = was_zero_authorized
         if DO_ASSERT:
             assert self.regs[id].fsm_state == IntRegIndivState.FREE
-        # if self.regs[id].get_val_t0() == 0:
-        #     print(f"WANT UNTAINTED: Got untainted reg.")
-        # else:
-        #     print(f"WANT UNTAINTED: Got tainted reg.")
         return id
 
     # Includes the zero register. When force is enabled, will either throw an exception or return an untainted register.
@@ -278,6 +281,17 @@ class IntRegPickState:
         if DO_ASSERT:
             assert np.max(authorized_regs_onehot) == 1, "Unexpectedly, some register was registered in two states at a time."
         rd = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, True, force))[0]
+        if authorize_sideeffects:
+            self._update_probaweights(rd)
+            if rd:
+                self.set_regstate(rd, IntRegIndivState.FREE)
+        return rd
+
+    def pick_tainted_int_outputreg(self, authorize_sideeffects: bool = True, force: bool = False):
+        authorized_regs_onehot = self.get_free_or_relocused_regs_onehot() # We could use any, but let's not waste the generated ones
+        if DO_ASSERT:
+            assert np.max(authorized_regs_onehot) == 1, "Unexpectedly, some register was registered in two states at a time."
+        rd = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, False, force))[0]
         if authorize_sideeffects:
             self._update_probaweights(rd)
             if rd:

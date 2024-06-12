@@ -168,13 +168,17 @@ class MemoryView:
                 allowed_pages = [page_start_end_addr for page_start_end_addr in allowed_pages if self.fuzzerstate.random_data_block_has_taint[page_start_end_addr[0]]]
             assert len(allowed_pages), f"No pages matched required criteria: tainted_ok: {tainted_ok}, not_tainted_ok: {not_tainted_ok}"
             page_start_end_addr = random.choice(allowed_pages)
-            picked_addr = random.choice([addr for addr in range(page_start_end_addr[0], page_start_end_addr[1]) if addr % (1 << alignment_bits) == 0])
+            picked_addr = random.choice([addr for addr in range(page_start_end_addr[0], page_start_end_addr[1]) if addr % (1 << alignment_bits) == 0 and addr+min_space<page_start_end_addr[1]])
             # print(f"Picked addr {hex(picked_addr)} in page {hex(page_start_end_addr[0])}")
             if min_space == 0 or picked_addr+min_space<page_start_end_addr[1]:
                 if DO_ASSERT:
                     assert picked_addr >= 0
                     assert picked_addr + min_space <= self.memsize, f"{hex(picked_addr+min_space)} exceeds memsize {hex(self.memsize)}"
                     assert picked_addr % (1 << alignment_bits) == 0
+                    if not tainted_ok:
+                        assert not self.fuzzerstate.random_data_block_has_taint[picked_addr&PAGE_ALIGNMENT_MASK]
+                    if not not_tainted_ok:
+                        assert self.fuzzerstate.random_data_block_has_taint[picked_addr&PAGE_ALIGNMENT_MASK]
                 # print(f"Returning addr {hex(picked_addr)}, min_space: {min_space}, align: {alignment_bits}")
                 return picked_addr
         return None

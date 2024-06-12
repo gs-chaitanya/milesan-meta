@@ -5,7 +5,7 @@
 # This script is used to pick an instruction from the privileged descent instruction ISA class.
 
 from params.runparams import DO_ASSERT,DEBUG_PRINT
-from params.fuzzparams import USE_MMU, MAX_NUM_INSTR_IN_PRV
+from params.fuzzparams import USE_MMU, MAX_NUM_INSTR_IN_PRV, MIN_NUM_INSTR_IN_PRV
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.cfinstructionclasses_t0 import PrivilegeDescentInstruction_t0
 from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
@@ -32,8 +32,7 @@ def gen_priv_descent_instr(fuzzerstate):
 
     is_mret = fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE
 
-
-    # If there should not be any taint propagation from the privelege were in to the one we are returning to.
+    # If there should not be any taint propagation from the privelege we're in to the one we are returning to.
     if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and fuzzerstate.privilegestate.curr_mstatus_mpp not in fuzzerstate.taint_in_priv:
         instr_objs += clear_taints_with_random_instructions(fuzzerstate)
 
@@ -97,7 +96,7 @@ def gen_priv_descent_instr(fuzzerstate):
     
     # If we fuzz the MMU, we want to stay in priviledged mode longer
     if USE_MMU:
-        fuzzerstate.num_instr_to_stay_in_prv = random.randint(0, MAX_NUM_INSTR_IN_PRV)
+        fuzzerstate.num_instr_to_stay_in_prv = random.randint(MIN_NUM_INSTR_IN_PRV, MAX_NUM_INSTR_IN_PRV)
         if DEBUG_PRINT: print(f"will stay in this mode for {fuzzerstate.num_instr_to_stay_in_prv} instructions")
     return instr_objs + [PrivilegeDescentInstruction_t0(fuzzerstate, is_mret)]
 

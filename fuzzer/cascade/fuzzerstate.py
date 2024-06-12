@@ -97,7 +97,6 @@ class FuzzerState:
     # @return [bool] : [sv32, sv39, sv48]
     def get_design_mmu(self, design_name):
         if self.is_design_64bit:
-            
             self.mmu_capabilities.append(design_has_sv39(design_name))
             #self.mmu_capabilities.append(design_has_sv48(design_name))
             self.mmu_capabilities.append(False)

@@ -5,13 +5,16 @@ from cascade.util import ExceptionCauseVal
 from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from cascade.registers import ABI_INAMES
 from rv.csrids import CSR_ABI_NAMES
-from params.runparams import PRINT_CHECK_REGS_T0, PRINT_WRITEBACK_T0, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT
+from params.runparams import PRINT_CHECK_REGS_T0, PRINT_COLOR_TAINT, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT, PRINT_WRITEBACK_T0
 from common.spike import SPIKE_STARTADDR
 from cascade.registers import IntRegIndivState
 import numpy as np
 from rv.csrids import MPP_BIT, MIE_BIT, MPIE_BIT
 from rv.csrids import SIE_BIT, SPIE_BIT, SPP_BIT
 from rv.csrids import SIE_BIT, SPIE_BIT, SPP_BIT
+
+CRED = '\033[91m'
+CEND = '\033[0m'
 
 # Ensures that the register and its taint mask excludes some registers we don't want to get tainted
 def clean_reg_taint(reg, reg_t0, skip_regs):
@@ -128,6 +131,8 @@ class RDInstruction_t0(CFInstruction_t0):
         assert self.fuzzerstate.taint_en
         assert self.rd_t0 == 0
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(res_t0)
+        if PRINT_WRITEBACK_T0:
+            print(f"{self.get_str()} <- {hex(res_t0)}")
         self.add_writeback_trace(res, res_t0, is_spike_resolution)
 
     def add_writeback_trace(self, res, res_t0, is_spike_resolution: bool):
@@ -144,6 +149,7 @@ class RDInstruction_t0(CFInstruction_t0):
         if not is_placeholder(self) and self.rd >0 and not self.rd_unreliable: # The placeholders will result in different values by construction.
             assert self.writeback_trace["in-situ"][0] == self.writeback_trace["final"][0], f"Writeback trace value mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'][0])} !=  {hex(self.writeback_trace['final'][0])}"
         assert self.writeback_trace["in-situ"][1] == self.writeback_trace["final"][1], f"Writeback trace taint mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'][1])} !=  {hex(self.writeback_trace['final'][1])}"
+
 
 # does not inherit from ImmInstruction
 class ImmInstruction_t0(CFInstruction_t0):
@@ -222,6 +228,24 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
         return res_t0
 
 
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool= PRINT_COLOR_TAINT):
+        if not color_taint:
+            return super().get_str()
+        if self.fuzzerstate.intregpickstate.regs[self.rd].get_val_t0():
+            rd_str = CRED + ABI_INAMES[self.rd] + CEND
+        else:
+            rd_str = ABI_INAMES[self.rd]
+        if self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0():
+            rs1_str = CRED + ABI_INAMES[self.rs1] + CEND
+        else:
+            rs1_str = ABI_INAMES[self.rs1]
+        if self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0():
+            rs2_str = CRED + ABI_INAMES[self.rs2] + CEND
+        else:
+            rs2_str = ABI_INAMES[self.rs2]
+        
+        return f"{self.get_preamble()}: {self.instr_str} {rd_str}, {rs1_str}, {rs2_str}"
+
 class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, imm_t0: int = 0, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(fuzzerstate, instr_str, rd, imm, iscompressed, is_rd_nonpickable_ok)
@@ -257,13 +281,11 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         # Writeback taints according to tainted bits in rd.
         self.writeback_t0(res_t0, res, is_spike_resolution)
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        CRED = '\033[91m'
-        CEND = '\033[0m'
-        if self.imm_t0:
-            return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}," + CRED + f"{hex(self.imm)}" + CEND
-        else:
-            return super().get_str(is_spike_resolution)
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = PRINT_COLOR_TAINT):
+        if not color_taint or not self.imm_t0:
+            return super().get_str()
+
+        return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}," + CRED + f"{hex(self.imm)}" + CEND
 
     # Overrides function in ImmRdInstructionClass
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
@@ -335,13 +357,24 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0, RDInstruction_t
         self.fuzzerstate.advance_minstret()
 
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        CRED = '\033[91m'
-        CEND = '\033[0m'
-        if self.imm_t0:
-            return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, " + CRED + f"{hex(self.imm)}" + CEND
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool= PRINT_COLOR_TAINT):
+        if not color_taint:
+            return super().get_str()
+        if self.fuzzerstate.intregpickstate.regs[self.rd].get_val_t0():
+            rd_str = CRED + ABI_INAMES[self.rd] + CEND
         else:
-            return super().get_str(is_spike_resolution)
+            rd_str = ABI_INAMES[self.rd]
+        if self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0():
+            rs1_str = CRED + ABI_INAMES[self.rs1] + CEND
+        else:
+            rs1_str = ABI_INAMES[self.rs1]
+        if self.imm_t0:
+            imm_str = CRED + hex(self.imm) + CEND
+        else:
+            imm_str = hex(self.imm)
+        
+        return f"{self.get_preamble()}: {self.instr_str} {rd_str}, {rs1_str}, {imm_str}"
+
 
 
 
@@ -520,7 +553,10 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
     def writeback_t0(self, res_t0, res, is_spike_resolution):
         assert self.fuzzerstate.taint_en
         assert self.rdep_t0 == 0
+        assert res_t0 == 0
         self.fuzzerstate.intregpickstate.regs[self.rdep].set_val_t0(res_t0)
+        if PRINT_WRITEBACK_T0:
+            print(f"{self.get_str()} <- {hex(res_t0)}")
         self.add_writeback_trace(res_t0, is_spike_resolution)
 
     def add_writeback_trace(self, res_t0, is_spike_resolution: bool):
@@ -667,6 +703,21 @@ class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
         rs2_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
         self.fuzzerstate.memview.write_t0(addr,rs2_val_t0&self.mask, self.n_bytes, self.priv_level, self.va_layout) # We don't allow addresses to be tainted, thus we don't need a writeback here.
 
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = PRINT_COLOR_TAINT):
+        if not color_taint:
+            return super().get_str()
+
+        if self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0():
+            rs1_str = CRED + ABI_INAMES[self.rs1] + CEND
+        else:
+            rs1_str = ABI_INAMES[self.rs1]
+        if self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0():
+            rs2_str = CRED + ABI_INAMES[self.rs2] + CEND
+        else:
+            rs2_str = ABI_INAMES[self.rs2]
+        
+        return f"{self.get_preamble()}: {self.instr_str} {rs2_str}, {self.imm}({rs1_str})"
+
 
 class RegdumpInstruction_t0(IntStoreInstruction_t0):
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -675,7 +726,7 @@ class RegdumpInstruction_t0(IntStoreInstruction_t0):
         else:
             return super().gen_bytecode_int(is_spike_resolution)
 
-    def get_str(self, is_spike_resolution):
+    def get_str(self, is_spike_resolution, color_taint: bool = PRINT_COLOR_TAINT):
         if not is_spike_resolution:
             return f"{hex(self.paddr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
         else:
@@ -914,7 +965,7 @@ class RawDataWord_t0(RawDataWord):
     def gen_bytecode_int_t0(self, is_spike_resolution: bool):
         return self.wordval_t0
     
-    def get_str(self, is_spike_resolution: bool = True):
+    def get_str(self, is_spike_resolution: bool = True, color_taint: bool = PRINT_COLOR_TAINT):
         return f"{hex(self.paddr)}: {hex(self.wordval)}, {hex(self.wordval_t0)} (RAW DATA)"
     
     def execute(self, taint_en, is_spike_resolution: bool = True):

@@ -108,6 +108,7 @@ def gen_basicblock(fuzzerstate):
                 # fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[next_instrobj_id])
                 fuzzerstate.append_and_execute_instr(new_instrobjs_constructors[next_instrobj_id](*new_instrobjs_params[next_instrobj_id]))
             continue
+        
         # If this is an FPU enable-disable instruction or a rounding mode change
         elif curr_isa_class == ISAInstrClass.FPUFSM:
             assert False, "not implemented"
@@ -630,12 +631,14 @@ def gen_basicblocks(fuzzerstate):
     while True:
 
         fuzzerstate.reset()
+        # print(f"Allowing taint in {[p.name for p in fuzzerstate.taint_in_priv]}")
+
         if not gen_initial_basic_block(fuzzerstate, SPIKE_STARTADDR): continue
 
         # Reserve space for the second basic block (whose address is already fixed).
         fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
 
-        # We need at least one random data block with taint and one without
+        # We need at least one random data block with taint and one without s.t. both priveleges can read and write to memory
         gen_random_data_block(fuzzerstate, False)
         gen_random_data_block(fuzzerstate, True)
         # Generate the random data blocks

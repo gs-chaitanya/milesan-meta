@@ -429,7 +429,7 @@ def gen_ppfill_instrs(fuzzerstate):
             target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR])
         else:
             target_privlvl = PrivilegeStateEnum.SUPERVISOR
-
+        
     # print(f"Target priv is {target_privlvl.name}: is_mpp: {is_mpp}")
     # def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False, is_satp_smode = (False, None), mpp_val = None):
 
