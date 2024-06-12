@@ -673,6 +673,8 @@ INSTR_FUNCS = {
     "ebreak": None,
     # unimplemented instructions
     "fence": None,
+    "fence.i": None,
+    "sfence.vma": None,
     # wrapper instructions
     "TvecWriterInstruction": None,
     "EPCWriterInstruction": None,
@@ -751,6 +753,8 @@ INSTR_FUNCS_T0 = {
     "ebreak": None,
     # unimplemented instructions
     "fence": None,
+    "fence.i": None,
+    "sfence.vma": None,
     # wrapper instructions
     "TvecWriterInstruction": None,
     "EPCWriterInstruction": None,
