@@ -432,19 +432,20 @@ def gen_ppfill_instrs(fuzzerstate):
 
     if is_mpp:
         if target_privlvl == PrivilegeStateEnum.USER:
-            ret = [CSRRegInstruction_t0], [(fuzzerstate,"csrrc", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS, False, (False,None), PrivilegeStateEnum.USER)]
+            ret = [CSRRegInstruction_t0(fuzzerstate,"csrrc", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS, False, (False,None), PrivilegeStateEnum.USER)]
         elif target_privlvl == PrivilegeStateEnum.SUPERVISOR:
             # Could theretically be done in a single instruction if we had one more mask register.
-            ret =  [CSRRegInstruction_t0, CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS, False, (False,None), PrivilegeStateEnum.SUPERVISOR),(fuzzerstate,"csrrc", rd, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS,False, (False,None), PrivilegeStateEnum.SUPERVISOR)]
+            ret =  [CSRRegInstruction_t0(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS, False, (False,None), PrivilegeStateEnum.SUPERVISOR), 
+                    CSRRegInstruction_t0(fuzzerstate,"csrrc", rd, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS,False, (False,None), PrivilegeStateEnum.SUPERVISOR)]
         elif target_privlvl == PrivilegeStateEnum.MACHINE:
-            ret = [CSRRegInstruction_t0],[(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS,False, (False,None), PrivilegeStateEnum.MACHINE)]
+            ret = [CSRRegInstruction_t0(fuzzerstate,"csrrs", rd, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS,False, (False,None), PrivilegeStateEnum.MACHINE)]
         else:
             raise NotImplementedError("Hypervisor mode not implemented")
     else:
         if target_privlvl == PrivilegeStateEnum.USER:
-            ret = [CSRRegInstruction_t0],[(fuzzerstate,"csrrc", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS, False, (False,None), PrivilegeStateEnum.USER)]
+            ret = [CSRRegInstruction_t0(fuzzerstate,"csrrc", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS, False, (False,None), PrivilegeStateEnum.USER)]
         elif target_privlvl == PrivilegeStateEnum.SUPERVISOR:
-            ret = [CSRRegInstruction_t0], [(fuzzerstate,"csrrs", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS,False, (False,None), PrivilegeStateEnum.SUPERVISOR)]
+            ret = [CSRRegInstruction_t0(fuzzerstate,"csrrs", rd, SPP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS,False, (False,None), PrivilegeStateEnum.SUPERVISOR)]
         else:
             raise Exception("Invalid target privlvl when setting spp")
 

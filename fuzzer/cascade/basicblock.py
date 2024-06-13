@@ -97,16 +97,14 @@ def gen_basicblock(fuzzerstate):
 
         # If this is an instruction that influences offset register states
         if curr_isa_class == ISAInstrClass.REGFSM:
-            new_instrobjs_constructors, new_instrobjs_params = create_regfsm_instrobjs(fuzzerstate)
-            fuzzerstate.append_and_execute_instr(new_instrobjs_constructors[0](*new_instrobjs_params[0]))
-            curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
-
+            new_instrobjs = create_regfsm_instrobjs(fuzzerstate)
+            fuzzerstate.append_and_execute_instr(new_instrobjs[0])
             # For consumers, we may need to insert one more instruction
-            for next_instrobj_id in range(1, len(new_instrobjs_constructors)):
+            for new_instrobj in new_instrobjs[1:]:
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
                 curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
-                # fuzzerstate.instr_objs_seq[-1].append(new_instrobjs[next_instrobj_id])
-                fuzzerstate.append_and_execute_instr(new_instrobjs_constructors[next_instrobj_id](*new_instrobjs_params[next_instrobj_id]))
+                fuzzerstate.append_and_execute_instr(new_instrobj)
+            del new_instrobjs
             continue
         
         # If this is an FPU enable-disable instruction or a rounding mode change
@@ -140,10 +138,10 @@ def gen_basicblock(fuzzerstate):
 
             new_instrobjs = gen_priv_descent_instr(fuzzerstate)
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
-            for next_instrobj_id in range(1, len(new_instrobjs)):
+            for new_instrobj_id in range(1, len(new_instrobjs)):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
                 curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
-                fuzzerstate.append_and_execute_instr(new_instrobjs[next_instrobj_id])
+                fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
                 
             if DEBUG_PRINT: print(f"priv change at addr: {hex(curr_addr+SPIKE_STARTADDR)} to ", fuzzerstate.privilegestate.privstate)
 
@@ -152,17 +150,15 @@ def gen_basicblock(fuzzerstate):
 
         elif curr_isa_class == ISAInstrClass.PPFSM:
             # assert False, "not implemented"
-            constructors, params = gen_ppfill_instrs(fuzzerstate)
+            new_instrobjs = gen_ppfill_instrs(fuzzerstate)
             if DO_ASSERT:
-                assert len(constructors) * CURR_ALLOC_CURSOR_INC < BASIC_BLOCK_MIN_SPACE # NO_COMPRESSED
-            # fuzzerstate.instr_objs_seq[-1] += new_instrobjs
-            for new_instrobj_constructor, new_instrobj_param in zip(constructors, params):
+                assert len(new_instrobjs) * CURR_ALLOC_CURSOR_INC < BASIC_BLOCK_MIN_SPACE # NO_COMPRESSED
+            fuzzerstate.append_and_execute_instr(new_instrobjs[0])
+            for new_instrobj_id in range(1, len(new_instrobjs)):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                new_instrobj = new_instrobj_constructor(*new_instrobj_param)
-                fuzzerstate.append_and_execute_instr(new_instrobj)
                 curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
-            del new_instrobj_constructor # For safety, we prevent accidental reuse of this variable
-            del new_instrobj_param
+                fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
+            del new_instrobjs
             continue
 
         elif curr_isa_class == ISAInstrClass.EXCEPTION:
@@ -178,21 +174,21 @@ def gen_basicblock(fuzzerstate):
             new_instrobjs = gen_exception_instr(fuzzerstate)
             # print('  New priv:', fuzzerstate.privilegestate.privstate)
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
-            for next_instrobj_id in range(1, len(new_instrobjs)):
+            for new_instrobj_id in range(1, len(new_instrobjs)):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
                 curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
-                fuzzerstate.append_and_execute_instr(new_instrobjs[next_instrobj_id])
-
+                fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
             del new_instrobjs # For safety, we prevent accidental reuse of this variable
             return True
         
         elif curr_isa_class == ISAInstrClass.MEM:
             instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
             new_instrobjs = create_memop_instrobjs(fuzzerstate, instr_str)
-            for new_instrobj in new_instrobjs: # TODO change loop, were allocating one extra instruction than intended
+            fuzzerstate.append_and_execute_instr(new_instrobjs[0])
+            for new_instrobj_id in range(1, len(new_instrobjs)):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                fuzzerstate.append_and_execute_instr(new_instrobj)
                 curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
             del new_instrobjs
             continue
 

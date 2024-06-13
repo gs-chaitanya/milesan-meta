@@ -405,18 +405,25 @@ class IntRegPickState:
             if self.exists_reg_in_state(IntRegIndivState.CONSUMED):
                 return # self.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
             elif self.exists_reg_in_state(IntRegIndivState.PRODUCED1):
-                inst_to_create = [create_targeted_consumer_instrobj] 
+                for instr in create_targeted_consumer_instrobj(fuzzerstate):
+                    fuzzerstate.append_and_execute_instr(instr)
             elif self.exists_reg_in_state(IntRegIndivState.PRODUCED0):
-                inst_to_create = [create_targeted_producer1_instrobj, create_targeted_consumer_instrobj]  # Collect function pointers and call later.
+                for instr in create_targeted_producer1_instrobj(fuzzerstate):
+                    fuzzerstate.append_and_execute_instr(instr)
+                for instr in create_targeted_consumer_instrobj(fuzzerstate):
+                    fuzzerstate.append_and_execute_instr(instr)
+
             elif self.exists_reg_in_state(IntRegIndivState.FREE):
-                inst_to_create = [create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj]  # Collect function pointers and call later.
+                for instr in create_targeted_producer0_instrobj(fuzzerstate):
+                    fuzzerstate.append_and_execute_instr(instr)
+                for instr in create_targeted_producer1_instrobj(fuzzerstate): 
+                    fuzzerstate.append_and_execute_instr(instr)
+                for instr in create_targeted_consumer_instrobj(fuzzerstate):
+                    fuzzerstate.append_and_execute_instr(instr)
+
             else: 
                 raise ValueError('Unexpected state.')
 
-            for create_inst_f in inst_to_create:
-                constructors, params = create_inst_f(fuzzerstate)
-                for new_instrobj_constructor, new_instribj_params in zip(constructors,params):
-                    fuzzerstate.append_and_execute_instr(new_instrobj_constructor(*new_instribj_params), False)
 
 
     # Save at the end of basic blocks, and restore if popping basic blocks from the end.

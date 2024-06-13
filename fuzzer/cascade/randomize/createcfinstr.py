@@ -344,7 +344,8 @@ def create_targeted_producer0_instrobj(fuzzerstate):
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED0)
     # return [PlaceholderProducerInstr0(rd, fuzzerstate.next_producer_id, fuzzerstate.is_design_64bit)]
-    return [PlaceholderProducerInstr0_t0],[(fuzzerstate, rd, fuzzerstate.next_producer_id)]
+    # return [PlaceholderProducerInstr0_t0],[(fuzzerstate, rd, fuzzerstate.next_producer_id)]
+    return [PlaceholderProducerInstr0_t0(fuzzerstate, rd, fuzzerstate.next_producer_id)]
 
 def create_targeted_producer1_instrobj(fuzzerstate):
     rd = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.PRODUCED0, force = True)  # rd should not be tainted
@@ -352,7 +353,8 @@ def create_targeted_producer1_instrobj(fuzzerstate):
     # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED1)
     # return [PlaceholderProducerInstr1(rd, fuzzerstate.intregpickstate.get_producer_id(rd), fuzzerstate.is_design_64bit)]
-    return [PlaceholderProducerInstr1_t0],[(fuzzerstate, rd, fuzzerstate.intregpickstate.get_producer_id(rd))]
+    # return [PlaceholderProducerInstr1_t0],[(fuzzerstate, rd, fuzzerstate.intregpickstate.get_producer_id(rd))]
+    return [PlaceholderProducerInstr1_t0(fuzzerstate, rd, fuzzerstate.intregpickstate.get_producer_id(rd))]
 
 def create_targeted_consumer_instrobj(fuzzerstate):
     rdep = fuzzerstate.intregpickstate.pick_untainted_int_inputreg_nonzero(force = True) # We want to create dependencies, therefore we choose not to accept x0. Also it should not be tainted to avoid tainting the PC.
@@ -364,15 +366,17 @@ def create_targeted_consumer_instrobj(fuzzerstate):
     if USE_MMU:
         fuzzerstate.intregpickstate.set_regstate(rdep, IntRegIndivState.RELOCUSED, force=True)
     if fuzzerstate.is_design_64bit:
-        # return [PlaceholderPreConsumerInstr(rprod), PlaceholderPreConsumerInstr(rdep), PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
-        # return [PlaceholderPreConsumerInstr_t0(fuzzerstate, rprod), PlaceholderPreConsumerInstr_t0(fuzzerstate, rdep), PlaceholderConsumerInstr_t0(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
-        return [PlaceholderPreConsumerInstr_t0, PlaceholderPreConsumerInstr_t0, PlaceholderConsumerInstr_t0], \
-        [(fuzzerstate, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod), True), (fuzzerstate, rdep, fuzzerstate.intregpickstate.get_producer_id(rprod)), (fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
-
+        # return [PlaceholderPreConsumerInstr_t0, PlaceholderPreConsumerInstr_t0, PlaceholderConsumerInstr_t0], \
+        # [(fuzzerstate, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod), True), (fuzzerstate, rdep, fuzzerstate.intregpickstate.get_producer_id(rprod)), (fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
+        return [
+            PlaceholderPreConsumerInstr_t0(fuzzerstate, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod), True),
+            PlaceholderPreConsumerInstr_t0(fuzzerstate, rdep, fuzzerstate.intregpickstate.get_producer_id(rprod)),
+            PlaceholderConsumerInstr_t0(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))
+        ]
     else:
         # return [PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
-        return [PlaceholderConsumerInstr_t0], [(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
-
+        # return [PlaceholderConsumerInstr_t0], [(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
+        return [PlaceholderConsumerInstr_t0(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
 # Creates the instruction sequence that prepares valid addresses for the load and stores. Returns the respective sequence of constructors and parameters as zip.
 # The objects cannot be created inside the class because their current address for the next instruction needs to be increased, which is done outside of this function. 
 # TODO use FSM for this
