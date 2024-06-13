@@ -66,22 +66,38 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                             next_instr.check_regs_t0(regstream_rtl_val_t0[regdump_idx]) # check value before executing instruction
                         regdump_idx += 1
                 # SPIKE SIM CHECK
-                elif not is_placeholder(next_instr) and addr in pc_reg_pairs: # TODO: why use is_placeholder? Values should also match here i think.
+                elif addr in pc_reg_pairs:
                     next_instr.check_regs(pc_reg_pairs[addr]) # check value before executing instruction. Skip if placeholder as their values change between spikeresol and final elf.
+                # SKIP CHECK
                 elif PRINT_SKIPPED_CHECKS:
                     print(f"Skipping check for {next_instr.get_str(USE_SPIKE_INTERM_ELF)}")
 
                 if PRINT_INSTRUCTION_EXECUTION_FINAL:
                     next_instr.print(USE_SPIKE_INTERM_ELF)
+
                 next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
                 
             # if this bb is followed by a context saver block, execute it
             if bb_id in fuzzerstate.bb_id_to_ctxsv_id:
                 ctxsv_bb_id = fuzzerstate.bb_id_to_ctxsv_id[bb_id]
                 for next_instr in fuzzerstate.ctxsv_bbs[ctxsv_bb_id]:
-                    next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
+                    if isinstance(next_instr, RegdumpInstruction_t0) and INSERT_REGDUMPS:
+                        if not USE_SPIKE_INTERM_ELF:
+                            next_instr.check_regs(regstream_rtl_val[regdump_idx]) # check value before executing instruction
+                            if fuzzerstate.taint_en:
+                                next_instr.check_regs_t0(regstream_rtl_val_t0[regdump_idx]) # check value before executing instruction
+                            regdump_idx += 1
+                    # SPIKE SIM CHECK
+                    elif addr in pc_reg_pairs:
+                        next_instr.check_regs(pc_reg_pairs[addr]) # check value before executing instruction. Skip if placeholder as their values change between spikeresol and final elf.
+                    # SKIP CHECK
+                    elif PRINT_SKIPPED_CHECKS:
+                        print(f"Skipping check for {next_instr.get_str(USE_SPIKE_INTERM_ELF)}")
+
                     if PRINT_INSTRUCTION_EXECUTION_FINAL:
-                        print(f"{next_instr.get_str(USE_SPIKE_INTERM_ELF)} (ctx)")
+                        next_instr.print(USE_SPIKE_INTERM_ELF)
+                        
+                    next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
         
         if PRINT_REGISTER_VALIDATION:
             print("*** REGISTER VALIDATION ***:")

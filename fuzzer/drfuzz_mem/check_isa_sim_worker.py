@@ -27,9 +27,6 @@ def test_done_callback(ret):
             total_finished_tests += 1
             if PRINT_THREAD_STATUS:
                 print(f"Finished {total_finished_tests} succesful threads.")
-        # else:
-        #     print(f"Thread failed.")
-
 
 
 def __check_isa_sim_worker(design_name, seed, taint_en):
@@ -39,11 +36,27 @@ def __check_isa_sim_worker(design_name, seed, taint_en):
     except Exception as e:
         print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {e}")
         if LOG_EXCEPTIONS:
-            if "Taint mismatch" in str(e):
+            if "(RTL) Taint mismatch" in str(e):
                 logdir = os.path.join(PATH_TO_TMP, "logs")
                 os.makedirs(logdir, exist_ok=True)
-                with open(f"{logdir}/{design_name}.log", "a") as f:
+                with open(f"{logdir}/{design_name}.taint_mismatch.log", "a") as f:
                     f.write(f"{str(e)}\n")
+            elif "(RTL) Value mismatch":
+                logdir = os.path.join(PATH_TO_TMP, "logs")
+                os.makedirs(logdir, exist_ok=True)
+                with open(f"{logdir}/{design_name}.value_mismatch.log", "a") as f:
+                    f.write(f"{str(e)}\n")
+            elif "Command" in str(e):
+                logdir = os.path.join(PATH_TO_TMP, "logs")
+                os.makedirs(logdir, exist_ok=True)
+                with open(f"{logdir}/{design_name}.timeout.log", "a") as f:
+                    f.write(f"{str(e)}\n")
+            else:
+                logdir = os.path.join(PATH_TO_TMP, "logs")
+                os.makedirs(logdir, exist_ok=True)
+                with open(f"{logdir}/{design_name}.failed.log", "a") as f:
+                    f.write(f"{str(e)}\n")
+
         return False
 
 def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en: bool, seed_offset: int):
