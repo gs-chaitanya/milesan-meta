@@ -39,7 +39,7 @@ def __check_isa_sim_worker(design_name, seed, taint_en):
     except Exception as e:
         print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {e}")
         if LOG_EXCEPTIONS:
-            if "There are less" not in str(e):
+            if "Taint mismatch" in str(e):
                 logdir = os.path.join(PATH_TO_TMP, "logs")
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.log", "a") as f:

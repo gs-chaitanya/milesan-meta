@@ -34,6 +34,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         rtl_elfpath = fuzzerstate.rtl_elfpath
         interm_elfpath = fuzzerstate.interm_elfpath
 
+    # fuzzerstate.compute_context_stats()
+    # exit()
     # Retrieve register stream and final intregvals from spike.
     pc_reg_pairs = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
     for req, regval in zip(expected_regvals[2],expected_regvals[3]):

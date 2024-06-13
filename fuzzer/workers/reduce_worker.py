@@ -40,7 +40,7 @@ def __reduce_program_worker(design_name, seed):
             logdir = os.path.join(PATH_TO_TMP, "logs")
             os.makedirs(logdir, exist_ok=True)
             with open(f"{logdir}/{design_name}.reduce.log", "a") as f:
-                f.write(f"{ret}\n")
+                f.write(f"seed {seed}: {ret}\n")
         return ret
 
     except Exception as e:
@@ -49,7 +49,7 @@ def __reduce_program_worker(design_name, seed):
             logdir = os.path.join(PATH_TO_TMP, "logs")
             os.makedirs(logdir, exist_ok=True)
             with open(f"{logdir}/{design_name}.reduce.exceptions.log", "a") as f:
-                f.write(f"{str(e)}\n")
+                f.write(f"seed {seed}: {str(e)}\n")
         return False
         
 # Helps with suppressing the verbose outputs

@@ -496,12 +496,6 @@ class FuzzerState:
         return (regdumps, regdumps_t0),((final_intreg_vals, final_intreg_vals_t0), (None, None))
 
     
-    def print_writebacks_t0(self, final_addr: int = None):
-        self.intregpickstate.print_writebacks_t0(final_addr)
-
-    def verify_writeback_t0(self,final_addr: int = None, print_trace: bool = False):
-        self.intregpickstate.verify_writeback_t0(final_addr,print_trace)
-
     def simulate_execution(self, is_spike_resolution: bool = True, final_addr: int = None, print_execution: bool = False, reset_after_execution: bool = False):
         # Retrieve the register values from the requests
         self.curr_pc = SPIKE_STARTADDR
@@ -528,19 +522,29 @@ class FuzzerState:
             self.reset_after_execution()
 
     def reset_after_execution(self):
-        self.intregpickstate.setup_registers()
-        self.memview.restore() # Reset the memory content to the last stored state. If we have a ctxsv block, the last state needs to store it.
-        self.csrfile.reset()
+        self.intregpickstate.setup_registers() # Restore registers to before anything was executed.
+        self.memview.restore(0) # Restore contents before anything was executed.
+        self.csrfile.reset() # Reset all CSRs to zero.
 
     def verify_program(self,print_execution: bool = False, print_trace:bool = False):
-        self.intregpickstate.setup_registers()
-        self.memview.restore() # Reset the memory content to the last stored state. If we have a ctxsv block, the last state needs to store it.
-        self.csrfile.reset()
-        self.intregpickstate.writeback_trace_in_situ.clear()
-        self.intregpickstate.writeback_trace_final.clear()
+        self.reset_after_execution()
         self.simulate_execution(True,print_execution=print_execution, reset_after_execution=True)
         self.simulate_execution(False,print_execution=print_execution, reset_after_execution=True)
-        self.verify_writeback_t0(print_trace=print_trace)
+
+    def compute_context_stats(self, print_stats: bool = True):
+        n_instr_in_priv = {
+            PrivilegeStateEnum.USER: 0,
+            PrivilegeStateEnum.SUPERVISOR: 0,
+            PrivilegeStateEnum.MACHINE: 0
+        }
+        for bb_id, bb_instrs in enumerate(self.instr_objs_seq):
+            for next_instr in bb_instrs:
+                n_instr_in_priv[next_instr.priv_level] += 1
+        
+        if print_stats:
+            print(n_instr_in_priv)
+
+
 
     def log(self, log_msg):
         with open(f"{self.tmp_dir}/log.txt", "a") as f:

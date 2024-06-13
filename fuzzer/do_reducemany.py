@@ -10,7 +10,7 @@
 
 from workers.reduce_worker import reduce_programs
 from cascade.toleratebugs import tolerate_bug_for_eval_reduction
-from common.profiledesign import profile_get_medeleg_mask
+from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask
 from common.spike import calibrate_spikespeed
 import sys
 import os
@@ -56,7 +56,9 @@ if __name__ == '__main__':
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
-    reduce_programs(design_name,num_cores,seeds)
+    profile_get_asid_mask(design_name)
+
+    reduce_programs(design_name,num_cores,seeds,mute_output=False)
 
 
 else:

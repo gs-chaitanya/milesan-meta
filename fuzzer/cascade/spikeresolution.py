@@ -71,7 +71,7 @@ def gen_regdump_reqs(fuzzerstate):
 
 def get_dumps_from_instr(bb_instr):
     ret = []
-    addr = bb_instr.vaddr if USE_MMU and bb_instr.va_layout != -1 else bb_instr.vaddr
+    addr = bb_instr.vaddr if USE_MMU else bb_instr.paddr
     if isinstance(bb_instr, R12DInstruction):
         ret.append((addr, False, bb_instr.rd))
         ret.append((addr, False, bb_instr.rs1))
@@ -156,7 +156,6 @@ def gen_regdump_reqs_all_rds(fuzzerstate, max_bb_id: int = None, max_instr_id: i
 # @param max_instr_id: if not None, only consider instructions with id < max_instr_id. Used with pruning for finding the instruction that caused the mismatch.
 # @return the register dump requests: an iterable of pairs (pc, reg to dump) in program order
 def gen_regdump_reqs_reduced(fuzzerstate, max_bb_id: int = None, max_instr_id: int = None, index_first_bb_to_consider: int = 1, first_instr_id_in_first_bb_to_consider: int = 0):
-    if USE_MMU: raise NotImplementedError
     if DO_ASSERT:
         assert max_bb_id is None or (max_bb_id >= 0 and max_bb_id <= len(fuzzerstate.instr_objs_seq))
         assert max_instr_id is None or max_instr_id >= 0
@@ -173,16 +172,17 @@ def gen_regdump_reqs_reduced(fuzzerstate, max_bb_id: int = None, max_instr_id: i
                 continue
             if max_instr_id is not None and bb_instr_id >= max_instr_id and max_bb_id is not None and bb_id >= max_bb_id:
                 break
-            curr_addr = bb_start_addr + 4*bb_instr_id # NO_COMPRESSED
-
+            curr_addr = bb_start_addr + 4*bb_instr_id + SPIKE_STARTADDR # NO_COMPRESSED
+            assert curr_addr == bb_instr.paddr, f"Address mismatch: Expected {hex(curr_addr)}, got {bb_instr.paddr}"
+            
             # All we need is the value of the dependent register at consumption time.
             if isinstance(bb_instr, PlaceholderConsumerInstr):
-                ret.append((curr_addr, False, bb_instr.rdep))
+                ret.append((bb_instr.vaddr if USE_MMU else bb_instr.paddr, False, bb_instr.rdep))
             # For branches, we need to know the val of both operands to generate a suitable opcode later.
             if isinstance(bb_instr, BranchInstruction):
                 # if not bb_instr.plan_taken:
-                ret.append((curr_addr, False, bb_instr.rs1)) # rs1 is the first  dependent register.
-                ret.append((curr_addr, False, bb_instr.rs2)) # rs2 is the second dependent register.
+                ret.append((bb_instr.vaddr if USE_MMU else bb_instr.paddr, False, bb_instr.rs1)) # rs1 is the first  dependent register.
+                ret.append((bb_instr.vaddr if USE_MMU else bb_instr.paddr, False, bb_instr.rs2)) # rs2 is the second dependent register.
     return ret
 
 # @brief generates the register dump requests made to spike for saving the architectural state.
@@ -380,7 +380,7 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False, return_int
         va_layout, priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
         if va_layout != -1:
             final_addr = phys2virt(fuzzerstate.final_bb_base_addr, priv_level, va_layout, fuzzerstate, True)
-
+            # print(f"Final addr: {hex(final_addr)} in layout {va_layout} and priv {priv_level.name}")
     # # len(flat_instr_objs)+1: the +1 is to reach the final basic block and thereby overwrite the potential destination register of a jal/jalr
     # for i in range(len(regdump_reqs)):
     #     print(f"until {hex(regdump_reqs[i][0])}")

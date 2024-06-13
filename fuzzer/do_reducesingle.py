@@ -10,7 +10,7 @@
 
 from cascade.reduce import reduce_program
 from cascade.toleratebugs import tolerate_bug_for_eval_reduction
-from common.profiledesign import profile_get_medeleg_mask
+from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask
 from common.spike import calibrate_spikespeed
 from cascade.fuzzfromdescriptor import gen_new_test_instance
 import sys
@@ -21,7 +21,7 @@ if __name__ == '__main__':
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     if len(sys.argv) < 3:
-        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <seed> [authorize_privileges, hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, hint_left_bound_instr, hint_right_bound_instr, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr] ")
+        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <seed> [hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, hint_left_bound_instr, hint_right_bound_instr, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr] ")
 
     design_name = sys.argv[1]
     seed = int(sys.argv[2])
@@ -66,9 +66,10 @@ if __name__ == '__main__':
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
+    profile_get_asid_mask(design_name)
 
     reduce_program(*gen_new_test_instance(design_name,seed,True),
-                    True, check_pc_spike_again=True, taint_en=True, 
+                    False, check_pc_spike_again=True, taint_en=True, 
                     hint_left_bound_bb=hint_left_bound_bb, 
                     hint_right_bound_bb=hint_right_bound_bb,
                     hint_left_bound_pillar_bb=hint_left_bound_pillar_bb,

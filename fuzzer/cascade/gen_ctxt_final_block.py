@@ -75,9 +75,8 @@ def get_last_mpp(fuzzerstate = None, bb_id = -1, instr_id = -1):
     for curr_instr_id in range(instr_id, -1, -1):  # Iterate over columns in reverse
         if isinstance(fuzzerstate.instr_objs_seq[bb_id][curr_instr_id], CSRRegInstruction) and fuzzerstate.instr_objs_seq[bb_id][curr_instr_id].mpp_val != None :
             return fuzzerstate.instr_objs_seq[bb_id][curr_instr_id].mpp_val
-        #FIXME
         if isinstance(fuzzerstate.instr_objs_seq[bb_id][curr_instr_id], ExceptionInstruction):
-            return fuzzerstate.instr_objs_seq[bb_id][curr_instr_id].old_privilege
+            return fuzzerstate.instr_objs_seq[bb_id][curr_instr_id].priv_level
         if isinstance(fuzzerstate.instr_objs_seq[bb_id][curr_instr_id], PrivilegeDescentInstruction) and fuzzerstate.instr_objs_seq[bb_id][curr_instr_id].is_mret:
             return PrivilegeStateEnum.USER
         
@@ -85,9 +84,8 @@ def get_last_mpp(fuzzerstate = None, bb_id = -1, instr_id = -1):
         for curr_instr_id in range(len(fuzzerstate.instr_objs_seq[curr_bb_id]) - 1, -1, -1):  # Iterate over columns in reverse
             if isinstance(fuzzerstate.instr_objs_seq[curr_bb_id][curr_instr_id], CSRRegInstruction) and fuzzerstate.instr_objs_seq[curr_bb_id][curr_instr_id].mpp_val != None :
                 return fuzzerstate.instr_objs_seq[curr_bb_id][curr_instr_id].mpp_val
-            #FIXME
             if isinstance(fuzzerstate.instr_objs_seq[curr_bb_id][curr_instr_id], ExceptionInstruction):
-                return fuzzerstate.instr_objs_seq[curr_bb_id][curr_instr_id].old_privilege
+                return fuzzerstate.instr_objs_seq[curr_bb_id][curr_instr_id].priv_level
             if isinstance(fuzzerstate.instr_objs_seq[curr_bb_id][curr_instr_id], PrivilegeDescentInstruction) and fuzzerstate.instr_objs_seq[curr_bb_id][curr_instr_id].is_mret:
                 return PrivilegeStateEnum.USER
             

@@ -206,8 +206,8 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MAX_BBS_UPPERBOUND = 200
-NUM_MIN_BBS_LOWERBOUND = 50
+NUM_MAX_BBS_UPPERBOUND = 100
+NUM_MIN_BBS_LOWERBOUND = 20
 NUM_BBS = 0
 
 # The tanh saturates, so that we don't neglect registers that have only few bits tainted when there are regs that have much more bits tainted
