@@ -25,6 +25,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
         fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN, taint_en) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
+        n_instr_in_notaint_priv = fuzzerstate.compute_context_stats()
+        assert n_instr_in_notaint_priv != 0, f"Computed program does not execute in leakage target privilege."
         fuzzerstate.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         fuzzerstate.memview.restore(0) # Restore contents before anything was executed.
         fuzzerstate.csrfile.reset() # Reset all CSRs to zero.
@@ -34,7 +36,6 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         rtl_elfpath = fuzzerstate.rtl_elfpath
         interm_elfpath = fuzzerstate.interm_elfpath
 
-    # fuzzerstate.compute_context_stats()
     # exit()
     # Retrieve register stream and final intregvals from spike.
     pc_reg_pairs = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}

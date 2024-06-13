@@ -19,7 +19,7 @@ from cascade.randomize.pickstoreaddr import MemStoreState
 from cascade.randomize.pickreg import IntRegPickState, FloatRegPickState
 from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
-from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0
+from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0, RDInstruction_t0
 from cascade.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen
 from rv.csrids import CSR_IDS, CSR_ABI_NAMES
 from cascade.registers import ABI_INAMES
@@ -531,8 +531,13 @@ class FuzzerState:
         self.simulate_execution(True,print_execution=print_execution, reset_after_execution=True)
         self.simulate_execution(False,print_execution=print_execution, reset_after_execution=True)
 
-    def compute_context_stats(self, print_stats: bool = True):
+    def compute_context_stats(self, print_stats: bool = False):
         n_instr_in_priv = {
+            PrivilegeStateEnum.USER: 0,
+            PrivilegeStateEnum.SUPERVISOR: 0,
+            PrivilegeStateEnum.MACHINE: 0
+        }
+        n_taints_in_priv = {
             PrivilegeStateEnum.USER: 0,
             PrivilegeStateEnum.SUPERVISOR: 0,
             PrivilegeStateEnum.MACHINE: 0
@@ -540,11 +545,13 @@ class FuzzerState:
         for bb_id, bb_instrs in enumerate(self.instr_objs_seq):
             for next_instr in bb_instrs:
                 n_instr_in_priv[next_instr.priv_level] += 1
-        
+                if isinstance(next_instr, RDInstruction_t0) and next_instr.writeback_trace["in-situ"]:
+                    n_taints_in_priv[next_instr.priv_level] += 1
         if print_stats:
-            print(n_instr_in_priv)
+                print({p.name:v for p,v in n_instr_in_priv.items()})
 
-
+        forbidden_priv = list(set(list(PrivilegeStateEnum))-set(self.taint_in_priv))[0]
+        return n_instr_in_priv[forbidden_priv]
 
     def log(self, log_msg):
         with open(f"{self.tmp_dir}/log.txt", "a") as f:
