@@ -387,7 +387,7 @@ def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int =
     is_success, rtl_msg = runtest_simulator(test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs, REDUCTION_SIMULATOR)
     
     if DO_ASSERT:
-        assert not (not is_success and fuzzerstate.compute_context_stats() == 0), f"Triggered bug without executing in taint sink privilege. Aborting reduction."
+        assert not (not is_success and test_fuzzerstate.compute_context_stats() == 0), f"Triggered bug without executing in taint sink privilege. Aborting reduction."
 
     if quiet and not is_success:
         print(rtl_msg)

@@ -80,6 +80,7 @@ class SavedContext:
 # @brief This function generates the context setter basic block.
 # @param next_jmp_addr: The address where the context setter will jump to. We do not call it next_bb_addr because it may target not the first Instruction_t0 of a basic block.
 def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
+    raise NotImplementedError(f"Not implemented to work with taint+vaddr yet.")
     def addr_to_id_in_ctxsv(addr: int):
         if DO_ASSERT:
             assert addr >= fuzzerstate.curr_ctxsv_bb_start_addr

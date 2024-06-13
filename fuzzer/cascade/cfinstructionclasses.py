@@ -162,7 +162,7 @@ class BaseInstruction:
             if PRINT_CHECK_REGS:
                 print(f"{self.get_preamble()}: Checking register value: {ABI_INAMES[reg_id]}:{hex(reg_val)}")
             mismatch = self.fuzzerstate.intregpickstate.regs[reg_id].check(reg_val)
-            assert not mismatch, f"{self.get_str()}: Value mismatch for {ABI_INAMES[reg_id]}: {hex(mismatch[1])} != {hex(reg_val)}\n\t Traceback: {compute_reg_traceback(reg_id,self.paddr,self.fuzzerstate,reg_val).get_str()}"
+            assert not mismatch, f"{self.get_str()}: (Inst) Value mismatch for {ABI_INAMES[reg_id]}: {hex(mismatch[1])} != {hex(reg_val)}\n\t Traceback: {compute_reg_traceback(reg_id,self.paddr,self.fuzzerstate,reg_val).get_str()}"
 
     def assert_addr(self):
         if ASSERT_ADDR:
@@ -1163,7 +1163,7 @@ class CSRInstruction(CFInstruction):
 CSRRegInstructions = "csrrw", "csrrs", "csrrc"
 class CSRRegInstruction(CSRInstruction):
     authorized_instr_strs = CSRRegInstructions
-    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False, is_satp_smode = (False, None), mpp_val = None):
+    def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: CSR_IDS, iscompressed: bool = False, is_satp_smode = (False, None), mpp_val = None):
         super().__init__(fuzzerstate, instr_str, csr_id, iscompressed)
         if DO_ASSERT:
             assert rd >= 0

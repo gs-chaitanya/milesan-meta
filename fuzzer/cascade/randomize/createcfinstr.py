@@ -321,10 +321,10 @@ def create_regfsm_instrobjs(fuzzerstate):
     #     print(f"n_free_or_relocused: {n_free_or_relocused_regs}")
     assert np.any(effective_weights), f"No FSM operation possible! {doable_fsm_ops}"
 
-    if fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.PRODUCED0) >= NUM_MAX_PRODUCED0_REGS:
-        return create_targeted_producer1_instrobj(fuzzerstate)
-    elif fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.PRODUCED1) >= NUM_MAX_PRODUCED1_REGS:
-        return create_targeted_consumer_instrobj(fuzzerstate)
+    if fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.PRODUCED0) > NUM_MAX_PRODUCED0_REGS:
+        return create_targeted_producer1_instrobj(fuzzerstate) # PRODUCED0 -> PRODUCED1
+    elif fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.PRODUCED1) > NUM_MAX_PRODUCED1_REGS:
+        return create_targeted_consumer_instrobj(fuzzerstate)  # PRODUCED1 -> FREE/CONSUMED
 
     choice = random.choices(range(len(effective_weights)), weights=effective_weights, k=1)[0]
 

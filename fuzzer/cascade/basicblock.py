@@ -19,6 +19,7 @@ from cascade.randomize.pickexceptionop import gen_exception_instr, gen_tvecfill_
 from cascade.randomize.pickrandomcsrop import gen_random_csr_op
 from cascade.randomize.pickprivilegedescentop import gen_priv_descent_instr
 from cascade.randomize.forbidden_random_value import is_forbidden_random_value
+from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
 from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator
 from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
 from cascade.finalblock import get_finalblock_max_size,finalblock
@@ -106,6 +107,19 @@ def gen_basicblock(fuzzerstate):
                 fuzzerstate.append_and_execute_instr(new_instrobj)
             del new_instrobjs
             continue
+
+        # If this is an instruction that influences offset register states
+        if curr_isa_class == ISAInstrClass.CLEARTAINT:
+            new_instrobjs = clear_taints_with_random_instructions(fuzzerstate)
+            fuzzerstate.append_and_execute_instr(new_instrobjs[0])
+            # For consumers, we may need to insert one more instruction
+            for new_instrobj in new_instrobjs[1:]:
+                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                fuzzerstate.append_and_execute_instr(new_instrobj)
+            del new_instrobjs
+            continue
+
         
         # If this is an FPU enable-disable instruction or a rounding mode change
         elif curr_isa_class == ISAInstrClass.FPUFSM:

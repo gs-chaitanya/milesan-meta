@@ -298,7 +298,7 @@ class MemoryView:
                 self.write_t0(addr, 0, n_bytes)
 
     def store_state(self): 
-        self.states += [(deepcopy(self.data), deepcopy(self.data_t0))]
+        self.states += [(deepcopy(self.data), deepcopy(self.data_t0))]  # deepcopy important so we can restore and execute multiple times
 
     def restore_and_reduce_taint(self, mismatch):
         # print([hash(frozenset(state[1].items())) for state in self.states])
@@ -327,9 +327,9 @@ class MemoryView:
         self.states.append((deepcopy(self.data), deepcopy(self.data_t0)))
         return n_total_tainted_bits
 
-    def restore(self, bb_id: int = -1):# TODO: the index wont correspond to bb_id as we store before that already
-        self.data = self.states[bb_id][0]
-        self.data_t0 = self.states[bb_id][1]
+    def restore(self, bb_id: int = -1):# TODO: the index wont correspond to bb_id as we store before that already?
+        self.data = deepcopy(self.states[bb_id][0]) # deepcopy important so we can restore and execute multiple times
+        self.data_t0 = deepcopy(self.states[bb_id][1])
 
     def reset(self):
         self.data.clear()

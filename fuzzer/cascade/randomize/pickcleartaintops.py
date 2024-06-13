@@ -13,7 +13,6 @@ def clear_taints_with_random_instructions(fuzzerstate):
     instr_objs = []
     tainted_reg_ids = fuzzerstate.intregpickstate.get_tainted_free_regs()
     untainted_reg_ids = fuzzerstate.intregpickstate.get_untainted_free_regs()
-
     for tainted_reg_id in tainted_reg_ids:
         instr_str = gen_next_instrstr_from_isaclass(ISAInstrClass.ALU, fuzzerstate)
         assert instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.ALU]
@@ -43,5 +42,4 @@ def clear_taints_with_random_instructions(fuzzerstate):
 
     if DO_ASSERT:
         assert set(tainted_reg_ids) <= set(untainted_reg_ids), f"Not all tainted registers were overwritten."
-    
     return instr_objs

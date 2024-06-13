@@ -116,7 +116,7 @@ def pick_illegal_instruction(is_mtvec, fuzzerstate):
         else:
             candidate_instructions = [
                 SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, SimpleIllegalInstruction_t0(fuzzerstate, is_mtvec),  ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
-                SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, CSRRegInstruction_t0(fuzzerstate,"csrrw", random.randrange(fuzzerstate.num_pickable_regs), random.randrange(fuzzerstate.num_pickable_regs), 0xCCA),  ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
+                SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, CSRRegInstruction_t0(fuzzerstate,"csrrw", random.randrange(fuzzerstate.num_pickable_regs), random.randrange(fuzzerstate.num_pickable_regs), CSR_IDS.UNIMP),  ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION),
             ]
     elif fuzzerstate.privilegestate.prev_privstate == PrivilegeStateEnum.SUPERVISOR:
         candidate_instructions = [

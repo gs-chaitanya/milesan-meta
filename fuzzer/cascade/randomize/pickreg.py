@@ -73,8 +73,8 @@ class IntRegPickState:
         ret = [int(self.regs[reg_id].fsm_state == IntRegIndivState.FREE) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
             if sum(ret) < NUM_MIN_FREE_INTREGS:
-                # self.print()
-                assert False, f"There are less than {NUM_MIN_FREE_INTREGS} free integer registers available. ({ret})"
+                self.print()
+                # assert False, f"There are less than {NUM_MIN_FREE_INTREGS} free integer registers available. ({ret})"
             assert sum(ret) >= NUM_MIN_FREE_INTREGS, f"There are less than {NUM_MIN_FREE_INTREGS} free integer registers available."
         return np.asarray(ret)
 
@@ -85,9 +85,9 @@ class IntRegPickState:
     def get_untainted_regs_onehot(self):
         ret = [int(self.regs[reg_id].get_val_t0() == 0) for reg_id in range(self.num_pickable_regs)]
         if DO_ASSERT:
-            if sum(ret) < NUM_MIN_UNTAINTED_INTREGS:
-                # self.print()
-                assert False,f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
+            # if sum(ret) < NUM_MIN_UNTAINTED_INTREGS:
+            #     # self.print()
+            #     assert False,f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
             assert sum(ret) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
         return np.asarray(ret)
 
@@ -99,9 +99,9 @@ class IntRegPickState:
 
     # If there are relocused regs, prioritize those as output. This way they return to the free state and can be used in the dataflow asap.
     # WARNING: Use those only for outputs, not for inputs, as the relocused registers change values between in-situ simulation and spike/final.
-    def get_free_or_relocused_regs_onehot(self): 
+    def get_free_or_relocused_regs_onehot(self,min: int = 1): 
         ret = self.get_relocused_regs_onehot()
-        if sum(ret) > 1: # if theres more than one relocused register, prioritize it to be used as output register.
+        if sum(ret) >= min: # if theres more than min relocused register, prioritize it to be used as output register.
             return ret
         return ret + self.get_free_regs_onehot()
 
@@ -299,7 +299,7 @@ class IntRegPickState:
         return rd
 
     def pick_untainted_int_outputregs_nonzero(self, n:int, authorize_sideeffects: bool = True, force: bool = False):
-        authorized_regs_onehot = self.get_free_or_relocused_regs_onehot() # We could use any, but let's not waste the generated ones
+        authorized_regs_onehot = self.get_free_or_relocused_regs_onehot(n) # We could use any, but let's not waste the generated ones
         was_zero_authorized = authorized_regs_onehot[0]
         authorized_regs_onehot[0] = 0
         if DO_ASSERT:
@@ -412,7 +412,6 @@ class IntRegPickState:
                     fuzzerstate.append_and_execute_instr(instr)
                 for instr in create_targeted_consumer_instrobj(fuzzerstate):
                     fuzzerstate.append_and_execute_instr(instr)
-
             elif self.exists_reg_in_state(IntRegIndivState.FREE):
                 for instr in create_targeted_producer0_instrobj(fuzzerstate):
                     fuzzerstate.append_and_execute_instr(instr)

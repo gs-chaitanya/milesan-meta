@@ -44,7 +44,8 @@ class ISAInstrClass(enum.IntEnum):
     SPECIAL     = enum.auto() # fence, ecall, ebreak
     MMU         = enum.auto() # mmu operations
     MSTATUS     = enum.auto() # mstatus operations
-
+    CLEARTAINT  = enum.auto() # Random sequence of instructions to remove taints from registers
+    
 # Use this for taints
 # TODO: depricated. Remove this.
 class CFInstructionClass(enum.IntEnum):
