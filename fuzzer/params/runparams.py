@@ -61,3 +61,5 @@ DEBUG_PRINT = False
 
 ASSERT_ADDR = True
 
+PRINT_PRIV_STATS = False
+
