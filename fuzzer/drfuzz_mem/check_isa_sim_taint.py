@@ -45,7 +45,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     expected_intregvals = expected_regvals[0]
     
     env = fuzzerstate.setup_env(interm_elfpath if USE_SPIKE_INTERM_ELF else rtl_elfpath,seed)
-
+    
+    fuzzerstate.write_imm_t0_to_mem() # Write the immediate taints from the program code to the imem.
     fuzzerstate.dump_memview_t0()
     
     regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(env, fuzzerstate.design_name)

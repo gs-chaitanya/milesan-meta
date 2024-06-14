@@ -655,10 +655,9 @@ def gen_basicblocks(fuzzerstate):
         for _ in range(2, random.randint(MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS)):
             gen_random_data_block(fuzzerstate, random.random() < P_PAGE_HAS_TAINT)
 
-        # print(f"Generated {len(fuzzerstate.random_data_block_ranges)} random blocks: memsize: {hex(fuzzerstate.memsize)}")
-        # for start_addr, end_addr in fuzzerstate.random_data_block_ranges:
-        #     print(f"{hex(start_addr)}:{hex(end_addr)}: {hex(end_addr-start_addr)}")
-        # fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
+        #WARNING: The state we save here accounts for the random data block, integer registers and CSRs. However, the taints
+        # that are generated with the immediates during program generation, are not accounted for! Therefore, they need to be explicitly written to
+        # memory using fuzzerstate.write_imm_t0_to_mem() before calling fuzzerstate.dump_memview_t0().
         fuzzerstate.save_states()
 
         # Reserve space for the final basic block.

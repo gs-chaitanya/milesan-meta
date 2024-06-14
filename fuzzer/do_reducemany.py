@@ -58,7 +58,7 @@ if __name__ == '__main__':
     profile_get_medeleg_mask(design_name)
     profile_get_asid_mask(design_name)
 
-    reduce_programs(design_name,num_cores,seeds,mute_output=False)
+    reduce_programs(design_name,num_cores,seeds,mute_output=True)
 
 
 else:

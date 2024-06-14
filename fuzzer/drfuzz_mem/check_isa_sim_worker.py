@@ -40,22 +40,22 @@ def __check_isa_sim_worker(design_name, seed, taint_en):
                 logdir = os.path.join(PATH_TO_TMP, "logs")
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.taint_mismatch.log", "a") as f:
-                    f.write(f"{str(e)}\n")
-            elif "(RTL) Value mismatch":
+                    f.write(f"seed {seed}: {str(e)}\n")
+            elif "(RTL) Value mismatch" in str(e):
                 logdir = os.path.join(PATH_TO_TMP, "logs")
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.value_mismatch.log", "a") as f:
-                    f.write(f"{str(e)}\n")
+                    f.write(f"seed {seed}: {str(e)}\n")
             elif "Command" in str(e):
                 logdir = os.path.join(PATH_TO_TMP, "logs")
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.timeout.log", "a") as f:
-                    f.write(f"{str(e)}\n")
+                    f.write(f"seed {seed}: {str(e)}\n")
             else:
                 logdir = os.path.join(PATH_TO_TMP, "logs")
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.failed.log", "a") as f:
-                    f.write(f"{str(e)}\n")
+                    f.write(f"seed {seed}: {str(e)}\n")
 
         return False
 

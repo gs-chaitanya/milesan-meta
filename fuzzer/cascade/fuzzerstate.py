@@ -19,7 +19,7 @@ from cascade.randomize.pickstoreaddr import MemStoreState
 from cascade.randomize.pickreg import IntRegPickState, FloatRegPickState
 from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
-from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0, RDInstruction_t0
+from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0, RDInstruction_t0, RegImmInstruction_t0
 from cascade.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen
 from rv.csrids import CSR_IDS, CSR_ABI_NAMES
 from cascade.registers import ABI_INAMES
@@ -344,8 +344,6 @@ class FuzzerState:
 
     def append_and_execute_instr(self, instr, insert_regdump: bool = INSERT_REGDUMPS):
         instr.reset_addr()
-        if self.taint_en and isinstance(instr, ImmRdInstruction_t0):
-            instr.write_t0() # Write tainted bytecode to instruction memory if taint is enabled.
         if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
             instr.print(is_spike_resolution=True)
         self.instr_objs_seq[-1].append(instr)
@@ -366,6 +364,18 @@ class FuzzerState:
                     return 12
                 return 8
         return 4
+
+    def write_imm_t0_to_mem(self):
+        for bb_instrs in self.instr_objs_seq:
+            for next_instr in bb_instrs:
+                if self.taint_en and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0)):
+                    next_instr.write_t0() # Write tainted bytecode to instruction memory if taint is enabled.
+
+        for bb_instrs in self.ctxsv_bbs:
+            for next_instr in bb_instrs:
+                if self.taint_en and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0)):
+                    next_instr.write_t0() # Write tainted bytecode to instruction memory if taint is enabled.
+
 
     def dump_instructions_t0(self):
         insts = {}

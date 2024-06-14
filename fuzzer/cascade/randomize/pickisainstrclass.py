@@ -48,7 +48,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.SPECIAL:     0,
     ISAInstrClass.MMU:         0.5,
     ISAInstrClass.MSTATUS:     0,
-    ISAInstrClass.CLEARTAINT:  0.001
+    ISAInstrClass.CLEARTAINT:  0.00
 }
 
 

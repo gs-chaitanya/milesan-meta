@@ -305,6 +305,7 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     else:
         last_addr_layout, last_addr_priv = get_last_bb_layout_and_priv(test_fuzzerstate, max_bb_id_to_consider, -1, True)
         gen_ctxt_finalbock(last_addr_priv, last_addr_layout, test_fuzzerstate, max_bb_id_to_consider, -1)
+
         curr_addr = test_fuzzerstate.bb_start_addr_seq[max_bb_id_to_consider] + (len(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider])-1) * 4 # NO_COMPRESSED
         new_jal = JALInstruction_t0(test_fuzzerstate, "jal", 0, test_fuzzerstate.final_bb_base_addr-curr_addr)
         old_jal = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1]
@@ -597,14 +598,12 @@ def _find_failing_instr_in_bb(fuzzerstate, failing_bb_id: int, hint_left_bound_i
     # Take the hints
     if hint_left_bound_instr is not None:
         if DO_ASSERT:
-            # assert True # TODO Uncomment sanity check for user input: assert not is_mismatch(fuzzerstate, failing_bb_id, hint_left_bound_instr), f"Wrong left bound hint `{hint_left_bound_instr}`."
             assert not is_mismatch(fuzzerstate, failing_bb_id, hint_left_bound_instr, quiet=quiet), f"Wrong left bound hint `{hint_left_bound_instr}`."
         left_bound = hint_left_bound_instr
     else:
         left_bound = 0
     if hint_right_bound_instr is not None:
         if DO_ASSERT:
-            # assert True # TODO Uncomment sanity check for user input: assert is_mismatch(fuzzerstate, failing_bb_id, hint_right_bound_instr), f"Wrong right bound hint `{hint_right_bound_instr}`."
             assert is_mismatch(fuzzerstate, failing_bb_id, hint_right_bound_instr, quiet=quiet), f"Wrong right bound hint `{hint_right_bound_instr}`."
         right_bound = hint_right_bound_instr
     else: # TODO: set to -2?
@@ -967,17 +966,28 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             print('Detected interaction between CF instruction and the next block instruction')
             failing_instr_id = 0
             assert is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id,quiet=quiet)
-        # failing_bb_id = failing_bb_id-1
-        # failing_instr_id = len(fuzzerstate.instr_objs_seq[failing_bb_id])
+        # else:
+        #     failing_bb_id = failing_bb_id-1
+        #     failing_instr_id = len(fuzzerstate.instr_objs_seq[failing_bb_id])-1
 
-
-
-    ret_msg = f"Failing bb id                    : {failing_bb_id}\n"
-    ret_msg += f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}\n"
-    ret_msg += f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}\n"
-    ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}"
-    if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level not in fuzzerstate.taint_in_priv:
-        ret_msg += f"Leakage from {fuzzerstate.taint_in_priv.name} to {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name} found!"
+    
+    ret_msg = f"{fuzzerstate.instance_to_str()}:\n"
+    if not fault_from_prev_bb:
+        ret_msg += f"Failing bb id                    : {failing_bb_id}\n"
+        ret_msg += f"Fault from previous BB           : {fault_from_prev_bb}\n"
+        ret_msg += f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}\n"
+        ret_msg += f"Failing instr in bb excluding cf : {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])-1}\n"
+        ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}\n"
+        if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level not in fuzzerstate.taint_in_priv:
+            ret_msg += f"\tLeakage from {[p.name for p in fuzzerstate.taint_in_priv]} to {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name} found!"
+    else:
+        ret_msg += f"Failing bb id                    : {failing_bb_id-1}\n"
+        ret_msg += f"Fault from previous BB           : {fault_from_prev_bb}\n"
+        ret_msg += f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id-1] + SPIKE_STARTADDR)}\n"
+        ret_msg += f"Failing instr in bb excluding cf : {len(fuzzerstate.instr_objs_seq[failing_bb_id-1])-1}/{len(fuzzerstate.instr_objs_seq[failing_bb_id-1])-1}\n"
+        ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id-1][-1].get_str()}\n"
+        if fuzzerstate.instr_objs_seq[failing_bb_id-1][-1].priv_level not in fuzzerstate.taint_in_priv:
+            ret_msg += f"\tLeakage from {[p.name for p in fuzzerstate.taint_in_priv]} to {fuzzerstate.instr_objs_seq[failing_bb_id-1][-1].priv_level.name} found!"
 
     if not quiet:
         print(ret_msg)

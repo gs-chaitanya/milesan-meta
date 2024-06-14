@@ -162,7 +162,8 @@ class ImmInstruction_t0(CFInstruction_t0):
         if DO_ASSERT:
             assert self.paddr >= SPIKE_STARTADDR
             assert self.paddr < SPIKE_STARTADDR + self.fuzzerstate.memsize
-            self.fuzzerstate.memview.write_t0(self.paddr, self.gen_bytecode_int_t0(is_spike_resolution), 4)
+            if self.imm_t0:
+                self.fuzzerstate.memview.write_t0(self.paddr, self.gen_bytecode_int_t0(is_spike_resolution), 4)
         # if self.imm_t0:
         #     print(f"{self.get_str()} adds taint extra with imm {hex(self.imm_t0)}")
         # else:
