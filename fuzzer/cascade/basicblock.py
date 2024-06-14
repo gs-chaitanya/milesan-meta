@@ -64,7 +64,7 @@ def gen_basicblock(fuzzerstate):
     curr_isa_class = None # This is used in case there is only space for control flow
 
     # We stop the instruction generation either when there is no more space available, or when we encounter an end-of-state instruction
-    while fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > BASIC_BLOCK_MIN_SPACE:
+    while fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > BASIC_BLOCK_MIN_SPACE and fuzzerstate.privilegestate.privstate == fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(curr_alloc_cursor+BASIC_BLOCK_MIN_SPACE&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]:
         if fuzzerstate.num_instr_to_stay_in_prv > 0:
             fuzzerstate.num_instr_to_stay_in_prv -= 1
         if fuzzerstate.num_instr_to_stay_in_layout > 0:
@@ -253,7 +253,8 @@ def gen_basicblock(fuzzerstate):
             return True
         # If this is the end of the basic block, then we quit this function. The part after the loop is reserved for cases where we need to urgently change control flow.
 
-    # This is reached if we need to urgently jump to the next basic block.
+    # This is reached if we need to urgently jump to the next basic block, either because we ran out of available contiguous memory
+    # or because we've reached a page boundary, and the next page is reserved for a different privelege.
     # The algorithm is the following: if there is a possibility to jump immediately, then do so. Else, prepare the registers as fast as possible.
 
     # If the regfsm is not IDLE, we cannot use JALR. Bringing it to maturity would increase the minimal ammount of instr, 

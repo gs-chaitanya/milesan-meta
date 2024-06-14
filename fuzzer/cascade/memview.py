@@ -73,6 +73,7 @@ class MemoryView:
                 else:
                     return 0
         return 0
+        
 
     # @param start:    first address of the range.
     # @param end:      last address of the range, excluded.

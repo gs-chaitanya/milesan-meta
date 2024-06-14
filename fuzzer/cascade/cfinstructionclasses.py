@@ -26,6 +26,7 @@ from common.spike import SPIKE_STARTADDR
 from cascade.registers import ABI_INAMES, MAX_32b, MAX_64b, MAX_20b
 from cascade.util import ExceptionCauseVal
 from cascade.privilegestate import PrivilegeStateEnum
+from cascade.mmu_utils import PAGE_ALIGNMENT_MASK
 import random
 import numpy as np
 
@@ -136,8 +137,12 @@ class BaseInstruction:
                 assert self.priv_level == PrivilegeStateEnum.MACHINE, f"Need to be in MACHINE mode to use bare translation."
             if self.priv_level == PrivilegeStateEnum.MACHINE:
                 assert self.va_layout == -1,  f"Need to use bare translation when in MACHINE mode."
+
         self.paddr = self.fuzzerstate.curr_bb_start_addr + 4*len(self.fuzzerstate.instr_objs_seq[-1]) + SPIKE_STARTADDR
         self.vaddr = phys2virt(self.paddr, self.priv_level, self.va_layout,self.fuzzerstate,absolute_addr=False)
+
+        if DO_ASSERT:
+            assert self.priv_level == PrivilegeStateEnum.MACHINE or self.priv_level == self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(self.paddr&PAGE_ALIGNMENT_MASK)], f"{self.get_str()} cannot be stored in physical page reserved for {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(self.paddr&PAGE_ALIGNMENT_MASK)].name} at page addr {hex(self.paddr&PAGE_ALIGNMENT_MASK)}."
 
     def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         print(self.get_str(is_spike_resolution))
