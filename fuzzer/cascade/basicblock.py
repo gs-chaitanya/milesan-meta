@@ -41,8 +41,14 @@ CURR_ALLOC_CURSOR_INC = 12 if INSERT_FENCE else 8 if INSERT_REGDUMPS else 4
 # @return False if could not find a next bb address
 def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     range_bits_each_direction = get_range_bits_per_instrclass(isa_class)
+
+    if isa_class in  (ISAInstrClass.EXCEPTION, ISAInstrClass.DESCEND_PRV): # When we are changing privilege, we need a new page.
+        alignment_bits = PAGE_ALIGNMENT_SHIFT # TODO: allow non-page aligned addresses
+    else:
+        alignment_bits = 4
+
     # We must select the next basic block address before the resolution
-    fuzzerstate.next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction))
+    fuzzerstate.next_bb_addr = fuzzerstate.memview.gen_random_free_addr(alignment_bits, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction), priv = fuzzerstate.privilegestate.privstate)
     # If we could not find a new address where to place the next basic block, then return and consider this stage complete.
     if fuzzerstate.next_bb_addr is None:
         return False
@@ -59,7 +65,6 @@ def gen_basicblock(fuzzerstate):
 
     # We stop the instruction generation either when there is no more space available, or when we encounter an end-of-state instruction
     while fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > BASIC_BLOCK_MIN_SPACE:
-
         if fuzzerstate.num_instr_to_stay_in_prv > 0:
             fuzzerstate.num_instr_to_stay_in_prv -= 1
         if fuzzerstate.num_instr_to_stay_in_layout > 0:
@@ -142,15 +147,15 @@ def gen_basicblock(fuzzerstate):
             # print('Priv descent at addr', hex(curr_addr+SPIKE_STARTADDR), 'privstate', fuzzerstate.privilegestate.privstate)
             # print('  New privstate', fuzzerstate.privilegestate.privstate)
             # Create space for the next basic block.
+            new_instrobjs = gen_priv_descent_instr(fuzzerstate)
+            # First generate the instrucion, only then allocate for the next BB s.t. we allocate for the right privilege.
             if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
                 # Abort the bb
                 fuzzerstate.instr_objs_seq.pop()
                 fuzzerstate.bb_start_addr_seq.pop()
-                # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
                 fuzzerstate.restore_states()
                 return False
 
-            new_instrobjs = gen_priv_descent_instr(fuzzerstate)
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
             for new_instrobj_id in range(1, len(new_instrobjs)):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
@@ -177,6 +182,9 @@ def gen_basicblock(fuzzerstate):
 
         elif curr_isa_class == ISAInstrClass.EXCEPTION:
             # Create space for the next basic block.
+            # print('exception at addr', hex(curr_addr), 'privstate', fuzzerstate.privilegestate.privstate)
+            new_instrobjs = gen_exception_instr(fuzzerstate)
+            # First generate the instructions, only then allocate for the next BB s.t. we allocate for the right privilege.
             if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
                 # Abort the bb
                 fuzzerstate.instr_objs_seq.pop()
@@ -184,8 +192,6 @@ def gen_basicblock(fuzzerstate):
                 # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
                 fuzzerstate.restore_states()
                 return False
-            # print('exception at addr', hex(curr_addr), 'privstate', fuzzerstate.privilegestate.privstate)
-            new_instrobjs = gen_exception_instr(fuzzerstate)
             # print('  New priv:', fuzzerstate.privilegestate.privstate)
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
             for new_instrobj_id in range(1, len(new_instrobjs)):
@@ -648,7 +654,7 @@ def gen_basicblocks(fuzzerstate):
         # Reserve space for the second basic block (whose address is already fixed).
         fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
 
-        # We need at least one random data block with taint and one without s.t. both priveleges can read and write to memory
+        # We need at least one random data block with taint and one without s.t. all privileges can read and write memory
         gen_random_data_block(fuzzerstate, False)
         gen_random_data_block(fuzzerstate, True)
         # Generate the random data blocks
@@ -673,15 +679,13 @@ def gen_basicblocks(fuzzerstate):
             #gen_mmu_init_block(fuzzerstate) first commit shows how to use this, it needs some modif for spikedoublecheck and above to get the space
             fuzzerstate.pagetablestate.gen_pt_in_mem(fuzzerstate)
 
-
         while True:
             # print('len(fuzzerstate.instr_objs_seq)', len(fuzzerstate.instr_objs_seq))
             gen_basicblock(fuzzerstate)
             if fuzzerstate.next_bb_addr is None:
                 # This corresponds to failing to find space for a new basic block. In this case, this block may also not have completed, and we drop it.
                 break
-            # Save the register states
-            # fuzzerstate.saved_reg_states.append(fuzzerstate.intregpickstate.save_curr_state())
+            # Save the states
             fuzzerstate.save_states()
             if fuzzerstate.nmax_bbs is not None and len(fuzzerstate.instr_objs_seq) >= fuzzerstate.nmax_bbs or fuzzerstate.memview.get_allocated_ratio() >= LIMIT_MEM_SATURATION_RATIO:
                 break

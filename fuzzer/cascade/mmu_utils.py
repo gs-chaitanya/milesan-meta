@@ -100,6 +100,7 @@ class PageTablesGen:
         self.vmem_base_list = [] # The virtual address mapping to SPIKE_STARTADDR for each layout
         self.ptr_pt_base_list_per_layout = [] # The physical address of the page base for each PT lavel and layouts, [[l0, l1, l2], [...], ...]
         self.ppn_leaves = [] # The value of the PTE for the leaf at offset 0 for all layout (SPIKE_START or 0x0 depending on allignment)
+        self.ppn_leaf_to_priv_dict = {} # The privilege mode for that ppn_leave
         self.page_size_per_layout = [] # The page size for all layout
         self.all_pt_entries = [] # DATA BLOCK, saves all of the PTEs for all layouts, [[[ptel0], [ptel1], ...] ...]
         self.layout_is_global = [] # If the layout has global mappings, TLB entries need to be flushed even if ASID changes
@@ -397,6 +398,7 @@ class PageTablesGen:
             curr_layout_pt_content, curr_layout_pt_content_supervisor = [], []
             if DEBUG_PRINT:
                 print(f"Generating {self.n_entries_per_level[layout_id][-1]} leaves for layout {layout_id}")
+            priv = PrivilegeStateEnum.MACHINE
             for _ in range(self.n_entries_per_level[layout_id][-1]):
                 # Make user and supervisor
                 is_random_data_block = ppn_leaf-SPIKE_STARTADDR in [addr[0] for addr in fuzzerstate.random_data_block_ranges]
@@ -405,9 +407,34 @@ class PageTablesGen:
                     # We then need to ensure that tainted data is also only written to pages that were tainted initially.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_in_priv, is_executable=False)
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_in_priv, is_executable=False)
-                else:
+                elif is_random_data_block:
+                    # If it is a random data block without taint, map it to both privileges. It will be a shared memory, where only untainted data can be written to.
+                    curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=False)
+                    curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=False)
+                elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.final_bb_base_addr&PAGE_ALIGNMENT_MASK:
+                    # If it is the final block, also map it for both priveleges.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=True)
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=True)
+                    self.ppn_leaf_to_priv_dict[ppn_leaf] = (PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR)
+                elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.bb_start_addr_seq[0]&PAGE_ALIGNMENT_MASK:
+                    # If it is the first basic block, don't map it as it will only be used in machine mode.
+                    curr_pte            = 0
+                    curr_pte_supervisor = 0
+                    self.ppn_leaf_to_priv_dict[ppn_leaf] = (PrivilegeStateEnum.MACHINE)
+                else:
+                    if ppn_leaf not in self.ppn_leaf_to_priv_dict:
+                        priv = random.choices((PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE))[0] if random.random() < 0.5 else priv # Dont map any hypervisor
+                        self.ppn_leaf_to_priv_dict[ppn_leaf] = priv
+                        # print(f"Mapping {hex(ppn_leaf)} to {priv.name}")
+                    else:
+                        priv = self.ppn_leaf_to_priv_dict[ppn_leaf]
+                    if priv == PrivilegeStateEnum.MACHINE:
+                        curr_pte = 0 # If this page is an executable page for machine mode, don't map it
+                        curr_pte_supervisor = 0
+                    else:
+                        # Otherwise, map it for both user and supervisor with the right privileges.
+                        curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=priv == PrivilegeStateEnum.USER, is_executable=True)
+                        curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user= priv == PrivilegeStateEnum.USER, is_executable=True)
                 curr_layout_pt_content.append(curr_pte)
                 curr_layout_pt_content_supervisor.append(curr_pte_supervisor)
                 ppn_leaf += self.page_size_per_layout[layout_id]
