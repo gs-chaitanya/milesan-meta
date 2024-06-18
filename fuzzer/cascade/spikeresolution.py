@@ -343,6 +343,8 @@ def _check_pc_trace_from_spike(fuzzerstate, spike_pc_seq):
     curr_priv_state = PrivilegeStateEnum.MACHINE
     for bb_id, bb_instrlist in enumerate(fuzzerstate.instr_objs_seq):
         for bb_instr_id, bb_instr in enumerate(bb_instrlist):
+            if isinstance(bb_instr, SpeculativeInstructionEncapsulator):
+                continue
             spike_pc = spike_pc_seq[curr_id_in_spike_pc_seq]
             curr_id_in_spike_pc_seq += 1
             expected_pc = SPIKE_STARTADDR + fuzzerstate.bb_start_addr_seq[bb_id] + 4*bb_instr_id # NO_COMPRESSED
@@ -373,6 +375,7 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False, return_int
     # print('Spike resolution elfpath:', spike_resolution_elfpath)
     regdump_reqs = gen_regdump_reqs(fuzzerstate)
     flat_instr_objs = list(itertools.chain.from_iterable(fuzzerstate.instr_objs_seq))
+    flat_instr_objs = [i for i in flat_instr_objs if not isinstance(i, SpeculativeInstructionEncapsulator)]
 
     final_addr = fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR
     last_instr = fuzzerstate.instr_objs_seq[-1][-1]

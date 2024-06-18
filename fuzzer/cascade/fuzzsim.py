@@ -7,7 +7,7 @@
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS
 from cascade.util import IntRegIndivState
 from common.sim.modelsim import get_next_worker_id
-from params.runparams import DO_ASSERT, PATH_TO_TMP
+from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES
 from common.sim.commonsim import setup_sim_env
 from common import designcfgs
 from cascade.spikeresolution import SPIKE_STARTADDR
@@ -154,13 +154,13 @@ def runsim_modelsim(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PI
 # @param expected_regvals a pair of iterables of expected int regvals, and float regvals.
 # @param override_num_instrs if not None, then use this value instead of the number of instructions in fuzzerstate.instr_objs_seq. Used when pruning to shorten a bit the timeout.
 # @return (is_success: bool, msg: str)
-def runtest_simulator(fuzzerstate, elfpath: str, expected_regvals: tuple, override_num_instrs: int = None, simulator=SimulatorEnum.VERILATOR):
+def runtest_simulator(fuzzerstate, elfpath: str, expected_regvals: tuple, override_num_instrs: int = None, simulator=SimulatorEnum.VERILATOR, leakage_en: bool = True):
     from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint, FuzzerStateException
     try:
-        check_isa_sim_taint(fuzzerstate.design_name, fuzzerstate.randseed, False, fuzzerstate)
+        check_isa_sim_taint(fuzzerstate.design_name, fuzzerstate.randseed, False, fuzzerstate, leakage_en = leakage_en)
     except FuzzerStateException as e:
         print(e)
-        return False, str(e)
+        return False, e
     return True, "No taint or value mismatch detected."
 
     expected_intregvals, expected_floatregvals = expected_regvals
@@ -227,6 +227,8 @@ def runtest_verilator_forprofiling(fuzzerstate, elfpath: str, expected_fuzzersta
     if DO_ASSERT:
         assert len(fuzzerstate.instr_objs_seq) == expected_fuzzerstate_len_fordebug, f"Unexpected length of fuzzerstate: {len(fuzzerstate.instr_objs_seq)}"
     is_stop_successful, received_regvals = runsim_verilator(fuzzerstate.design_name, len(fuzzerstate.instr_objs_seq[0])*MAX_CYCLES_PER_INSTR + SETUP_CYCLES, elfpath, 1, 0)
+    if not NO_REMOVE_TMPFILES:
+        fuzzerstate.remove_tmp_files()
     # Check successful stop
     if not is_stop_successful:
         raise Exception(f"Timeout during profiling of design `{fuzzerstate.design_name}`.")

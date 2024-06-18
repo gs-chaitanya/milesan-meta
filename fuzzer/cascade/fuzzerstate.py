@@ -19,7 +19,7 @@ from cascade.randomize.pickstoreaddr import MemStoreState
 from cascade.randomize.pickreg import IntRegPickState, FloatRegPickState
 from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
-from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0, RDInstruction_t0, RegImmInstruction_t0
+from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0, RDInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0
 from cascade.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen
 from rv.csrids import CSR_IDS, CSR_ABI_NAMES
 from cascade.registers import ABI_INAMES
@@ -368,12 +368,12 @@ class FuzzerState:
     def write_imm_t0_to_mem(self):
         for bb_instrs in self.instr_objs_seq:
             for next_instr in bb_instrs:
-                if self.taint_en and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0)):
+                if self.taint_en and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0)):
                     next_instr.write_t0() # Write tainted bytecode to instruction memory if taint is enabled.
 
         for bb_instrs in self.ctxsv_bbs:
             for next_instr in bb_instrs:
-                if self.taint_en and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0)):
+                if self.taint_en and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0)):
                     next_instr.write_t0() # Write tainted bytecode to instruction memory if taint is enabled.
 
 
@@ -393,6 +393,9 @@ class FuzzerState:
     def dump_memview_t0(self, path: str = None):
         path = self.env["SIMSRAMTAINT"]
         self.memview.dump_taint(path)
+
+    def gen_tmp_dir(self):
+        os.makedirs(self.tmp_dir,exist_ok=True)
 
     def setup_env(self, rtl_elfpath, seed):
         ## temp dirs below

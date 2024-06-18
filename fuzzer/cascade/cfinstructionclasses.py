@@ -1532,6 +1532,26 @@ class SimpleExceptionEncapsulator(ExceptionInstruction):
         self.instr.reset_addr()
         return super().reset_addr()
 
+# Wrapper for instructions that are only executed speculatively, so should not have any architectually visible effects.
+class SpeculativeInstructionEncapsulator(BaseInstruction):
+    authorized_instr_strs = JALInstruction.authorized_instr_strs+JALRInstruction.authorized_instr_strs+BranchInstruction.authorized_instr_strs
+    def __init__(self, fuzzerstate, instr):
+        super().__init__(fuzzerstate, "SpeculativeInstructionEncapsulator")
+        self.instr = instr
+
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+        return f"{self.instr.get_str(is_spike_resolution)} (SpeculativeInstructionEncapsulator)"
+
+    def reset_addr(self):
+        self.instr.reset_addr()
+        return super().reset_addr()
+
+    def gen_bytecode_int(self, is_spike_resolution: bool):
+        return self.instr.gen_bytecode_int(is_spike_resolution)
+
+    def execute(self, taint_en, is_spike_resolution: bool = True):
+        return
+
 
 # This is a wrapper class for a misaligned load or store.
 # As opposed to usual load and store operations used above, this class chooses a consumed register by itself.

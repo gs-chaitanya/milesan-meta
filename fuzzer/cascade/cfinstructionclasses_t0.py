@@ -766,9 +766,11 @@ class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
         assert 0
 
 
-class BranchInstruction_t0(BranchInstruction, BaseInstruction_t0):
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, iscompressed: bool = False):
+class BranchInstruction_t0(BranchInstruction, ImmInstruction_t0):
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, imm_t0: int, plan_taken: bool, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
+        self.imm_t0 = imm_t0
+        assert not (plan_taken and imm_t0)
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
         if not is_spike_resolution:
@@ -782,6 +784,31 @@ class BranchInstruction_t0(BranchInstruction, BaseInstruction_t0):
         assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"{self.get_str()}: source register is tainted. This is not allowed."
         assert self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0() == 0, f"{self.get_str()}: source register is tainted. This is not allowed."
 
+    def gen_bytecode_int_t0(self, is_spike_resolution: bool):
+        assert self.fuzzerstate.taint_en, "Taint is disabled. Enable to use this method."
+        rs2 = self.rs2
+        rs1 = self.rs1
+        imm = self.imm
+        self.rd = 0x0 # set regs to taints to get taint bytecode
+        self.rs1 = 0x0
+        self.imm = self.imm_t0
+        taint_bytecode = self.gen_bytecode_int(is_spike_resolution)
+        self.rd = 0x00 # set regs to 0 to get taint bytecode mask to remove func and opcode fields
+        self.rs1 = 0x00
+        self.imm = 0x00
+        taint_bytecode_mask = self.gen_bytecode_int(is_spike_resolution)
+        self.rs1 = rs1
+        self.rs2 = rs2
+        self.imm = imm
+        masked_taint = taint_bytecode ^ taint_bytecode_mask
+        return masked_taint
+
+
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = PRINT_COLOR_TAINT):
+        if not color_taint or not self.imm_t0:
+            return super().get_str()
+
+        return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, " + CRED + f"{hex(self.imm)}" + CEND
 
 class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False, is_satp_smode = (False, None), mpp_val = None):

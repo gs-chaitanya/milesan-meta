@@ -169,14 +169,15 @@ class IntRegPickState:
         return random.choices(range(self.num_pickable_regs), self.get_effective_weights(self.get_free_regs_onehot()))[0]
     
     # Returns a free and likely tainted inputreg.
-    def pick_tainted_int_inputreg(self, authorize_sideeffects: bool = True, force: bool = False):
-        id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(self.get_free_regs_onehot(), False, force))[0]
+    def pick_tainted_int_inputreg(self, authorize_sideeffects: bool = True, force: bool = False, allow_zero: bool = True):
+        authorized_regs_onehot = self.get_free_regs_onehot()
+        zero_allowed = authorized_regs_onehot[0]
+        if zero_allowed and not allow_zero:
+            authorized_regs_onehot[0] = 0
+        id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, False, force))[0]
         if DO_ASSERT:
             assert self.regs[id].fsm_state == IntRegIndivState.FREE
-        # if self.regs[id].get_val_t0() != 0:
-        #     print(f"WANT TAINTED: Got tainted reg.")
-        # else:
-        #     print(f"WANT TAINTED: Got tainted reg.")
+        authorized_regs_onehot[0] = zero_allowed
         return id
 
     # Excludes the zero register
@@ -287,8 +288,11 @@ class IntRegPickState:
                 self.set_regstate(rd, IntRegIndivState.FREE)
         return rd
 
-    def pick_tainted_int_outputreg(self, authorize_sideeffects: bool = True, force: bool = False):
+    def pick_tainted_int_outputreg(self, authorize_sideeffects: bool = True, force: bool = False, allow_zero: bool = True):
         authorized_regs_onehot = self.get_free_or_relocused_regs_onehot() # We could use any, but let's not waste the generated ones
+        zero_allowed = authorized_regs_onehot[0]
+        if zero_allowed and not allow_zero:
+            authorized_regs_onehot[0] = 0
         if DO_ASSERT:
             assert np.max(authorized_regs_onehot) == 1, "Unexpectedly, some register was registered in two states at a time."
         rd = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, False, force))[0]
@@ -296,6 +300,7 @@ class IntRegPickState:
             self._update_probaweights(rd)
             if rd:
                 self.set_regstate(rd, IntRegIndivState.FREE)
+        authorized_regs_onehot[0] = zero_allowed
         return rd
 
     def pick_untainted_int_outputregs_nonzero(self, n:int, authorize_sideeffects: bool = True, force: bool = False):

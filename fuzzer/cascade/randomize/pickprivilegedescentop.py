@@ -5,7 +5,7 @@
 # This script is used to pick an instruction from the privileged descent instruction ISA class.
 
 from params.runparams import DO_ASSERT,DEBUG_PRINT
-from params.fuzzparams import USE_MMU, MAX_NUM_INSTR_IN_PRV, MIN_NUM_INSTR_IN_PRV
+from params.fuzzparams import USE_MMU, MAX_NUM_INSTR_IN_PRV, MIN_NUM_INSTR_IN_PRV, INSERT_SPECTRE_GADGETS
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.cfinstructionclasses_t0 import PrivilegeDescentInstruction_t0
 from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
@@ -94,9 +94,15 @@ def gen_priv_descent_instr(fuzzerstate):
             if ((old_priv_state == PrivilegeStateEnum.SUPERVISOR and fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.USER) or (old_priv_state == PrivilegeStateEnum.USER and fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR)) and (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.SUPERVISOR] | 0x7fffffff) - (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.USER] | 0x7fffffff) != 0:
                 assert False, "We are going from user to supervisor with page too larger, we do not handle that yet"
     
+    if INSERT_SPECTRE_GADGETS:
+        instr_objs += [
+
+        ]
     # If we fuzz the MMU, we want to stay in priviledged mode longer
     if USE_MMU:
         fuzzerstate.num_instr_to_stay_in_prv = random.randint(MIN_NUM_INSTR_IN_PRV, MAX_NUM_INSTR_IN_PRV)
         if DEBUG_PRINT: print(f"will stay in this mode for {fuzzerstate.num_instr_to_stay_in_prv} instructions")
-    return instr_objs + [PrivilegeDescentInstruction_t0(fuzzerstate, is_mret)]
+    instr_objs += [PrivilegeDescentInstruction_t0(fuzzerstate, is_mret)]
+
+    return instr_objs
 

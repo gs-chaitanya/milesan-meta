@@ -8,7 +8,7 @@ from params.runparams import DO_ASSERT
 from common.spike import SPIKE_STARTADDR
 from rv.csrids import CSR_IDS
 from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES
-from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN
+from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, INSERT_SPECTRE_GADGETS
 from params.runparams import INSERT_REGDUMPS, INSERT_FENCE, GET_DATA, DEBUG_PRINT
 from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memop_instrobjs
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
@@ -20,7 +20,8 @@ from cascade.randomize.pickrandomcsrop import gen_random_csr_op
 from cascade.randomize.pickprivilegedescentop import gen_priv_descent_instr
 from cascade.randomize.forbidden_random_value import is_forbidden_random_value
 from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
-from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator
+from cascade.randomize.createspeculativeinstr import create_speculative_instrs
+from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator, SpeculativeInstructionEncapsulator
 from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
 from cascade.finalblock import get_finalblock_max_size,finalblock
 from cascade.initialblock import gen_initial_basic_block
@@ -42,13 +43,13 @@ CURR_ALLOC_CURSOR_INC = 12 if INSERT_FENCE else 8 if INSERT_REGDUMPS else 4
 def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     range_bits_each_direction = get_range_bits_per_instrclass(isa_class)
 
-    if isa_class in  (ISAInstrClass.EXCEPTION, ISAInstrClass.DESCEND_PRV): # When we are changing privilege, we need a new page.
-        alignment_bits = PAGE_ALIGNMENT_SHIFT # TODO: allow non-page aligned addresses
-    else:
-        alignment_bits = 4
+    # if isa_class in  (ISAInstrClass.EXCEPTION, ISAInstrClass.DESCEND_PRV): # When we are changing privilege, we need a new page.
+    #     alignment_bits = PAGE_ALIGNMENT_SHIFT # TODO: allow non-page aligned addresses
+    # else:
+    #     alignment_bits = 4
 
     # We must select the next basic block address before the resolution
-    fuzzerstate.next_bb_addr = fuzzerstate.memview.gen_random_free_addr(alignment_bits, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction), priv = fuzzerstate.privilegestate.privstate)
+    fuzzerstate.next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction), priv = fuzzerstate.privilegestate.privstate)
     # If we could not find a new address where to place the next basic block, then return and consider this stage complete.
     if fuzzerstate.next_bb_addr is None:
         return False
@@ -242,7 +243,16 @@ def gen_basicblock(fuzzerstate):
             next_instr = gen_epcfill_instr(fuzzerstate)
         elif curr_isa_class == ISAInstrClass.RANDOM_CSR:
             next_instr = gen_random_csr_op(fuzzerstate)
-
+        elif INSERT_SPECTRE_GADGETS and (curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.JALR) or fuzzerstate.curr_branch_taken):
+            instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
+            new_instrobjs = create_speculative_instrs(instr_str, fuzzerstate)
+            fuzzerstate.append_and_execute_instr(new_instrobjs[0])
+            for new_instrobj_id in range(1, len(new_instrobjs)):
+                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
+            del new_instrobjs
+            return True
         else:
             instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
             next_instr = create_instr(instr_str, fuzzerstate, curr_addr)
@@ -362,8 +372,13 @@ def free_context_saver_bb(fuzzerstate, ctxsv_bb_id):
 def pop_last_bbs_to_connect_with_final_block(fuzzerstate):
     popped_at_least_once = False
     while fuzzerstate.instr_objs_seq:
+        # Remove the trailing speculative instructions from the basic block to find the cf instruction.
+        while isinstance(fuzzerstate.instr_objs_seq[-1][-1],SpeculativeInstructionEncapsulator):
+            fuzzerstate.instr_objs_seq[-1].pop()
+        
         # Check whether the last element can target the final bb
         last_cf_instr_base_addr = fuzzerstate.bb_start_addr_seq[-1] + (len(fuzzerstate.instr_objs_seq[-1])-1) * 4 # NO_COMPRESSED
+
         if isinstance(fuzzerstate.instr_objs_seq[-1][-1], JALInstruction):
             range_bits = get_range_bits_per_instrclass(ISAInstrClass.JAL)
         elif isinstance(fuzzerstate.instr_objs_seq[-1][-1], JALRInstruction):

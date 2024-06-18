@@ -680,6 +680,7 @@ INSTR_FUNCS = {
     "EPCWriterInstruction": None,
     "GenericCSRWriterInstruction": None,
     "ExceptionInstruction": None,
+    "SpeculativeInstructionEncapsulator": None,
     # mret and sret have no function
     "mret": None,
     "sret": None,
@@ -760,6 +761,7 @@ INSTR_FUNCS_T0 = {
     "EPCWriterInstruction": None,
     "GenericCSRWriterInstruction": None,
     "ExceptionInstruction": None,
+    "SpeculativeInstructionEncapsulator": None,
     # mret and sret have no function
     "mret": None,
     "sret": None,

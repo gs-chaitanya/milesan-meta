@@ -128,9 +128,14 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
         assert instr_str in BranchInstructions
     rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputregs(2, force=True))
     plan_taken = fuzzerstate.curr_branch_taken
+    if fuzzerstate.is_design_64bit:
+        curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1]
+    else:
+        curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[instr_str]][-1]
     # The rng should have randomness that follows from the system random state but not have any reciprocal effects
     # This is necessary s.t. the bugs can be enabled/disabled without further influencing program construction
     # except unavoidable sideeffects due to change in data-flow
+
     rng = np.random.RandomState(random.randrange(0,2**31)) 
     if plan_taken:
         # print('A', flush=True)
@@ -148,10 +153,6 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
             # target_addr_in_random_data_block = random.randrange(lowest_random_data_reachable_addr//2, highest_random_data_reachable_addr//2)*2
             # imm = target_addr_in_random_data_block-curr_addr
             target_addr =  None
-            if fuzzerstate.is_design_64bit:
-                curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1]
-            else:
-                curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[instr_str]][-1]
             # TODO do we need to modify this for virtual addresses? Think not since we can't jump further than a page anyway
             while target_addr is None or (fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR) and not is_tolerate_branchpred(fuzzerstate.design_name)):
                 target_addr = fuzzerstate.memview.gen_random_addr_from_randomblock_from_rng(rng,2,4)
@@ -164,9 +165,13 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
 
     if DO_ASSERT:
             assert is_tolerate_branchpred(fuzzerstate.design_name) or not fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR), f"Chose tainted CL at {hex(curr_addr+imm+SPIKE_STARTADDR)} (plan_taken: {plan_taken}, is_random_data_block_in_reach: {is_random_data_block_in_reach})"
-    instr = BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
+    
+    imm_t0 = 0
+    if fuzzerstate.taint_en and not plan_taken and random.random() < 0.5 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+        imm_t0 = random.randint(0, 1<<curr_param_size)
+    instr = BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, imm_t0, plan_taken, iscompressed)
     return instr
-
+    
 def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg()
     imm = fuzzerstate.next_bb_addr-curr_addr
@@ -174,7 +179,8 @@ def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompre
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
     return JALInstruction_t0(fuzzerstate, instr_str, rd, imm, iscompressed)
 
-def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
+def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool, curr_addr: int = None): # curr_addr for compatibility in _create_spectre_gadget_instrobjs 
+    assert curr_addr is None
     rs1 = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.CONSUMED, force = True)
     assert not fuzzerstate.intregpickstate.regs[rs1].get_val_t0(), f"rs1 {ABI_INAMES[rs1]} for JALR is tainted!"
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg()
@@ -439,6 +445,7 @@ def create_memop_instrobjs(fuzzerstate, instr_str):
         else:
             instr_objs += [IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rd, 0x0, None)]
         return instr_objs
+
 # The reservation in the MemoryView is already done ahead and should not be reiterated here.
 # @param jalr_addr_reg: only meaningful if a jalr is present (in the latter case, it should be the next instruction)
 def create_instr(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool = False):
