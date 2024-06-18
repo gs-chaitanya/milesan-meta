@@ -22,7 +22,7 @@ from cascade.randomize.forbidden_random_value import is_forbidden_random_value
 from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
 from cascade.randomize.createspeculativeinstr import create_speculative_instrs
 from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator, SpeculativeInstructionEncapsulator
-from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
+from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, SPECTRE_GADGET_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
 from cascade.finalblock import get_finalblock_max_size,finalblock
 from cascade.initialblock import gen_initial_basic_block
 from cascade.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setters
@@ -55,6 +55,8 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
         return False
     return True
 
+def is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor, required_space: int = BASIC_BLOCK_MIN_SPACE):
+    return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space and fuzzerstate.privilegestate.privstate == fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(curr_alloc_cursor+required_space&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
 # The first BASIC_BLOCK_MIN_SPACE must be pre-allocated. The rationale is that we want to pre-allocate at least for the first basic block, to prevent the store data from landing exactly there.
 # @return True iff the creation is successful
 def gen_basicblock(fuzzerstate):
@@ -65,7 +67,7 @@ def gen_basicblock(fuzzerstate):
     curr_isa_class = None # This is used in case there is only space for control flow
 
     # We stop the instruction generation either when there is no more space available, or when we encounter an end-of-state instruction
-    while fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > BASIC_BLOCK_MIN_SPACE and fuzzerstate.privilegestate.privstate == fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(curr_alloc_cursor+BASIC_BLOCK_MIN_SPACE&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]:
+    while is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor):
         if fuzzerstate.num_instr_to_stay_in_prv > 0:
             fuzzerstate.num_instr_to_stay_in_prv -= 1
         if fuzzerstate.num_instr_to_stay_in_layout > 0:
@@ -243,7 +245,7 @@ def gen_basicblock(fuzzerstate):
             next_instr = gen_epcfill_instr(fuzzerstate)
         elif curr_isa_class == ISAInstrClass.RANDOM_CSR:
             next_instr = gen_random_csr_op(fuzzerstate)
-        elif INSERT_SPECTRE_GADGETS and (curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.JALR) or fuzzerstate.curr_branch_taken):
+        elif INSERT_SPECTRE_GADGETS and (curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.JALR) or fuzzerstate.curr_branch_taken) and is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor, SPECTRE_GADGET_MIN_SPACE):
             instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
             new_instrobjs = create_speculative_instrs(instr_str, fuzzerstate)
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])

@@ -1,4 +1,5 @@
 from params.runparams import DO_ASSERT
+from params.fuzzparams import INSERT_SPECTRE_GADGETS
 import enum
 
 
@@ -313,4 +314,7 @@ class IntRegIndivState(IntEnum):
     CONSUMED           = auto() # aka "applied". Was either PRODUCED1 and directly consumed as input and output of the consumer, or FREE and just output of the consumer.
     UNRELIABLE         = auto() # If offset but not chosen as applied
     RELOCUSED          = auto() # Already used by cf-ambiguous instruction, value differs between in-situ and spike/final rtl simulation and must be excluded from df computation.
+
 BASIC_BLOCK_MIN_SPACE = 24 # bytes.
+LI_DOUBLEWORD_SPACE = 7*4 # 7 instructions to prepare one virtual address.
+SPECTRE_GADGET_MIN_SPACE = 2*LI_DOUBLEWORD_SPACE + 4*4 # 4 speculative instructions.
