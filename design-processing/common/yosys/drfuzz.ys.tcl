@@ -19,7 +19,7 @@ if { [info exists ::env(WIRE_PC_TO_TOP)]} {
     } else {set WIRE_PC_TO_TOP 0}
 if { [info exists ::env(BLOCK_MODULE_SIGNAL_T0_PAIRS)] }    {set BLOCK_MODULE_SIGNAL_T0_PAIRS $::env(BLOCK_MODULE_SIGNAL_T0_PAIRS)}    else { set BLOCK_MODULE_SIGNAL_T0_PAIRS "" }
 
-yosys read_verilog -DSTOP_COND=0 -sv $VERILOG_INPUT 
+yosys read_verilog -DSTOP_COND=0 -defer -sv $VERILOG_INPUT 
 yosys hierarchy -top $TOP_MODULE -check
 yosys proc
 yosys opt -purge
