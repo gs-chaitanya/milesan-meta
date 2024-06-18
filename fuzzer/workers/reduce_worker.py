@@ -16,7 +16,7 @@ import sys
 
 LOG_EXCEPTIONS = True
 LOG_EN = True
-PRINT_THREAD_STATUS = True
+PRINT_THREAD_STATUS = False
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 total_finished_tests = 0
@@ -86,6 +86,8 @@ def reduce_programs(design_name: str, num_cores: int, seeds, mute_output: bool =
         with callback_lock:
             if newly_finished_tests > 0 and process_instance_id < len(seeds):
                 for _ in range(newly_finished_tests):
+                    if process_instance_id >= len(seeds):
+                        break
                     if PRINT_THREAD_STATUS:
                         print(f"Starting thread {process_instance_id}.")
                     pool.apply_async(__reduce_program_worker, args=(design_name, seeds[process_instance_id]),callback=test_done_callback)

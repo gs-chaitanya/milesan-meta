@@ -3,7 +3,7 @@ import shutil
 import glob
 import json
 
-from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE
+from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN
 from cascade.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 from cascade.cfinstructionclasses import *
@@ -15,13 +15,27 @@ from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
 from cascade.registers import ABI_INAMES,MAX_32b
 from cascade.spikeresolution import spike_resolution_return_interm
 from drfuzz_mem.spike_sim_taint import spike_sim_taint
+import enum
+import subprocess
+
+class FailTypeEnum(enum.IntEnum):
+    TIMEOUT = enum.auto()
+    VALUE_MISMATCH = enum.auto()
+    TAINT_MISMATCH = enum.auto()
+
 
 class FuzzerStateException(Exception):
-    def __init__(self, *args: object, fuzzerstate) -> None:
+    def __init__(self, *args: object, fuzzerstate, fail_type: FailTypeEnum) -> None:
         super().__init__(*args)
         self.fuzzerstate = fuzzerstate
+        self.fail_type = fail_type
 
-def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None, taint_en: bool = TAINT_EN):   
+class MismatchError(ValueError):
+    def __init__(self, *args: object, fail_type: FailTypeEnum) -> None:
+        super().__init__(*args)
+        self.fail_type = fail_type
+
+def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None, taint_en: bool = TAINT_EN, remove_tmpdirs: bool = not NO_REMOVE_TMPDIRS, leakage_en: bool =True):   
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
         fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN, taint_en) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
@@ -48,14 +62,13 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     
     fuzzerstate.write_imm_t0_to_mem() # Write the immediate taints from the program code to the imem.
     fuzzerstate.dump_memview_t0()
-    
-    regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(env, fuzzerstate.design_name)
-    regstream_rtl_val, regstream_rtl_val_t0 = regstream_rtl
-
-    fuzzerstate.curr_pc = SPIKE_STARTADDR
-    fuzzerstate.privilegestate.privstate = PrivilegeStateEnum.MACHINE
-    regdump_idx = 0
     try:
+        regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(env, fuzzerstate.design_name)
+        regstream_rtl_val, regstream_rtl_val_t0 = regstream_rtl
+
+        fuzzerstate.curr_pc = SPIKE_STARTADDR
+        fuzzerstate.privilegestate.privstate = PrivilegeStateEnum.MACHINE
+        regdump_idx = 0
         for bb_id, bb_instrs in enumerate(fuzzerstate.instr_objs_seq):
             for next_instr in bb_instrs:
                 addr = next_instr.paddr if not USE_MMU else next_instr.vaddr
@@ -123,12 +136,12 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 elif isinstance(last_instr, GenericCSRWriterInstruction) and last_instr.csr_instr.csr_id in (CSR_IDS.SCAUSE, CSR_IDS.MCAUSE):
                     pass
                 else:    
-                    raise ValueError(f"(RTL) Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}")
+                    raise MismatchError(f"(RTL) Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}", fail_type=FailTypeEnum.VALUE_MISMATCH)
 
             if fuzzerstate.taint_en:
                 mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
-                if mismatch:
-                    raise ValueError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}.\n\t Taint allowed in {[p.name for p in fuzzerstate.taint_in_priv]}.")
+                if mismatch and leakage_en:
+                    raise MismatchError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}.\n\t Taint allowed in {[p.name for p in fuzzerstate.taint_in_priv]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
 
         if PRINT_MEMORY_VALIDATION:
             print("*** MEMORY VALIDATION ***:")
@@ -145,12 +158,14 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 print("*** MEMORY CONTENT  ***")
                 fuzzerstate.memview.print_and_compare(final_sramdump_rtl)
         print(f"Failed for seed {seed}")
-        if "There are less" in str(e):
+        if "There are less" in str(e) or "Computed program does not execute" in str(e) or remove_tmpdirs :
             fuzzerstate.remove_tmp_files()
         else:
             fuzzerstate.log(str(e))
-        raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate)
-
+        if isinstance(e, subprocess.CalledProcessError):
+            raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.TIMEOUT)
+        elif isinstance(e, MismatchError):
+            raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=e.fail_type)
     return fuzzerstate
 
 

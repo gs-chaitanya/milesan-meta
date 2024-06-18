@@ -23,10 +23,10 @@ def test_done_callback(ret):
     global total_finished_tests
     with callback_lock:
         newly_finished_tests += 1
-        if(ret):
-            total_finished_tests += 1
-            if PRINT_THREAD_STATUS:
-                print(f"Finished {total_finished_tests} succesful threads.")
+        # if(ret):
+        total_finished_tests += 1
+        if PRINT_THREAD_STATUS:
+            print(f"Finished {total_finished_tests} threads.")
 
 
 def __check_isa_sim_worker(design_name, seed, taint_en):
@@ -76,9 +76,10 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en:
             check_isa_sim_taint(design_name,process_instance_id, taint_en=taint_en)
             process_instance_id += 1
         exit(0)
-    if total_tests != -1:
-        print(f"Starting parallel ISA sim validation on {total_tests} total tests of `{design_name}` on {num_workers} processes.")
-    print(f"Starting parallel ISA sim validation of `{design_name}` on {num_workers} processes. No max number of tests given.")
+    if total_tests == -1:
+        print(f"Starting parallel ISA sim validation of `{design_name}` on {num_workers} threads. No max number of tests given.")
+    else:
+        print(f"Starting parallel ISA sim validation on {total_tests} total tests of `{design_name}` on {num_workers} threads.")
 
     pool = mp.Pool(processes=num_workers)
     for _ in range(num_workers):
@@ -99,8 +100,7 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en:
                     process_instance_id += 1
                 newly_finished_tests = 0
             if total_finished_tests >= total_tests and total_tests != -1:
-                if PRINT_THREAD_STATUS:
-                    print(f"Finished {total_finished_tests} threads. Exiting.")
+                print(f"Finished {total_finished_tests} threads. Exiting.")
                 pool.terminate()
                 exit(0)
 

@@ -25,6 +25,7 @@ if __name__ == '__main__':
 
     design_name = sys.argv[1]
     seed = int(sys.argv[2])
+    leakage_en = int(sys.argv[3]) == 1
 
     hint_left_bound_bb = None
     hint_right_bound_bb = None
@@ -35,22 +36,22 @@ if __name__ == '__main__':
     hint_left_bound_pillar_instr = None
     hint_right_bound_pillar_instr = None
 
-    if len(sys.argv) > 3:
-        hint_left_bound_bb = int(sys.argv[3])
     if len(sys.argv) > 4:
-        hint_right_bound_bb = int(sys.argv[4])
+        hint_left_bound_bb = int(sys.argv[4])
     if len(sys.argv) > 5:
-        hint_left_bound_pillar_bb = int(sys.argv[5])
+        hint_right_bound_bb = int(sys.argv[5])
     if len(sys.argv) > 6:
-        hint_right_bound_pillar_bb = int(sys.argv[6])
+        hint_left_bound_pillar_bb = int(sys.argv[6])
     if len(sys.argv) > 7:
-        hint_left_bound_instr = int(sys.argv[7])
+        hint_right_bound_pillar_bb = int(sys.argv[7])
     if len(sys.argv) > 8:
-        hint_right_bound_instr = int(sys.argv[8])
+        hint_left_bound_instr = int(sys.argv[8])
     if len(sys.argv) > 9:
-        hint_left_bound_pillar_instr = int(sys.argv[9])
+        hint_right_bound_instr = int(sys.argv[9])
     if len(sys.argv) > 10:
-        hint_right_bound_pillar_instr = int(sys.argv[10])
+        hint_left_bound_pillar_instr = int(sys.argv[10])
+    if len(sys.argv) > 11:
+        hint_right_bound_pillar_instr = int(sys.argv[11])
 
 
     # 346864, 'rocket', 232, 75
@@ -67,9 +68,10 @@ if __name__ == '__main__':
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
     profile_get_asid_mask(design_name)
-
+    print(f"Reducing single program with leakage {'enabled' if leakage_en else 'disabled'}.")
     reduce_program(*gen_new_test_instance(design_name,seed,True),
-                    False, check_pc_spike_again=True, taint_en=True, 
+                    False, check_pc_spike_again=True, taint_en=True,
+                    leakage_en=leakage_en, 
                     hint_left_bound_bb=hint_left_bound_bb, 
                     hint_right_bound_bb=hint_right_bound_bb,
                     hint_left_bound_pillar_bb=hint_left_bound_pillar_bb,
