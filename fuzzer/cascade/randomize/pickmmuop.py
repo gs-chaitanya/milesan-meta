@@ -7,8 +7,7 @@ from cascade.mmu_utils import li_doubleword, MODES_PARAM_RV32, MODES_PARAMS_RV64
 from rv.csrids import CSR_IDS
 from rv.asmutil import li_into_reg
 import random
-from cascade.util import BASIC_BLOCK_MIN_SPACE, MmuState, IntRegIndivState
-
+from cascade.util import BASIC_BLOCK_MIN_SPACE, MmuState, IntRegIndivState, ExceptionCauseVal
 #DEBUG_PRINT = True
 
 # @brief checks if we can currently do an MMU operation
@@ -224,6 +223,7 @@ def update_mmu_fsm_rv32(fuzzerstate, curr_addr):
                     fuzzerstate.satp_write_supervisor += 1
                 else:
                     fuzzerstate.satp_write_machine += 1
+
             return [CSRRegInstruction_t0(fuzzerstate,"csrrw", tmp, 0, CSR_IDS.SATP, is_satp_smode=is_satp_smode)]
         else:
             fuzzerstate.target_layout = target_layout
@@ -533,11 +533,20 @@ def gen_satp_write(fuzzerstate, curr_addr):
         if DEBUG_PRINT:
             print("using fence, either, same asid")
         instr_objs.append(SpecialInstruction_t0(fuzzerstate, "sfence.vma", 0, 0, 0))
+        if (fuzzerstate.privilegestate.medeleg_val >> ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT)&1:
+            fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
+        else:
+            fuzzerstate.csrfile.regs[CSR_IDS.MEPC].unreliable = True
+
     # If the old layout was global, we also need an sfence, or the TLB will continue using the old mappings.
     elif fuzzerstate.pagetablestate.layout_is_global[fuzzerstate.target_layout]:
         if DEBUG_PRINT: 
             print(f"layout {fuzzerstate.target_layout} is global, sfence")
         instr_objs.append(SpecialInstruction_t0(fuzzerstate, "sfence.vma", 0, 0, 0)) #TODO we can flush only the old ASID, must have a reg for that
+        if (fuzzerstate.privilegestate.medeleg_val >> ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT)&1 and not is_from_bare:
+            fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
+        else:
+            fuzzerstate.csrfile.regs[CSR_IDS.MEPC].unreliable = True
 
     if GET_DATA:
         fuzzerstate.num_hardcoded_instr_mmufsm += len(instr_objs)

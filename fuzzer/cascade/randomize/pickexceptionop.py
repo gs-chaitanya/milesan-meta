@@ -196,6 +196,10 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
             assert misaligned_tgt_addr + 4 < fuzzerstate.memview_blacklist.memsize
         # Find out the address of the instruction to be created, to make the relative jump
         jal_addr = fuzzerstate.bb_start_addr_seq[-1] + 4*len(fuzzerstate.instr_objs_seq) # NO_COMPRESSED
+        # Misaligned memory accesses trigger a page fault and a misaligned address exception. Their priority and order of 
+        # handling is open to the platform, therefore we can't rely on the STVEC and SCAUSE values.
+        fuzzerstate.csrfile.regs[CSR_IDS.STVEC].unreliable = True
+        fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
         return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, JALInstruction(fuzzerstate, "jal", 0, misaligned_tgt_addr - jal_addr),exception_op_type)
     elif exception_op_type == ExceptionCauseVal.ID_INSTR_ACCESS_FAULT:
         raise NotImplementedError("ID_INSTR_ACCESS_FAULT not yet supported")
@@ -414,16 +418,20 @@ def gen_ppfill_instrs(fuzzerstate):
 
     # rd = fuzzerstate.intregpickstate.pick_int_outputreg()
 
+    n_instr_in_priv, taint_sink_priv = fuzzerstate.compute_context_stats() # TODO: this is unnecessarily expensive
     # Choose the target. It should be a valid target.
     if is_mpp:
-        if not fuzzerstate.design_has_supervisor_mode and not fuzzerstate.design_has_user_mode:
+        if not fuzzerstate.design_has_supervisor_mode and not fuzzerstate.design_has_user_mode or fuzzerstate.real_curr_layout == -1:
             target_privlvl = PrivilegeStateEnum.MACHINE
         elif fuzzerstate.design_has_supervisor_mode and not fuzzerstate.design_has_user_mode:
             target_privlvl = random.choice([PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE])
         elif not fuzzerstate.design_has_supervisor_mode and fuzzerstate.design_has_user_mode:
             target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.MACHINE])
-        else:
-            target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE])
+        else: 
+            if n_instr_in_priv[taint_sink_priv] == 0:
+                target_privlvl = taint_sink_priv
+            else:
+                target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE])
     else:
         if fuzzerstate.design_has_user_mode:
             target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR])
