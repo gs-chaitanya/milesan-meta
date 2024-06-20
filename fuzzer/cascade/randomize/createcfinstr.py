@@ -7,7 +7,7 @@ import numpy as np
 
 from params.runparams import DO_ASSERT, PRINT_FSM_TRANSITIONS
 
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED, NUM_MAX_PRODUCED0_REGS, NUM_MAX_PRODUCED1_REGS
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED, NUM_MAX_PRODUCED0_REGS, NUM_MAX_PRODUCED1_REGS, TAINT_NONTAKEN_BRANCH_IMM, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM
 from params.runparams import GET_DATA
 from cascade.util import IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS, ISAInstrClass
 from cascade.cfinstructionclasses import *
@@ -88,13 +88,13 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
 
-    if n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+    if TAINT_IMMRD_IMM and n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
         imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
         rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
     else:
         imm_t0 = 0
         rd = fuzzerstate.intregpickstate.pick_tainted_int_outputreg()
-
+    
 
     if instr_str == "auipc" and rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
@@ -110,7 +110,7 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
 
-    if n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and  fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+    if TAINT_REGIMM_IMM and n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and  fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
         imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
         rs1 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg()
         rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
@@ -167,8 +167,9 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
             assert is_tolerate_branchpred(fuzzerstate.design_name) or not fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR), f"Chose tainted CL at {hex(curr_addr+imm+SPIKE_STARTADDR)} (plan_taken: {plan_taken}, is_random_data_block_in_reach: {is_random_data_block_in_reach})"
     
     imm_t0 = 0
-    if fuzzerstate.taint_en and not plan_taken and random.random() < 0.5 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
-        imm_t0 = random.randint(0, 1<<curr_param_size)
+    if TAINT_NONTAKEN_BRANCH_IMM:
+        if fuzzerstate.taint_en and not plan_taken and random.random() < 0.5 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+            imm_t0 = random.randint(0, 1<<curr_param_size)
     instr = BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, imm_t0, plan_taken, iscompressed)
     return instr
     
@@ -416,8 +417,8 @@ def create_memop_instrobjs(fuzzerstate, instr_str):
     addr  = fuzzerstate.memview.gen_random_addr_from_randomblock(alignment_bits,min_space,tainted_ok=tainted_ok, not_tainted_ok=not_tainted_ok)
     assert addr is not None
 
-    if not USE_MMU or va_layout == -1: # We don't need 64bit values in bare.
-        assert priv_level == PrivilegeStateEnum.MACHINE, f"We need to be in machine mode to use bare translation."
+    if va_layout == -1: # We don't need 64bit values in bare.
+        assert not USE_MMU or priv_level == PrivilegeStateEnum.MACHINE, f"We need to be in machine mode to use bare translation when the MMU is enabled."
         rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.
         uimm0, uimm1 = li_into_reg(to_unsigned(addr, fuzzerstate.is_design_64bit), False)
         if is_store:

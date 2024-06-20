@@ -8,7 +8,7 @@ import numpy as np
 ##
 # MMU
 ##
-USE_MMU = True
+USE_MMU = False
 
 MAX_NUM_LAYOUTS = 5
 PROBA_ENTANGLE_LAYOUT = 0
@@ -192,6 +192,8 @@ USE_SPIKE_INTERM_ELF = False # When both this and INSERT_REGDUMPS are enabled, t
 TAINT_EN = True # The assumed value for function paramteres.
 P_TAINT_REG = 0.5
 P_TAINT_IN_MACHINE = 1
+if USE_MMU:
+    P_TAINT_IN_MACHINE = 1
 MAX_NUM_INIT_TAINTED_REGS = 5
 
 # There should be at least this number of untainted regs
@@ -230,5 +232,10 @@ USE_TAINT_HW = False
 USE_TAINT_BIN = False
 assert USE_TAINT_TANH or USE_TAINT_BIN or USE_TAINT_HW
 
-INSERT_SPECTRE_GADGETS = True
+INSERT_SPECTRE_GADGETS = False
+# Tainting immediates could taint the pc without executing the instruction e.g. through the BPU.
+TAINT_NONTAKEN_BRANCH_IMM = False
+TAINT_IMMRD_IMM = False
+TAINT_REGIMM_IMM = False
+
 
