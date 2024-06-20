@@ -36,7 +36,7 @@ from cascade.gen_ctxt_final_block import *
 
 import numpy as np
 import random
-CURR_ALLOC_CURSOR_INC = 12 if INSERT_FENCE else 8 if INSERT_REGDUMPS else 4
+CURR_ALLOC_CURSOR_INC = 12 if INSERT_FENCE and INSERT_REGDUMPS else 8 if INSERT_REGDUMPS else 4
 
 # Given the provided control flow instruction, finds a location for a new block, but does not allocate it.
 # @return False if could not find a next bb address
@@ -56,7 +56,9 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     return True
 
 def is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor, required_space: int = BASIC_BLOCK_MIN_SPACE):
-    return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space and fuzzerstate.privilegestate.privstate == fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(curr_alloc_cursor+required_space&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
+    if USE_MMU:
+        return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space and fuzzerstate.privilegestate.privstate == fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(curr_alloc_cursor+required_space&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
+    return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space
 # The first BASIC_BLOCK_MIN_SPACE must be pre-allocated. The rationale is that we want to pre-allocate at least for the first basic block, to prevent the store data from landing exactly there.
 # @return True iff the creation is successful
 def gen_basicblock(fuzzerstate):
