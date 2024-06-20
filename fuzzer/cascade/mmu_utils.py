@@ -416,26 +416,25 @@ class PageTablesGen:
                     # If the page belongs to the final block, also map it for both priveleges.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=True)
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=True)
-                    self.ppn_leaf_to_priv_dict[ppn_leaf] = (PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR)
+                    self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
                 elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.bb_start_addr_seq[0]&PAGE_ALIGNMENT_MASK:
                     # If it is the first basic block, don't map it as it will only be used in machine mode.
                     curr_pte            = 0
                     curr_pte_supervisor = 0
-                    self.ppn_leaf_to_priv_dict[ppn_leaf] = (PrivilegeStateEnum.MACHINE)
+                    self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.MACHINE}
                 else:
                     if ppn_leaf not in self.ppn_leaf_to_priv_dict:
-                        priv = random.choices((PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE))[0] # Dont map any hypervisor
-                        self.ppn_leaf_to_priv_dict[ppn_leaf] = (priv)
-                        # print(f"Mapping {hex(ppn_leaf)} to {priv.name}")
+                        priv = {PrivilegeStateEnum.USER if random.random() < 0.5 else PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE} # Dont map any hypervisor
+                        self.ppn_leaf_to_priv_dict[ppn_leaf] = priv
                     else:
                         priv = self.ppn_leaf_to_priv_dict[ppn_leaf]
-                    if priv == (PrivilegeStateEnum.MACHINE):
+                    if priv == {PrivilegeStateEnum.MACHINE}:
                         curr_pte = 0 # If this page is an executable page for machine mode, don't map it
                         curr_pte_supervisor = 0
                     else:
                         # Otherwise, map it for both user and supervisor with the right privileges.
-                        curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=priv == PrivilegeStateEnum.USER, is_executable=True)
-                        curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user= priv == PrivilegeStateEnum.USER, is_executable=True)
+                        curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user = PrivilegeStateEnum.USER in priv, is_executable=True)
+                        curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user = PrivilegeStateEnum.USER in priv, is_executable=True)
                 curr_layout_pt_content.append(curr_pte)
                 curr_layout_pt_content_supervisor.append(curr_pte_supervisor)
                 ppn_leaf += self.page_size_per_layout[layout_id]

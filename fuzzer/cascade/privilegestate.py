@@ -200,3 +200,4 @@ def is_ready_to_descend_privileges(fuzzerstate):
             (fuzzerstate.privilegestate.is_stvec_populated or ((~fuzzerstate.privilegestate.medeleg_val) & fuzzerstate.privilegestate.gen_takable_exception_mask(fuzzerstate)))
     else:
         raise NotImplementedError("Unknown privilege state: " + str(fuzzerstate.privilegestate.privstat))
+

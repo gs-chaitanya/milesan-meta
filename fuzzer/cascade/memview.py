@@ -151,7 +151,7 @@ class MemoryView:
             picked_addr = random.randrange((left_bound+(1 << alignment_bits)-1) >> alignment_bits, ((right_bound-min_space) >> alignment_bits)) << alignment_bits
             cl_addr = picked_addr - picked_addr%self.cl_size
             if min_space == 0 or self.is_mem_range_free(cl_addr, picked_addr+min_space+self.cl_size) and \
-                 (priv == PrivilegeStateEnum.MACHINE or not USE_MMU or priv == self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(picked_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]): # is_mem_range_free returns False if it goes beyond the memory boundaries.
+                 (priv == PrivilegeStateEnum.MACHINE or not USE_MMU or priv in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(picked_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]): # is_mem_range_free returns False if it goes beyond the memory boundaries.
                 if DO_ASSERT:
                     assert picked_addr >= 0
                     assert picked_addr + min_space <= self.memsize

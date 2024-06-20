@@ -57,7 +57,7 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
 
 def is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor, required_space: int = BASIC_BLOCK_MIN_SPACE):
     if USE_MMU:
-        return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space and fuzzerstate.privilegestate.privstate == fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(curr_alloc_cursor+required_space&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
+        return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space and fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(curr_alloc_cursor+required_space&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
     return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space
 # The first BASIC_BLOCK_MIN_SPACE must be pre-allocated. The rationale is that we want to pre-allocate at least for the first basic block, to prevent the store data from landing exactly there.
 # @return True iff the creation is successful

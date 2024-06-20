@@ -56,7 +56,7 @@ class FuzzerState:
         if taint_en:
             self.random_data_block_has_taint = {} # Is true if the random data block at that page can have taint.
             if USE_MMU:
-                self.taint_in_priv = {random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR])} # Subset of priveleges has access to tainted data.
+                self.taint_in_priv = {PrivilegeStateEnum.USER if random.random() < 0.5 else PrivilegeStateEnum.SUPERVISOR} # Subset of priveleges has access to tainted data.
             else: 
                 self.taint_in_priv = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
             if random.random() < P_TAINT_IN_MACHINE:

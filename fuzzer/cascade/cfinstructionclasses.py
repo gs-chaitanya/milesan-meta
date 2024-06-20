@@ -147,7 +147,7 @@ class BaseInstruction:
             self.vaddr = None
             self.va_layout = -1
         if USE_MMU and DO_ASSERT:
-            assert self.priv_level == PrivilegeStateEnum.MACHINE or self.priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(self.paddr&PAGE_ALIGNMENT_MASK)], f"{self.get_str()} cannot be stored in physical page reserved for {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(self.paddr&PAGE_ALIGNMENT_MASK)].name} at page addr {hex(self.paddr&PAGE_ALIGNMENT_MASK)}."
+            assert self.priv_level == PrivilegeStateEnum.MACHINE or self.priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(self.paddr&PAGE_ALIGNMENT_MASK)], f"{self.get_str()} cannot be stored in physical page reserved for {[p.name for p in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(self.paddr&PAGE_ALIGNMENT_MASK)]]} at page addr {hex(self.paddr&PAGE_ALIGNMENT_MASK)}."
 
     def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         print(self.get_str(is_spike_resolution))
