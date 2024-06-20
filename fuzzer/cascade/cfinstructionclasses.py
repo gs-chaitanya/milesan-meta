@@ -104,14 +104,16 @@ def filter_reg_traceback(reg_id, addr, fuzzerstate, correct_val, is_spike_resolu
 class BaseInstruction:
     fuzzerstate = None
     paddr = None
-    if USE_MMU:
-        vaddr = None
+    vaddr = None
     instr_str = None
     instr_type = CFInstructionClass.NONE
     instr_func = None
     instr_func_t0 = None
     priv_level = None
-    va_layout = None
+    if USE_MMU:
+        va_layout = -1
+    else:
+        va_layout = None
 
     def __init__(self, fuzzerstate, instr_str):
         assert fuzzerstate is not None
@@ -129,29 +131,36 @@ class BaseInstruction:
                 last_instr = self.fuzzerstate.instr_objs_seq[-1][-1] # We need the layout from the previous instruction
             else: # In case it's the first instruction of a block.
                 last_instr = self.fuzzerstate.instr_objs_seq[-2][-1] # We need the layout from the previous instruction
-
             self.va_layout, self.priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
-        
+
         if DO_ASSERT:
+            assert self.priv_level is not None
+            assert self.va_layout is not None
             if self.va_layout == -1:
-                assert self.priv_level == PrivilegeStateEnum.MACHINE, f"Need to be in MACHINE mode to use bare translation."
+                assert not USE_MMU or self.priv_level == PrivilegeStateEnum.MACHINE, f"We need to be in machine mode to use bare translation when the MMU is enabled."
             if self.priv_level == PrivilegeStateEnum.MACHINE:
                 assert self.va_layout == -1,  f"Need to use bare translation when in MACHINE mode."
-
         self.paddr = self.fuzzerstate.curr_bb_start_addr + 4*len(self.fuzzerstate.instr_objs_seq[-1]) + SPIKE_STARTADDR
-        self.vaddr = phys2virt(self.paddr, self.priv_level, self.va_layout,self.fuzzerstate,absolute_addr=False)
-
-        if DO_ASSERT:
-            assert self.priv_level == PrivilegeStateEnum.MACHINE or self.priv_level == self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(self.paddr&PAGE_ALIGNMENT_MASK)], f"{self.get_str()} cannot be stored in physical page reserved for {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(self.paddr&PAGE_ALIGNMENT_MASK)].name} at page addr {hex(self.paddr&PAGE_ALIGNMENT_MASK)}."
+        if USE_MMU:
+            self.vaddr = phys2virt(self.paddr, self.priv_level, self.va_layout,self.fuzzerstate,absolute_addr=False)
+        else:
+            self.vaddr = None
+            self.va_layout = -1
+        if USE_MMU and DO_ASSERT:
+            assert self.priv_level == PrivilegeStateEnum.MACHINE or self.priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(self.paddr&PAGE_ALIGNMENT_MASK)], f"{self.get_str()} cannot be stored in physical page reserved for {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(self.paddr&PAGE_ALIGNMENT_MASK)].name} at page addr {hex(self.paddr&PAGE_ALIGNMENT_MASK)}."
 
     def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         print(self.get_str(is_spike_resolution))
 
     def get_preamble(self):
-        if self.priv_level is not None and self.va_layout is not None and self.paddr is not None and self.vaddr is not None:
-            return f"({self.priv_level.name[0]}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}"
+        if USE_MMU:
+            if self.priv_level is not None and self.va_layout is not None and self.paddr is not None and self.vaddr is not None:
+                return f"({self.priv_level.name[0]}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}"
+            else:
+                return "(Undetermined)"
         else:
-            return "(Undetermined)"
+            return f"({self.priv_level.name[0]}): {hex(self.paddr)}"
+
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{self.get_preamble()}: {self.instr_str}"
 
@@ -655,7 +664,7 @@ class RegdumpInstruction(IntStoreInstruction):
         else:
             return super().gen_bytecode_int(is_spike_resolution)
 
-    def get_str(self, is_spike_resolution):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         if not is_spike_resolution:
             return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
         else:

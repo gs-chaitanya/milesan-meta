@@ -169,6 +169,33 @@ class ImmInstruction_t0(CFInstruction_t0):
         # else:
         #     print(f"{self.get_str()} reduces taint.")
 
+    def assert_imm_size(self):
+        if DO_ASSERT:
+            assert hasattr(self, 'imm')
+            if self.fuzzerstate.is_design_64bit:
+                curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[self.instr_str]][-1]
+            else:
+                curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[self.instr_str]][-1]
+            if PARAM_IS_SIGNED[INSTRUCTION_IDS[self.instr_str]][-1]:
+                assert self.imm >= -(1<<(curr_param_size-1)), f"{hex(self.imm)} not within paramsize: (signed, {curr_param_size})"
+                assert self.imm <  1<<(curr_param_size-1),  f"{hex(self.imm)} not within paramsize: (signed, {curr_param_size})"
+            else:
+                assert self.imm >= 0
+                assert self.imm <  1<<curr_param_size, f"{hex(self.imm)} not within paramsize: (unsigned, {curr_param_size})"
+
+
+            assert hasattr(self, 'imm_t0')
+            if self.fuzzerstate.is_design_64bit:
+                curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[self.instr_str]][-1]
+            else:
+                curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[self.instr_str]][-1]
+            if PARAM_IS_SIGNED[INSTRUCTION_IDS[self.instr_str]][-1]:
+                assert self.imm_t0 >= -(1<<(curr_param_size-1)), f"{hex(self.imm_t0)} not within paramsize: (signed, {curr_param_size})"
+                assert self.imm_t0 <  1<<(curr_param_size-1),  f"{hex(self.imm_t0)} not within paramsize: (signed, {curr_param_size})"
+            else:
+                assert self.imm_t0 >= 0
+                assert self.imm_t0 <  1<<curr_param_size, f"{hex(self.imm_t0)} not within paramsize: (unsigned, {curr_param_size})"
+
 ###
 # Concrete classes with taint: integers
 ###
@@ -727,11 +754,15 @@ class RegdumpInstruction_t0(IntStoreInstruction_t0):
         else:
             return super().gen_bytecode_int(is_spike_resolution)
 
-    def get_str(self, is_spike_resolution, color_taint: bool = PRINT_COLOR_TAINT):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = PRINT_COLOR_TAINT):
+        assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"Regdump register is tainted, this should not happen."
         if not is_spike_resolution:
-            return f"{hex(self.paddr)}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
+            if self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0():
+                return f"{self.get_preamble()}: {self.instr_str} " + CRED +  ABI_INAMES[self.rs2] + CEND + f", {self.imm}({ABI_INAMES[self.rs1]})"
+            else:
+                return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
         else:
-            return f"{hex(self.paddr)}: nop"
+            return f"{self.get_preamble()}: nop"
 
     def check_regs_t0(self,val_t0):
         assert self.fuzzerstate.taint_en
@@ -747,6 +778,7 @@ class RegdumpInstruction_t0(IntStoreInstruction_t0):
         assert not mismatch, f"{hex(self.paddr)}: {self.instr_str}: (Regdump) Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.paddr,self.fuzzerstate,val,False).get_str(False)}"
 
     def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+        assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"Regdump register is tainted, this should not happen."
         if is_spike_resolution:
             self.fuzzerstate.advance_minstret()
         else:
@@ -875,7 +907,7 @@ class CSRImmInstruction_t0(CSRImmInstruction, RDInstruction_t0):
 
 # Used to check if a register dump should be inserted after instruction in Fuzzerstate::appen_and_execute if enabled.
 def has_taint_trace(obj):
-    return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0, CSRImmInstruction_t0, CSRRegInstruction_t0)) and obj.instr_str != "auipc"
+    return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0, CSRImmInstruction_t0, CSRRegInstruction_t0)) and not isinstance(obj, SpeculativeInstructionEncapsulator)
 
 class MstatusWriterInstruction_t0(MstatusWriterInstruction, BaseInstruction_t0):
     def __init__(self, rd: int, rs1: int, producer_id: int, instr_str: str, mstatus_mask: int, old_sum_mprv=...):

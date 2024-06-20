@@ -4,7 +4,8 @@ from cascade.randomize.createcfinstr import create_instr
 from cascade.spikeresolution import get_current_layout
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 from cascade.util import ISAInstrClass
-import random
+
+
 # @params: create_cf_ambigous_instrs: function that returns a list of instructions that redirect the control flow e.g. a taken branch, jalr et.c
 def _create_spectre_gadget_instrobjs(fuzzerstate, instr_str):
     load_str = None
@@ -54,8 +55,8 @@ def _create_spectre_gadget_instrobjs(fuzzerstate, instr_str):
     store_addr  = fuzzerstate.memview.gen_random_addr_from_randomblock(store_alignment_bits,256,tainted_ok=False, not_tainted_ok=True)
     assert store_addr is not None
     instr_objs = []
-    if not USE_MMU or va_layout == -1: # We don't need 64bit values in bare.
-        assert priv_level == PrivilegeStateEnum.MACHINE, f"We need to be in machine mode to use bare translation."
+    if va_layout == -1: # We don't need 64bit values in bare.
+        assert not USE_MMU or priv_level == PrivilegeStateEnum.MACHINE, f"We need to be in machine mode to use bare translation when the MMU is enabled."
         rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.
         (rs1,rs2) = fuzzerstate.intregpickstate.pick_tainted_int_inputregs(n=2,force = False) # Chose some tainted regs to leak via cache.
         # In machine mode, we just try to leak some tainted register speculatively by using it to index into an array that is accessible from any privelege.
@@ -77,13 +78,13 @@ def _create_spectre_gadget_instrobjs(fuzzerstate, instr_str):
         
         # Preparing the load addr to load from a tainted memory region, if we are not in a privilege that has access to tainted data.
         if priv_level not in fuzzerstate.taint_in_priv:
-            (rd1,rd2,tmp) = fuzzerstate.intregpickstate.pick_untainted_int_outputregs_nonzero(3,force = False) # Rd and tmp will be untainted after execution.
+            (rd1,rd2,tmp) = fuzzerstate.intregpickstate.pick_untainted_int_outputregs_nonzero(3,force = False)
             rs2 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg(force = False, authorize_sideeffects= False, allow_zero = False) # we will load tainted data into rs2
             load_addr = phys2virt(load_addr, priv_level, va_layout, fuzzerstate,absolute_addr=True)
             instr_objs += li_doubleword(load_addr, rd1, tmp, fuzzerstate) # rd1 has the load address 
         else:
             (rd2,tmp) = fuzzerstate.intregpickstate.pick_untainted_int_outputregs_nonzero(2,force = False) # Rd and tmp will be untainted after execution.
-            rs2 = fuzzerstate.intregpickstate.pick_tainted_int_outputreg(force = False, authorize_sideeffects= False, allow_zero = False) # we will load tainted data into rs2
+            rs2 = fuzzerstate.intregpickstate.pick_tainted_int_outputreg(force = False, authorize_sideeffects= False, allow_zero = False)
         # Prepare the store address.
         store_addr = phys2virt(store_addr, priv_level, va_layout,fuzzerstate,absolute_addr=True)
         instr_objs += li_doubleword(load_addr, rd2, tmp, fuzzerstate) # rd2 holds the store address
@@ -92,7 +93,7 @@ def _create_spectre_gadget_instrobjs(fuzzerstate, instr_str):
 
         if priv_level not in fuzzerstate.taint_in_priv:
             instr_objs += [SpeculativeInstructionEncapsulator(fuzzerstate, IntLoadInstruction_t0(fuzzerstate, load_str, rs2, rd1, 0x0, None))]  # Speculatively load tainted data into rs2 if we are in a privelege mode that cannot access tainted data.
-
+        
         instr_objs += [
                 SpeculativeInstructionEncapsulator(fuzzerstate, RegImmInstruction_t0(fuzzerstate,"andi",rs2,rs2,0xFF)), # mask out single byte
                 SpeculativeInstructionEncapsulator(fuzzerstate, R12DInstruction_t0(fuzzerstate, "add", rd2, rd2, rs2)), # add tainted offset to rd2

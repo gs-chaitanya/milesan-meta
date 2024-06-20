@@ -55,7 +55,10 @@ class FuzzerState:
         self.random_data_block_ranges = []
         if taint_en:
             self.random_data_block_has_taint = {} # Is true if the random data block at that page can have taint.
-            self.taint_in_priv = {random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR])} # Subset of priveleges has access to tainted data.
+            if USE_MMU:
+                self.taint_in_priv = {random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR])} # Subset of priveleges has access to tainted data.
+            else: 
+                self.taint_in_priv = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
             if random.random() < P_TAINT_IN_MACHINE:
                 self.taint_in_priv.add(PrivilegeStateEnum.MACHINE)
         # For benchmarks
@@ -351,15 +354,17 @@ class FuzzerState:
         if insert_regdump: # TODO for vaddr, we need to bring the REGDUMP_REGISTER to the appropriate state for each layout.
             if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS:
                 store_instr = RegdumpInstruction_t0(self,"sd" if self.is_design_64bit else "sw", REGDUMP_REGISTER_ID, instr.rd,0,-1)
-                store_instr.execute(taint_en=self.taint_en, is_spike_resolution=True)
+                store_instr.reset_addr()
                 if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
                     store_instr.print(is_spike_resolution=True)
+                store_instr.execute(taint_en=self.taint_en, is_spike_resolution=True)
                 self.instr_objs_seq[-1].append(store_instr)
                 if INSERT_FENCE:
                     fence_instr = SpecialInstruction_t0(self,"fence")
-                    fence_instr.execute(taint_en=False, is_spike_resolution=True)
+                    fence_instr.reset_addr()
                     if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
                         fence_instr.print(is_spike_resolution=True)
+                    fence_instr.execute(taint_en=False, is_spike_resolution=True)
                     self.instr_objs_seq[-1].append(fence_instr)
                     return 12
                 return 8
@@ -564,7 +569,7 @@ class FuzzerState:
                 print({p.name:v for p,v in n_instr_in_priv.items()})
 
         forbidden_priv = list(set(list(PrivilegeStateEnum))-set(self.taint_in_priv))[0]
-        return n_instr_in_priv[forbidden_priv]
+        return n_instr_in_priv, forbidden_priv
 
     def log(self, log_msg):
         with open(f"{self.tmp_dir}/log.txt", "a") as f:

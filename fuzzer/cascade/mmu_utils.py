@@ -338,6 +338,7 @@ class PageTablesGen:
     # @brief populate the mmu pte list with the value of the PTE for all layouts to write them already initialized in memory
     # the program can later modify these lists to trigger page faults, etc 
     def gen_pt_in_mem(self, fuzzerstate):
+        from cascade.finalblock import get_finalblock_max_size
         curr_layout_pt_content      = []
         ppn_leaf                    = 0
 
@@ -398,7 +399,7 @@ class PageTablesGen:
             curr_layout_pt_content, curr_layout_pt_content_supervisor = [], []
             if DEBUG_PRINT:
                 print(f"Generating {self.n_entries_per_level[layout_id][-1]} leaves for layout {layout_id}")
-            priv = PrivilegeStateEnum.MACHINE
+            # priv = PrivilegeStateEnum.MACHINE
             for _ in range(self.n_entries_per_level[layout_id][-1]):
                 # Make user and supervisor
                 is_random_data_block = ppn_leaf-SPIKE_STARTADDR in [addr[0] for addr in fuzzerstate.random_data_block_ranges]
@@ -411,8 +412,8 @@ class PageTablesGen:
                     # If it is a random data block without taint, map it to both privileges. It will be a shared memory, where only untainted data can be written to.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=False)
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=False)
-                elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.final_bb_base_addr&PAGE_ALIGNMENT_MASK:
-                    # If it is the final block, also map it for both priveleges.
+                elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.final_bb_base_addr&PAGE_ALIGNMENT_MASK or ppn_leaf - SPIKE_STARTADDR == ((fuzzerstate.final_bb_base_addr+get_finalblock_max_size())&PAGE_ALIGNMENT_MASK) :
+                    # If the page belongs to the final block, also map it for both priveleges.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=True)
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=True)
                     self.ppn_leaf_to_priv_dict[ppn_leaf] = (PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR)
@@ -424,11 +425,11 @@ class PageTablesGen:
                 else:
                     if ppn_leaf not in self.ppn_leaf_to_priv_dict:
                         priv = random.choices((PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE))[0] # Dont map any hypervisor
-                        self.ppn_leaf_to_priv_dict[ppn_leaf] = priv
+                        self.ppn_leaf_to_priv_dict[ppn_leaf] = (priv)
                         # print(f"Mapping {hex(ppn_leaf)} to {priv.name}")
                     else:
                         priv = self.ppn_leaf_to_priv_dict[ppn_leaf]
-                    if priv == PrivilegeStateEnum.MACHINE:
+                    if priv == (PrivilegeStateEnum.MACHINE):
                         curr_pte = 0 # If this page is an executable page for machine mode, don't map it
                         curr_pte_supervisor = 0
                     else:
