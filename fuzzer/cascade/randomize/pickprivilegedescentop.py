@@ -34,7 +34,7 @@ def gen_priv_descent_instr(fuzzerstate):
 
     # If there should not be any taint propagation from the privelege we're in to the one we are returning to.
     if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and fuzzerstate.privilegestate.curr_mstatus_mpp not in fuzzerstate.taint_in_priv:
-        instr_objs += clear_taints_with_random_instructions(fuzzerstate)
+        instr_objs += clear_taints_with_random_instructions(fuzzerstate) # TODO: make sure we have space for the extra instructions.
 
     # Invalidate the corresponding epc and update the current privilege level.
     # Do not update or invalidate mpp/spp bits.
