@@ -205,7 +205,8 @@ def sll(a: int, b: int,  is_design_64bit: bool):
     return a<<shamt
 
 def sll_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
-    if b_t0&(0x3f if is_design_64bit else 0x1f):
+    # if b_t0&(0x3f if is_design_64bit else 0x1f):
+    if b_t0: # overaproximate
         return MAX_64b if is_design_64bit else MAX_32b
     else:
         return sll(a_t0, b, is_design_64bit)
@@ -225,7 +226,7 @@ def sll_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
         y_t0 |= left_side&right_side
     
     y_t0 &= MAX_64b if is_design_64bit else MAX_32b
-    print(f"a: {hex(a)}, a_t0: {hex(a_t0)}, b: {hex(b)}, b_t0: {hex(b_t0)}")
+    # print(f"a: {hex(a)}, a_t0: {hex(a_t0)}, b: {hex(b)}, b_t0: {hex(b_t0)}")
     return y_t0
 
 def slt(a: int, b: int, is_design_64bit: bool):
@@ -323,10 +324,9 @@ def srl(a: int, b: int,  is_design_64bit: bool):
     return a>>shamt
 
 def srl_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
-    if b_t0&(0x3f if is_design_64bit else 0x1f):
+    # if b_t0&(0x3f if is_design_64bit else 0x1f):
+    if b_t0: # overaproximate
         return MAX_64b if is_design_64bit else MAX_32b
-    elif b_t0 and not (a or a_t0):
-        return 0x0
     else:
         return srl(a_t0,b, is_design_64bit)
 
@@ -358,7 +358,8 @@ def sra(a: int, b: int, is_design_64bit: bool):
 
 
 def sra_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
-    if b_t0&(0x3F if is_design_64bit else 0x1F):
+    # if b_t0&(0x3F if is_design_64bit else 0x1F):
+    if b_t0: # overaproximate
         return MAX_64b if is_design_64bit else MAX_32b
     else:
         return sra(a_t0, b, is_design_64bit)
@@ -367,7 +368,10 @@ def or_(a: int, b: int, is_design_64bit: bool):
     return a | b
 
 def conj(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
-    return a_t0 | b_t0
+    return sign_extend(a_t0,32,is_design_64bit) | sign_extend(b_t0,32,is_design_64bit)
+
+def conji(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    return sign_extend(a_t0,32,is_design_64bit) | sign_extend(imm_t0,12,is_design_64bit)
 
 def or_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
     a_t0_and_b_t0 = a_t0 & b_t0 # Can change value since both sides tainted
@@ -481,7 +485,7 @@ def lui(pc: int, imm: int, is_design_64bit: bool):
     if is_design_64bit:
         msb = (res>>31)&1
         res |= (MAX_64b^MAX_32b)*msb
-    return res
+    return res&(MAX_64b if is_design_64bit else MAX_32b)
     
 def lui_t0(pc: int, pc_t0: int,  imm: int, imm_t0: int, is_design_64bit: bool):
     return lui(0x0, imm_t0, is_design_64bit)
@@ -497,14 +501,15 @@ def auipc(pc: int, imm: int, is_design_64bit: bool):
 
 def auipc_t0(pc: int, pc_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     uimm = to_unsigned(imm, is_design_64bit) & 0xFFFFF # 20 bit immediate
+    uimm = uimm << 12
     uimm_t0 = to_unsigned(imm_t0, is_design_64bit) & 0xFFFFF # 20 bit immediate
-    n_bits = 64 if is_design_64bit else 32
-    mask = (MAX_64b<<n_bits)&MAX_64b # extend to 64 bits
-    uimm = (uimm & 0xFFFFF) << 12
-    uimm_t0 = (uimm_t0 & 0xFFFFF) << 12
+    uimm_t0 = uimm_t0 << 12
+    if is_design_64bit:
+        msb = (uimm_t0>>31)&1
+        uimm_t0 |= (MAX_64b^MAX_32b)*msb
+
     res_t0 = add_t0(pc, pc_t0, uimm, uimm_t0, is_design_64bit)
-    msb = (res_t0>>(n_bits-1))&1
-    return (res_t0 | (mask*msb))
+    return res_t0
 
 ## JAL and JALR ##
 def jal(pc: int, imm: int, is_design_64bit: bool):
@@ -700,15 +705,15 @@ INSTR_FUNCS_T0 = {
     "or": or_t0 if not OR_CONJ else conj,
     "and": and_t0 if not AND_CONJ else conj,
     # immediate instructions
-    "addi": addi_t0 if not ADDI_CONJ else conj,
-    "slli": slli_t0_imprecise if SLL_IMPRECISE else conj if SLL_CONJ else slli_t0_precise,
-    "slti": slti_t0 if not SLTI_CONJ else conj,
-    "sltiu": sltiu_t0 if not SLTI_CONJ else conj,
-    "xori": xori_t0 if not XORI_CONJ else conj,
-    "srli": srli_t0_imprecise if SRL_IMPRECISE else conj if SRL_IMPRECISE else srl_t0_precise,
-    "srai": srai_t0 if not SRAI_CONJ else conj,
-    "ori": ori_t0 if not ORI_CONJ else conj,  
-    "andi": andi_t0 if not ANDI_CONJ else conj,
+    "addi": addi_t0 if not ADDI_CONJ else conji,
+    "slli": slli_t0_imprecise if SLL_IMPRECISE else conji if SLL_CONJ else slli_t0_precise,
+    "slti": slti_t0 if not SLTI_CONJ else conji,
+    "sltiu": sltiu_t0 if not SLTI_CONJ else conji,
+    "xori": xori_t0 if not XORI_CONJ else conji,
+    "srli": srli_t0_imprecise if SRL_IMPRECISE else conji if SRL_IMPRECISE else srl_t0_precise,
+    "srai": srai_t0 if not SRAI_CONJ else conji,
+    "ori": ori_t0 if not ORI_CONJ else conji,  
+    "andi": andi_t0 if not ANDI_CONJ else conji,
     "lui": lui_t0,
     "auipc": auipc_t0,
     # jal and jalr
@@ -716,9 +721,9 @@ INSTR_FUNCS_T0 = {
     "jalr": jalr_t0,
     # placeholder instructions
     "lui (PlaceholderProducerInstr0)": lui_t0,
-    "addi (PlaceholderProducerInstr1)": addi_t0 if not ADDI_CONJ else conj,
-    "and (PlaceholderPreConsumerInstr)": and_t0 if not AND_CONJ else conj,
-    "xor (PlaceholderConsumerInstr)": xor_t0 if not XOR_CONJ else conj,
+    "addi (PlaceholderProducerInstr1)": addi_t0 if not ADDI_CONJ else conji,
+    "and (PlaceholderPreConsumerInstr)": and_t0 if not AND_CONJ else conji,
+    "xor (PlaceholderConsumerInstr)": xor_t0 if not XOR_CONJ else conji,
     # load and store instructions, no taint function as we dont allow tainted operands for address computation.
     "lb": lb_t0,
     "lh": lh_t0,
