@@ -10,7 +10,7 @@ from common.spike import SPIKE_STARTADDR
 from cascade.basicblock import gen_basicblocks
 from cascade.finalblock import finalblock
 from cascade.mmu_utils import phys2virt
-from cascade.cfinstructionclasses import filter_reg_traceback, is_placeholder
+from cascade.cfinstructionclasses import filter_reg_traceback, is_placeholder, SpeculativeInstructionEncapsulator
 from cascade.cfinstructionclasses_t0 import JALInstruction_t0, RegImmInstruction_t0, JALRInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0, R12DInstruction_t0, BranchInstruction_t0
 from cascade.fuzzsim import SimulatorEnum, runtest_simulator
 from cascade.spikeresolution import gen_elf_from_bbs, gen_regdump_reqs_reduced, gen_ctx_regdump_reqs, run_trace_regs_at_pc_locs, spike_resolution, gen_regdump_reqs_all_rds
@@ -251,11 +251,13 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
         assert index_first_bb_to_consider >= 0
         assert index_first_bb_to_consider <= max_bb_id_to_consider or max_bb_id_to_consider == 0, f"index_first_bb_to_consider: `{index_first_bb_to_consider}`, max_bb_id_to_consider: `{max_bb_id_to_consider}`"
 
+    max_instr_id_except_speculative = len([instr for instr in fuzzerstate.instr_objs_seq[max_bb_id_to_consider] if not isinstance(instr, SpeculativeInstructionEncapsulator)])
+
     if max_bb_id_to_consider == 0:
         return False
     if max_instr_id_except_cf is None:
         max_instr_id_except_cf = len(fuzzerstate.instr_objs_seq[max_bb_id_to_consider])
-
+        # print(f"max_instr_id_except_cf: {max_instr_id_except_cf}, {fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf-1].get_str()}")
     if DO_ASSERT:
         if max_instr_id_except_cf is not None:
             assert max_instr_id_except_cf >= -1, f"Expected max_instr_id_except_cf `{max_instr_id_except_cf}` >= -1"  # if -1, then it means that we only want the CF instruction.
@@ -285,42 +287,56 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     # Remove the last instructions in the last basic block
     ###
 
-    # Pop intermediate instructions if required
-    if max_instr_id_except_cf < len(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider]):
-        last_addr_layout, last_addr_priv = get_last_bb_layout_and_priv(test_fuzzerstate, max_bb_id_to_consider, max_instr_id_except_cf + 1, True)
-        gen_ctxt_finalbock(last_addr_priv, last_addr_layout, test_fuzzerstate, max_bb_id_to_consider, max_instr_id_except_cf)
-
-        curr_addr = test_fuzzerstate.bb_start_addr_seq[max_bb_id_to_consider] + (max_instr_id_except_cf+1) * 4 # NO_COMPRESSED
-        new_jal = JALInstruction_t0(test_fuzzerstate, "jal", 0, test_fuzzerstate.final_bb_base_addr-curr_addr)
-        old_jal = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1]
-        new_jal.paddr = old_jal.paddr
-        new_jal.priv_level = old_jal.priv_level
+    # Pop intermediate cf-instructions if required 
+    if max_instr_id_except_cf < max_instr_id_except_speculative:
+        # last_addr_layout, last_addr_priv = get_last_bb_layout_and_priv(test_fuzzerstate, max_bb_id_to_consider, max_instr_id_except_cf + 1, True)
+        last_instr = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1]
+        new_jal = JALInstruction_t0(test_fuzzerstate, "jal", 0, test_fuzzerstate.final_bb_base_addr-last_instr.paddr+SPIKE_STARTADDR)
+        # print(f"Replacig {last_instr.get_str()} with {new_jal.get_str()}")
+        new_jal.paddr = last_instr.paddr
+        new_jal.priv_level = last_instr.priv_level
         if USE_MMU:
-            new_jal.vaddr = old_jal.vaddr
-            new_jal.va_layout = old_jal.va_layout
+            new_jal.vaddr = last_instr.vaddr
+            new_jal.va_layout = last_instr.va_layout
+
+        last_addr_layout = last_instr.va_layout
+        last_addr_priv = last_instr.priv_level
+        gen_ctxt_finalbock(last_addr_priv, last_addr_layout, test_fuzzerstate, max_bb_id_to_consider, max_instr_id_except_cf)
 
         test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1] = new_jal
         test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
         test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider] = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][:max_instr_id_except_cf+2]
-    else:
-        last_addr_layout, last_addr_priv = get_last_bb_layout_and_priv(test_fuzzerstate, max_bb_id_to_consider, -1, True)
-        gen_ctxt_finalbock(last_addr_priv, last_addr_layout, test_fuzzerstate, max_bb_id_to_consider, -1)
+    
+    # Pop speculative instructions. We don't need a new JAL as we can use the original jump/branch.
+    elif max_instr_id_except_cf < len(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider]):
+        assert max_instr_id_except_cf >=  max_instr_id_except_speculative
+        last_instr = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1]
+        assert isinstance(last_instr, SpeculativeInstructionEncapsulator)
+        last_addr_layout = old_jal.va_layout
+        last_addr_priv = old_jal.priv_level
+        gen_ctxt_finalbock(last_addr_priv, last_addr_layout, test_fuzzerstate, max_bb_id_to_consider, max_instr_id_except_cf)
+        test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
+        test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider] = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][:max_instr_id_except_cf+2]
 
-        curr_addr = test_fuzzerstate.bb_start_addr_seq[max_bb_id_to_consider] + (len(test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider])-1) * 4 # NO_COMPRESSED
-        new_jal = JALInstruction_t0(test_fuzzerstate, "jal", 0, test_fuzzerstate.final_bb_base_addr-curr_addr)
-        old_jal = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1]
+    else:
+        # last_addr_layout, last_addr_priv = get_last_bb_layout_and_priv(test_fuzzerstate, max_bb_id_to_consider, -1, True)
+        old_jal = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_speculative-1]
+        new_jal = JALInstruction_t0(test_fuzzerstate, "jal", 0, test_fuzzerstate.final_bb_base_addr-old_jal.paddr+SPIKE_STARTADDR)
+        # print(f"Replacig {old_jal.get_str()} with {new_jal.get_str()}")
         new_jal.paddr = old_jal.paddr
         new_jal.priv_level = old_jal.priv_level
         if USE_MMU:
             new_jal.vaddr = old_jal.vaddr
             new_jal.va_layout = old_jal.va_layout
+        last_addr_layout = old_jal.va_layout
+        last_addr_priv = old_jal.priv_level
+        gen_ctxt_finalbock(last_addr_priv, last_addr_layout, test_fuzzerstate, max_bb_id_to_consider, -1)
 
-        test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1] = new_jal
+        test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_speculative-1] = new_jal
         test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
     
     test_fuzzerstate.bb_start_addr_seq = test_fuzzerstate.bb_start_addr_seq[:max_bb_id_to_consider+1]
 
-    # print(f"Swapping {old_jal.get_str()} for {new_jal.get_str()}")
 
     ###
     # Remove the first basic blocks and instructions
@@ -340,7 +356,7 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     # Generate the ELF for RTL
     ###
 
-    regdump_reqs = gen_regdump_reqs_reduced(test_fuzzerstate, max_bb_id_to_consider, max_instr_id_except_cf+1, index_first_bb_to_consider, index_first_instr_to_consider)
+    regdump_reqs = gen_regdump_reqs_reduced(test_fuzzerstate, max_bb_id_to_consider, min(max_instr_id_except_cf, max_instr_id_except_speculative)+1, index_first_bb_to_consider, index_first_instr_to_consider)
 
     # Generate the translate last address
     final_addr = phys2virt((test_fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR), last_addr_priv, last_addr_layout, test_fuzzerstate, False)
@@ -982,20 +998,20 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_msg += f"Failing instr in bb excluding cf : {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])-1}\n"
         ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}\n"
 
-        if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level not in fuzzerstate.taint_in_priv:
+        if leakage_en and fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level not in fuzzerstate.taint_in_priv:
             ret_msg += f"\tLeakage from {[p.name for p in fuzzerstate.taint_in_priv]} to {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name} found!\n"
     else:
-        ret_msg += f"Failing bb id                    : {failing_bb_id-1}\n"
         ret_msg += f"Fault from previous BB           : {fault_from_prev_bb}\n"
-        ret_msg += f"Prvious bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id-1] + SPIKE_STARTADDR)}\n"
+        ret_msg += f"Previous bb i                    : {failing_bb_id-1}\n"
+        ret_msg += f"Previous bb start addr           : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id-1] + SPIKE_STARTADDR)}\n"
         ret_msg += f"Previous instr in bb excluding cf: {len(fuzzerstate.instr_objs_seq[failing_bb_id-1])-1}/{len(fuzzerstate.instr_objs_seq[failing_bb_id-1])-1}\n"
-        ret_msg += f"Prvious instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id-1][-1].get_str()}\n"
+        ret_msg += f"Previous instr                   : {fuzzerstate.instr_objs_seq[failing_bb_id-1][-1].get_str()}\n"
 
         ret_msg += f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}\n"
         ret_msg += f"Failing instr bb excluding cf    : {0}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])-1}\n"
         ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][0].get_str()}\n"
 
-        if fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level not in fuzzerstate.taint_in_priv:
+        if leakage_en and fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level not in fuzzerstate.taint_in_priv:
             ret_msg += f"\tLeakage from {[p.name for p in fuzzerstate.taint_in_priv]} to {fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level.name} found!\n"
 
     if not quiet:
