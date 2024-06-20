@@ -25,8 +25,8 @@ if __name__ == '__main__':
 
     design_name = sys.argv[1]
     seed = int(sys.argv[2])
-    leakage_en = int(sys.argv[3]) == 1
-
+    
+    leakage_en = True
     hint_left_bound_bb = None
     hint_right_bound_bb = None
     hint_left_bound_pillar_bb = None
@@ -36,6 +36,8 @@ if __name__ == '__main__':
     hint_left_bound_pillar_instr = None
     hint_right_bound_pillar_instr = None
 
+    if len(sys.argv) > 3:
+        leakage_en = int(sys.argv[3]) == 1
     if len(sys.argv) > 4:
         hint_left_bound_bb = int(sys.argv[4])
     if len(sys.argv) > 5:

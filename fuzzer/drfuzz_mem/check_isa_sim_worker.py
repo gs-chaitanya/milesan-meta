@@ -34,7 +34,7 @@ def __check_isa_sim_worker(design_name, seed, taint_en):
         check_isa_sim_taint(design_name,seed, taint_en=taint_en).remove_tmp_files()
         return True
     except Exception as e:
-        print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {e}")
+        print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")
         if LOG_EXCEPTIONS:
             if "(RTL) Taint mismatch" in str(e):
                 logdir = os.path.join(PATH_TO_TMP, "logs")

@@ -23,7 +23,6 @@ class FailTypeEnum(enum.IntEnum):
     VALUE_MISMATCH = enum.auto()
     TAINT_MISMATCH = enum.auto()
 
-
 class FuzzerStateException(Exception):
     def __init__(self, *args: object, fuzzerstate, fail_type: FailTypeEnum) -> None:
         super().__init__(*args)
@@ -39,8 +38,9 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
         fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN, taint_en) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
-        n_instr_in_notaint_priv = fuzzerstate.compute_context_stats()
-        assert n_instr_in_notaint_priv != 0, f"Computed program does not execute in leakage target privilege."
+        n_instr_in_per_priv, taint_sink_priv = fuzzerstate.compute_context_stats()
+        if USE_MMU:
+            assert n_instr_in_per_priv[taint_sink_priv] != 0, f"Computed program does not execute in taint sink privilege."
         fuzzerstate.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         fuzzerstate.memview.restore(0) # Restore contents before anything was executed.
         fuzzerstate.csrfile.reset() # Reset all CSRs to zero.
@@ -72,17 +72,29 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         for bb_id, bb_instrs in enumerate(fuzzerstate.instr_objs_seq):
             for next_instr in bb_instrs:
                 addr = next_instr.paddr if not USE_MMU else next_instr.vaddr
-                # RTL SIM CHECK
-                if isinstance(next_instr, RegdumpInstruction_t0) and INSERT_REGDUMPS:
-                    if not USE_SPIKE_INTERM_ELF:
+
+                ## RTL SIM CHECK ##
+                if isinstance(next_instr, RegdumpInstruction_t0):
+                    assert INSERT_REGDUMPS, f"Encountered RegdumpInstruction with INSERT_REGDUMPS disabled."
+                    try:
                         next_instr.check_regs(regstream_rtl_val[regdump_idx]) # check value before executing instruction
-                        if fuzzerstate.taint_en:
+                    except AssertionError as e:
+                        raise MismatchError(str(e), fail_type=FailTypeEnum.VALUE_MISMATCH)
+                    if fuzzerstate.taint_en:
+                        try:
                             next_instr.check_regs_t0(regstream_rtl_val_t0[regdump_idx]) # check value before executing instruction
-                        regdump_idx += 1
-                # SPIKE SIM CHECK
+                        except AssertionError as e:
+                            raise MismatchError(str(e), fail_type=FailTypeEnum.TAINT_MISMATCH)
+                    regdump_idx += 1
+                
+                ## SPIKE SIM CHECK ##
                 elif addr in pc_reg_pairs:
-                    next_instr.check_regs(pc_reg_pairs[addr]) # check value before executing instruction. Skip if placeholder as their values change between spikeresol and final elf.
-                # SKIP CHECK
+                    try:
+                        next_instr.check_regs(pc_reg_pairs[addr]) # check value before executing instruction. Skip if placeholder as their values change between spikeresol and final elf.
+                    except AssertionError as e:
+                        raise MismatchError(str(e), fail_type=FailTypeEnum.VALUE_MISMATCH)
+                
+                ## SKIP CHECK ##
                 elif PRINT_SKIPPED_CHECKS:
                     print(f"Skipping check for {next_instr.get_str(USE_SPIKE_INTERM_ELF)}")
 
@@ -95,16 +107,27 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             if bb_id in fuzzerstate.bb_id_to_ctxsv_id:
                 ctxsv_bb_id = fuzzerstate.bb_id_to_ctxsv_id[bb_id]
                 for next_instr in fuzzerstate.ctxsv_bbs[ctxsv_bb_id]:
-                    if isinstance(next_instr, RegdumpInstruction_t0) and INSERT_REGDUMPS:
-                        if not USE_SPIKE_INTERM_ELF:
+                    if isinstance(next_instr, RegdumpInstruction_t0):
+                        assert INSERT_REGDUMPS, f"Encountered RegdumpInstruction with INSERT_REGDUMPS disabled."
+                        try:
                             next_instr.check_regs(regstream_rtl_val[regdump_idx]) # check value before executing instruction
-                            if fuzzerstate.taint_en:
+                        except AssertionError as e:
+                            raise MismatchError(str(e), fail_type=FailTypeEnum.VALUE_MISMATCH)
+                        if fuzzerstate.taint_en:
+                            try:
                                 next_instr.check_regs_t0(regstream_rtl_val_t0[regdump_idx]) # check value before executing instruction
-                            regdump_idx += 1
-                    # SPIKE SIM CHECK
+                            except AssertionError as e:
+                                raise MismatchError(str(e), fail_type=FailTypeEnum.TAINT_MISMATCH)
+                        regdump_idx += 1
+
+                    ## SPIKE SIM CHECK ##
                     elif addr in pc_reg_pairs:
-                        next_instr.check_regs(pc_reg_pairs[addr]) # check value before executing instruction. Skip if placeholder as their values change between spikeresol and final elf.
-                    # SKIP CHECK
+                        try:
+                            next_instr.check_regs(pc_reg_pairs[addr]) # check value before executing instruction. Skip if placeholder as their values change between spikeresol and final elf.
+                        except AssertionError as e:
+                            raise MismatchError(str(e), fail_type=FailTypeEnum.VALUE_MISMATCH)
+                    
+                    # SKIP CHECK ##
                     elif PRINT_SKIPPED_CHECKS:
                         print(f"Skipping check for {next_instr.get_str(USE_SPIKE_INTERM_ELF)}")
 
@@ -166,6 +189,9 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.TIMEOUT)
         elif isinstance(e, MismatchError):
             raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=e.fail_type)
+        else:
+            raise Exception
+            
     return fuzzerstate
 
 
