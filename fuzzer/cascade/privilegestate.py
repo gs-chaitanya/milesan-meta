@@ -138,8 +138,14 @@ class PrivilegeState:
                     else:
                         if not fuzzerstate.privilegestate.is_mtvec_populated:
                             supported_exceptions_dict[exception_cause_val] = False
+                    # Misaligned exceptions also trigger page faults. Their order is platform-specific. Therefore, we must ensure that both the misaligned access exception and the page fault
+                    # are either delegated or not, i.e. their bits in medeleg must match, so that they are both caught by stvec.
+                    if exception_cause_val in [ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED, ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED, ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED]:
+                        supported_exceptions_dict[exception_cause_val] &= (fuzzerstate.privilegestate.medeleg_val >> exception_cause_val.value)&1 == (fuzzerstate.privilegestate.medeleg_val >> ExceptionCauseVal.ID_LOAD_PAGE_FAULT)&1    
+
 
             return supported_exceptions_dict
+
 
     def gen_takable_exception_mask(self, fuzzerstate):
         ret = 0

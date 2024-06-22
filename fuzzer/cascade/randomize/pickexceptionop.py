@@ -52,8 +52,8 @@ def _gen_next_exceptionoptype(fuzzerstate) -> ExceptionCauseVal:
         if curr_weight == 1:
             return curr_exception_type
     ret = None
-    while ret is None or weights[ret] == 0:
-        ret = random.choices(list(ExceptionCauseVal), weights=weights)[0]
+
+    ret = random.choices(list(ExceptionCauseVal), weights=weights.values())[0]
     return ret
 
 # @brief For now, the weights used for choosing instructions are fixed over time.
@@ -62,6 +62,7 @@ def _gen_next_exceptionoptype(fuzzerstate) -> ExceptionCauseVal:
 # DO NOT @cache
 def _get_exceptionoptype_filtered_weights(fuzzerstate):
     takable_exceptions = fuzzerstate.privilegestate.gen_takable_exception_dict(fuzzerstate)
+
     ret_dict = {
         exception_type: int(takable_exceptions[exception_type]) * fuzzerstate.exceptionoppickweights[exception_type]
         for exception_type in fuzzerstate.exceptionoppickweights
@@ -143,8 +144,8 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
             assert fuzzerstate.privilegestate.medeleg_val is not None
         is_mtvec = not (fuzzerstate.privilegestate.medeleg_val & (1 << exception_op_type.value))
 
-
-
+    if DO_ASSERT:
+        assert fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE or exception_op_type not in (ExceptionCauseVal.ID_INSTR_ACCESS_FAULT, ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED, ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED) or (fuzzerstate.privilegestate.medeleg_val >> exception_op_type.value)&1 == (fuzzerstate.privilegestate.medeleg_val >> ExceptionCauseVal.ID_LOAD_PAGE_FAULT)&1, "We can only do misaligned exceptions from supervisor/user if we either both or neither delegate the page fault and the misaligned access as the order of exceptions is platform-specific."
     # Pollutes the corresponding epc and updates xpp
     if is_mtvec:
         fuzzerstate.privilegestate.is_mepc_populated = False
@@ -197,8 +198,8 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         # Find out the address of the instruction to be created, to make the relative jump
         jal_addr = fuzzerstate.bb_start_addr_seq[-1] + 4*len(fuzzerstate.instr_objs_seq) # NO_COMPRESSED
         # Misaligned memory accesses trigger a page fault and a misaligned address exception. Their priority and order of 
-        # handling is open to the platform, therefore we can't rely on the STVEC and SCAUSE values.
-        fuzzerstate.csrfile.regs[CSR_IDS.STVEC].unreliable = True
+        # handling is open to the platform, therefore we can't rely on the SEPC and SCAUSE values.
+        fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
         fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
         return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, JALInstruction(fuzzerstate, "jal", 0, misaligned_tgt_addr - jal_addr),exception_op_type)
     elif exception_op_type == ExceptionCauseVal.ID_INSTR_ACCESS_FAULT:
@@ -212,8 +213,8 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
         # Misaligned memory accesses trigger a page fault and a misaligned address exception. Their priority and order of 
-        # handling is open to the platform, therefore we can't rely on the STVEC and SCAUSE values.
-        fuzzerstate.csrfile.regs[CSR_IDS.STVEC].unreliable = True
+        # handling is open to the platform, therefore we can't rely on the SEPC and SCAUSE values.
+        fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
         fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
         return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, True)
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
@@ -222,8 +223,8 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
         # Misaligned memory accesses trigger a page fault and a misaligned address exception. Their priority and order of 
-        # handling is open to the platform, therefore we can't rely on the STVEC and SCAUSE values.
-        fuzzerstate.csrfile.regs[CSR_IDS.STVEC].unreliable = True
+        # handling is open to the platform, therefore we can't rely on the SEPC and SCAUSE values.
+        fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
         fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
         return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, False)
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:

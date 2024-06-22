@@ -21,7 +21,7 @@ from cascade.randomize.pickmmuop import is_mmu_op_not_possible
 ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.REGFSM:      0.1,
     ISAInstrClass.FPUFSM:      0,
-    ISAInstrClass.ALU:         0.05,
+    ISAInstrClass.ALU:         0.5,
     ISAInstrClass.ALU64:       0,
     ISAInstrClass.MULDIV:      0,
     ISAInstrClass.MULDIV64:    0,
@@ -137,6 +137,7 @@ def _get_isainstrclass_filtered_weights(fuzzerstate, curr_alloc_cursor):
         or (USE_MMU and fuzzerstate.is_design_64bit and ((fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.USER] | 0x7fffffff) - (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.SUPERVISOR] | 0x7fffffff)) != 0) \
         or fuzzerstate.num_instr_to_stay_in_prv > 0\
         or fuzzerstate.curr_mmu_state == MmuState.MMU_PROD_J or fuzzerstate.curr_mmu_state == MmuState.MMU_PROD_1:
+        # or fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE: # only do exceptions in machine mode, TODO remove this when fixed
         ret_dict[ISAInstrClass.EXCEPTION] = 0
     if not fuzzerstate.privilegestate.privstate in (PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR) \
         or "vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs() \
