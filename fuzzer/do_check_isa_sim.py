@@ -14,7 +14,7 @@ from drfuzz_mem.check_isa_sim_worker import check_isa_sims
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask
 from cascade.toleratebugs import tolerate_bug_for_bug_timing
-
+from params.runparams import NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS
 import os
 import sys
 
@@ -53,6 +53,11 @@ if __name__ == '__main__':
     if len(sys.argv) < 4:
         raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <num_cores> <n_total_tests> [taint_en,seed_offset]")
 
+    if NO_REMOVE_TMPDIRS:
+        print("NO_REMOVE_TMPDIRS is enabled. This might eat up a lot of memory.")
+
+    if NO_REMOVE_TMPFILES:
+        print("NO_REMOVE_TMPFILES is enabled. This might eat up a lot of memory.")
 
     design_name = sys.argv[1]
     n_cores = int(sys.argv[2])

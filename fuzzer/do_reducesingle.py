@@ -21,7 +21,7 @@ if __name__ == '__main__':
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     if len(sys.argv) < 3:
-        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <seed> [hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, hint_left_bound_instr, hint_right_bound_instr, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr] ")
+        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <seed> [leakage_en, hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, hint_left_bound_instr, hint_right_bound_instr, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr] ")
 
     design_name = sys.argv[1]
     seed = int(sys.argv[2])

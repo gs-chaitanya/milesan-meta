@@ -8,7 +8,7 @@ import numpy as np
 ##
 # MMU
 ##
-USE_MMU = False
+USE_MMU = True
 
 MAX_NUM_LAYOUTS = 5
 PROBA_ENTANGLE_LAYOUT = 0
@@ -234,8 +234,8 @@ assert USE_TAINT_TANH or USE_TAINT_BIN or USE_TAINT_HW
 
 INSERT_SPECTRE_GADGETS = False
 # Tainting immediates could taint the pc without executing the instruction e.g. through the BPU.
-TAINT_NONTAKEN_BRANCH_IMM = False
-TAINT_IMMRD_IMM = False
-TAINT_REGIMM_IMM = False
+TAINT_NONTAKEN_BRANCH_IMM = True
+TAINT_IMMRD_IMM = True
+TAINT_REGIMM_IMM = True
 
 

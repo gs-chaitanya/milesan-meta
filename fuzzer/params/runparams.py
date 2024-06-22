@@ -17,7 +17,7 @@ DO_ASSERT = True
 DO_EXPENSIVE_ASSERT = False # More expensive assertions
 
 NO_REMOVE_TMPFILES = False # Used for debugging purposes.
-NO_REMOVE_TMPDIRS = False # When disabled, removes the /cascade-data/[design-name]/[ID] directories even when leakage (or bug) detected. Disable to save storage.
+NO_REMOVE_TMPDIRS = True # When disabled, removes the /cascade-data/[design-name]/[ID] directories even when leakage (or bug) detected. Disable to save storage.
 
 RUN_TIMEOUT_SECONDS = 60*3 # A program is not supposed to run longer than this in RTL simulation.
 
@@ -39,9 +39,9 @@ PRINT_COLOR_TAINT = True
 PRINT_REG_TRACEBACK = False
 PRINT_FILTERED_REG_TRACEBACK = False
 
-PRINT_ENVIRONMENT = False
+PRINT_ENVIRONMENT = True
 
-INSERT_REGDUMPS = True # Speculative bugs will likely diappear when enabled. Used to test correctness of dataflow computation.
+INSERT_REGDUMPS = False # Speculative bugs will likely diappear when enabled. Used to test correctness of dataflow computation.
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
 assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not supported when spectre gadgets enabled."
 assert not (TAINT_NONTAKEN_BRANCH_IMM and INSERT_REGDUMPS), "Enabling TAINT_NONTAKEN_BRANCH_IMM might render INSERT_REGDUMPS useless as pc might get tainted if non-taken branch is predicted taken."
