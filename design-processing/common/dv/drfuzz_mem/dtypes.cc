@@ -278,6 +278,7 @@ void doutput_t::check_failed(){
 }
 
 void doutput_t::check(){
+    #ifdef MUXCOV_EN
     #if N_COV_TRAIL_BITS != 0 
     assert((coverage[N_COV_POINTS_b32-1] & ~COV_MASK) == 0);
     #endif //COV_MASK != 0 
@@ -286,11 +287,14 @@ void doutput_t::check(){
     assert((taints[N_TAINT_OUTPUTS_b32-1] & ~TAINT_OUPUT_MASK) == 0); 
     #endif  // COV_MASK != 0  
     #endif // TAINT_EN
+    #endif // MUXCOV_EN
+    #ifdef ASSERTCOV_EN
     #ifdef CHECK_ASSERTS
     #if N_COV_TRAIL_BITS != 0
     assert((asserts[N_ASSERTS_b32-1] & ~ASSERTS_MASK) == 0);
     #endif // COV_MASK != 0 
     #endif // CHECK_ASSERTS
+    #endif // ASSERTCOV_EN
 }
 
 void doutput_t::print_diff(doutput_t *other){ // print coverage and highlight bits where other has different value

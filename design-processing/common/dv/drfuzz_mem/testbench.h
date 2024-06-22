@@ -70,14 +70,22 @@ class Testbench {
         }
 
 		void reset(void);
+        #ifdef META_RESTET_EN
 		void meta_reset();
+        #endif
+        #ifdef RESET_MEM_EN
         void reset_memory();
+        #ifdef TAINT_EN
         void reset_memory_t();
+        #endif
+        #endif
 		void close_trace(void);
         void clear_outputs();
+        #ifdef MUXCOV_EN
 		int get_coverage_amount();
-		void read_new_output();
 		void print_last_output();
+        #endif
+        void read_new_output();
         void dump_memory();
         #ifdef TAINT_EN
         bool is_output_tainted();

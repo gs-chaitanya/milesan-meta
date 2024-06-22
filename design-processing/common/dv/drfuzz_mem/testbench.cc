@@ -10,13 +10,16 @@
 void Testbench::reset(){
     this->got_stop_req = false;
     this->module_->rst_ni = 1;
+    #ifdef META_RESTET_EN
     this->module_->meta_rst_ni = 1;
     #ifdef TAINT_EN
     this->module_->meta_rst_ni_t0 = 1;
+    #endif // TAINT_EN
+    #endif // META_RESET_EN
+
     #ifdef BLOCK_TAINT
     this->module_->block_signal_t0 = 1;
     #endif // BLOCK_TAINT
-    #endif // TAINT_EN
     this->tick(1);
     this->module_->rst_ni = 0;
     this->tick(N_RESET_TICKS);
@@ -24,6 +27,7 @@ void Testbench::reset(){
 }
 
 
+#ifdef META_RESTET_EN
 void Testbench::meta_reset(){
     this->module_->meta_rst_ni = 1;
     this->module_->rst_ni = 1; // deassert normal reset while meta reset is running
@@ -38,19 +42,16 @@ void Testbench::meta_reset(){
     this->module_->meta_rst_ni_t0 = 1;
     #endif
 }
+#endif
 
 #ifdef TAINT_EN
+#ifdef META_RESTET_EN
 void Testbench::meta_reset_t0(){
     this->module_->meta_rst_ni_t0 = 0;
     this->tick(N_META_RESET_TICKS);
     this->module_->meta_rst_ni_t0 = 1;
 }
-
-void Testbench::meta_reset_pc_t0(){
-    // this->module_->block_signal_t0 = 1;
-    // this->tick(N_META_RESET_TICKS);
-    // this->module_->block_signal_t0 = 0;
-}
+#endif
 #endif
 
 
@@ -59,52 +60,51 @@ void Testbench::clear_outputs(){
     assert(this->outputs.size() == 0);
 }
 
+#ifdef RESET_MEM_EN
 void Testbench::reset_memory(){
-    // #ifdef SINGLE_MEM
-    // svScope scope = svGetScopeFromName(VSCOPE_MEM);
-    // assert(scope);  // Check for nullptr if scope not found
-    // svSetScope(scope);
-    // _reset_memory();
-    // #endif
-    // #ifdef DUAL_MEM // also reset inst rom because of taints
-    // svScope scope = svGetScopeFromName(VSCOPE_DMEM);
-    // assert(scope);  // Check for nullptr if scope not found
-    // svSetScope(scope);
-    // _reset_memory();
-    // scope = svGetScopeFromName(VSCOPE_IMEM);
-    // assert(scope);  // Check for nullptr if scope not found
-    // svSetScope(scope);
-    // _reset_memory();
-    // #endif
+    #ifdef SINGLE_MEM
+    svScope scope = svGetScopeFromName(VSCOPE_MEM);
+    assert(scope);  // Check for nullptr if scope not found
+    svSetScope(scope);
+    _reset_memory();
+    #endif
+    #ifdef DUAL_MEM // also reset inst rom because of taints
+    svScope scope = svGetScopeFromName(VSCOPE_DMEM);
+    assert(scope);  // Check for nullptr if scope not found
+    svSetScope(scope);
+    _reset_memory();
+    scope = svGetScopeFromName(VSCOPE_IMEM);
+    assert(scope);  // Check for nullptr if scope not found
+    svSetScope(scope);
+    _reset_memory();
+    #endif
 }
 
+#ifdef TAINT_EN
 void Testbench::reset_memory_t(){
-    // #ifdef SINGLE_MEM // TODO test
-    // svScope scope = svGetScopeFromName(VSCOPE_MEM);
-    // assert(scope);  // Check for nullptr if scope not found
-    // svSetScope(scope);
-    // _reset_memory_t();
-    // // this->module_->mem_req_t0 = 0x0ULL;
-    // #endif
+    #ifdef SINGLE_MEM // TODO test
+    svScope scope = svGetScopeFromName(VSCOPE_MEM);
+    assert(scope);  // Check for nullptr if scope not found
+    svSetScope(scope);
+    _reset_memory_t();
+    #endif
 
-    // #ifdef DUAL_MEM
-    // svScope scope = svGetScopeFromName(VSCOPE_DMEM);
-    // assert(scope);  // Check for nullptr if scope not found
-    // svSetScope(scope);
-    // _reset_memory_t();
-    // // this->module_->data_mem_req_t0 = 0x0ULL;
-    // // this->module_->data_mem_addr_t0 = 0x0ULL;
+    #ifdef DUAL_MEM
+    svScope scope = svGetScopeFromName(VSCOPE_DMEM);
+    assert(scope);  // Check for nullptr if scope not found
+    svSetScope(scope);
+    _reset_memory_t();
     
-    // scope = svGetScopeFromName(VSCOPE_IMEM);
-    // assert(scope);  // Check for nullptr if scope not found
-    // svSetScope(scope);
-    // _reset_memory_t();
-    // // this->module_->instr_mem_req_t0 = 0x0ULL;
-    // // this->module_->instr_mem_addr_t0 = 0x0ULL;
-    // #endif
-
+    scope = svGetScopeFromName(VSCOPE_IMEM);
+    assert(scope);  // Check for nullptr if scope not found
+    svSetScope(scope);
+    _reset_memory_t();
+    #endif
 }
+#endif
+#endif
 
+#ifdef DUMP_FINAL_MEM
 void Testbench::dump_memory(){
     #ifdef SINGLE_MEM // TODO test
     // std::cout << "MEM:\n";
@@ -120,13 +120,9 @@ void Testbench::dump_memory(){
     svSetScope(scope);
     std::cout << "DMEM:\n";
     _dump_memory();
-    // scope = svGetScopeFromName(VSCOPE_IMEM);
-    // assert(scope);  // Check for nullptr if scope not found
-    // svSetScope(scope);
-    // std::cout << "IMEM:\n";
-    // _dump_mem();
     #endif
 }
+#endif
 
 void Testbench::close_trace(void) {
 	#if VM_TRACE  
@@ -150,67 +146,67 @@ tick_req_t *Testbench::tick(int num_ticks, bool false_tick) {
         #endif // VM_TRACE
 
         module_->clk_i = !false_tick;
-        // if(module_->data_mem_rdata_t0){
-        //     std::cout << "dbus taint: " << std::hex << module_->data_mem_rdata_t0 << std::endl;
-        // }
 
-        // if(intercept != nullptr){
-        //     if(intercept->retired){
-        //         intercept = nullptr;
-        //         #ifdef DUAL_MEM
-        //         #ifdef TAINT_EN
-        //         module_->instr_mem_rdata_t0 = 0x0;
-        //         #endif // TAINT_EN
-        //         module_->intercept_instr_mem_rdata = 0x0;
-        //         module_->intercept_instr_mem_en = 0;
-        //         #else // DUAL_MEM
-        //         #ifdef TAINT_EN
-        //         module_->mem_rdata_o_t0 = 0x0;
-        //         #endif // TAINT_EN
-        //         module_->intercept_mem_rdata = 0x0;
-        //         module_->intercept_mem_en = 0;
-        //         #endif // DUAL_MEM
-        //     }
-        //     else{
-        //         #ifdef DUAL_MEM
-        //         module_->intercept_instr_mem_en = 1;
-        //         module_->intercept_instr_mem_rdata = intercept->inject_inst ? intercept->get_binary() : module_->instr_mem_rdata;
-        //         module_->instr_mem_rdata_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
-        //         #ifdef PRINT_INTERCEPT
-        //         intercept->print_intercept(module_->instr_mem_rdata,0x0);
-        //         #endif // PRINT_INTERCEPT
-        //         #else // DUAL_MEM
-        //         module_->intercept_mem_en = 1;
-        //         #if DATA_WIDTH_BYTES == 4
-        //         module_->intercept_mem_rdata = intercept->inject_inst ?   module_->mem_rdata_o | intercept->get_binary() : module_->mem_rdata_o;
-        //         module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
-        //         #else // DATA_WIDTH_BYTES == 8
-        //         assert(DATA_WIDTH_BYTES==8);
-        //         if(intercept->alignment == 0){
-        //             module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o&(0xFFFFFFFFULL<<32) | intercept->get_binary()) : module_->mem_rdata_o;
-        //             #ifdef TAINT_EN
-        //             module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
-        //             #endif // TAINT_EN
-        //             #ifdef PRINT_INTERCEPT
-        //             intercept->print_intercept(module_->mem_rdata_o&0xFFFFFFFFULL,0x0);
-        //             #endif // PRINT_INTERCEPT
-        //         }
-        //         else{
-        //             assert(intercept->alignment == 4);
-        //             module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o & (0xFFFFFFFFULL) | ((uint64_t) intercept->get_binary())<<32) : module_->mem_rdata_o;
-        //             #ifdef TAINT_EN
-        //             module_->mem_rdata_o_t0 = intercept->inject_taint ? ((uint64_t) intercept->get_binary_t0())<<32 : 0x0;
-        //             #endif // TAINT_EN
-        //             #ifdef PRINT_INTERCEPT
-        //             intercept->print_intercept((module_->mem_rdata_o&(0xFFFFFFFFULL<<32))>>32,0x0);
-        //             #endif // PRINT_INTERCEPT
-        //         }
-        //         #endif // DATA_WIDTH_BYTES
-        //         #endif // DUAL_MEM
-        //         intercept->retired = true;
-        //         this->intercepted = true;
-        //     }
-        // }
+
+        #ifdef INJECT_INSTR_EN
+        if(intercept != nullptr){
+            if(intercept->retired){
+                intercept = nullptr;
+                #ifdef DUAL_MEM
+                #ifdef TAINT_EN
+                module_->instr_mem_rdata_t0 = 0x0;
+                #endif // TAINT_EN
+                module_->intercept_instr_mem_rdata = 0x0;
+                module_->intercept_instr_mem_en = 0;
+                #else // DUAL_MEM
+                #ifdef TAINT_EN
+                module_->mem_rdata_o_t0 = 0x0;
+                #endif // TAINT_EN
+                module_->intercept_mem_rdata = 0x0;
+                module_->intercept_mem_en = 0;
+                #endif // DUAL_MEM
+            }
+            else{
+                #ifdef DUAL_MEM
+                module_->intercept_instr_mem_en = 1;
+                module_->intercept_instr_mem_rdata = intercept->inject_inst ? intercept->get_binary() : module_->instr_mem_rdata;
+                module_->instr_mem_rdata_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
+                #ifdef PRINT_INTERCEPT
+                intercept->print_intercept(module_->instr_mem_rdata,0x0);
+                #endif // PRINT_INTERCEPT
+                #else // DUAL_MEM
+                module_->intercept_mem_en = 1;
+                #if DATA_WIDTH_BYTES == 4
+                module_->intercept_mem_rdata = intercept->inject_inst ?   module_->mem_rdata_o | intercept->get_binary() : module_->mem_rdata_o;
+                module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
+                #else // DATA_WIDTH_BYTES == 8
+                assert(DATA_WIDTH_BYTES==8);
+                if(intercept->alignment == 0){
+                    module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o&(0xFFFFFFFFULL<<32) | intercept->get_binary()) : module_->mem_rdata_o;
+                    #ifdef TAINT_EN
+                    module_->mem_rdata_o_t0 = intercept->inject_taint ? intercept->get_binary_t0() : 0x0;
+                    #endif // TAINT_EN
+                    #ifdef PRINT_INTERCEPT
+                    intercept->print_intercept(module_->mem_rdata_o&0xFFFFFFFFULL,0x0);
+                    #endif // PRINT_INTERCEPT
+                }
+                else{
+                    assert(intercept->alignment == 4);
+                    module_->intercept_mem_rdata = intercept->inject_inst ?  (module_->mem_rdata_o & (0xFFFFFFFFULL) | ((uint64_t) intercept->get_binary())<<32) : module_->mem_rdata_o;
+                    #ifdef TAINT_EN
+                    module_->mem_rdata_o_t0 = intercept->inject_taint ? ((uint64_t) intercept->get_binary_t0())<<32 : 0x0;
+                    #endif // TAINT_EN
+                    #ifdef PRINT_INTERCEPT
+                    intercept->print_intercept((module_->mem_rdata_o&(0xFFFFFFFFULL<<32))>>32,0x0);
+                    #endif // PRINT_INTERCEPT
+                }
+                #endif // DATA_WIDTH_BYTES
+                #endif // DUAL_MEM
+                intercept->retired = true;
+                this->intercepted = true;
+            }
+        }
+        #endif
         module_->eval();
 
 
@@ -223,19 +219,20 @@ tick_req_t *Testbench::tick(int num_ticks, bool false_tick) {
 
         module_->clk_i = 0;
         module_->eval();
-
-        // if(intercept==nullptr){
-        //     #ifdef DUAL_MEM
-        //     if(this->intercept_instructions.count((module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
-        //         intercept = this->intercept_instructions[(module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2)];
-        //         }
-        //     #else // single memory for data and instructions 
-        //     if(this->intercept_instructions.count((module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
-        //         intercept = this->intercept_instructions[(module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2)];
-        //     }
-        //     #endif
-        // }
-        // if(module_->mem_addr_o) std::cout << std::hex << (module_->mem_addr_o>>3) << ":" << module_->mem_rdata_o << std::endl;
+        #ifdef INJECT_INSTR_EN
+        if(intercept==nullptr){
+            #ifdef DUAL_MEM
+            if(this->intercept_instructions.count((module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
+                intercept = this->intercept_instructions[(module_->instr_mem_addr>>DATA_WIDTH_BYTES_LOG2)];
+                }
+            #else // single memory for data and instructions 
+            if(this->intercept_instructions.count((module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2))){ // instr_mem returns instruction in subsequent cycle
+                intercept = this->intercept_instructions[(module_->mem_addr_o>>DATA_WIDTH_BYTES_LOG2)];
+            }
+            #endif
+        }
+        if(module_->mem_addr_o) std::cout << std::hex << (module_->mem_addr_o>>3) << ":" << module_->mem_rdata_o << std::endl;
+        #endif
         #if VM_TRACE
             trace_->dump(5 * tick_count_ + 2);
             trace_->flush();
@@ -245,6 +242,7 @@ tick_req_t *Testbench::tick(int num_ticks, bool false_tick) {
 }
 
 #ifdef TAINT_EN
+#ifdef MUXCOV_EN
 void Testbench::read_vtaints(uint32_t* taints){
      for(int i=0; i<N_TAINT_OUTPUTS_b32; i++){
         #ifdef READ_UNTIL_PC_TAINTED
@@ -255,15 +253,18 @@ void Testbench::read_vtaints(uint32_t* taints){
         #endif
     }
 }
+#endif
 #endif // TAINT_EN
 
+#ifdef MUXCOV_EN
 void Testbench::read_vcoverage(uint32_t* cov){
     for(int i=0; i<N_COV_POINTS_b32; i++){
         cov[i] = this->module_->auto_cover_out[i];
     }
     cov[N_COV_POINTS_b32-1] &= COV_MASK;
 }
-
+#endif
+#ifdef ASSERTCOV_EN
 void Testbench::read_vasserts(uint32_t* asserts){
     #ifdef CHECK_ASSERTS
     #if N_ASSERTS_b32>1
@@ -276,23 +277,30 @@ void Testbench::read_vasserts(uint32_t* asserts){
     asserts[N_ASSERTS_b32-1] &= ASSERTS_MASK;
     #endif // CHECK_ASSERTS
 }
+#endif
 
 void Testbench::read_new_output(){
     doutput_t *new_output = (doutput_t *) malloc(sizeof(doutput_t));
+    #ifdef MUXCOV_EN
     this->read_vcoverage(new_output->coverage);
     #ifdef TAINT_EN
     this->read_vtaints(new_output->taints);
     #endif
+    #endif
+    #ifdef ASSERTCOV_EN
     this->read_vasserts(new_output->asserts);
+    #endif
     new_output->check_failed();
     new_output->check(); // sanity check
     this->outputs.push_back(new_output);
 }  
 
+#ifdef MUXCOV_EN
 void Testbench::print_last_output(){
     assert(this->outputs.size());
     this->outputs.back()->print();
 }
+#endif
 #ifdef TAINT_EN
 bool Testbench::is_output_tainted(){
     return  this->outputs.back()->is_tainted();
