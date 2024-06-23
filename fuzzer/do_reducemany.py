@@ -32,7 +32,7 @@ if __name__ == '__main__':
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     if len(sys.argv) < 4:
-        raise Exception("Usage: python3 do_reducemany.py <design_name> <num_cores> [--seeds=seed0,seed1,seed2,...,seedN] [--log-file=path_to_log-file] ")
+        raise Exception("Usage: python3 do_reducemany.py <design_name> <num_cores> [--seeds=seed0,seed1,seed2,...,seedN] [--log-file=path_to_log-file] [--max-seed=seedN]")
 
     design_name = sys.argv[1]
     num_cores = int(sys.argv[2])
@@ -42,6 +42,9 @@ if __name__ == '__main__':
         logfile = sys.argv[3].split("=")[-1]
         seeds = _parse_logfile(logfile,design_name)
         print(f"Found {len(seeds)} seeds in logfile: {seeds}")
+    elif "max-seed" in sys.argv[3]:
+        seeds = range(0, int(sys.argv[3].split("=")[-1]))
+
 
     # 346864, 'rocket', 232, 75
     # 230898, 'rocket', 673, 991

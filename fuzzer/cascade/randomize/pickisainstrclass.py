@@ -21,7 +21,7 @@ from cascade.randomize.pickmmuop import is_mmu_op_not_possible
 ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.REGFSM:      0.1,
     ISAInstrClass.FPUFSM:      0,
-    ISAInstrClass.ALU:         0.5,
+    ISAInstrClass.ALU:         0.05,
     ISAInstrClass.ALU64:       0,
     ISAInstrClass.MULDIV:      0,
     ISAInstrClass.MULDIV64:    0,

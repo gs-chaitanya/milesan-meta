@@ -915,7 +915,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     if len(fuzzerstate.instr_objs_seq) == 1:
         print('Only one basic block. Trivial case.')
-        print('Is mismatch', is_mismatch(fuzzerstate, 1, len(fuzzerstate.instr_objs_seq[0])-1), quiet=quiet)
+        print('Is mismatch', is_mismatch(fuzzerstate, 1, len(fuzzerstate.instr_objs_seq[0])-1, quiet=quiet))
         ret_msg = f"Reduction failed for seed {randseed}:\n"
         ret_msg += f"\t Trivial case for single BB."
         fuzzerstate.log(ret_msg)
