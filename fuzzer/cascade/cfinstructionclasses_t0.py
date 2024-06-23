@@ -5,7 +5,7 @@ from cascade.util import ExceptionCauseVal
 from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from cascade.registers import ABI_INAMES
 from rv.csrids import CSR_ABI_NAMES
-from params.runparams import PRINT_CHECK_REGS_T0, PRINT_COLOR_TAINT, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT, PRINT_WRITEBACK_T0
+from params.runparams import PRINT_CHECK_REGS_T0, PRINT_COLOR_TAINT, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT, PRINT_WRITEBACK_T0, PRINT_WRITEBACK
 from common.spike import SPIKE_STARTADDR
 from cascade.registers import IntRegIndivState
 import numpy as np
@@ -133,6 +133,8 @@ class RDInstruction_t0(CFInstruction_t0):
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(res_t0)
         if PRINT_WRITEBACK_T0:
             print(f"{self.get_str()} <- {hex(res_t0)}")
+        if PRINT_WRITEBACK:
+            print(f"{self.get_str()} <- {hex(res)}")
         self.add_writeback_trace(res, res_t0, is_spike_resolution)
 
     def add_writeback_trace(self, res, res_t0, is_spike_resolution: bool):
@@ -585,6 +587,8 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
         self.fuzzerstate.intregpickstate.regs[self.rdep].set_val_t0(res_t0)
         if PRINT_WRITEBACK_T0:
             print(f"{self.get_str()} <- {hex(res_t0)}")
+        if PRINT_WRITEBACK:
+            print(f"{self.get_str()} <- {hex(res)}")
         self.add_writeback_trace(res_t0, is_spike_resolution)
 
     def add_writeback_trace(self, res_t0, is_spike_resolution: bool):

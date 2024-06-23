@@ -195,7 +195,7 @@ def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool, cur
     return JALRInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
 
 def _create_SpecialInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
-    rd = fuzzerstate.intregpickstate.pick_int_outputreg()
+    rd = fuzzerstate.intregpickstate.pick_int_outputreg(authorize_sideeffects=False) # The fence instructions don't write to rd, thus we don't set them free.
     rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
     return SpecialInstruction_t0(fuzzerstate, instr_str, rd, rs1)
 

@@ -17,7 +17,7 @@ DO_ASSERT = True
 DO_EXPENSIVE_ASSERT = False # More expensive assertions
 
 NO_REMOVE_TMPFILES = False # Used for debugging purposes.
-NO_REMOVE_TMPDIRS = False # When disabled, removes the /cascade-data/[design-name]/[ID] directories even when leakage (or bug) detected. Disable to save storage.
+NO_REMOVE_TMPDIRS = True # When disabled, removes the /cascade-data/[design-name]/[ID] directories even when leakage (or bug) detected. Disable to save storage.
 
 RUN_TIMEOUT_SECONDS = 60*3 # A program is not supposed to run longer than this in RTL simulation.
 
@@ -29,6 +29,7 @@ PRINT_CHECK_REGS_T0 = False # Print taint propagation checks.
 PRINT_CHECK_REGS_T0_MISMATCH_OK = False
 PRINT_CHECK_REGS = False
 PRINT_WRITEBACK_T0 = False # Print taint writeback of instructions.
+PRINT_WRITEBACK = False
 
 PRINT_INSTRUCTION_EXECUTION_IN_SITU = False # Prints execution during program generation.
 PRINT_INSTRUCTION_EXECUTION_FINAL = False # Prints execution during register value checks.

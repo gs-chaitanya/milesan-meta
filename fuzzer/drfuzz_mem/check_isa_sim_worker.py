@@ -1,7 +1,7 @@
-from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint
+from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint, FailTypeEnum, FuzzerStateException
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
-from cascade.randomize.pickbytecodetaints import MAX_N_INJECT_PER_BB
+from workers.reduce_worker import reduce_programs
 from cascade.util import CFInstructionClass
 from params.runparams import PATH_TO_TMP
 
@@ -10,21 +10,28 @@ import time
 import threading
 import os
 
+DO_REDUCE = True
 LOG_EXCEPTIONS = True
 PRINT_THREAD_STATUS = False
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 total_finished_tests = 0
-
+seed_to_fail_type_dict = {
+    FailTypeEnum.TAINT_MISMATCH: [],
+    FailTypeEnum.VALUE_MISMATCH: [],
+    FailTypeEnum.TIMEOUT: []
+}
 
 def test_done_callback(ret):
     global newly_finished_tests
     global callback_lock
     global total_finished_tests
+    global seed_to_fail_type_dict
     with callback_lock:
         newly_finished_tests += 1
-        # if(ret):
         total_finished_tests += 1
+        if ret is not None:
+            seed_to_fail_type_dict[ret[0]] += [ret[1]]
         if PRINT_THREAD_STATUS:
             print(f"Finished {total_finished_tests} threads.")
 
@@ -32,7 +39,7 @@ def test_done_callback(ret):
 def __check_isa_sim_worker(design_name, seed, taint_en):
     try:
         check_isa_sim_taint(design_name,seed, taint_en=taint_en).remove_tmp_files()
-        return True
+        return None
     except Exception as e:
         print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")
         if LOG_EXCEPTIONS:
@@ -41,11 +48,13 @@ def __check_isa_sim_worker(design_name, seed, taint_en):
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.taint_mismatch.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
+
             elif "(RTL) Value mismatch" in str(e):
                 logdir = os.path.join(PATH_TO_TMP, "logs")
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.value_mismatch.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
+
             elif "Command" in str(e):
                 logdir = os.path.join(PATH_TO_TMP, "logs")
                 os.makedirs(logdir, exist_ok=True)
@@ -57,7 +66,10 @@ def __check_isa_sim_worker(design_name, seed, taint_en):
                 with open(f"{logdir}/{design_name}.failed.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
 
-        return False
+        return (e.fail_type, seed)
+
+
+
 
 def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en: bool, seed_offset: int):
     global newly_finished_tests
@@ -88,7 +100,6 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en:
         pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id,taint_en,),callback=test_done_callback)
         process_instance_id += 1
 
-    
     while True:
         time.sleep(2)
         with callback_lock:
@@ -102,7 +113,12 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en:
             if total_finished_tests >= total_tests and total_tests != -1:
                 print(f"Finished {total_finished_tests} threads. Exiting.")
                 pool.terminate()
-                exit(0)
+                break
+
+    if DO_REDUCE:
+        print(f"Starting reduction.")
+        reduce_programs(design_name, num_cores, seed_to_fail_type_dict[FailTypeEnum.TAINT_MISMATCH])
+
 
 
 

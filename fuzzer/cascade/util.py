@@ -284,6 +284,7 @@ INSTRUCTIONS_BY_ISA_CLASS = {
     ISAInstrClass.SPECIAL: [
         "fence",
         "fence.i"
+        # "sfence.vma"
     ],
 }
 
