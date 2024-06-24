@@ -201,7 +201,7 @@ NUM_MIN_UNTAINTED_INTREGS = 2
 
 NUM_MIN_TAINTED_REGS = 1
 
-P_RANDOM_DATA_TAINTED = 0.1
+P_RANDOM_DATA_TAINTED = 0.5
 P_PAGE_HAS_TAINT = 1
 
 MIN_WEIGHT_T0 = 0.01
@@ -234,8 +234,12 @@ assert USE_TAINT_TANH or USE_TAINT_BIN or USE_TAINT_HW
 
 INSERT_SPECTRE_GADGETS = False
 # Tainting immediates could taint the pc without executing the instruction e.g. through the BPU.
-TAINT_NONTAKEN_BRANCH_IMM = True
+TAINT_NONTAKEN_BRANCH_IMM = False
 TAINT_IMMRD_IMM = True
 TAINT_REGIMM_IMM = True
 
+# We can disable non-taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges.
+ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = False
 
+# Abort fuzzing run if the computed program does not execute in taint sink privilege.
+ASSERT_EXEC_IN_TAINT_SINK_PRIV = False
