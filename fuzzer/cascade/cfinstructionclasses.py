@@ -164,7 +164,7 @@ class BaseInstruction:
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         return f"{self.get_preamble()}: {self.instr_str}"
 
-    def execute(self, taint_en, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         raise Exception(f"Function execute() called on abstract class BaseInstruction {self.get_str(is_spike_resolution)}.")
  
     def check_regs(self,reg_cmp):
@@ -1558,7 +1558,7 @@ class SpeculativeInstructionEncapsulator(BaseInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.instr.gen_bytecode_int(is_spike_resolution)
 
-    def execute(self, taint_en, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         return
 
 

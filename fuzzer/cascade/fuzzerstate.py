@@ -30,7 +30,7 @@ import shutil
 
 class FuzzerState:
     # @param randseed for identification purposes only.
-    def __init__(self, design_base_addr: int, design_name: str, memsize: int, randseed: int, nmax_bbs: int, authorize_privileges: bool, taint_en: bool = TAINT_EN):
+    def __init__(self, design_base_addr: int, design_name: str, memsize: int, randseed: int, nmax_bbs: int, authorize_privileges: bool):
         # For identification
         self.randseed = randseed
         self.nmax_bbs = nmax_bbs
@@ -53,7 +53,7 @@ class FuzzerState:
 
         self.random_block_contents4by4bytes = []
         self.random_data_block_ranges = []
-        if taint_en:
+        if TAINT_EN:
             self.random_data_block_has_taint = {} # Is true if the random data block at that page can have taint.
             if USE_MMU:
                 self.taint_in_priv = {PrivilegeStateEnum.USER if random.random() < 0.5 else PrivilegeStateEnum.SUPERVISOR} # Subset of priveleges has access to tainted data.
@@ -88,7 +88,6 @@ class FuzzerState:
         self.reset()
         self.init_design_state()
 
-        self.taint_en = taint_en
         self.expected_regvals = None
         self.interm_elfpath = None
         self.rtl_elfpath = None
@@ -350,21 +349,21 @@ class FuzzerState:
         if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
             instr.print(is_spike_resolution=True)
         self.instr_objs_seq[-1].append(instr)
-        instr.execute(taint_en=self.taint_en, is_spike_resolution = True)
+        instr.execute(is_spike_resolution = True)
         if insert_regdump: # TODO for vaddr, we need to bring the REGDUMP_REGISTER to the appropriate state for each layout.
             if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS:
                 store_instr = RegdumpInstruction_t0(self,"sd" if self.is_design_64bit else "sw", REGDUMP_REGISTER_ID, instr.rd,0,-1)
                 store_instr.reset_addr()
                 if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
                     store_instr.print(is_spike_resolution=True)
-                store_instr.execute(taint_en=self.taint_en, is_spike_resolution=True)
+                store_instr.execute(is_spike_resolution=True)
                 self.instr_objs_seq[-1].append(store_instr)
                 if INSERT_FENCE:
                     fence_instr = SpecialInstruction_t0(self,"fence")
                     fence_instr.reset_addr()
                     if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
                         fence_instr.print(is_spike_resolution=True)
-                    fence_instr.execute(taint_en=False, is_spike_resolution=True)
+                    fence_instr.execute(is_spike_resolution=True)
                     self.instr_objs_seq[-1].append(fence_instr)
                     return 12
                 return 8
@@ -373,12 +372,12 @@ class FuzzerState:
     def write_imm_t0_to_mem(self):
         for bb_instrs in self.instr_objs_seq:
             for next_instr in bb_instrs:
-                if self.taint_en and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0)):
+                if TAINT_EN and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0)):
                     next_instr.write_t0() # Write tainted bytecode to instruction memory if taint is enabled.
 
         for bb_instrs in self.ctxsv_bbs:
             for next_instr in bb_instrs:
-                if self.taint_en and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0)):
+                if TAINT_EN and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0)):
                     next_instr.write_t0() # Write tainted bytecode to instruction memory if taint is enabled.
 
 
@@ -489,7 +488,7 @@ class FuzzerState:
                         else:
                             regdumps += [self.intregpickstate.regs[reg_id].get_val()]
                             regdumps_t0 += [self.intregpickstate.regs[reg_id].get_val_t0()]
-                next_instr.execute(self.taint_en, is_spike_resolution=is_spike_resolution)
+                next_instr.execute(is_spike_resolution=is_spike_resolution)
                 if final_address is not None and next_instr.addr == final_address:
                     reached_end = True
                     break
@@ -519,7 +518,7 @@ class FuzzerState:
         self.curr_pc = SPIKE_STARTADDR
         for bb_id, bb_instrs in enumerate(self.instr_objs_seq):
             for next_instr in bb_instrs:
-                next_instr.execute(self.taint_en, is_spike_resolution=is_spike_resolution)
+                next_instr.execute(is_spike_resolution=is_spike_resolution)
                 if print_execution:
                     next_instr.print(is_spike_resolution)
                 
@@ -527,7 +526,7 @@ class FuzzerState:
             if bb_id in self.bb_id_to_ctxsv_id:
                 ctxsv_bb_id = self.bb_id_to_ctxsv_id[bb_id]
                 for next_instr in self.ctxsv_bbs[ctxsv_bb_id]:
-                    next_instr.execute(self.taint_en, is_spike_resolution=is_spike_resolution)
+                    next_instr.execute(is_spike_resolution=is_spike_resolution)
                     if print_execution:
                         print(f"{next_instr.get_str(is_spike_resolution)} (ctx)")
                 if final_addr is not None and next_instr.addr == final_addr:

@@ -189,7 +189,8 @@ USE_SPIKE_INTERM_ELF = False # When both this and INSERT_REGDUMPS are enabled, t
 
 ## TAINT PARAMETERS ##
 
-TAINT_EN = True # The assumed value for function paramteres.
+TAINT_EN = True
+
 P_TAINT_REG = 0.5
 P_TAINT_IN_MACHINE = 1
 if USE_MMU:
@@ -243,3 +244,8 @@ ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = False
 
 # Abort fuzzing run if the computed program does not execute in taint sink privilege.
 ASSERT_EXEC_IN_TAINT_SINK_PRIV = False
+
+IGNORE_TIMEOUT = False
+IGNORE_VALUE_MISMATCH = False
+IGNORE_TAINT_MISMATCH = False
+IGNORE_SPIKE_MISMATCH = False

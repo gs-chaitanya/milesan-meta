@@ -31,14 +31,14 @@ def gen_new_test_instance(design_name: str, randseed: int, can_authorize_privile
 
 # The main function for a single fuzzer run. It creates a new fuzzer state, populates it with basic blocks, and then runs the spike resolution. It does not run the RTL simulation.
 # @return (fuzzerstate, rtl_elfpath, expected_regvals: list) where expected_regval is a list of num_pickable_regs-1 expected reg values (we ignore x0)
-def gen_fuzzerstate_elf_expectedvals(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, check_pc_spike_again: bool, taint_en: bool = TAINT_EN):
+def gen_fuzzerstate_elf_expectedvals(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, check_pc_spike_again: bool):
     from cascade.fuzzerstate import FuzzerState
     if DO_ASSERT:
         assert nmax_bbs is None or nmax_bbs > 0
 
     start = time.time()
     random.seed(randseed)
-    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges, taint_en)
+    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges)
     gen_basicblocks(fuzzerstate)
     time_seconds_spent_in_gen_bbs = time.time() - start
 

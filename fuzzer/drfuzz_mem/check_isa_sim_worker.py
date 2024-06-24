@@ -10,7 +10,7 @@ import time
 import threading
 import os
 
-DO_REDUCE = True
+DO_REDUCE = False
 LOG_EXCEPTIONS = True
 PRINT_THREAD_STATUS = False
 callback_lock = threading.Lock()
@@ -36,9 +36,9 @@ def test_done_callback(ret):
             print(f"Finished {total_finished_tests} threads.")
 
 
-def __check_isa_sim_worker(design_name, seed, taint_en):
+def __check_isa_sim_worker(design_name, seed):
     try:
-        check_isa_sim_taint(design_name,seed, taint_en=taint_en).remove_tmp_files()
+        check_isa_sim_taint(design_name,seed).remove_tmp_files()
         return None
     except Exception as e:
         print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")
@@ -71,7 +71,7 @@ def __check_isa_sim_worker(design_name, seed, taint_en):
 
 
 
-def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en: bool, seed_offset: int):
+def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offset: int):
     global newly_finished_tests
     global callback_lock
 
@@ -85,7 +85,7 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en:
     if num_workers == 1:
         print(f"Starting sequential ISA sim validation on `{design_name}` with {total_tests} total tests.")
         for _ in range(total_tests):
-            check_isa_sim_taint(design_name,process_instance_id, taint_en=taint_en)
+            check_isa_sim_taint(design_name,process_instance_id)
             process_instance_id += 1
         exit(0)
     if total_tests == -1:
@@ -97,7 +97,7 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en:
     for _ in range(num_workers):
         if PRINT_THREAD_STATUS:
             print(f"Starting thread {process_instance_id}.")
-        pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id,taint_en,),callback=test_done_callback)
+        pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id,),callback=test_done_callback)
         process_instance_id += 1
 
     while True:
@@ -107,7 +107,7 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, taint_en:
                 for _ in range(newly_finished_tests):
                     if PRINT_THREAD_STATUS:
                         print(f"Starting thread {process_instance_id}.")
-                    pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id,taint_en),callback=test_done_callback)
+                    pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id),callback=test_done_callback)
                     process_instance_id += 1
                 newly_finished_tests = 0
             if total_finished_tests >= total_tests and total_tests != -1:

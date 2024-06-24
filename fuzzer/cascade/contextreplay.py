@@ -271,7 +271,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         curr_addr += 4 # NO_COMPRESSED
         # We set the byte value using an immediate
 
-        if fuzzerstate.taint_en:
+        if TAINT_EN:
             assert mem_byte_addr in saved_context.mem_bytes_t0_dict, f"No taint entry found for addr {hex(mem_byte_addr)}"
             mem_byte_val_t0 = saved_context.mem_bytes_t0_dict[mem_byte_addr]
             inst = RegImmInstruction_t0(fuzzerstate,"addi", 2, 0, mem_byte_val, mem_byte_val_t0, is_rd_nonpickable_ok=True)
@@ -313,7 +313,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
     curr_addr += 4 # NO_COMPRESSED
     for reg_id, reg_val in enumerate(saved_context.reg_vals):
         if DO_ASSERT:
-            if fuzzerstate.taint_en:
+            if TAINT_EN:
                 assert reg_id < len(saved_context.reg_vals_t0)
                 reg_val_t0 = saved_context.reg_vals_t0[reg_id]
                 assert  reg_val_t0 >= 0
@@ -496,7 +496,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         fuzzerstate.ctxsv_bbs[-1][addr_to_id_in_ctxsv(addr_reg_load_addi)] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.curr_ctxsv_bb_start_addr, is_rd_nonpickable_ok=True)
         for reg_id, reg_val in enumerate(saved_context.reg_vals):
             reg_val_t0 = 0
-            if fuzzerstate.taint_en:
+            if TAINT_EN:
                 assert reg_id < len(saved_context.reg_vals_t0)
                 reg_val_t0 = saved_context.reg_vals_t0[reg_id]
             # print('For reg id %d, reg val is %s. Addr: %s' % (reg_id, hex(reg_val), hex(curr_addr)))

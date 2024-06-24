@@ -19,7 +19,7 @@ from cascade.gen_ctxt_final_block import *
 from cascade.privilegestate import PrivilegeStateEnum
 
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
-from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF, RELOCATOR_REGISTER_ID
+from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF, RELOCATOR_REGISTER_ID, IGNORE_TAINT_MISMATCH, ASSERT_EXEC_IN_TAINT_SINK_PRIV
 
 from rv.asmutil import li_into_reg, to_unsigned
 
@@ -86,7 +86,7 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
     ctx_regdump_reqs, storenumbytes = gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider)
     dumpedvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags_nocompressed(fuzzerstate.design_name), SPIKE_STARTADDR, ctx_regdump_reqs, False, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
-    if fuzzerstate.taint_en:
+    if TAINT_EN:
         dumpedvals_in_situ, dumpedvals_t0 = fuzzerstate.get_regdumps_from_reqs(ctx_regdump_reqs, True, None, False, True)
         assert len(dumpedvals_in_situ) == len(dumpedvals)
         for idx, (in_situ_d, in_situ_d_t0, spike_d) in enumerate(zip(dumpedvals_in_situ, dumpedvals_t0, dumpedvals)):
@@ -388,7 +388,7 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
 # This module resolves a mismatch between design and simulation by finding the first basic block that causes a mismatch.
 # @param failing_instr_id the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore. It is None if the failing instruction is actually the last one in the previous bb. Only used in the second step.
 # @param index_first_bb_to_consider: only used in the second step
-def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int = None, index_first_bb_to_consider: int = 1, index_first_instr_to_consider: int = 0, quiet: bool = True, leakage_en: bool = True):
+def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int = None, index_first_bb_to_consider: int = 1, index_first_instr_to_consider: int = 0, quiet: bool = True):
     # try:
     test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs = gen_reduced_elf(fuzzerstate, max_bb_id_to_consider, failing_instr_id, index_first_bb_to_consider, index_first_instr_to_consider)
     test_fuzzerstate.expected_regvals = expected_regvals_pairs
@@ -401,13 +401,13 @@ def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int =
 
     del fuzzerstate
 
-    is_success, exception = runtest_simulator(test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs, REDUCTION_SIMULATOR, leakage_en = leakage_en)
+    is_success, exception = runtest_simulator(test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs, REDUCTION_SIMULATOR)
 
-    if not is_success and exception.fail_type == FailTypeEnum.TAINT_MISMATCH and not leakage_en:
+    if not is_success and exception.fail_type == FailTypeEnum.TAINT_MISMATCH and IGNORE_TAINT_MISMATCH:
         is_success = True # We triggered leakage, but we are reducing for an architectural bug, not leakage.
 
     if DO_ASSERT:
-        assert not (not is_success and test_fuzzerstate.compute_context_stats() == 0 and exception.fail_type == FailTypeEnum.TAINT_MISMATCH and leakage_en), f"Triggered leakage without executing in taint sink privilege. Aborting reduction."
+        assert not (not is_success and test_fuzzerstate.compute_context_stats() == 0 and exception.fail_type == FailTypeEnum.TAINT_MISMATCH and ASSERT_EXEC_IN_TAINT_SINK_PRIV), f"Triggered leakage without executing in taint sink privilege. Aborting reduction."
 
     if quiet and not is_success:
         print(str(exception))
@@ -502,19 +502,19 @@ def _try_flatten_cf(fuzzerstate, failing_bb, failing_instr, pillar_bb, pillar_in
 # hint_left_bound_bb: when the bb with id `hint_left_bound_bb` is removed and all the subsequent bbs are removed, the bug should disappear.
 # hint_right_bound_bb: when the bb with id `hint_right_bound_bb` is removed and all the subsequent bbs are removed, the bug should still be here.
 # @return failing_bb_id is the index of the first bb that, when removed as well as the subsequent ones, makes the bug disappear.
-def _find_failing_bb(fuzzerstate, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, quiet: bool = False, leakage_en: bool = True):
+def _find_failing_bb(fuzzerstate, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, quiet: bool = False):
     # Take the hints
     if hint_left_bound_bb is not None:
         if DO_ASSERT:
             # assert True # TODO Uncomment sanity check for user input: assert not is_mismatch(fuzzerstate, hint_left_bound_bb), f"Wrong left bound hint `{hint_left_bound_bb}`."
-            assert not is_mismatch(fuzzerstate, hint_left_bound_bb, quiet=quiet, leakage_en=leakage_en), f"Wrong left bound hint `{hint_left_bound_bb}`."
+            assert not is_mismatch(fuzzerstate, hint_left_bound_bb, quiet=quiet), f"Wrong left bound hint `{hint_left_bound_bb}`."
         left_bound = hint_left_bound_bb
     else:
         left_bound = 0
     if hint_right_bound_bb is not None:
         if DO_ASSERT:
             # assert True # TODO Uncomment sanity check for user input: assert is_mismatch(fuzzerstate, hint_right_bound_bb), f"Wrong right bound hint `{hint_right_bound_bb}`."
-            assert is_mismatch(fuzzerstate, hint_right_bound_bb, quiet=quiet, leakage_en=leakage_en), f"Wrong right bound hint `{hint_right_bound_bb}`."
+            assert is_mismatch(fuzzerstate, hint_right_bound_bb, quiet=quiet), f"Wrong right bound hint `{hint_right_bound_bb}`."
         right_bound = hint_right_bound_bb
     else:
         right_bound = len(fuzzerstate.instr_objs_seq)
@@ -527,7 +527,7 @@ def _find_failing_bb(fuzzerstate, hint_left_bound_bb: int = None, hint_right_bou
         if DO_ASSERT:
             assert right_bound > left_bound
         candidate_bound = (right_bound + left_bound) // 2
-        if is_mismatch(fuzzerstate, candidate_bound, quiet=quiet, leakage_en=leakage_en):
+        if is_mismatch(fuzzerstate, candidate_bound, quiet=quiet):
             if not quiet:
                 print(candidate_bound, 'bb mismatch')
             right_bound = candidate_bound
@@ -604,7 +604,7 @@ def _find_pillar_bb(fuzzerstate, failing_bb_id: int, failing_instr_id: int, faul
 
 # @param failing_bb_id is the index of the first bb that, when removed as well as the subsequent ones, makes the bug disappear.
 # @return failing_instr_id is the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore. It is None if the failing instruction is actually the last one in the previous bb.
-def _find_failing_instr_in_bb(fuzzerstate, failing_bb_id: int, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, quiet: bool = False, leakage_en: bool = True):
+def _find_failing_instr_in_bb(fuzzerstate, failing_bb_id: int, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, quiet: bool = False):
     if DO_ASSERT:
         assert failing_bb_id > 0
         assert failing_bb_id < len(fuzzerstate.instr_objs_seq)
@@ -617,19 +617,19 @@ def _find_failing_instr_in_bb(fuzzerstate, failing_bb_id: int, hint_left_bound_i
     # Take the hints
     if hint_left_bound_instr is not None:
         if DO_ASSERT:
-            assert not is_mismatch(fuzzerstate, failing_bb_id, hint_left_bound_instr, quiet=quiet, leakage_en=leakage_en), f"Wrong left bound hint `{hint_left_bound_instr}`."
+            assert not is_mismatch(fuzzerstate, failing_bb_id, hint_left_bound_instr, quiet=quiet), f"Wrong left bound hint `{hint_left_bound_instr}`."
         left_bound = hint_left_bound_instr
     else:
         left_bound = 0
     if hint_right_bound_instr is not None:
         if DO_ASSERT:
-            assert is_mismatch(fuzzerstate, failing_bb_id, hint_right_bound_instr, quiet=quiet, leakage_en=leakage_en), f"Wrong right bound hint `{hint_right_bound_instr}`."
+            assert is_mismatch(fuzzerstate, failing_bb_id, hint_right_bound_instr, quiet=quiet), f"Wrong right bound hint `{hint_right_bound_instr}`."
         right_bound = hint_right_bound_instr
     else: # TODO: set to -2?
         right_bound = len(fuzzerstate.instr_objs_seq[failing_bb_id])-1 # -1 because cannot be the last instruction of the bb (falls into the case where we look back for the previous bb)
 
     # Check whether the issue actually comes from the cf instruction from the previous bb.
-    if right_bound == 0 or is_mismatch(fuzzerstate, failing_bb_id, 0, quiet=quiet, leakage_en=leakage_en):
+    if right_bound == 0 or is_mismatch(fuzzerstate, failing_bb_id, 0, quiet=quiet):
         print('Issue comes from the previous bb')
         return None
 
@@ -641,7 +641,7 @@ def _find_failing_instr_in_bb(fuzzerstate, failing_bb_id: int, hint_left_bound_i
         if DO_ASSERT:
             assert right_bound > left_bound
         candidate_bound = (right_bound + left_bound) // 2
-        if is_mismatch(fuzzerstate, failing_bb_id, candidate_bound, quiet=quiet, leakage_en=leakage_en):
+        if is_mismatch(fuzzerstate, failing_bb_id, candidate_bound, quiet=quiet):
             if not quiet:
                 print(candidate_bound, 'instr mismatch')
             right_bound = candidate_bound
@@ -891,7 +891,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 # @param target_dir: If not None, the directory where to save the generated files. Else, will be saved in the design's directory
 # @param find_pillars: If false, the front of the test case will not be reduced.
 # @return a boolean indicating whether the reduction was successful, a float measuring the elapesd time (in seconds), and the number of instructions in the test case.
-def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False, taint_en: bool = TAINT_EN, leakage_en: bool = True):
+def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
     from cascade.fuzzerstate import FuzzerState
 
     ###
@@ -904,7 +904,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     start_time = time.time()
 
     random.seed(randseed)
-    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges, taint_en)
+    fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges)
 
     gen_basicblocks(fuzzerstate)
     numinstrs = sum([len(bb) for bb in fuzzerstate.instr_objs_seq])
@@ -935,11 +935,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     ###
 
     # failing_bb_id is the index of the first basic block that causes trouble, in the sense that when it is removed (and all the following ones), the test case does not fail anymore.
-    failing_bb_id = _find_failing_bb(fuzzerstate, hint_left_bound_bb, hint_right_bound_bb, quiet=quiet, leakage_en=leakage_en)
+    failing_bb_id = _find_failing_bb(fuzzerstate, hint_left_bound_bb, hint_right_bound_bb, quiet=quiet)
 
     # If fail even just with the initial block
     if failing_bb_id == 0:
-        if is_mismatch(fuzzerstate, 1, len(fuzzerstate.instr_objs_seq[0])-1, quiet=quiet, leakage_en=leakage_en):
+        if is_mismatch(fuzzerstate, 1, len(fuzzerstate.instr_objs_seq[0])-1, quiet=quiet):
             if not quiet:
                 print('Failure takes already place in the initial basic block. Copying the initial basic block.')
             test_fuzzerstate_larger, rtl_elfpath_larger, expected_regvals_pairs_larger, numinstrs = gen_reduced_elf(fuzzerstate, failing_bb_id, len(fuzzerstate.instr_objs_seq[0])-1)
@@ -956,7 +956,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
 
     # If no fail at all
-    if failing_bb_id == len(fuzzerstate.instr_objs_seq) and not is_mismatch(fuzzerstate, failing_bb_id-1,quiet=quiet, leakage_en=leakage_en):
+    if failing_bb_id == len(fuzzerstate.instr_objs_seq) and not is_mismatch(fuzzerstate, failing_bb_id-1,quiet=quiet):
         if not quiet:
             print(f"Success (no failure at all with tuple: ({memsize}, design_name, {randseed}, {nmax_bbs})")
         ret_msg = f"Reduction failed for seed {randseed}:\n"
@@ -981,10 +981,10 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
         # If this is due to an interaction between the last CF instruction and the first instruction of the failing_bb_id, we may want to have failing_instr_id=0
         failing_instr_id = -1
-        if not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id,quiet=quiet, leakage_en=leakage_en):
+        if not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id,quiet=quiet):
             print('Detected interaction between CF instruction and the next block instruction')
             failing_instr_id = 0
-            assert is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id,quiet=quiet, leakage_en=leakage_en)
+            assert is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id,quiet=quiet)
         # else:
         #     failing_bb_id = failing_bb_id-1
         #     failing_instr_id = len(fuzzerstate.instr_objs_seq[failing_bb_id])-1
@@ -998,7 +998,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_msg += f"Failing instr in bb excluding cf : {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])-1}\n"
         ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}\n"
 
-        if leakage_en and fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level not in fuzzerstate.taint_in_priv:
+        if not IGNORE_TAINT_MISMATCH and fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level not in fuzzerstate.taint_in_priv:
             ret_msg += f"\tLeakage from {[p.name for p in fuzzerstate.taint_in_priv]} to {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name} found!\n"
     else:
         ret_msg += f"Fault from previous BB           : {fault_from_prev_bb}\n"
@@ -1011,7 +1011,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_msg += f"Failing instr bb excluding cf    : {0}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])-1}\n"
         ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][0].get_str()}\n"
 
-        if leakage_en and fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level not in fuzzerstate.taint_in_priv:
+        if IGNORE_TAINT_MISMATCH and fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level not in fuzzerstate.taint_in_priv:
             ret_msg += f"\tLeakage from {[p.name for p in fuzzerstate.taint_in_priv]} to {fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level.name} found!\n"
 
     if not quiet:

@@ -168,7 +168,7 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
     
     imm_t0 = 0
     if TAINT_NONTAKEN_BRANCH_IMM:
-        if fuzzerstate.taint_en and not plan_taken and random.random() < 0.5 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+        if TAINT_EN and not plan_taken and random.random() < 0.5 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
             imm_t0 = random.randint(0, 1<<curr_param_size)
     instr = BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, imm_t0, plan_taken, iscompressed)
     return instr

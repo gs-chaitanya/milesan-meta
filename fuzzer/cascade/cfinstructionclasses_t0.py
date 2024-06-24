@@ -96,7 +96,7 @@ class BaseInstruction_t0(BaseInstruction):
         self.instr_func_t0 = INSTR_FUNCS_T0[self.instr_str]
 
     def check_regs_t0(self,reg_cmp):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         for reg_id,reg_val in reg_cmp.items():
             if reg_id not in self.fuzzerstate.intregpickstate.regs:
                 # print(f"{hex(self.addr)}: Ignoring register taint: {ABI_INAMES[reg_id]}")
@@ -107,7 +107,7 @@ class BaseInstruction_t0(BaseInstruction):
             assert not mismatch, f"{hex(self.paddr)}: {self.instr_str}: Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {compute_reg_traceback(reg_id,self.paddr,self.fuzzerstate,reg_val).get_str()}"
 
     def execute_t0(self):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         raise Exception(f"Function execute_t0() called on abstract class BaseInstruction_t0 {self.get_str()}.")
 
     def inject_taint(self, is_spike_resolution: bool = True):
@@ -128,7 +128,7 @@ class RDInstruction_t0(CFInstruction_t0):
     # could also be tainted, the alternative values for those executions (i.e. where the registers were chosen differently according to their taints)
     # are computed and written back to the set of registers derived from the taints in the rd field.
     def writeback_t0(self, res_t0, res, is_spike_resolution: bool):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         assert self.rd_t0 == 0
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val_t0(res_t0)
         if PRINT_WRITEBACK_T0:
@@ -210,7 +210,7 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
         self.rd_t0 = 0
 
     def execute_t0(self, res, is_spike_resolution: bool):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         if self.paddr == -1:
             print(f"Skipping execution of {self.get_str()}")
             return
@@ -228,7 +228,7 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
         self.writeback_t0(res_t0, res, is_spike_resolution)
 
     # Overrides function in R12DInstructionClass
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if self.paddr == -1:
             print(f"Skipping execution of {self.get_str()}")
             return
@@ -241,13 +241,13 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
         rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
         res = self.instr_func(rs1_val,rs2_val, self.fuzzerstate.is_design_64bit)
         # Compute taint propagation before writing back result
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
 
     def compute_alt_res_t0(self, res):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         res_t0 = 0x0
         for alt_rs1_id, alt_rs1 in self.fuzzerstate.intregpickstate.regs.items():
             for alt_rs2_id, alt_rs2 in self.fuzzerstate.intregpickstate.regs.items():
@@ -283,7 +283,7 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         self.imm_t0 = imm_t0
 
     def gen_bytecode_int_t0(self, is_spike_resolution: bool):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         assert self.rd_t0 == 0, "Tainting register selection bits not supported yet."
         rd = self.rd
         imm = self.imm
@@ -299,11 +299,11 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         return masked_taint
  
     def compute_alt_res_t0(self, res):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         return 0x0 # skip possible immediates for now
 
     def execute_t0(self, res, is_spike_resolution: bool):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         # Compute the taint results of the operation. The address is never tainted.
         res_t0 = self.instr_func_t0(self.paddr, 0x0, self.imm, self.imm_t0, self.fuzzerstate.is_design_64bit)
         # Compute alternative results if other soruce registers had been choosen.
@@ -318,7 +318,7 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}," + CRED + f"{hex(self.imm)}" + CEND
 
     # Overrides function in ImmRdInstructionClass
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
@@ -326,7 +326,7 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
             res = self.instr_func(self.vaddr, self.imm, self.fuzzerstate.is_design_64bit)
         else:
             res = self.instr_func(self.paddr, self.imm, self.fuzzerstate.is_design_64bit)
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
@@ -341,7 +341,7 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0, RDInstruction_t
         self.imm_t0 = imm_t0
 
     def gen_bytecode_int_t0(self, is_spike_resolution: bool):
-        assert self.fuzzerstate.taint_en, "Taint is disabled. Enable to use this method."
+        assert TAINT_EN
         assert self.rs1_t0 == 0 and self.rd_t0 == 0, "Tainting register selection bits not supported yet."
         rd = self.rd
         rs1 = self.rs1
@@ -361,11 +361,11 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0, RDInstruction_t
         return masked_taint
 
     def compute_alt_res_t0(self, res):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         return 0x0 # skip possible immediates for now
 
     def execute_t0(self, res, is_spike_resolution: bool):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         rs1_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
         # Compute the taint results of the operation.
@@ -375,13 +375,13 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0, RDInstruction_t
         # Writeback taints according to tainted bits in rd.
         self.writeback_t0(res_t0, res, is_spike_resolution)
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         res = self.instr_func(rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
@@ -415,11 +415,11 @@ class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
         self.rd_t0 = 0
 
     def execute_t0(self, res, is_spike_resolution):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         # We assume the PC does not get tainted, therefore the result of JAL is never either.
         self.writeback_t0(0x0, res, is_spike_resolution)
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
             if USE_MMU:
@@ -430,7 +430,7 @@ class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
             res = self.instr_func(self.vaddr, 0x0, self.fuzzerstate.is_design_64bit)
         else:
             res = self.instr_func(self.paddr, 0x0, self.fuzzerstate.is_design_64bit)
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
         
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
@@ -444,12 +444,12 @@ class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
         self.rs1_t0 = 0
 
     def execute_t0(self, res, is_spike_resolution: bool):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"{self.get_str()}: source register is tainted. This is not allowed."
         # We assume the PC does not get tainted, therefore the result of JAL is never either.
         self.writeback_t0(0x0, res, is_spike_resolution)
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() + self.imm
@@ -457,7 +457,7 @@ class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
             res = self.instr_func(self.vaddr, 0x0, self.fuzzerstate.is_design_64bit)
         else:
             res = self.instr_func(self.paddr, 0x0, self.fuzzerstate.is_design_64bit)
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
@@ -470,13 +470,13 @@ class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0, RDInstruction_t0):
         self.rd_t0 = 0
 
     def execute_t0(self, res, is_spike_resolution: bool):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         self.writeback_t0(0x0,res,is_spike_resolution)
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if is_spike_resolution:
             if self.spike_resolution_offset is None:
-                if taint_en:
+                if TAINT_EN:
                     self.execute_t0(0x0,is_spike_resolution)
                     self.fuzzerstate.advance_minstret()
                 return
@@ -495,7 +495,7 @@ class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0, RDInstruction_t0):
             imm = li_into_reg(to_unsigned(rtl_off, self.fuzzerstate.is_design_64bit), False)[0]
 
         res = self.instr_func(None,imm,self.fuzzerstate.is_design_64bit)
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res,is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
@@ -507,16 +507,16 @@ class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1, RDInstruction_t0):
         self.rd_t0 = 0
 
     def execute_t0(self, res, is_spike_resolution: bool):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         rd_t0 = self.fuzzerstate.intregpickstate.regs[self.rd].get_val_t0()
         assert rd_t0 == 0, "rd is tainted, this should not happen."
         self.writeback_t0(0x0,res,is_spike_resolution)
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if is_spike_resolution:
             if self.spike_resolution_offset is None:
                 assert self.fuzzerstate.intregpickstate.regs[self.rd].get_val_t0() == 0
-                if taint_en:
+                if TAINT_EN:
                     self.execute_t0(0x0,is_spike_resolution)
                     self.fuzzerstate.advance_minstret()
                 return
@@ -534,7 +534,7 @@ class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1, RDInstruction_t0):
             uimm = li_into_reg(to_unsigned(rtl_off, self.fuzzerstate.is_design_64bit), False)[1]
         rd_val = self.fuzzerstate.intregpickstate.regs[self.rd].get_val()
         res = self.instr_func(rd_val, uimm, self.fuzzerstate.is_design_64bit)
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
@@ -547,7 +547,7 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
         self.writeback_trace = {"in-situ":0, "final": 0}
 
     def execute_t0(self, res, is_spike_resolution):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         rdep_taint = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val_t0()
         assert rdep_taint == 0, "rdep is tainted, this should not happen."
         if USE_MMU and self.fuzzerstate.is_design_64bit and self.is_rprod and self.produce_va_layout != -1:
@@ -559,7 +559,7 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
         assert mask_t0 == 0, "mask is tainted, this should not happen."
         self.writeback_t0(0, res, is_spike_resolution)
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
@@ -571,7 +571,7 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
         else:
             mask = self.fuzzerstate.intregpickstate.regs[RDEP_MASK_REGISTER_ID].get_val()
         res = self.instr_func(rdep_val,mask,self.fuzzerstate.is_design_64bit)
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rdep].set_val(res)
         self.fuzzerstate.advance_minstret()
@@ -581,7 +581,7 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
     # those executions (i.e. where the registers were chosen differently according to their taints)
     # are computed and written back to the set of registers derived from the taints in the rdep field.
     def writeback_t0(self, res_t0, res, is_spike_resolution):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         assert self.rdep_t0 == 0
         assert res_t0 == 0
         self.fuzzerstate.intregpickstate.regs[self.rdep].set_val_t0(res_t0)
@@ -608,7 +608,7 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
         self.rprod_t0 = 0
 
     def execute_t0(self, res, is_spike_resolution: bool = True):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         assert self.instr_func_t0 is not None, f"Cannot execute {self.get_str()}: no instr_func_t0 found."
         assert self.fuzzerstate is not None, f"fuzzerstate not set, cannot execute {self.get_str()}" 
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val()
@@ -632,7 +632,7 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
         # Writeback taints according to tainted bits in rd.
         self.writeback_t0(res_t0, res, is_spike_resolution)
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
@@ -640,7 +640,7 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
         if is_spike_resolution:
             if USE_MMU and self.produce_va_layout != -1:
                 self.fuzzerstate.advance_minstret()
-                if taint_en:
+                if TAINT_EN:
                     self.execute_t0(0x0, is_spike_resolution)
                     self.fuzzerstate.advance_minstret()
                 return
@@ -648,14 +648,14 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
         else:
             rdep_val = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val()  
         res = self.instr_func(rprod_val,rdep_val,self.fuzzerstate.is_design_64bit)
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
 
 
     def compute_alt_res_t0(self, res):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         res_t0 = 0x0
         for alt_rs1_id, alt_rs1 in self.fuzzerstate.intregpickstate.regs.items():
             if ((alt_rs1_id^self.rprod)&(~self.rprod_t0) == 0 and self.rprod_t0 != 0) : # only differ in the tainted bits, therefore this register could have been used for addition instead and we need to derive the taints
@@ -675,7 +675,7 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         assert self.n_bytes != -1 # sanity check
         self.mask = 2**(self.n_bytes*8)-1
         
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
@@ -686,14 +686,14 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         except Exception as e:
             print(f"{self.get_str()} failed to read from addr {hex(addr)}. {ABI_INAMES[self.rs1]}:{hex(rs1_val)}")
             raise e
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
         res = self.instr_func(res,self.fuzzerstate.is_design_64bit)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
 
     def execute_t0(self, res, is_spike_resolution):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         rs1_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
         assert rs1_val_t0 == 0, f"Source register {ABI_INAMES[self.rs1]} is tainted ({hex(rs1_val_t0)}), this is not allowed."
@@ -713,20 +713,20 @@ class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
         assert self.n_bytes != -1
         self.mask = 2**(self.n_bytes*8)-1
     
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
         addr = INSTR_FUNCS["addi"](self.fuzzerstate.intregpickstate.regs[self.rs1].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
         res = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.memview.write(addr, res&self.mask, self.n_bytes, self.priv_level, self.va_layout)
         self.fuzzerstate.advance_minstret()
 
 
     def execute_t0(self, res, is_spike_resolution):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         rs1_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
         assert rs1_val_t0 == 0, f"Source register {ABI_INAMES[self.rs1]} is tainted ({hex(rs1_val_t0)}), this is not allowed."
@@ -769,7 +769,7 @@ class RegdumpInstruction_t0(IntStoreInstruction_t0):
             return f"{self.get_preamble()}: nop"
 
     def check_regs_t0(self,val_t0):
-        assert self.fuzzerstate.taint_en
+        assert TAINT_EN
         if PRINT_CHECK_REGS_T0:
             print(f"{hex(self.paddr)}: Checking register taint: {ABI_INAMES[self.rs2]}:{hex(val_t0)}")
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check_t0(val_t0)
@@ -781,18 +781,18 @@ class RegdumpInstruction_t0(IntStoreInstruction_t0):
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check(val)
         assert not mismatch, f"{hex(self.paddr)}: {self.instr_str}: (Regdump) Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.paddr,self.fuzzerstate,val,False).get_str(False)}"
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"Regdump register is tainted, this should not happen."
         if is_spike_resolution:
             self.fuzzerstate.advance_minstret()
         else:
-            super().execute(taint_en,is_spike_resolution)
+            super().execute(is_spike_resolution)
 
 class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int = 0, rs1: int = 0, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, rd, rs1, iscompressed)
 
-    def execute(self, taint_en, is_spike_resolution):
+    def execute(self, is_spike_resolution):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
@@ -808,11 +808,11 @@ class BranchInstruction_t0(BranchInstruction, ImmInstruction_t0):
         self.imm_t0 = imm_t0
         assert not (plan_taken and imm_t0)
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += self.imm if self.plan_taken else 4
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(None,is_spike_resolution)
         self.fuzzerstate.advance_minstret()
 
@@ -821,7 +821,7 @@ class BranchInstruction_t0(BranchInstruction, ImmInstruction_t0):
         assert self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0() == 0, f"{self.get_str()}: source register is tainted. This is not allowed."
 
     def gen_bytecode_int_t0(self, is_spike_resolution: bool):
-        assert self.fuzzerstate.taint_en, "Taint is disabled. Enable to use this method."
+        assert TAINT_EN
         rs2 = self.rs2
         rs1 = self.rs1
         imm = self.imm
@@ -850,7 +850,7 @@ class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False, is_satp_smode = (False, None), mpp_val = None):
         super().__init__(fuzzerstate, instr_str, rd, rs1, csr_id, iscompressed, is_satp_smode, mpp_val)
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         is_satp_smode, va_layout = self.is_satp_smode
         if not is_spike_resolution:
             self.assert_addr()
@@ -860,7 +860,7 @@ class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         csr_val = self.fuzzerstate.csrfile.regs[self.csr_id].get_val()
         res = self.instr_func(rs1_val, csr_val, self.fuzzerstate.is_design_64bit)
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res,is_spike_resolution)
         self.fuzzerstate.csrfile.regs[self.csr_id].set_val(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(csr_val)
@@ -888,13 +888,13 @@ class CSRImmInstruction_t0(CSRImmInstruction, RDInstruction_t0):
         super().__init__(fuzzerstate, instr_str, rd, uimm, csr_id, iscompressed)
         self.uimm_t0 = 0
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += 4
         csr_val = self.fuzzerstate.csrfile.regs[self.csr_id].get_val()
         res = self.instr_func(self.uimm, csr_val, self.fuzzerstate.is_design_64bit)
-        if taint_en:
+        if TAINT_EN:
             self.execute_t0(res,is_spike_resolution)
         self.fuzzerstate.csrfile.regs[self.csr_id].set_val(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(csr_val)
@@ -918,8 +918,8 @@ class MstatusWriterInstruction_t0(MstatusWriterInstruction, BaseInstruction_t0):
         super().__init__(rd, rs1, producer_id, instr_str, mstatus_mask, old_sum_mprv)
         self.csr_instr = CSRRegInstruction_t0(instr_str, rd, rs1, CSR_IDS.MSTATUS)
 
-    def execute(self, taint_en, is_spike_resolution: bool = True):
-        self.csr_instr.execute(taint_en, is_spike_resolution)
+    def execute(self, is_spike_resolution: bool = True):
+        self.csr_instr.execute(is_spike_resolution)
         
 class TvecWriterInstruction_t0(TvecWriterInstruction, BaseInstruction_t0):
     def __init__(self, fuzzerstate, is_mtvec: bool, rd: int, rs1: int, producer_id: int):
@@ -928,8 +928,8 @@ class TvecWriterInstruction_t0(TvecWriterInstruction, BaseInstruction_t0):
         self.csr_instr = CSRRegInstruction_t0(fuzzerstate, "csrrw", rd, rs1, csr_id)
         assert self.paddr == self.csr_instr.paddr
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        self.csr_instr.execute(taint_en,is_spike_resolution)
+    def execute(self, is_spike_resolution: bool = True):
+        self.csr_instr.execute(is_spike_resolution)
     
 class EPCWriterInstruction_t0(EPCWriterInstruction, BaseInstruction_t0):  
     def __init__(self, fuzzerstate, is_mepc: bool, rd: int, rs1: int, producer_id: int):
@@ -940,8 +940,8 @@ class EPCWriterInstruction_t0(EPCWriterInstruction, BaseInstruction_t0):
         self.csr_instr = CSRRegInstruction_t0(fuzzerstate, "csrrw", rd, rs1, self.csr_id)
         assert self.paddr == self.csr_instr.paddr
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        self.csr_instr.execute(taint_en,is_spike_resolution)
+    def execute(self, is_spike_resolution: bool = True):
+        self.csr_instr.execute(is_spike_resolution)
 
 class GenericCSRWriterInstruction_t0(GenericCSRWriterInstruction, BaseInstruction_t0):
     def __init__(self, fuzzerstate, csr_id: int, rd: int, rs1: int, producer_id: int, val_to_write_spike: int, val_to_write_cpu: int):
@@ -951,12 +951,12 @@ class GenericCSRWriterInstruction_t0(GenericCSRWriterInstruction, BaseInstructio
         self.csr_instr = CSRRegInstruction_t0(fuzzerstate,"csrrw", rd, rs1, csr_id)
         assert self.paddr == self.csr_instr.paddr
 
-    def execute(self, taint_en: bool = TAINT_EN, is_spike_resolution: bool = True):
-        self.csr_instr.execute(taint_en,is_spike_resolution)
+    def execute(self, is_spike_resolution: bool = True):
+        self.csr_instr.execute(is_spike_resolution)
 
 
 class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstruction_t0):
-    def execute(self, taint_en, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def execute(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         if is_spike_resolution:
             return
         if self.is_mret:
@@ -975,7 +975,7 @@ class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstructio
 
 
 class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
-    def execute(self, taint_en, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def execute(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         if not is_spike_resolution:
             self.assert_addr()
         if self.is_mtvec:
@@ -988,7 +988,7 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val() if self.is_mtvec else self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
 
 class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstruction_t0):
-    def execute(self, taint_en, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
         if self.is_mtvec:
@@ -1000,7 +1000,7 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val() if self.is_mtvec else self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
 
 class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
-    def execute(self, taint_en, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
         if self.is_mtvec:
@@ -1032,7 +1032,7 @@ class RawDataWord_t0(RawDataWord):
     def get_str(self, is_spike_resolution: bool = True, color_taint: bool = PRINT_COLOR_TAINT):
         return f"{hex(self.paddr)}: {hex(self.wordval)}, {hex(self.wordval_t0)} (RAW DATA)"
     
-    def execute(self, taint_en, is_spike_resolution: bool = True):
+    def execute(self, is_spike_resolution: bool = True):
         return
 
     def write(self, is_spike_resolution: bool = False):

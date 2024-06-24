@@ -301,7 +301,7 @@ class MemoryView:
             addr = start_addr + i*8 # Stride for double is used even if design is 32bit.
             n_bytes = 8 if self.fuzzerstate.is_design_64bit else 4
             self.write(addr, reg_data_content, n_bytes)
-            if fuzzerstate.taint_en and n_tainted_regs < MAX_NUM_INIT_TAINTED_REGS:
+            if TAINT_EN and n_tainted_regs < MAX_NUM_INIT_TAINTED_REGS:
                 if random.choices([0,1],[1-P_TAINT_REG,P_TAINT_REG],k=1)[0]:
                     rand_val = random.randint(1,MAX_64b if fuzzerstate.is_design_64bit else MAX_32b)
                     n_tainted_regs += 1

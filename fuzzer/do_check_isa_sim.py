@@ -51,7 +51,7 @@ if __name__ == '__main__':
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     if len(sys.argv) < 4:
-        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <num_cores> <n_total_tests> [taint_en,seed_offset]")
+        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <num_cores> <n_total_tests> [seed_offset]")
 
     if NO_REMOVE_TMPDIRS:
         print("NO_REMOVE_TMPDIRS is enabled. This might eat up a lot of memory.")
@@ -62,11 +62,6 @@ if __name__ == '__main__':
     design_name = sys.argv[1]
     n_cores = int(sys.argv[2])
     n_total_tests = int(sys.argv[3])
-
-
-    taint_en = False
-    if len(sys.argv) > 4:
-        taint_en = int(sys.argv[4]) == 1
 
     seed_offset = 0
     if len(sys.argv) > 5:
@@ -82,7 +77,7 @@ if __name__ == '__main__':
     # tolerate_bug_for_bug_timing(design_name, "b3", True) # RAS0
     # tolerate_bug_for_bug_timing(design_name, "b4", True) # RAS1
     # tolerate_bug_for_bug_timing(design_name, "b5", True) # branch prediction
-    check_isa_sims(design_name,n_cores,n_total_tests,taint_en,seed_offset)
+    check_isa_sims(design_name,n_cores,n_total_tests,seed_offset)
     
 else:
     raise Exception("This module must be at the toplevel.")

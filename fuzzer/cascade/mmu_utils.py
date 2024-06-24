@@ -403,7 +403,7 @@ class PageTablesGen:
             for _ in range(self.n_entries_per_level[layout_id][-1]):
                 # Make user and supervisor
                 is_random_data_block = ppn_leaf-SPIKE_STARTADDR in [addr[0] for addr in fuzzerstate.random_data_block_ranges]
-                if fuzzerstate.taint_en and is_random_data_block and fuzzerstate.random_data_block_has_taint[ppn_leaf-SPIKE_STARTADDR]:
+                if TAINT_EN and is_random_data_block and fuzzerstate.random_data_block_has_taint[ppn_leaf-SPIKE_STARTADDR]:
                     # If this is a random data block with taint and we only allow taint in one privilege, we map it accordingly s.t. only that privelege has access.
                     # We then need to ensure that tainted data is also only written to pages that were tainted initially.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_in_priv, is_executable=False)

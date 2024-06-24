@@ -3,8 +3,8 @@ import shutil
 import glob
 import json
 
-from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS
-from params.runparams import IGNORE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH, DO_DOUBLECHECK_SIM
+from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, DO_DOUBLECHECK_SIM
+from params.fuzzparams import IGNORE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV
 from cascade.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 from cascade.cfinstructionclasses import *
@@ -35,10 +35,10 @@ class MismatchError(ValueError):
         super().__init__(*args)
         self.fail_type = fail_type
 
-def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None, taint_en: bool = TAINT_EN, remove_tmpdirs: bool = not NO_REMOVE_TMPDIRS, leakage_en: bool =True):   
+def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None, remove_tmpdirs: bool = not NO_REMOVE_TMPDIRS):   
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
-        fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN, taint_en) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
+        fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
         n_instr_in_per_priv, taint_sink_priv = fuzzerstate.compute_context_stats()
         fuzzerstate.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         fuzzerstate.memview.restore(0) # Restore contents before anything was executed.
@@ -83,7 +83,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                             next_instr.check_regs(regstream_rtl_val[regdump_idx]) # check value before executing instruction
                         except AssertionError as e:
                             raise MismatchError(str(e), fail_type=FailTypeEnum.VALUE_MISMATCH)
-                        if fuzzerstate.taint_en:
+                        if TAINT_EN:
                             try:
                                 next_instr.check_regs_t0(regstream_rtl_val_t0[regdump_idx]) # check value before executing instruction
                             except AssertionError as e:
@@ -104,7 +104,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     if PRINT_INSTRUCTION_EXECUTION_FINAL:
                         next_instr.print(USE_SPIKE_INTERM_ELF)
 
-                next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
+                next_instr.execute(is_spike_resolution=USE_SPIKE_INTERM_ELF)
                 
             # if this bb is followed by a context saver block, execute it
             if bb_id in fuzzerstate.bb_id_to_ctxsv_id:
@@ -117,7 +117,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                                 next_instr.check_regs(regstream_rtl_val[regdump_idx]) # check value before executing instruction
                             except AssertionError as e:
                                 raise MismatchError(str(e), fail_type=FailTypeEnum.VALUE_MISMATCH)
-                            if fuzzerstate.taint_en:
+                            if TAINT_EN:
                                 try:
                                     next_instr.check_regs_t0(regstream_rtl_val_t0[regdump_idx]) # check value before executing instruction
                                 except AssertionError as e:
@@ -138,7 +138,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                         if PRINT_INSTRUCTION_EXECUTION_FINAL:
                             next_instr.print(USE_SPIKE_INTERM_ELF)
                         
-                    next_instr.execute(fuzzerstate.taint_en, is_spike_resolution=USE_SPIKE_INTERM_ELF)
+                    next_instr.execute(is_spike_resolution=USE_SPIKE_INTERM_ELF)
         
         if PRINT_REGISTER_VALIDATION:
             print("*** REGISTER VALIDATION ***:")
@@ -165,9 +165,9 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 elif not IGNORE_VALUE_MISMATCH:    
                     raise MismatchError(f"(RTL) Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}", fail_type=FailTypeEnum.VALUE_MISMATCH)
 
-            if fuzzerstate.taint_en:
+            if TAINT_EN:
                 mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
-                if mismatch and leakage_en and not IGNORE_TAINT_MISMATCH:
+                if mismatch and not IGNORE_TAINT_MISMATCH:
                     raise MismatchError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}.\n\t Taint allowed in {[p.name for p in fuzzerstate.taint_in_priv]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
 
         if PRINT_MEMORY_VALIDATION:
