@@ -50,7 +50,7 @@ def gen_random_csr_op(fuzzerstate):
             if not fuzzerstate.design_has_supervisor_mode:
                 while target_csr in (MachineCSROpCandidates64.SCAUSE, MachineCSROpCandidates64.SSCRATCH):
                     target_csr = random.choice(list(MachineCSROpCandidates64))
-            while 'cva6' in fuzzerstate.design_name and not is_tolerate_cva6_mhpmcounter() and not is_tolerate_cva6_mhpmevent31() and target_csr == MachineCSROpCandidates64.MHPMCOUNTER3:
+            while 'cva6' in fuzzerstate.design_name and (not is_tolerate_cva6_mhpmcounter() and target_csr == MachineCSROpCandidates64.MHPMCOUNTER3 or not is_tolerate_cva6_mhpmevent31() and target_csr == MachineCSROpCandidates64.MHPMEVENT31):
                 target_csr = random.choice(list(MachineCSROpCandidates64))
 
             if target_csr == MachineCSROpCandidates64.SCAUSE:

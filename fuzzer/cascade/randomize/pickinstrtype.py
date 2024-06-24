@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from cascade.cfinstructionclasses import *
-from cascade.toleratebugs import is_tolerate_cva6_fdivs_flags, is_tolerate_vexriscv_imprecise_fcvt, is_tolerate_vexriscv_fmin, is_tolerate_vexriscv_double_to_float, is_tolerate_vexriscv_dependent_single_precision, is_tolerate_vexriscv_dependent_fle_feq_ret1, is_tolerate_vexriscv_dependent_flt_ret0, is_tolerate_vexriscv_sqrt, is_tolerate_vexriscv_muldiv_conversion
+from cascade.toleratebugs import is_tolerate_cva6_fdivs_flags, is_tolerate_vexriscv_imprecise_fcvt, is_tolerate_vexriscv_fmin, is_tolerate_vexriscv_double_to_float, is_tolerate_vexriscv_dependent_single_precision, is_tolerate_vexriscv_dependent_fle_feq_ret1, is_tolerate_vexriscv_dependent_flt_ret0, is_tolerate_vexriscv_sqrt, is_tolerate_vexriscv_muldiv_conversion, is_tolerate_cva6_division, is_tolerate_cva6_single_precision
 from cascade.util import ISAInstrClass, IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS
 from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS
 
@@ -138,15 +138,19 @@ def gen_next_instrstr_from_isaclass(isaclass: ISAInstrClass, fuzzerstate) -> str
     if fuzzerstate.design_name == "cva6":
         # Double precision
         keys_and_weights_dict["fsqrt.d"] = 0
-        keys_and_weights_dict["fdiv.d"] = 0
+        if not is_tolerate_cva6_division():
+            keys_and_weights_dict["fdiv.d"] = 0
 
         # Single precision
-        keys_and_weights_dict["fsqrt.s"] = 0
+        if not is_tolerate_cva6_single_precision():
+            keys_and_weights_dict["fsqrt.s"] = 0
+            keys_and_weights_dict["fdiv.s"] = 0
+            keys_and_weights_dict["fcvt.d.s"] = 0
+            keys_and_weights_dict["fcvt.s.d"] = 0
+            keys_and_weights_dict["fcvt.wu.d"] = 0
+            
         if not is_tolerate_cva6_fdivs_flags():
             keys_and_weights_dict["fdiv.s"] = 0
-        keys_and_weights_dict["fcvt.d.s"] = 0
-        keys_and_weights_dict["fcvt.s.d"] = 0
-        keys_and_weights_dict["fcvt.wu.d"] = 0
 
     if DO_ASSERT:
         assert isaclass != ISAInstrClass.REGFSM   , "ISAInstrClass.REGFSM must be treated separately"

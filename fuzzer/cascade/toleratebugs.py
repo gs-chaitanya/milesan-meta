@@ -91,6 +91,18 @@ def is_tolerate_cva6_fmuld_rdn():
 if __TOLERATE_CVA6_FMULD_RDN:
     print('WARNING: Tolerating one bug: __TOLERATE_CVA6_FMULD_RDN')
 
+__TOLERATE_CVA6_SINGLE_PRECISION = False
+def is_tolerate_cva6_single_precision():
+    return __TOLERATE_CVA6_SINGLE_PRECISION
+if __TOLERATE_CVA6_SINGLE_PRECISION:
+    print('WARNING: Tolerating one bug: __TOLERATE_CVA6_SINGLE_PRECISION')
+
+__TOLERATE_CVA6_DIVISION = False
+def is_tolerate_cva6_division():
+    return __TOLERATE_CVA6_DIVISION
+if __TOLERATE_CVA6_DIVISION:
+    print('WARNING: Tolerating one bug: __TOLERATE_CVA6_DIVISION')
+
 __TOLERATE_CVA6_FDIVS_FLAGS = False
 def is_tolerate_cva6_fdivs_flags():
     return __TOLERATE_CVA6_FDIVS_FLAGS
