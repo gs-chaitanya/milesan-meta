@@ -3,5 +3,7 @@
     "kronos": "../../cascade-designs/cascade-kronos/cascade",
     "picorv32": "../../cascade-designs/cascade-picorv32/cascade",
     "rocket": "../../cascade-designs/cascade-chipyard/cascade-rocket",
-    "boom": "../../cascade-designs/cascade-chipyard/cascade-boom"
+    "boom": "../../cascade-designs/cascade-chipyard/cascade-boom",
+    "cva6": "../../cascade-designs/cascade-cva6/cascade"
+
 }
