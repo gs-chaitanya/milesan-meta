@@ -71,11 +71,11 @@ if {$CELLIFT_EN == 1} {
 
     yosys opt -purge
     yosys cellift -exclude-signals $EXCLUDE_SIGNALS -imprecise-shl-sshl -imprecise-shr-sshr -verbose
-    yosys meta_reset_t0 $VERBOSE
-
+    
+    if {$META_RESET == 1} {
+        yosys meta_reset_t0 $VERBOSE
+    }
 }
-
-yosys dffunmap
 
 if {$META_RESET == 1} {
     yosys meta_reset $VERBOSE
