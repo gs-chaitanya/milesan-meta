@@ -9,6 +9,7 @@
 # sys.argv[3]: offset for seed (to avoid running the fuzzing on the same instances over again)
 
 from cascade.reduce import reduce_program
+from params.fuzzparams import IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_TIMEOUT
 from cascade.toleratebugs import tolerate_bug_for_eval_reduction
 from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask
 from common.spike import calibrate_spikespeed
@@ -67,6 +68,15 @@ if __name__ == '__main__':
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
     profile_get_asid_mask(design_name)
+
+    print(f"Reducing single program for {design_name} with seed {seed}.")
+    if IGNORE_VALUE_MISMATCH:
+        print(f"Ingoring value mismatches.")
+    if IGNORE_TIMEOUT:
+        print(f"Ignoring timeouts.")
+    if IGNORE_TAINT_MISMATCH:
+        print(f"Ignoring taint mismatches.")
+        
     reduce_program(*gen_new_test_instance(design_name,seed,True),
                     False, check_pc_spike_again=True,
                     hint_left_bound_bb=hint_left_bound_bb, 

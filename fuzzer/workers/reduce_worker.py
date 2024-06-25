@@ -66,12 +66,12 @@ def reduce_programs(design_name: str, num_cores: int, seeds, mute_output: bool =
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
     if num_workers == 1:
-        print(f"Starting sequential ISA sim validation on `{design_name}` with {len(seeds)} total tests.")
+        print(f"Starting sequential reduction on `{design_name}` with {len(seeds)} total tests")
         for seed in seeds:
             reduce_program(*gen_new_test_instance(design_name,seed,True),
                             True, check_pc_spike_again=True)
         exit(0)
-    print(f"Starting parallel ISA sim validation of `{design_name}` on {num_workers} processes for {len(seeds)} seeds.")
+    print(f"Starting parallel reduction of `{design_name}` on {num_workers} processes for {len(seeds)} seeds.")
     pool = mp.Pool(processes=num_workers, initializer=mute if mute_output else None)
 
     for _ in range(min(num_workers,len(seeds))):

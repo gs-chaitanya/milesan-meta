@@ -64,19 +64,14 @@ if __name__ == '__main__':
     n_total_tests = int(sys.argv[3])
 
     seed_offset = 0
-    if len(sys.argv) > 5:
-        seed_offset = int(sys.argv[5])
+    if len(sys.argv) > 4:
+        seed_offset = int(sys.argv[4])
 
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
     profile_get_asid_mask(design_name)
-    # tolerate_bug_for_bug_timing(design_name, "r1", True)
-    # tolerate_bug_for_bug_timing(design_name, "k4", True)
-    # tolerate_bug_for_bug_timing(design_name, "k5", True)
-    # tolerate_bug_for_bug_timing(design_name, "b3", True) # RAS0
-    # tolerate_bug_for_bug_timing(design_name, "b4", True) # RAS1
-    # tolerate_bug_for_bug_timing(design_name, "b5", True) # branch prediction
+
     check_isa_sims(design_name,n_cores,n_total_tests,seed_offset)
     
 else:

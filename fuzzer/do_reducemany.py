@@ -9,7 +9,6 @@
 # sys.argv[3]: offset for seed (to avoid running the fuzzing on the same instances over again)
 
 from workers.reduce_worker import reduce_programs
-from cascade.toleratebugs import tolerate_bug_for_eval_reduction
 from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask
 from common.spike import calibrate_spikespeed
 import sys
@@ -44,18 +43,8 @@ if __name__ == '__main__':
         print(f"Found {len(seeds)} seeds in logfile: {seeds}")
     elif "max-seed" in sys.argv[3]:
         seeds = range(0, int(sys.argv[3].split("=")[-1]))
-
-
-    # 346864, 'rocket', 232, 75
-    # 230898, 'rocket', 673, 991
-    # 754911, 'rocket', 1220, 812
-    # 265291, 'rocket', 2231, 740
-    # 493247, 'rocket', 1745, 936
-    # 526858, 'rocket', 2170, 531
-    # 269239, 'rocket', 1921, 707
-    # descriptor = (747222, design_name, 576, 97, True)
-
-    # tolerate_bug_for_eval_reduction(design_name)
+    else:
+        print("One of '--seeds', '--log-file' or '--max-seed' need to be provided.")
 
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
