@@ -161,7 +161,7 @@ class BaseInstruction:
         else:
             return f"({self.priv_level.name[0]}): {hex(self.paddr)}"
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str}"
 
     def execute(self, is_spike_resolution: bool = True):
@@ -257,7 +257,7 @@ class R12DInstruction(CFInstruction):
         self.rs2 = rs2
         self.rd =  rd
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -344,7 +344,7 @@ class ImmRdInstruction(ImmInstruction):
         self.rd =  rd
         # self.compute_taints()
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -381,7 +381,7 @@ class RegImmInstruction(ImmInstruction):
         if self.instr_str == "sraiw" and self.imm < 0:
             assert False
         
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def set_bytecode(self,bytecode):
@@ -440,7 +440,7 @@ class BranchInstruction(ImmInstruction):
         self.rs2 = rs2
         self.plan_taken = plan_taken
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, {hex(self.imm)}"
 
     # Choose an opcode that, given the values of rs1 and rs2, will comply with the required takenness
@@ -500,7 +500,7 @@ class JALInstruction(ImmInstruction):
             assert rd < MAX_NUM_PICKABLE_REGS
         self.rd  = rd
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -528,7 +528,7 @@ class JALRInstruction(ImmInstruction):
         self.to_new_layout = to_new_layout
         self.va_layout_after_op = fuzzerstate.target_layout
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -546,7 +546,7 @@ class SpecialInstruction(CFInstruction):
         self.rs1 = rs1
         self.rs2 = rs2
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -597,7 +597,7 @@ class IntLoadInstruction(ImmInstruction):
         self.rs1 =  rs1
         self.producer_id = producer_id
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.imm}({ABI_INAMES[self.rs1]}) "
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -638,7 +638,7 @@ class IntStoreInstruction(ImmInstruction):
         self.rs2  = rs2
         self.producer_id = producer_id
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
@@ -664,7 +664,7 @@ class RegdumpInstruction(IntStoreInstruction):
         else:
             return super().gen_bytecode_int(is_spike_resolution)
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         if not is_spike_resolution:
             return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
         else:
@@ -1232,7 +1232,7 @@ class CSRImmInstruction(CSRInstruction):
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {hex(self.uimm)}"
 
 ###
@@ -1268,7 +1268,7 @@ class PlaceholderProducerInstr0(BaseInstruction):
         else:
             return super().get_preamble() +  f": {int(self.producer_id)}/None/None"
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         if is_spike_resolution:
             if self.spike_resolution_offset is not None:
                 spike_res_off = self.spike_resolution_offset
@@ -1322,7 +1322,7 @@ class PlaceholderProducerInstr1(BaseInstruction):
         else:
             return super().get_preamble() +  f": {int(self.producer_id)}/None/None"
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         if is_spike_resolution:
             if self.spike_resolution_offset is not None:
                 spike_res_off = self.spike_resolution_offset
@@ -1472,7 +1472,7 @@ class RawDataWord:
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.wordval
     
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {hex(self.wordval)} (RAW DATA)"
 
     def print(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
@@ -1514,7 +1514,7 @@ class SimpleIllegalInstruction(ExceptionInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return 0x00000000
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
             return f"{self.get_preamble()}: unimp (SimpleIllegalInstruction)"
 
 
@@ -1534,7 +1534,7 @@ class SimpleExceptionEncapsulator(ExceptionInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.instr.gen_bytecode_int(is_spike_resolution)
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.instr.get_str(is_spike_resolution)} (SimpleExceptionEncapsulator for {self.producer_id})"
     
     def reset_addr(self):
@@ -1548,7 +1548,7 @@ class SpeculativeInstructionEncapsulator(BaseInstruction):
         super().__init__(fuzzerstate, "SpeculativeInstructionEncapsulator")
         self.instr = instr
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.instr.get_str(is_spike_resolution)} (SpeculativeInstructionEncapsulator)"
 
     def reset_addr(self):
@@ -1683,7 +1683,7 @@ class MisalignedMemInstruction(ExceptionInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.meminstr.gen_bytecode_int(is_spike_resolution)
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.meminstr.get_str(is_spike_resolution)} (MisalignedMemInstruction for {self.producer_id})"
 
     def reset_addr(self):
@@ -1709,7 +1709,7 @@ class MstatusWriterInstruction(BaseInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return self.csr_instr.get_str() + f" ({self.instr_str})"
 
     def reset_addr(self):
@@ -1731,7 +1731,7 @@ class TvecWriterInstruction(BaseInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
 
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return self.csr_instr.get_str() + f" ({self.instr_str} for {self.producer_id})"
 
     def reset_addr(self):
@@ -1753,7 +1753,7 @@ class EPCWriterInstruction(BaseInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
     
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return self.csr_instr.get_str() + f" ({self.instr_str} for {self.producer_id})"
 
     def reset_addr(self):
@@ -1782,7 +1782,7 @@ class GenericCSRWriterInstruction(BaseInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         return self.csr_instr.gen_bytecode_int(is_spike_resolution)
     
-    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return self.csr_instr.get_str() + f" ({self.instr_str} for {self.producer_id})"
 
     def reset_addr(self):
