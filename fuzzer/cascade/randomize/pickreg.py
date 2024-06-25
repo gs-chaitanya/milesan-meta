@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT, PRINT_FSM_TRANSITIONS, PRINT_WRITEBACK_T0
 from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG, NUM_MIN_TAINTED_REGS
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
-from params.fuzzparams import USE_TAINT_HW, USE_TAINT_TANH, USE_TAINT_BIN, NONPICKABLE_REGISTERS
+from params.fuzzparams import USE_TAINT_HW, USE_TAINT_TANH, USE_TAINT_BIN, NONPICKABLE_REGISTERS, TAINT_EN
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
 from cascade.util import IntRegIndivState
 from cascade.registers import IntRegister, ABI_INAMES
@@ -222,19 +222,37 @@ class IntRegPickState:
         return id
 
     # Excludes the zero register. When force is enabled, will either throw an exception or return an untainted register.
-    def pick_untainted_int_inputreg_nonzero(self, force: bool = False):
+    def pick_untainted_int_inputreg_nonzero(self, force: bool = False, val_range: tuple = None, val_t0_range: tuple = None):
         authorized_regs_onehot = self.get_free_regs_onehot()
         was_zero_authorized = authorized_regs_onehot[0]
         authorized_regs_onehot[0] = 0
+        regs_in_range_onehot = [1 for _ in range(len(authorized_regs_onehot))]
+        if val_range is not None:
+            regs_in_range_onehot &= [reg.get_val() in val_range for reg in self.regs[:self.num_pickable_regs]]
+        if val_t0_range is not None:
+            assert TAINT_EN
+            regs_in_range_onehot &= [reg.get_val_t0() in val_t0_range for reg in self.regs[:self.num_pickable_regs]]
         if DO_ASSERT:
             # if self.get_num_untainted_regs_in_state(IntRegIndivState.FREE) < NUM_MIN_UNTAINTED_INTREGS:
                 # self.print()
             assert self.get_num_untainted_regs_in_state(IntRegIndivState.FREE) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
-        id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0(authorized_regs_onehot, True, force))[0]
+        id = random.choices(range(self.num_pickable_regs), self.get_effective_weights_t0([i&j for i,j in zip(authorized_regs_onehot,regs_in_range_onehot)], True, force))[0]
         authorized_regs_onehot[0] = was_zero_authorized
         if DO_ASSERT:
             assert self.regs[id].fsm_state == IntRegIndivState.FREE
         return id
+
+    def exists_free_intreg_in_range(self, val_range: tuple = None, val_t0_range: tuple = None, allow_zero: bool = False):
+        regs_in_range_onehot = self.get_free_regs_onehot()
+        if not allow_zero:
+            regs_in_range_onehot[0] = 0
+        if val_range is not None:
+            regs_in_range_onehot &= [reg.get_val() in val_range for reg in self.regs[:self.num_pickable_regs]]
+        if val_t0_range is not None:
+            assert TAINT_EN
+            regs_in_range_onehot &= [reg.get_val_t0() in val_t0_range for reg in self.regs[:self.num_pickable_regs]]
+
+        return sum(regs_in_range_onehot) > 0
 
     # Includes the zero register. When force is enabled, will either throw an exception or return an untainted register.
     def pick_untainted_int_inputreg(self, force: bool = False):

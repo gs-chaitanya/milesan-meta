@@ -422,6 +422,7 @@ def create_memop_instrobjs(fuzzerstate, instr_str):
         rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.
         uimm0, uimm1 = li_into_reg(to_unsigned(addr, fuzzerstate.is_design_64bit), False)
         if is_store:
+            # if fuzzerstate.intregpickstate.exists_free_intreg_in_range()
             return [
                 ImmRdInstruction_t0(fuzzerstate, "lui", rd, uimm0),
                 RegImmInstruction_t0(fuzzerstate, "addi",rd,rd,uimm1),
