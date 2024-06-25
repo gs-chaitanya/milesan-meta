@@ -8,24 +8,8 @@ if { [info exists ::env(TOP_MODULE)] }       { set TOP_MODULE $::env(TOP_MODULE)
 
 yosys read_verilog -defer -sv $VERILOG_INPUT
 yosys hierarchy -top $TOP_MODULE -check
-
-# yosys proc_clean
-# yosys proc_rmdead
-# yosys proc_prune
-# yosys proc_init
-# yosys proc_arst
-# yosys proc_rom
-# yosys proc_mux
-# yosys proc_dlatch
-# yosys proc_dff
-
-# # yosys proc_memwr # Adding this shadows the bug.
-
-# yosys proc_clean
-# # yosys opt_expr -keepdc
-
 yosys proc
 yosys opt -purge
-
+yosys pmuxtree
 
 yosys write_verilog -sv -noattr $VERILOG_OUTPUT
