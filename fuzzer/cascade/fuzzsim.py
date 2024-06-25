@@ -4,10 +4,10 @@
 
 # This script is responsible for running the RTL simulations from the fuzzer.
 
-from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS
+from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA
+from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, TRACE_FST, TRACE_VCD, TRACE_EN
 from cascade.util import IntRegIndivState
 from common.sim.modelsim import get_next_worker_id
-from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES
 from common.sim.commonsim import setup_sim_env
 from common import designcfgs
 from cascade.spikeresolution import SPIKE_STARTADDR
@@ -40,7 +40,7 @@ def runsim_verilator(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_P
 
     my_env = setup_sim_env(elfpath, '/dev/null', '/dev/null', simlen, cascadedir, coveragepath, False)
 
-    simdir               = f"run_{'coverage' if coveragepath else 'rfuzz' if get_rfuzz_coverage_mask else 'vanilla'}_notrace_0.1"
+    simdir               = f"run_{'coverage' if coveragepath else 'rfuzz' if get_rfuzz_coverage_mask else 'vanilla'}_{'notrace' if not TRACE_EN else 'trace' if TRACE_VCD else 'trace_fst' if TRACE_FST else ''}_0.1"
     verilatordir         = 'default-verilator'
     verilator_executable = 'V%s' % design_cfg['toplevel']
     sim_executable_path  = os.path.abspath(os.path.join(builddir, simdir, verilatordir, verilator_executable))
@@ -263,7 +263,7 @@ def runtest_modelsim_forcoverage(fuzzerstate, elfpath: str, coveragepath: str):
 
 
 def run_rtl_and_load_regstream(env,design_name: str):
-    cmd = ["make","rerun_drfuzz_mem_notrace"]
+    cmd = ["make",f"rerun_{'drfuzz_mem' if not USE_VANILLA else 'vanilla'}_{'notrace' if not TRACE_EN else 'trace' if TRACE_VCD else 'trace_fst' if TRACE_FST else ''}"]
     cascadedir = designcfgs.get_design_cascade_path(design_name)
     subprocess.run(cmd,cwd=cascadedir,env=env,capture_output=True,check=True)
 
