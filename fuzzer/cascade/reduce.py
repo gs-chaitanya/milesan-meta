@@ -996,7 +996,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_msg += f"Fault from previous BB           : {fault_from_prev_bb}\n"
         ret_msg += f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}\n"
         ret_msg += f"Failing instr in bb excluding cf : {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])-1}\n"
-        ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}\n"
+        ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str(color_taint=False)}\n"
 
         if not IGNORE_TAINT_MISMATCH and fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level not in fuzzerstate.taint_in_priv:
             ret_msg += f"\tLeakage from {[p.name for p in fuzzerstate.taint_in_priv]} to {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name} found!\n"
@@ -1005,13 +1005,13 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_msg += f"Previous bb i                    : {failing_bb_id-1}\n"
         ret_msg += f"Previous bb start addr           : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id-1] + SPIKE_STARTADDR)}\n"
         ret_msg += f"Previous instr in bb excluding cf: {len(fuzzerstate.instr_objs_seq[failing_bb_id-1])-1}/{len(fuzzerstate.instr_objs_seq[failing_bb_id-1])-1}\n"
-        ret_msg += f"Previous instr                   : {fuzzerstate.instr_objs_seq[failing_bb_id-1][-1].get_str()}\n"
+        ret_msg += f"Previous instr                   : {fuzzerstate.instr_objs_seq[failing_bb_id-1][-1].get_str(color_taint=False)}\n"
 
         ret_msg += f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}\n"
         ret_msg += f"Failing instr bb excluding cf    : {0}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])-1}\n"
-        ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][0].get_str()}\n"
+        ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][0].get_str(color_taint=False)}\n"
 
-        if IGNORE_TAINT_MISMATCH and fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level not in fuzzerstate.taint_in_priv:
+        if not IGNORE_TAINT_MISMATCH and fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level not in fuzzerstate.taint_in_priv:
             ret_msg += f"\tLeakage from {[p.name for p in fuzzerstate.taint_in_priv]} to {fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level.name} found!\n"
 
     if not quiet:
