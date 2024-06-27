@@ -64,7 +64,7 @@
 #define MUX_UNTAINT_TH 0
 #endif
 #ifndef RELOCATE_UP
-#define RELOCATE_UP 0
+#define RELOCATE_UP 0x8000000
 #endif
 
 #endif // MACROS

@@ -10,6 +10,5 @@ yosys read_verilog -defer -sv $VERILOG_INPUT
 yosys hierarchy -top $TOP_MODULE -check
 yosys proc
 yosys opt -purge
-yosys pmuxtree
 
-yosys write_verilog -sv -noattr $VERILOG_OUTPUT
+yosys write_verilog -sv $VERILOG_OUTPUT
