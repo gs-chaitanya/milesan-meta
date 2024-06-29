@@ -8,7 +8,7 @@ import numpy as np
 ##
 # MMU
 ##
-USE_MMU = True
+USE_MMU = False
 
 MAX_NUM_LAYOUTS = 5
 PROBA_ENTANGLE_LAYOUT = 0
@@ -21,7 +21,7 @@ PROBA_NEW_SATP_XEPC_POP = 0.0001
 PROBA_NEW_SATP_STVEC_POP = 0.1
 PROBA_SAME_BASE_PT = 0.5
 REGFSM_BIAS = 0.1
-
+ALLOC_PAGE_PER_PT = True
 
 ###
 # Basic blocks
@@ -243,14 +243,17 @@ TAINT_REGIMM_IMM = True
 ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = False
 
 # Abort fuzzing run if the computed program does not execute in taint sink privilege.
-ASSERT_EXEC_IN_TAINT_SINK_PRIV = True
+ASSERT_EXEC_IN_TAINT_SINK_PRIV = False
 
 # Ignore exception types to e.g. only fuzz for leakage and ignore architectural bugs that trigger timeouts or value mismatches.
-IGNORE_TIMEOUT = False 
+IGNORE_RTL_TIMEOUT = False
+IGNORE_SPIKE_TIMEOUT = False
 IGNORE_VALUE_MISMATCH = False
-IGNORE_TAINT_MISMATCH = False
+IGNORE_TAINT_MISMATCH = True
 IGNORE_SPIKE_MISMATCH = False
 
 # Use the uninstrumented design for fuzzing/reducing. This helps checking if theres a translation bug in yosys.
 USE_VANILLA = False
+
+
 

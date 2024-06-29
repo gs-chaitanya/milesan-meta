@@ -312,6 +312,9 @@ class MemoryView:
     def store_state(self): 
         self.states += [(deepcopy(self.data), deepcopy(self.data_t0))]  # deepcopy important so we can restore and execute multiple times
 
+    def set_as_initial_state(self):
+        self.states[0] = (deepcopy(self.data), deepcopy(self.data_t0))
+
     def restore_and_reduce_taint(self, mismatch):
         # print([hash(frozenset(state[1].items())) for state in self.states])
         if mismatch:

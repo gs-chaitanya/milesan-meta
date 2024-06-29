@@ -48,7 +48,7 @@ def __reduce_program_worker(design_name, seed):
         if LOG_EXCEPTIONS:
             logdir = os.path.join(PATH_TO_TMP, "logs")
             os.makedirs(logdir, exist_ok=True)
-            with open(f"{logdir}/{design_name}.reduce.exceptions.log", "a") as f:
+            with open(f"{logdir}/{design_name}.reduce.failed.log", "a") as f:
                 f.write(f"seed {seed}: {str(e)}\n")
         return False
         

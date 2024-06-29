@@ -72,7 +72,8 @@ def finalblock(fuzzerstate, design_name: str):
         ]
     else:
         if DEBUG_PRINT: print(f"physical regdump addr is: {hex(regdump_addr)}")
-        regdump_addr, _ = fuzzerstate.pagetablestate.finalblock_sig_vaddr[fuzzerstate.real_curr_layout] #FIXME somewhow, this can be a tuple
+        if USE_MMU:
+            regdump_addr, _ = fuzzerstate.pagetablestate.finalblock_sig_vaddr[fuzzerstate.real_curr_layout] #FIXME somewhow, this can be a tuple
         if DEBUG_PRINT: print(f"virtual regdump addr is: {hex(regdump_addr)}, sum/mprv: {fuzzerstate.status_sum_mprv} layout: {fuzzerstate.effective_curr_layout} ", fuzzerstate.privilegestate.privstate)
         
         # We re-purpose MPP_BOTH_ENDIS_REGISTER_ID, because we will not need it anymore.
@@ -146,7 +147,8 @@ def finalblock(fuzzerstate, design_name: str):
         ]
     else:
         if DEBUG_PRINT: print(f"physical regdump addr is: {hex(stopsig_addr)}")
-        _, stopsig_addr = fuzzerstate.pagetablestate.finalblock_sig_vaddr[fuzzerstate.real_curr_layout]
+        if USE_MMU:
+            _, stopsig_addr = fuzzerstate.pagetablestate.finalblock_sig_vaddr[fuzzerstate.real_curr_layout]
         if DEBUG_PRINT: print(f"virtual regdump addr is: {hex(stopsig_addr)}")
         
         # We re-purpose MPP_BOTH_ENDIS_REGISTER_ID, because we will not need it anymore.

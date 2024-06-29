@@ -159,7 +159,11 @@ class BaseInstruction:
             else:
                 return "(Undetermined)"
         else:
-            return f"({self.priv_level.name[0]}): {hex(self.paddr)}"
+            if self.priv_level is not None and self.paddr is not None:
+                return f"({self.priv_level.name[0]}): {hex(self.paddr)}"
+            else:
+                return "(Undetermined)"
+
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str}"
@@ -1202,7 +1206,7 @@ class CSRRegInstruction(CSRInstruction):
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
-    def get_str(self, is_spike_resolution: bool = True):
+    def get_str(self, is_spike_resolution: bool = True, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {self.csr_id.name}, {ABI_INAMES[self.rs1]}"
 
 # CSR operations with immediate
@@ -1374,7 +1378,7 @@ class PlaceholderPreConsumerInstr(BaseInstruction):
         else:
             return super().get_preamble() +  f": {int(self.producer_id)}/None/None"
 
-    def get_str(self, is_spike_resolution: bool = False):
+    def get_str(self, is_spike_resolution: bool = False, color_taint: bool = False):
         if USE_MMU and self.fuzzerstate.is_design_64bit and self.is_rprod and self.produce_va_layout != -1:
             return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rdep]},  {ABI_INAMES[self.rdep]}, {ABI_INAMES[RPROD_MASK_REGISTER_ID]}"
         elif USE_MMU and self.fuzzerstate.is_design_64bit and self.produce_va_layout != -1:
@@ -1421,7 +1425,7 @@ class PlaceholderConsumerInstr(BaseInstruction):
         else:
             return super().get_preamble() +  f": {int(self.producer_id)}/None/None"
 
-    def get_str(self, is_spike_resolution: bool = False):
+    def get_str(self, is_spike_resolution: bool = False, color_taint: bool = False):
         if is_spike_resolution:
             if USE_MMU and self.produce_va_layout != -1:
                 return f"{self.get_preamble()}: nop (PlaceholderConsumerInstr)"
@@ -1453,10 +1457,8 @@ def is_placeholder(obj):
 class RawDataWord:
     # @param intentionally_signed: When unset, we expect a non-negative wordval
     def __init__(self, fuzzerstate, wordval: int, signed: bool = False):
-        raise NotImplementedError
         self.fuzzerstate = fuzzerstate
         self.paddr = fuzzerstate.curr_ctxsv_bb_start_addr + 4*len(fuzzerstate.ctxsv_bbs[-1]) + SPIKE_STARTADDR
-        self.vaddr = phys2virt(self.paddr)
         if DO_ASSERT:
             if signed:
                 assert wordval >= -(1 << 31)

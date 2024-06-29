@@ -1,8 +1,8 @@
 from common.spike import SPIKE_STARTADDR
 # from cascade.cfinstructionclasses import R12DInstruction, ImmRdInstruction, RegImmInstruction
 from rv.asmutil import li_into_reg
-from params.fuzzparams import RDEP_MASK_REGISTER_ID, PROBA_ENTANGLE_LAYOUT, PROBA_SAME_BASE_PT, TAINT_EN
-from params.runparams import DEBUG_PRINT, INSERT_REGDUMPS
+from params.fuzzparams import RDEP_MASK_REGISTER_ID, PROBA_ENTANGLE_LAYOUT, PROBA_SAME_BASE_PT, TAINT_EN, ALLOC_PAGE_PER_PT
+from params.runparams import DEBUG_PRINT, DO_ASSERT
 from cascade.privilegestate import PrivilegeStateEnum
 from common.designcfgs import get_design_stop_sig_addr, get_design_reg_dump_addr, get_design_reg_stream_addr
 import random
@@ -328,6 +328,58 @@ class PageTablesGen:
                     if (self.ptr_pt_base_list_per_layout[i][0] & PAGE_ALIGNMENT_MASK) == (self.ptr_pt_base_list_per_layout[j][0] & PAGE_ALIGNMENT_MASK):
                         self.common_base_page[i].append(j)
 
+        # Allocate a whole page for each page table.
+        # if ALLOC_PAGE_PER_PT:
+        #     for pt_base_list in self.ptr_pt_base_list_per_layout:
+        #         # Allocate space from page start until first PTE.
+        #         page_addr = pt_base_list[0]&PAGE_ALIGNMENT_MASK
+        #         space_until_first_pte = fuzzerstate.memview.get_available_contig_space(page_addr)
+        #         if DO_ASSERT:
+        #             assert page_addr+space_until_first_pte == pt_base_list[0], f"Distance from page start address to first PTE does not match PTE address: {hex(page_addr+space_until_first_pte)} != {hex(pt_base_list[0])}"
+        #         fuzzerstate.memview.alloc_mem_range(page_addr, page_addr+space_until_first_pte)
+        #         # Allocate the space between the PTEs.
+        #         for pte_idx, pte_addr in enumerate(pt_base_list[:-1]):
+        #             space_until_next_pte = fuzzerstate.memview.get_available_contig_space(pte_addr+fuzzerstate.ptesize)
+        #             if DO_ASSERT:
+        #                 assert pte_addr+fuzzerstate.ptesize+space_until_next_pte == pt_base_list[pte_idx+1]
+        #             fuzzerstate.memview.alloc_mem_range(pte_addr+fuzzerstate.ptesize, pte_addr+fuzzerstate.ptesize+space_until_next_pte)
+        #         # Allocate the space from the final PTE until the end of the page.
+        #         last_pte_addr = pt_base_list[-1]
+        #         fuzzerstate.memview.alloc_mem_range(last_pte_addr+fuzzerstate.ptesize, last_pte_addr&PAGE_ALIGNMENT_MASK+PHYSICAL_PAGE_SIZE)
+
+        if ALLOC_PAGE_PER_PT:
+            allocated_pages = []
+            for pt_base_list in self.ptr_pt_base_list_per_layout:
+                # Allocate space from page start until first PTE.
+                for pte_base in pt_base_list:
+                    page_addr = pte_base&PAGE_ALIGNMENT_MASK-SPIKE_STARTADDR
+                    if page_addr in allocated_pages: continue
+                    allocated_pages += [page_addr]
+                    space_until_first_pte = fuzzerstate.memview.get_available_contig_space(page_addr)
+                    if space_until_first_pte > 0:
+                        if DEBUG_PRINT:
+                            print(f"Allocating until first PTE {hex(page_addr)} - {hex(page_addr+space_until_first_pte)}")
+                        fuzzerstate.memview.alloc_mem_range(page_addr, page_addr+space_until_first_pte)
+                    pte_addr = page_addr + space_until_first_pte
+                    # Allocate the space between the PTEs.
+                    while pte_addr < page_addr + PHYSICAL_PAGE_SIZE:
+                        space_until_next_pte = fuzzerstate.memview.get_available_contig_space(pte_addr+fuzzerstate.ptesize)
+                        if DO_ASSERT:
+                            assert fuzzerstate.memview.get_available_contig_space(pte_addr) == 0
+                        if space_until_next_pte > 0:
+                            if (pte_addr+fuzzerstate.ptesize+space_until_next_pte)&PAGE_ALIGNMENT_MASK == page_addr:
+                                if DEBUG_PRINT:
+                                    print(f"Allocating until next PTE {hex(pte_addr+fuzzerstate.ptesize)} - {hex(pte_addr+fuzzerstate.ptesize+space_until_next_pte)}")
+                                fuzzerstate.memview.alloc_mem_range(pte_addr+fuzzerstate.ptesize, pte_addr+fuzzerstate.ptesize+space_until_next_pte)
+                            elif pte_addr+fuzzerstate.ptesize < page_addr+PHYSICAL_PAGE_SIZE:
+                                if DEBUG_PRINT:
+                                    print(f"Allocating until end of page {hex(pte_addr+fuzzerstate.ptesize)} - {hex(page_addr+PHYSICAL_PAGE_SIZE)}")
+                                fuzzerstate.memview.alloc_mem_range(pte_addr+fuzzerstate.ptesize, page_addr+PHYSICAL_PAGE_SIZE)
+                                break
+                        pte_addr += space_until_next_pte + fuzzerstate.ptesize
+
+
+
         if DEBUG_PRINT: 
             print("common base page dict")
             print(self.common_base_page)
@@ -399,27 +451,40 @@ class PageTablesGen:
             curr_layout_pt_content, curr_layout_pt_content_supervisor = [], []
             if DEBUG_PRINT:
                 print(f"Generating {self.n_entries_per_level[layout_id][-1]} leaves for layout {layout_id}")
+            
             # priv = PrivilegeStateEnum.MACHINE
             for _ in range(self.n_entries_per_level[layout_id][-1]):
                 # Make user and supervisor
+                is_pt = ppn_leaf in [i&PAGE_ALIGNMENT_MASK for j in self.ptr_pt_base_list_per_layout for i in j]
+                if is_pt:
+                    if DEBUG_PRINT:
+                        print(f"{hex(ppn_leaf)} points to page table. Skipping mapping.")
+                    curr_layout_pt_content.append(0)
+                    curr_layout_pt_content_supervisor.append(0)
+                    ppn_leaf += self.page_size_per_layout[layout_id]
+                    continue
                 is_random_data_block = ppn_leaf-SPIKE_STARTADDR in [addr[0] for addr in fuzzerstate.random_data_block_ranges]
                 if TAINT_EN and is_random_data_block and fuzzerstate.random_data_block_has_taint[ppn_leaf-SPIKE_STARTADDR]:
+                    # print("Mapping random data block with taints")
                     # If this is a random data block with taint and we only allow taint in one privilege, we map it accordingly s.t. only that privelege has access.
                     # We then need to ensure that tainted data is also only written to pages that were tainted initially.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_in_priv, is_executable=False)
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_in_priv, is_executable=False)
                     self.ppn_leaf_to_priv_dict[ppn_leaf] = fuzzerstate.taint_in_priv
                 elif is_random_data_block:
+                    # print("Mapping random data block without taints")
                     # If it is a random data block without taint, map it to both privileges. It will be a shared memory, where only untainted data can be written to.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=False)
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=False)
                     self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
-                elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.final_bb_base_addr&PAGE_ALIGNMENT_MASK or ppn_leaf - SPIKE_STARTADDR == ((fuzzerstate.final_bb_base_addr+get_finalblock_max_size())&PAGE_ALIGNMENT_MASK) :
+                elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.final_bb_base_addr&PAGE_ALIGNMENT_MASK or ppn_leaf - SPIKE_STARTADDR == ((fuzzerstate.final_bb_base_addr+get_finalblock_max_size())&PAGE_ALIGNMENT_MASK):
+                    # print("Mapping final block")
                     # If the page belongs to the final block, also map it for both priveleges.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=True)
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=True)
                     self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
                 elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.bb_start_addr_seq[0]&PAGE_ALIGNMENT_MASK:
+                    # print("(Not) mapping initial block.")
                     # If it is the first basic block, don't map it as it will only be used in machine mode.
                     curr_pte            = 0
                     curr_pte_supervisor = 0

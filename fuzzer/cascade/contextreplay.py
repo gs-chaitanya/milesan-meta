@@ -6,14 +6,17 @@
 
 from dataclasses import dataclass
 from params.runparams import DO_ASSERT
-from params.fuzzparams import MAX_NUM_PICKABLE_REGS
+from params.fuzzparams import MAX_NUM_PICKABLE_REGS, USE_MMU, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, TAINT_EN
 from cascade.toleratebugs import is_tolerate_ras0
 from rv.csrids import CSR_IDS
 from common.spike import SPIKE_STARTADDR
+from cascade.spikeresolution import get_current_layout
 from cascade.privilegestate import PrivilegeStateEnum
-from cascade.cfinstructionclasses_t0 import ImmRdInstruction_t0, RegImmInstruction_t0, IntLoadInstruction_t0, IntStoreInstruction_t0, CSRRegInstruction_t0, JALInstruction_t0, RawDataWord_t0
+from cascade.cfinstructionclasses_t0 import ImmRdInstruction_t0, RegImmInstruction_t0, IntLoadInstruction_t0, IntStoreInstruction_t0, CSRRegInstruction_t0, JALInstruction_t0, RawDataWord_t0, PrivilegeDescentInstruction_t0
 from cascade.randomize.pickstoreaddr import ALIGNMENT_BITS_MAX
 from common.designcfgs import get_design_cl_size
+from cascade.mmu_utils import phys2virt
+
 # @brief This function computes an upper bound on the size of the context setter basic block.
 # Do not functools.cache because it is cheap to compute, even though it is not expected to change during a fuzzing run.
 def get_context_setter_max_size(fuzzerstate):
@@ -31,8 +34,8 @@ def get_context_setter_max_size(fuzzerstate):
     num_instrs_csrs += 4 # mtvec
     num_instrs_csrs += 4 # stvec
     num_instrs_csrs += 4 # medeleg
-    num_instrs_csrs += 8 # mstatus  is a bit special and requires more Instruction_t0s.
-    num_instrs_csrs += 8 # minstret is a bit special and requires more Instruction_t0s.
+    num_instrs_csrs += 8 # mstatus  is a bit special and requires more Instructions.
+    num_instrs_csrs += 8 # minstret is a bit special and requires more Instructions.
     num_instrs_reset_last_reg = 1 # Reset the register used as an offset (should not be necessary)
     # Privilege restoration overhead
     num_instr_privilege_restoration = 6
@@ -68,6 +71,7 @@ class SavedContext:
     mstatus: int
     minstret: int
     minstreth: int # Only used for 32-bit
+    satp: int
     privilege: PrivilegeStateEnum
     mem_bytes_dict: dict # mem_bytes_dict[addr]: value
     mem_bytes_t0_dict: dict # mem_bytes_t0_dict[addr]: value_t0
@@ -75,12 +79,13 @@ class SavedContext:
     freg_vals_t0: list
     reg_vals: list
     reg_vals_t0: list
+    rprod_mask: int
 
 # FUTURE Set the proper privilege mode, page tables, CSR values, etc.
 # @brief This function generates the context setter basic block.
 # @param next_jmp_addr: The address where the context setter will jump to. We do not call it next_bb_addr because it may target not the first Instruction_t0 of a basic block.
 def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
-    raise NotImplementedError(f"Not implemented to work with taint+vaddr yet.")
+    assert not USE_MMU, f"MMU not implemented."
     def addr_to_id_in_ctxsv(addr: int):
         if DO_ASSERT:
             assert addr >= fuzzerstate.curr_ctxsv_bb_start_addr
@@ -233,23 +238,23 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
     ###
 
     if saved_context.privilege == PrivilegeStateEnum.SUPERVISOR or saved_context.privilege == PrivilegeStateEnum.USER:
-        raise NotImplementedError("Privileges not implemented yet.")
-        # # Populate mpp
-        # if saved_context.privilege == PrivilegeStateEnum.SUPERVISOR:
-        #     fuzzerstate.ctxsv_bbs[-1].append(CSRRegInstruction_t0(fuzzerstate,"csrrs", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
-        #     fuzzerstate.ctxsv_bbs[-1].append(CSRRegInstruction_t0(fuzzerstate,"csrrc", 0, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
-        # else:
-        #     fuzzerstate.ctxsv_bbs[-1].append(CSRRegInstruction_t0(fuzzerstate,"csrrc", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
-        #     fuzzerstate.ctxsv_bbs[-1].append(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0, is_rd_nonpickable_ok=True))
-        # curr_addr += 8 # NO_COMPRESSED
-        # # Populate mepc
-        # mepc_target = curr_addr + 12
-        # fuzzerstate.ctxsv_bbs[-1].append(RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, mepc_target-fuzzerstate.ctxsv_bbs[-1]_base_addr, is_rd_nonpickable_ok=True)) # The reg `MAX_NUM_PICKABLE_REGS` contains the start address of the context sette, is_rd_nonpickable_ok=Truer
-        # fuzzerstate.ctxsv_bbs[-1].append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MEPC))
-        # fuzzerstate.ctxsv_bbs[-1].append(PrivilegeDescentInstruction_t0(fuzzerstate,True)) # mret
-        # # Add 2 nops for the mret, just in case the CPU is not doing great with mret sometimes :)
-        # fuzzerstate.ctxsv_bbs[-1].append(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0, is_rd_nonpickable_ok=True))
-        # curr_addr += 16 # NO_COMPRESSED
+        # raise NotImplementedError("Privileges not implemented yet.")
+        # Populate mpp
+        if saved_context.privilege == PrivilegeStateEnum.SUPERVISOR:
+            fuzzerstate.ctxsv_bbs[-1].append(CSRRegInstruction_t0(fuzzerstate,"csrrs", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+            fuzzerstate.ctxsv_bbs[-1].append(CSRRegInstruction_t0(fuzzerstate,"csrrc", 0, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+        else:
+            fuzzerstate.ctxsv_bbs[-1].append(CSRRegInstruction_t0(fuzzerstate,"csrrc", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+            fuzzerstate.ctxsv_bbs[-1].append(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0, is_rd_nonpickable_ok=True))
+        curr_addr += 8 # NO_COMPRESSED
+        # Populate mepc
+        mepc_target = curr_addr + 12
+        fuzzerstate.ctxsv_bbs[-1].append(RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, mepc_target-fuzzerstate.ctxsv_bb_start_addr_seq[-1], is_rd_nonpickable_ok=True)) # The reg `MAX_NUM_PICKABLE_REGS` contains the start address of the context sette, is_rd_nonpickable_ok=Truer
+        fuzzerstate.ctxsv_bbs[-1].append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MEPC))
+        fuzzerstate.ctxsv_bbs[-1].append(PrivilegeDescentInstruction_t0(fuzzerstate,True)) # mret
+        # Add 2 nops for the mret, just in case the CPU is not doing great with mret sometimes :)
+        fuzzerstate.ctxsv_bbs[-1].append(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0, is_rd_nonpickable_ok=True))
+        curr_addr += 16 # NO_COMPRESSED
 
     ###
     # Third, set the memory bytes to the expected values
@@ -290,7 +295,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
     ###
 
     if fuzzerstate.design_has_fpu:
-        assert False, "Not implemented"
+        raise NotImplementedError()
         # addr_freg_load_addi = curr_addr
         # fuzzerstate.ctxsv_bbs[-1].append(None)
         # curr_addr += 4 # NO_COMPRESSED
@@ -514,15 +519,25 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int):
         assert curr_addr <= fuzzerstate.curr_ctxsv_bb_start_addr + fuzzerstate.ctxsv_size_upperbound, f"The context setter is too large: size is `{hex(curr_addr-fuzzerstate.curr_ctxsv_bb_start_addr)}`, fuzzerstate.ctxsv_size_upperbound is `{hex(fuzzerstate.ctxsv_size_upperbound)}`."
 
     # The addresses are set in the constructors according to the BBs, which is not correct since we are in the context block now.
-    # We correct these addresses here.
+    # We correct these addresseses and privileges here.
+    # TODO: This is quite ugly maybe change it if possible.
     # For the raw data, we write it to memview as soon as the address is set.
+    priv_level =  PrivilegeStateEnum.MACHINE
+    va_layout = -1
     for id,instr in enumerate(fuzzerstate.ctxsv_bbs[-1]):
-        instr.addr = fuzzerstate.curr_ctxsv_bb_start_addr + 4*id + SPIKE_STARTADDR
+        instr.paddr = fuzzerstate.curr_ctxsv_bb_start_addr + 4*id + SPIKE_STARTADDR
+        instr.priv_level = priv_level
+        if USE_MMU:
+            instr.va_layout = va_layout
+            instr.vaddr = phys2virt(instr.paddr, instr.priv)
+        if isinstance(instr, (PrivilegeDescentInstruction_t0, CSRRegInstruction_t0, JALInstruction_t0)):
+            va_layout, priv_level = get_current_layout(instr, va_layout, priv_level)
         if isinstance(instr, RawDataWord_t0):
-            instr.write()
+            instr.write() # Write both value and taint to DMEM
         if isinstance(instr, RegImmInstruction_t0):
-            instr.write_t0() # Could have tainted immediates
+            instr.write_t0() # Could have tainted immediates, only need to write taint to IMEM
 
     # We store this state so we can reset the memview to it before (re-)simulating.
-    fuzzerstate.memview.store_state()
+    # fuzzerstate.memview.store_state()
+    fuzzerstate.memview.set_as_initial_state()
         

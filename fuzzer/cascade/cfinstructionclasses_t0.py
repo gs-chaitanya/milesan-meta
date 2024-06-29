@@ -29,12 +29,13 @@ def clean_reg_taint(reg, reg_t0, skip_regs):
     return reg_t0
 
 def filter_reg_t0_traceback(reg_id, addr, fuzzerstate, correct_val: int = None, is_spike_resolution: bool = False):
+    raise NotImplementedError("Depricated.")
     last_instr = compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val)
     dep_regs = set()
     instr_stream = []
     for bb_instrs in reversed(fuzzerstate.instr_objs_seq):
         for instr_obj in reversed(bb_instrs):
-            if instr_obj.addr == last_instr.paddr: # start collecting depending registers
+            if instr_obj.paddr == last_instr.paddr: # start collecting depending registers
                 instr_stream += [instr_obj]
                 if hasattr(instr_obj,"rs1"):
                     dep_regs |= {instr_obj.rs1}
@@ -45,7 +46,7 @@ def filter_reg_t0_traceback(reg_id, addr, fuzzerstate, correct_val: int = None, 
                 if hasattr(instr_obj,"rprod"):    
                     dep_regs |= {instr_obj.rprod}
 
-            elif hasattr(instr_obj,"rd") and instr_obj.rd in dep_regs and instr_obj.addr in fuzzerstate.intregpickstate.writeback_trace_final :
+            elif hasattr(instr_obj,"rd") and instr_obj.rd in dep_regs and instr_obj.paddr in fuzzerstate.intregpickstate.writeback_trace_final :
                 instr_stream += [instr_obj]
                 dep_regs.remove(instr_obj.rd)
                 if hasattr(instr_obj,"rs1"):
@@ -63,11 +64,11 @@ def filter_reg_t0_traceback(reg_id, addr, fuzzerstate, correct_val: int = None, 
     if PRINT_FILTERED_REG_TRACEBACK:
         print("*** FILTERED TAINT TRACEBACK ***")
         for instr_obj in reversed(instr_stream):
-            if instr_obj.addr not in fuzzerstate.intregpickstate.writeback_trace_in_situ:
-                assert instr_obj.addr not in fuzzerstate.intregpickstate.writeback_trace_final
+            if instr_obj.paddr not in fuzzerstate.intregpickstate.writeback_trace_in_situ:
+                assert instr_obj.paddr not in fuzzerstate.intregpickstate.writeback_trace_final
                 continue
-            rd_spike,val_t0_spike = fuzzerstate.intregpickstate.writeback_trace_in_situ[instr_obj.addr]
-            rd_final,val_t0_final = fuzzerstate.intregpickstate.writeback_trace_final[instr_obj.addr]
+            rd_spike,val_t0_spike = fuzzerstate.intregpickstate.writeback_trace_in_situ[instr_obj.paddr]
+            rd_final,val_t0_final = fuzzerstate.intregpickstate.writeback_trace_final[instr_obj.paddr]
             if rd_final != rd_spike or val_t0_final != val_t0_spike:
                 print("Mismatch between in-situ and final simulation:")
                 instr_obj.print(True)

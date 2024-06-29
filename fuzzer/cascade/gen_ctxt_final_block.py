@@ -51,6 +51,21 @@ def get_last_bb_layout_and_priv(fuzzerstate = None, bb_id = -1, instr_id = -1, i
 
     return -1, PrivilegeStateEnum.MACHINE
 
+def get_priv_and_layout_after_instruction(bb_instr):
+    if isinstance(bb_instr, PrivilegeDescentInstruction) or isinstance(bb_instr, ExceptionInstruction):
+        return bb_instr.va_layout_after_op, bb_instr.priv_level_after_op
+    if isinstance(bb_instr, CSRRegInstruction):
+        is_satp_smode, layout = bb_instr.is_satp_smode
+        if is_satp_smode: 
+            return layout, PrivilegeStateEnum.SUPERVISOR
+    if isinstance(bb_instr, JALRInstruction):
+        if bb_instr.to_new_layout:
+            return bb_instr.va_layout, bb_instr.priv_level
+
+    return bb_instr.va_layout, bb_instr.priv_level
+
+
+
 # @brief gets the last sum and mprv bits, a bit redundant, but its getting really complicated
 def get_last_sum_mprv(fuzzerstate = None, bb_id = -1, instr_id = -1):
     for curr_instr_id in range(instr_id, -1, -1):  # Iterate over columns in reverse

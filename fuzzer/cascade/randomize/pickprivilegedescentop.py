@@ -34,7 +34,7 @@ def gen_priv_descent_instr(fuzzerstate):
 
     # If there should not be any taint propagation from the privelege we're in to the one we are returning to.
     if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and fuzzerstate.privilegestate.curr_mstatus_mpp not in fuzzerstate.taint_in_priv:
-        instr_objs += clear_taints_with_random_instructions(fuzzerstate) # TODO: make sure we have space for the extra instructions.
+        instr_objs += clear_taints_with_random_instructions(fuzzerstate)
 
     # Invalidate the corresponding epc and update the current privilege level.
     # Do not update or invalidate mpp/spp bits.
@@ -42,7 +42,6 @@ def gen_priv_descent_instr(fuzzerstate):
         fuzzerstate.privilegestate.is_mepc_populated = False
         fuzzerstate.privilegestate.privstate = fuzzerstate.privilegestate.curr_mstatus_mpp
         fuzzerstate.privilegestate.curr_mstatus_mpp = PrivilegeStateEnum.USER
-        # PROBLEM update the mprv here
     else:
         fuzzerstate.privilegestate.is_sepc_populated = False
         fuzzerstate.privilegestate.privstate = fuzzerstate.privilegestate.curr_mstatus_spp
@@ -94,10 +93,10 @@ def gen_priv_descent_instr(fuzzerstate):
             if ((old_priv_state == PrivilegeStateEnum.SUPERVISOR and fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.USER) or (old_priv_state == PrivilegeStateEnum.USER and fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR)) and (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.SUPERVISOR] | 0x7fffffff) - (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.USER] | 0x7fffffff) != 0:
                 assert False, "We are going from user to supervisor with page too larger, we do not handle that yet"
     
-    if INSERT_SPECTRE_GADGETS:
-        instr_objs += [
+    # if INSERT_SPECTRE_GADGETS:
+    #     instr_objs += [
 
-        ]
+    #     ]
     # If we fuzz the MMU, we want to stay in priviledged mode longer
     if USE_MMU:
         fuzzerstate.num_instr_to_stay_in_prv = random.randint(MIN_NUM_INSTR_IN_PRV, MAX_NUM_INSTR_IN_PRV)

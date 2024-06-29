@@ -5,7 +5,7 @@
 # This script is responsible for running the RTL simulations from the fuzzer.
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA
-from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, TRACE_FST, TRACE_VCD, TRACE_EN
+from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, TRACE_FST, TRACE_VCD, TRACE_EN, CHECK_MEM
 from cascade.util import IntRegIndivState
 from common.sim.modelsim import get_next_worker_id
 from common.sim.commonsim import setup_sim_env
@@ -279,14 +279,15 @@ def run_rtl_and_load_regstream(env,design_name: str):
     regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
 
     sramdump_rtl = {}
-    assert "SRAMDUMP_PATH" in env
-    with open(env["SRAMDUMP_PATH"], "r") as f:
-        for line in f.read().split("\n"):
-            if "{" not in line:
-                continue
-            d = json.loads(line)
-            addr = int(d["addr"],16) + SPIKE_STARTADDR
-            sramdump_rtl[addr] = {}
-            sramdump_rtl[addr]["val"] = int(d["value"],16)
-            sramdump_rtl[addr]["val_t0"] = int(d["value_t0"],16)
+    if CHECK_MEM:
+        assert "SRAMDUMP_PATH" in env
+        with open(env["SRAMDUMP_PATH"], "r") as f:
+            for line in f.read().split("\n"):
+                if "{" not in line:
+                    continue
+                d = json.loads(line)
+                addr = int(d["addr"],16) + SPIKE_STARTADDR
+                sramdump_rtl[addr] = {}
+                sramdump_rtl[addr]["val"] = int(d["value"],16)
+                sramdump_rtl[addr]["val_t0"] = int(d["value_t0"],16)
     return (regstream_rtl_val, regstream_rtl_val_t0), regdumps_rtl, sramdump_rtl

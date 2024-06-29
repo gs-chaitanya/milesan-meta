@@ -50,8 +50,8 @@ if __name__ == '__main__':
     if "CASCADE_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
-    if len(sys.argv) < 4:
-        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <num_cores> <n_total_tests> [seed_offset]")
+    if len(sys.argv) < 2:
+        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> [<num_cores> <n_total_tests> <seed_offset>]")
 
     if NO_REMOVE_TMPDIRS:
         print("NO_REMOVE_TMPDIRS is enabled. This might eat up a lot of memory.")
@@ -60,9 +60,14 @@ if __name__ == '__main__':
         print("NO_REMOVE_TMPFILES is enabled. This might eat up a lot of memory.")
 
     design_name = sys.argv[1]
-    n_cores = int(sys.argv[2])
-    n_total_tests = int(sys.argv[3])
-
+    n_cores = 40
+    if len(sys.argv) > 2:
+        n_cores = int(sys.argv[2])
+    
+    n_total_tests = -1
+    if len(sys.argv) > 3:
+        n_total_tests = int(sys.argv[3])
+    
     seed_offset = 0
     if len(sys.argv) > 4:
         seed_offset = int(sys.argv[4])

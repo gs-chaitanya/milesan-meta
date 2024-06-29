@@ -195,14 +195,15 @@ def gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider: int, first_ins
         assert first_instr_id_in_first_bb_to_consider >= 0
         assert first_instr_id_in_first_bb_to_consider < len(fuzzerstate.instr_objs_seq[index_first_bb_to_consider])
 
-    tgt_pc = fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] + 4*first_instr_id_in_first_bb_to_consider # NO_COMPRESSED
+    tgt_pc = fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] + 4*first_instr_id_in_first_bb_to_consider + SPIKE_STARTADDR # NO_COMPRESSED
     ret_dumpreqs = []
     ret_storesizes = []
 
     # Get the addresses and values of all the store instructions until the target PC.
     for bb_start_addr, bb_instrs in zip(fuzzerstate.bb_start_addr_seq[:index_first_bb_to_consider], fuzzerstate.instr_objs_seq[:index_first_bb_to_consider]):
         for bb_instr_id, bb_instr in enumerate(bb_instrs):
-            curr_addr = bb_start_addr + 4*bb_instr_id
+            curr_addr = bb_start_addr + 4*bb_instr_id + SPIKE_STARTADDR
+            assert curr_addr == bb_instr.paddr, f"Address mismatch: Expected {hex(curr_addr)}, got {bb_instr.paddr}"
             if isinstance(bb_instr, IntStoreInstruction):
                 ret_dumpreqs.append((curr_addr, False, bb_instr.rs1))
                 ret_dumpreqs.append((curr_addr, False, bb_instr.rs2))
@@ -408,7 +409,7 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False, return_int
     if check_pc_spike_again:
         # Generate the RTL ELF, but located for spike at SPIKE_STARTADDR
         rtl_spike_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'spikedoublecheck', fuzzerstate.instance_to_str(), SPIKE_STARTADDR)
-        rtl_spike_pc_seq, (finalintregvals_spikecheck, finalfpuregvals_spikecheck) = run_trace_all_pcs(fuzzerstate.instance_to_str(), rtl_spike_elfpath, get_design_march_flags_nocompressed(design_name), len(flat_instr_objs)+1, SPIKE_STARTADDR, True,  fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud, fuzzerstate)
+        rtl_spike_pc_seq, (finalintregvals_spikecheck, finalfpuregvals_spikecheck) = run_trace_all_pcs(fuzzerstate.instance_to_str(), rtl_spike_elfpath, get_design_march_flags_nocompressed(design_name), len(flat_instr_objs), SPIKE_STARTADDR, True,  fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud, fuzzerstate)
         if not NO_REMOVE_TMPFILES:
             os.remove(rtl_spike_elfpath)
             del rtl_spike_elfpath

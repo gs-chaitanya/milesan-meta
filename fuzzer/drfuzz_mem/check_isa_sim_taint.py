@@ -3,8 +3,8 @@ import shutil
 import glob
 import json
 
-from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, DO_DOUBLECHECK_SIM
-from params.fuzzparams import IGNORE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
+from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, DO_DOUBLECHECK_SIM, CHECK_MEM
+from params.fuzzparams import IGNORE_RTL_TIMEOUT, IGNORE_SPIKE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, USE_VANILLA
 from cascade.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 from cascade.cfinstructionclasses import *
@@ -20,7 +20,8 @@ import enum
 import subprocess
 
 class FailTypeEnum(enum.IntEnum):
-    TIMEOUT = enum.auto()
+    SPIKE_TIMEOUT = enum.auto()
+    RTL_TIMEOUT = enum.auto()
     VALUE_MISMATCH = enum.auto()
     TAINT_MISMATCH = enum.auto()
 
@@ -169,11 +170,12 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 if mismatch and not IGNORE_TAINT_MISMATCH:
                     raise MismatchError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}.\n\t Taint allowed in {[p.name for p in fuzzerstate.taint_in_priv]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
 
-        if PRINT_MEMORY_VALIDATION:
-            print("*** MEMORY VALIDATION ***:")
-            fuzzerstate.memview.print_and_compare(final_sramdump_rtl)
-        if fuzzerstate.design_name == "kronos":
-            fuzzerstate.memview.check(final_sramdump_rtl)
+        if CHECK_MEM:
+            if PRINT_MEMORY_VALIDATION:
+                print("*** MEMORY VALIDATION ***:")
+                fuzzerstate.memview.print_and_compare(final_sramdump_rtl)
+            if fuzzerstate.design_name == "kronos":
+                fuzzerstate.memview.check(final_sramdump_rtl)
 
     except Exception as e:
         if PRINT_AND_COMPARE:
@@ -188,10 +190,17 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         else:
             fuzzerstate.log(str(e))
         if isinstance(e, subprocess.CalledProcessError):
-            if IGNORE_TIMEOUT:
-                pass
-            else:
-                raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.TIMEOUT)
+            if "spike" in str(e):
+                if IGNORE_SPIKE_TIMEOUT:
+                    pass
+                else:
+                    raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.SPIKE_TIMEOUT)
+            if "make" in str(e):
+                if IGNORE_RTL_TIMEOUT:
+                    pass
+                else:
+                    raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.RTL_TIMEOUT)
+
         elif isinstance(e, MismatchError):
             raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=e.fail_type)
         else:

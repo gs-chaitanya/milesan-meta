@@ -100,8 +100,8 @@ class FuzzerState:
     def get_design_mmu(self, design_name):
         if self.is_design_64bit:
             self.mmu_capabilities.append(design_has_sv39(design_name))
-            #self.mmu_capabilities.append(design_has_sv48(design_name))
-            self.mmu_capabilities.append(False)
+            self.mmu_capabilities.append(design_has_sv48(design_name))
+            # self.mmu_capabilities.append(False)
         else:
             self.mmu_capabilities.append(design_has_sv32(design_name))
 
@@ -389,7 +389,7 @@ class FuzzerState:
                 if instr_obj.injectable:
                     insts[bb_id] += [{"bytecode": instr_obj.gen_bytecode_int(is_spike_resolution=True),
                                     "bytecode_t0": instr_obj.gen_bytecode_int_t0(is_spike_resolution=True),
-                                    "addr": instr_obj.addr,
+                                    "addr": instr_obj.paddr,
                                     "type": instr_obj.instr_type.name, 
                                     "str": instr_obj.instr_str,
                                     "bb_id": bb_id}]
@@ -456,6 +456,7 @@ class FuzzerState:
     # Returns the register values and taints for the given spike requests.
     # The register values are obtained from the in-situ simulation instead of spike 
     # to also obtain the (upper-bound) taint values.
+    # NOT TESTED WITH MMU ENABLED
     def get_regdumps_from_reqs(self, regdump_reqs, is_spike_resolution, final_address, dump_final_reg_vals, skip_placeholder):
         regdump_idx = 0
         regdumps = []
@@ -467,7 +468,7 @@ class FuzzerState:
             for next_instr in bb_instrs:
                 if PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS:
                     next_instr.print(is_spike_resolution)
-                while regdump_idx < len(regdump_reqs) and next_instr.addr == regdump_reqs[regdump_idx][0] + SPIKE_STARTADDR: # there could be multiple dumps for this address
+                while regdump_idx < len(regdump_reqs) and  (next_instr.vaddr if USE_MMU else next_instr.paddr) == regdump_reqs[regdump_idx][0]: # there could be multiple dumps for this address
                     is_floatdump = regdump_reqs[regdump_idx][1]
                     reg_id = regdump_reqs[regdump_idx][2]
                     regdump_idx += 1
@@ -489,7 +490,7 @@ class FuzzerState:
                             regdumps += [self.intregpickstate.regs[reg_id].get_val()]
                             regdumps_t0 += [self.intregpickstate.regs[reg_id].get_val_t0()]
                 next_instr.execute(is_spike_resolution=is_spike_resolution)
-                if final_address is not None and next_instr.addr == final_address:
+                if final_address is not None and (next_instr.vaddr if USE_MMU else next_instr.paddr) == final_address:
                     reached_end = True
                     break
             if reached_end:
@@ -498,9 +499,9 @@ class FuzzerState:
 
         if DO_ASSERT:
             assert reached_end or final_address is None
-            assert regdump_idx == len(regdump_reqs), f"Number of processed dumps does not match number of requests! {regdump_idx} != {len(regdump_reqs)-1}: requests at {[(hex(i[0]+SPIKE_STARTADDR),i[-1]) for i in regdump_reqs]}"
+            assert regdump_idx == len(regdump_reqs), f"Number of processed dumps does not match number of requests! {regdump_idx} != {len(regdump_reqs)-1}: requests at {[(hex(i[0]),i[-1]) for i in regdump_reqs]}"
         if not dump_final_reg_vals:
-            self.reset_after_execution()
+            self.reset_states()
             return (regdumps, regdumps_t0)
         # Retrieve the final register values
         final_intreg_vals = []
@@ -509,7 +510,7 @@ class FuzzerState:
             final_intreg_vals += [self.intregpickstate.regs[reg_id].get_val()]
             final_intreg_vals_t0 += [self.intregpickstate.regs[reg_id].get_val_t0()]
 
-        self.reset_after_execution()
+        self.reset_states()
         return (regdumps, regdumps_t0),((final_intreg_vals, final_intreg_vals_t0), (None, None))
 
     
@@ -529,22 +530,23 @@ class FuzzerState:
                     next_instr.execute(is_spike_resolution=is_spike_resolution)
                     if print_execution:
                         print(f"{next_instr.get_str(is_spike_resolution)} (ctx)")
-                if final_addr is not None and next_instr.addr == final_addr:
+                if final_addr is not None and (next_instr.vaddr if USE_MMU else next_instr.paddr) == final_addr:
                     if reset_after_execution:
-                        self.reset_after_execution()
+                        self.reset_states()
                     return
         if DO_ASSERT:
             assert final_addr is None, f"Final address not reached {hex(final_addr)}."
         if reset_after_execution:
-            self.reset_after_execution()
+            self.reset_states()
 
-    def reset_after_execution(self):
+    def reset_states(self, mem_state_id = 0):
         self.intregpickstate.setup_registers() # Restore registers to before anything was executed.
-        self.memview.restore(0) # Restore contents before anything was executed.
+        self.memview.restore(mem_state_id) # Restore contents before anything was executed.
         self.csrfile.reset() # Reset all CSRs to zero.
 
-    def verify_program(self,print_execution: bool = False, print_trace:bool = False):
-        self.reset_after_execution()
+    def verify_program(self, reset_before_execution: bool = True, print_execution: bool = False, print_trace:bool = False):
+        if reset_before_execution:
+            self.reset_states()
         self.simulate_execution(True,print_execution=print_execution, reset_after_execution=True)
         self.simulate_execution(False,print_execution=print_execution, reset_after_execution=True)
 

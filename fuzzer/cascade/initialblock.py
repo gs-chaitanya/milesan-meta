@@ -18,6 +18,7 @@ from params.runparams import INSERT_REGDUMPS
 from rv.asmutil import li_into_reg
 from common.spike import SPIKE_STARTADDR
 from common.designcfgs import get_design_reg_stream_addr, get_design_cl_size
+from cascade.mmu_utils import PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_BITS
 import numpy as np
 import random
 
@@ -247,7 +248,8 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         assert expect_padding == has_padding, f"{expect_padding} != {has_padding}"
     # Allocate the initial block before choosing an address for the next bb.
     intended_initial_block_plus_reginit_size = len(fuzzerstate.instr_objs_seq[-1]) * 4 + 4 + len(fuzzerstate.initial_reg_data_content) * 8 + int(has_padding) * 4 + interleave_cl_bytes_until_random_reg_vals # NO_COMPRESSED
-    fuzzerstate.memview.alloc_mem_range(fuzzerstate.curr_bb_start_addr, fuzzerstate.curr_bb_start_addr+intended_initial_block_plus_reginit_size+4) # NO_COMPRESSED
+    # fuzzerstate.memview.alloc_mem_range(fuzzerstate.curr_bb_start_addr, fuzzerstate.curr_bb_start_addr+intended_initial_block_plus_reginit_size+4) # NO_COMPRESSED
+    fuzzerstate.memview.alloc_mem_range(fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK, (fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK)+PHYSICAL_PAGE_SIZE) # NO_COMPRESSED
 
     # Jump to the next basic block, say, with jal for simplicity
     range_bits_each_direction = get_range_bits_per_instrclass(ISAInstrClass.JAL)

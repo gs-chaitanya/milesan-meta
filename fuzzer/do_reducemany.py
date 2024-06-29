@@ -46,6 +46,9 @@ if __name__ == '__main__':
     else:
         print("One of '--seeds', '--log-file' or '--max-seed' need to be provided.")
 
+    if num_cores > len(seeds):
+        num_cores = len(seeds)
+    
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
     profile_get_asid_mask(design_name)

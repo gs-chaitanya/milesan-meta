@@ -57,7 +57,7 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
 
 def is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor, required_space: int = BASIC_BLOCK_MIN_SPACE):
     if USE_MMU:
-        return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space and fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(curr_alloc_cursor+required_space&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
+        return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space and fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[((curr_alloc_cursor+required_space)&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
     return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space
 # The first BASIC_BLOCK_MIN_SPACE must be pre-allocated. The rationale is that we want to pre-allocate at least for the first basic block, to prevent the store data from landing exactly there.
 # @return True iff the creation is successful
@@ -360,10 +360,12 @@ def gen_random_data_block(fuzzerstate, page_has_taint = False):
 # This must be done early, say, just after generating the first basic block, to ensure that we have enough space.
 def alloc_final_basic_block(fuzzerstate):
     lenbytes = get_finalblock_max_size() * 4 # NO_COMPRESSED
-    fuzzerstate.final_bb_base_addr = fuzzerstate.memview.gen_random_free_addr(2, lenbytes, 0, fuzzerstate.memsize)
+    # fuzzerstate.final_bb_base_addr = fuzzerstate.memview.gen_random_free_addr(2, lenbytes, 0, fuzzerstate.memsize)
+    final_bb_page_addr = fuzzerstate.memview.gen_random_free_addr(PAGE_ALIGNMENT_SHIFT, PHYSICAL_PAGE_SIZE, 0, fuzzerstate.memsize)
     if DO_ASSERT:
-        assert fuzzerstate.final_bb_base_addr is not None, f"Maybe you should create the final basic block earlier in the creation of the test case."
-    fuzzerstate.memview.alloc_mem_range(fuzzerstate.final_bb_base_addr, fuzzerstate.final_bb_base_addr+lenbytes)
+        assert final_bb_page_addr is not None, f"Maybe you should create the final basic block earlier in the creation of the test case."
+    fuzzerstate.final_bb_base_addr = random.randrange(final_bb_page_addr, final_bb_page_addr+PHYSICAL_PAGE_SIZE-lenbytes, 4)
+    fuzzerstate.memview.alloc_mem_range(final_bb_page_addr, final_bb_page_addr+PHYSICAL_PAGE_SIZE)
 
 # This must be done early, say, just after generating the final basic block, to ensure that we have enough space.
 def alloc_context_saver_bb(fuzzerstate):

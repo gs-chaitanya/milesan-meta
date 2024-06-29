@@ -60,6 +60,12 @@ def is_tolerate_boom_branchpred():
 if __TOLERATE_BOOM_BRANCHPRED:
     print('WARNING: Tolerating one bug: __TOLERATE_BOOM_BRANCHPRED')
 
+__TOLERATE_BOOM_MEPC_AND_MCAUSE = False
+def is_tolerate_boom_mepc_and_mcause():
+    return __TOLERATE_BOOM_MEPC_AND_MCAUSE
+if __TOLERATE_BOOM_MEPC_AND_MCAUSE:
+    print('WARNING: Tolerating one bug: __TOLERATE_BOOM_MEPC_AND_MCAUSE')
+
 
 ###
 # Rocket
@@ -327,6 +333,7 @@ def tolerate_bug_for_bug_timing(design_name: str, bug_name: str, is_activate: bo
     global __TOLERATE_BOOM_RAS0
     global __TOLERATE_BOOM_RAS1
     global __TOLERATE_BOOM_BRANCHPRED
+    global __TOLERATE_BOOM_MEPC_AND_MCAUSE
     global __TOLERATE_ROCKET_MINSTRET
     global __TOLERATE_ROCKET_RAS0
 
@@ -572,12 +579,21 @@ def tolerate_bug_for_bug_timing(design_name: str, bug_name: str, is_activate: bo
             print('INFO: De-tolerating one bug for timing: __TOLERATE_BOOM_RAS1')
 
     elif bug_name == 'b5':
-        assert design_name == 'boom', 'Bug b4 is only for boom'
+        assert design_name == 'boom', 'Bug b5 is only for boom'
         __TOLERATE_BOOM_BRANCHPRED = is_activate
         if is_activate:
             print('WARNING: Tolerating one bug for timing: __TOLERATE_BOOM_BRANCHPRED')
         else:
             print('INFO: De-tolerating one bug for timing: __TOLERATE_BOOM_BRANCHPRED')
+
+    elif bug_name == 'b6':
+        assert design_name == 'boom', 'Bug b6 is only for boom'
+        __TOLERATE_BOOM_MEPC_AND_MCAUSE = is_activate
+        if is_activate:
+            print('WARNING: Tolerating one bug for timing: __TOLERATE_BOOM_MEPC_AND_MCAUSE')
+        else:
+            print('INFO: De-tolerating one bug for timing: __TOLERATE_BOOM_MEPC_AND_MCAUSE')
+
 
     # Rocket
 

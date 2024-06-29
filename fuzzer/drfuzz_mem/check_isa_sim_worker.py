@@ -19,7 +19,8 @@ total_finished_tests = 0
 seed_to_fail_type_dict = {
     FailTypeEnum.TAINT_MISMATCH: [],
     FailTypeEnum.VALUE_MISMATCH: [],
-    FailTypeEnum.TIMEOUT: []
+    FailTypeEnum.RTL_TIMEOUT: [],
+    FailTypeEnum.SPIKE_TIMEOUT: []
 }
 
 def test_done_callback(ret):
@@ -43,30 +44,20 @@ def __check_isa_sim_worker(design_name, seed):
     except Exception as e:
         print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")
         if LOG_EXCEPTIONS:
-            if "(RTL) Taint mismatch" in str(e):
+            if isinstance(e, FuzzerStateException):
                 logdir = os.path.join(PATH_TO_TMP, "logs")
                 os.makedirs(logdir, exist_ok=True)
-                with open(f"{logdir}/{design_name}.taint_mismatch.log", "a") as f:
+                with open(f"{logdir}/{design_name}.{e.fail_type.name.lower()}.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
+                return (e.fail_type, seed)
 
-            elif "(RTL) Value mismatch" in str(e):
-                logdir = os.path.join(PATH_TO_TMP, "logs")
-                os.makedirs(logdir, exist_ok=True)
-                with open(f"{logdir}/{design_name}.value_mismatch.log", "a") as f:
-                    f.write(f"seed {seed}: {str(e)}\n")
-
-            elif "Command" in str(e):
-                logdir = os.path.join(PATH_TO_TMP, "logs")
-                os.makedirs(logdir, exist_ok=True)
-                with open(f"{logdir}/{design_name}.timeout.log", "a") as f:
-                    f.write(f"seed {seed}: {str(e)}\n")
             else:
                 logdir = os.path.join(PATH_TO_TMP, "logs")
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.failed.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
+                return None
 
-        return (e.fail_type, seed)
 
 
 
