@@ -7,7 +7,7 @@ from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_F
 from params.fuzzparams import IGNORE_RTL_TIMEOUT, IGNORE_SPIKE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, USE_VANILLA
 from cascade.toleratebugs import  is_tolerate_cva6_mhpmcounter,  is_tolerate_cva6_mhpmevent31
-from cascade.toleratebugs import is_tolerate_boom_minstret, is_tolerate_boom_misaligned_jal
+from cascade.toleratebugs import is_tolerate_boom_minstret
 from cascade.toleratebugs import is_tolerate_rocket_minstret
 from cascade.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 from cascade.cfinstructionclasses import *
@@ -17,18 +17,12 @@ from cascade.util import IntRegIndivState
 from common.spike import SPIKE_STARTADDR
 from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
 from cascade.registers import ABI_INAMES,MAX_32b
-from cascade.spikeresolution import spike_resolution_return_interm
-from drfuzz_mem.spike_sim_taint import spike_sim_taint
 import enum
 import subprocess
 
 def is_tolerate(design_name: str, instr: BaseInstruction):
     if isinstance(instr, (CSRInstruction, EPCWriterInstruction, GenericCSRWriterInstruction)):
         if "boom" in design_name:
-            if instr.csr_id == CSR_IDS.MCAUSE:
-                return is_tolerate_boom_misaligned_jal()
-            if instr.csr_id == CSR_IDS.MEPC:
-                return is_tolerate_boom_misaligned_jal()
             if instr.csr_id == CSR_IDS.MINSTRET:
                 return is_tolerate_boom_minstret()
         elif "rocket" in design_name:

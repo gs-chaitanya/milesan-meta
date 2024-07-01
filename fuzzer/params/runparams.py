@@ -16,8 +16,8 @@ PATH_TO_FIGURES = os.environ['CASCADE_PATH_TO_FIGURES']
 DO_ASSERT = True
 DO_EXPENSIVE_ASSERT = False # More expensive assertions
 
-# TODO: below currently need to be enabled for reduction with pillar.
 NO_REMOVE_TMPFILES = False # Used for debugging purposes
+# TODO: below currently need to be enabled for reduction with pillar.
 NO_REMOVE_TMPDIRS = False # When disabled, removes the /cascade-data/[design-name]/[ID] directories even when leakage (or bug) detected. Enable to save storage.
 
 RUN_TIMEOUT_SECONDS = 60*3 # A program is not supposed to run longer than this in RTL simulation.

@@ -60,13 +60,6 @@ def is_tolerate_boom_branchpred():
 if __TOLERATE_BOOM_BRANCHPRED:
     print('WARNING: Tolerating one bug: __TOLERATE_BOOM_BRANCHPRED')
 
-__TOLERATE_BOOM_MISALIGNED_JAL = False
-def is_tolerate_boom_misaligned_jal():
-    return __TOLERATE_BOOM_MISALIGNED_JAL
-if __TOLERATE_BOOM_MISALIGNED_JAL:
-    print('WARNING: Tolerating one bug: __TOLERATE_BOOM_MISALIGNED_JAL')
-
-
 ###
 # Rocket
 ###
@@ -126,7 +119,6 @@ def is_tolerate_cva6_mhpmevent31():
     return __TOLERATE_CVA6_MHPMEVENT31
 if __TOLERATE_CVA6_MHPMEVENT31:
     print('WARNING: Tolerating one bug: __TOLERATE_CVA6_MHPMEVENT31')
-
 
 ###
 # Kronos
@@ -333,7 +325,6 @@ def tolerate_bug_for_bug_timing(design_name: str, bug_name: str, is_activate: bo
     global __TOLERATE_BOOM_RAS0
     global __TOLERATE_BOOM_RAS1
     global __TOLERATE_BOOM_BRANCHPRED
-    global __TOLERATE_BOOM_MISALIGNED_JAL
     global __TOLERATE_ROCKET_MINSTRET
     global __TOLERATE_ROCKET_RAS0
 
@@ -585,15 +576,6 @@ def tolerate_bug_for_bug_timing(design_name: str, bug_name: str, is_activate: bo
             print('WARNING: Tolerating one bug for timing: __TOLERATE_BOOM_BRANCHPRED')
         else:
             print('INFO: De-tolerating one bug for timing: __TOLERATE_BOOM_BRANCHPRED')
-
-    elif bug_name == 'b6':
-        assert design_name == 'boom', 'Bug b6 is only for boom'
-        __TOLERATE_BOOM_MISALIGNED_JAL = is_activate
-        if is_activate:
-            print('WARNING: Tolerating one bug for timing: __TOLERATE_BOOM_MEPC_AND_MCAUSE')
-        else:
-            print('INFO: De-tolerating one bug for timing: __TOLERATE_BOOM_MEPC_AND_MCAUSE')
-
 
     # Rocket
 

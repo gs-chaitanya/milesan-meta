@@ -1,6 +1,5 @@
 from params.runparams import DO_ASSERT
 from params.fuzzparams import USE_MMU
-from cascade.toleratebugs import is_tolerate_boom_misaligned_jal
 from cascade.util import ExceptionCauseVal, IntRegIndivState
 from functools import reduce
 from enum import IntEnum
@@ -97,9 +96,6 @@ class PrivilegeState:
         # Cannot write to SATP in user mode
         if self.privstate == PrivilegeStateEnum.USER:
             supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
-
-        if "boom" in fuzzerstate.design_name and not is_tolerate_boom_misaligned_jal():
-            supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED] = 0
 
         if self.privstate == PrivilegeStateEnum.MACHINE:
             supported_exceptions_dict[ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE] = False

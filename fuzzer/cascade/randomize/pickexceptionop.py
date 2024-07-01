@@ -9,7 +9,7 @@ from cascade.cfinstructionclasses_t0 import TvecWriterInstruction_t0, EPCWriterI
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.randomize.createcfinstr import gen_random_rounding_mode
 from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
-from cascade.toleratebugs import is_tolerate_rocket_minstret, is_tolerate_kronos_readbadcsr, is_tolerate_picorv32_readnonimplcsr, is_forbid_vexriscv_csrs, is_tolerate_vexriscv_fpu_disabled, is_tolerate_vexriscv_fpu_leak, is_tolerate_boom_misaligned_jal
+from cascade.toleratebugs import is_tolerate_rocket_minstret, is_tolerate_kronos_readbadcsr, is_tolerate_picorv32_readnonimplcsr, is_forbid_vexriscv_csrs, is_tolerate_vexriscv_fpu_disabled, is_tolerate_vexriscv_fpu_leak
 from cascade.util import ExceptionCauseVal, IntRegIndivState
 from common.spike import SPIKE_MEDELEG_MASK, SPIKE_STARTADDR
 from params.fuzzparams import MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, SIMPLE_ILLEGAL_INSTRUCTION_PROBA, PROBA_PICK_WRONG_FPU, MAX_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_REGS, USE_MMU, TAINT_EN
@@ -187,9 +187,6 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
     if exception_op_type == ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED:
         if DO_ASSERT:
             assert not fuzzerstate.design_has_compressed_support, "Compressed instructions are supported, so no instruction address misalignment can occur."
-            if "boom" in fuzzerstate.design_name:
-                assert is_tolerate_boom_misaligned_jal()
-
         # The instruction misalignment will always be 2 bytes, because CF instructions have a granularity of 2 bytes.
         # Select the address to load. We care about blacklisting, in the (erroneous) case where the data would have some influence.
         misaligned_tgt_addr = random.randrange(0, (fuzzerstate.memview_blacklist.memsize-1) // 4) * 4 + 2 # -1 because we dont want to have an access fault but an instruction misaligned fault here.

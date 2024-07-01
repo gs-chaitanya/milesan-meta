@@ -270,16 +270,17 @@ def run_rtl_and_load_regstream(env,design_name: str):
     assert "REGDUMP_PATH" in env
     with open(env["REGDUMP_PATH"], "rb") as f:
         regdumps_rtl = json.load(f)
-
-    assert "REGSTREAM_PATH" in env
-    with open(env["REGSTREAM_PATH"], "rb") as f:
-        regstream_rtl = json.load(f)
+    
+    if not USE_VANILLA:
+        assert "REGSTREAM_PATH" in env
+        with open(env["REGSTREAM_PATH"], "rb") as f:
+            regstream_rtl = json.load(f)
     
     regstream_rtl_val_t0 = {int(r["id"],16): int(r["value_t0"],16) for r in regstream_rtl}
     regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
 
     sramdump_rtl = {}
-    if CHECK_MEM:
+    if CHECK_MEM and not USE_VANILLA:
         assert "SRAMDUMP_PATH" in env
         with open(env["SRAMDUMP_PATH"], "r") as f:
             for line in f.read().split("\n"):
