@@ -8,7 +8,7 @@ from params.runparams import DO_ASSERT
 from params.fuzzparams import ALLOW_CSR_TAINT
 from rv.csrids import CSR_IDS
 from cascade.util import IntRegIndivState
-from cascade.toleratebugs import is_no_interaction_minstret, is_tolerate_kronos_minstret, is_tolerate_vexriscv_minstret, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readnonimplcsr, is_tolerate_picorv32_writehpm, is_tolerate_cva6_mhpmcounter, is_tolerate_boom_minstret, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_vexriscv_mhpmcountern, is_tolerate_cva6_mhpmevent31, is_tolerate_boom_mepc_and_mcause
+from cascade.toleratebugs import is_no_interaction_minstret, is_tolerate_kronos_minstret, is_tolerate_vexriscv_minstret, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readnonimplcsr, is_tolerate_picorv32_writehpm, is_tolerate_cva6_mhpmcounter, is_tolerate_boom_minstret, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_vexriscv_mhpmcountern, is_tolerate_cva6_mhpmevent31, is_tolerate_boom_misaligned_jal
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.cfinstructionclasses import CSRRegInstruction, CSRImmInstruction
 from cascade.cfinstructionclasses_t0 import CSRRegInstruction_t0, CSRImmInstruction_t0
@@ -62,8 +62,8 @@ def gen_random_csr_op(fuzzerstate):
                 ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", rd, random.randrange(32), CSR_IDS.SCAUSE)
             elif target_csr == MachineCSROpCandidates64.MCAUSE:
                 rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False)
-                if "boom" in fuzzerstate.design_name and rd>0 and not is_tolerate_boom_mepc_and_mcause():
-                    fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
+                # if "boom" in fuzzerstate.design_name and rd>0 and not is_tolerate_boom_misaligned_jal():
+                #     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
                 ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", rd, random.randrange(16), CSR_IDS.MCAUSE)
             elif target_csr == MachineCSROpCandidates64.SSCRATCH:
                     # It is important that rs is chosen first, otherwise it could be that as we choose rd, we set it from RELOCUSED->free, and then choose it mistakenly as rs.
@@ -112,8 +112,8 @@ def gen_random_csr_op(fuzzerstate):
                     ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", rd, random.randrange(32), CSR_IDS.SCAUSE)
             elif target_csr == MachineCSROpCandidates32.MCAUSE:
                 rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg(force=False)
-                if "boom" in fuzzerstate.design_name and rd>0 and not is_tolerate_boom_mepc_and_mcause():
-                    fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
+                # if "boom" in fuzzerstate.design_name and rd>0 and not is_tolerate_boom_misaligned_jal():
+                #     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.RELOCUSED, force=True)
                 ret = CSRImmInstruction_t0(fuzzerstate,"csrrwi", rd, random.randrange(16), CSR_IDS.MCAUSE)
             elif target_csr == MachineCSROpCandidates32.SSCRATCH:
                 # It is important that rs is chosen first, otherwise it could be that as we choose rd, we set it from RELOCUSED->free, and then choose it mistakenly as rs.

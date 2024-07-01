@@ -9,7 +9,7 @@ from cascade.cfinstructionclasses_t0 import TvecWriterInstruction_t0, EPCWriterI
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.randomize.createcfinstr import gen_random_rounding_mode
 from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
-from cascade.toleratebugs import is_tolerate_rocket_minstret, is_tolerate_kronos_readbadcsr, is_tolerate_picorv32_readnonimplcsr, is_forbid_vexriscv_csrs, is_tolerate_vexriscv_fpu_disabled, is_tolerate_vexriscv_fpu_leak
+from cascade.toleratebugs import is_tolerate_rocket_minstret, is_tolerate_kronos_readbadcsr, is_tolerate_picorv32_readnonimplcsr, is_forbid_vexriscv_csrs, is_tolerate_vexriscv_fpu_disabled, is_tolerate_vexriscv_fpu_leak, is_tolerate_boom_misaligned_jal
 from cascade.util import ExceptionCauseVal, IntRegIndivState
 from common.spike import SPIKE_MEDELEG_MASK, SPIKE_STARTADDR
 from params.fuzzparams import MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, SIMPLE_ILLEGAL_INSTRUCTION_PROBA, PROBA_PICK_WRONG_FPU, MAX_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_REGS, USE_MMU, TAINT_EN
@@ -62,16 +62,15 @@ def _gen_next_exceptionoptype(fuzzerstate) -> ExceptionCauseVal:
 # DO NOT @cache
 def _get_exceptionoptype_filtered_weights(fuzzerstate):
     takable_exceptions = fuzzerstate.privilegestate.gen_takable_exception_dict(fuzzerstate)
-
     ret_dict = {
         exception_type: int(takable_exceptions[exception_type]) * fuzzerstate.exceptionoppickweights[exception_type]
-        for exception_type in fuzzerstate.exceptionoppickweights
+        for exception_type in list(ExceptionCauseVal)
     }
     # Normalize the weights
     if DO_ASSERT:
         assert sum(ret_dict.values()) > 0, "The sum of filtered exceptionop pick weights must be strictly positive! Currently: " + str(sum(ret_dict.values()))
     norm_factor = 1/sum(ret_dict.values())
-    for curr_key in ret_dict:
+    for curr_key in ret_dict.keys():
         ret_dict[curr_key] = ret_dict[curr_key] * norm_factor
     return ret_dict
 
@@ -188,6 +187,9 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
     if exception_op_type == ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED:
         if DO_ASSERT:
             assert not fuzzerstate.design_has_compressed_support, "Compressed instructions are supported, so no instruction address misalignment can occur."
+            if "boom" in fuzzerstate.design_name:
+                assert is_tolerate_boom_misaligned_jal()
+
         # The instruction misalignment will always be 2 bytes, because CF instructions have a granularity of 2 bytes.
         # Select the address to load. We care about blacklisting, in the (erroneous) case where the data would have some influence.
         misaligned_tgt_addr = random.randrange(0, (fuzzerstate.memview_blacklist.memsize-1) // 4) * 4 + 2 # -1 because we dont want to have an access fault but an instruction misaligned fault here.
@@ -199,8 +201,9 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         jal_addr = fuzzerstate.bb_start_addr_seq[-1] + 4*len(fuzzerstate.instr_objs_seq) # NO_COMPRESSED
         # Misaligned memory accesses trigger a page fault and a misaligned address exception. Their priority and order of 
         # handling is open to the platform, therefore we can't rely on the SEPC and SCAUSE values.
-        fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
-        fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
+        if USE_MMU:
+            fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
+            fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
         return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, JALInstruction(fuzzerstate, "jal", 0, misaligned_tgt_addr - jal_addr),exception_op_type)
     elif exception_op_type == ExceptionCauseVal.ID_INSTR_ACCESS_FAULT:
         raise NotImplementedError("ID_INSTR_ACCESS_FAULT not yet supported")
@@ -214,8 +217,9 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
         # Misaligned memory accesses trigger a page fault and a misaligned address exception. Their priority and order of 
         # handling is open to the platform, therefore we can't rely on the SEPC and SCAUSE values.
-        fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
-        fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
+        if USE_MMU:
+            fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
+            fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
         return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, True)
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
         raise NotImplementedError("ID_LOAD_ACCESS_FAULT not yet supported")
@@ -224,8 +228,9 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
         # Misaligned memory accesses trigger a page fault and a misaligned address exception. Their priority and order of 
         # handling is open to the platform, therefore we can't rely on the SEPC and SCAUSE values.
-        fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
-        fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
+        if USE_MMU:
+            fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
+            fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
         return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, False)
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
         raise NotImplementedError("ID_STORE_AMO_ACCESS_FAULT not yet supported")

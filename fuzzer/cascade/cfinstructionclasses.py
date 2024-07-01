@@ -1774,6 +1774,7 @@ class GenericCSRWriterInstruction(BaseInstruction):
             # Currently to ease analysis, we impose val_to_write_spike == val_to_write_cpu
 
         self.producer_id = producer_id
+        self.csr_id = csr_id
         self.val_to_write_spike = val_to_write_spike
         self.val_to_write_cpu = val_to_write_cpu
         assert val_to_write_cpu == val_to_write_spike

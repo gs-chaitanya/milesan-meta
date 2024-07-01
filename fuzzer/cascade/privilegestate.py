@@ -1,5 +1,6 @@
 from params.runparams import DO_ASSERT
 from params.fuzzparams import USE_MMU
+from cascade.toleratebugs import is_tolerate_boom_misaligned_jal
 from cascade.util import ExceptionCauseVal, IntRegIndivState
 from functools import reduce
 from enum import IntEnum
@@ -97,6 +98,9 @@ class PrivilegeState:
         if self.privstate == PrivilegeStateEnum.USER:
             supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
 
+        if "boom" in fuzzerstate.design_name and not is_tolerate_boom_misaligned_jal():
+            supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED] = 0
+
         if self.privstate == PrivilegeStateEnum.MACHINE:
             supported_exceptions_dict[ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE] = False
             supported_exceptions_dict[ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE] = False
@@ -114,7 +118,6 @@ class PrivilegeState:
                 supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
                 supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
 
-            return supported_exceptions_dict
         else:
             if DO_ASSERT:
                assert self.medeleg_val is not None, "medeleg must be written at least once before taking an exception in non-machine mode (and generally before transitioning to any non-machine mode, because it is a machine-mode-only CSR), so we may not reliably come back up."
@@ -143,8 +146,8 @@ class PrivilegeState:
                     if exception_cause_val in [ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED, ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED, ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED]:
                         supported_exceptions_dict[exception_cause_val] &= (fuzzerstate.privilegestate.medeleg_val >> exception_cause_val.value)&1 == (fuzzerstate.privilegestate.medeleg_val >> ExceptionCauseVal.ID_LOAD_PAGE_FAULT)&1    
                         supported_exceptions_dict[exception_cause_val] &= supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT]
-
-            return supported_exceptions_dict
+            
+        return supported_exceptions_dict
 
 
     def gen_takable_exception_mask(self, fuzzerstate):

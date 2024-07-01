@@ -14,7 +14,7 @@ from drfuzz_mem.check_isa_sim_worker import check_isa_sims
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask
 from cascade.toleratebugs import tolerate_bug_for_bug_timing
-from params.runparams import NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS
+from params.runparams import NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_FINAL
 import os
 import sys
 
@@ -59,6 +59,9 @@ if __name__ == '__main__':
     if NO_REMOVE_TMPFILES:
         print("NO_REMOVE_TMPFILES is enabled. This might eat up a lot of memory.")
 
+    assert not PRINT_INSTRUCTION_EXECUTION_IN_SITU
+    assert not PRINT_INSTRUCTION_EXECUTION_FINAL
+    
     design_name = sys.argv[1]
     n_cores = 40
     if len(sys.argv) > 2:

@@ -60,11 +60,11 @@ def is_tolerate_boom_branchpred():
 if __TOLERATE_BOOM_BRANCHPRED:
     print('WARNING: Tolerating one bug: __TOLERATE_BOOM_BRANCHPRED')
 
-__TOLERATE_BOOM_MEPC_AND_MCAUSE = False
-def is_tolerate_boom_mepc_and_mcause():
-    return __TOLERATE_BOOM_MEPC_AND_MCAUSE
-if __TOLERATE_BOOM_MEPC_AND_MCAUSE:
-    print('WARNING: Tolerating one bug: __TOLERATE_BOOM_MEPC_AND_MCAUSE')
+__TOLERATE_BOOM_MISALIGNED_JAL = False
+def is_tolerate_boom_misaligned_jal():
+    return __TOLERATE_BOOM_MISALIGNED_JAL
+if __TOLERATE_BOOM_MISALIGNED_JAL:
+    print('WARNING: Tolerating one bug: __TOLERATE_BOOM_MISALIGNED_JAL')
 
 
 ###
@@ -333,7 +333,7 @@ def tolerate_bug_for_bug_timing(design_name: str, bug_name: str, is_activate: bo
     global __TOLERATE_BOOM_RAS0
     global __TOLERATE_BOOM_RAS1
     global __TOLERATE_BOOM_BRANCHPRED
-    global __TOLERATE_BOOM_MEPC_AND_MCAUSE
+    global __TOLERATE_BOOM_MISALIGNED_JAL
     global __TOLERATE_ROCKET_MINSTRET
     global __TOLERATE_ROCKET_RAS0
 
@@ -588,7 +588,7 @@ def tolerate_bug_for_bug_timing(design_name: str, bug_name: str, is_activate: bo
 
     elif bug_name == 'b6':
         assert design_name == 'boom', 'Bug b6 is only for boom'
-        __TOLERATE_BOOM_MEPC_AND_MCAUSE = is_activate
+        __TOLERATE_BOOM_MISALIGNED_JAL = is_activate
         if is_activate:
             print('WARNING: Tolerating one bug for timing: __TOLERATE_BOOM_MEPC_AND_MCAUSE')
         else:

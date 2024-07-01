@@ -6,6 +6,9 @@ import json
 from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, DO_DOUBLECHECK_SIM, CHECK_MEM
 from params.fuzzparams import IGNORE_RTL_TIMEOUT, IGNORE_SPIKE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, USE_VANILLA
+from cascade.toleratebugs import  is_tolerate_cva6_mhpmcounter,  is_tolerate_cva6_mhpmevent31
+from cascade.toleratebugs import is_tolerate_boom_minstret, is_tolerate_boom_misaligned_jal
+from cascade.toleratebugs import is_tolerate_rocket_minstret
 from cascade.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0
@@ -18,6 +21,28 @@ from cascade.spikeresolution import spike_resolution_return_interm
 from drfuzz_mem.spike_sim_taint import spike_sim_taint
 import enum
 import subprocess
+
+def is_tolerate(design_name: str, instr: BaseInstruction):
+    if isinstance(instr, (CSRInstruction, EPCWriterInstruction, GenericCSRWriterInstruction)):
+        if "boom" in design_name:
+            if instr.csr_id == CSR_IDS.MCAUSE:
+                return is_tolerate_boom_misaligned_jal()
+            if instr.csr_id == CSR_IDS.MEPC:
+                return is_tolerate_boom_misaligned_jal()
+            if instr.csr_id == CSR_IDS.MINSTRET:
+                return is_tolerate_boom_minstret()
+        elif "rocket" in design_name:
+            if instr.csr_id == CSR_IDS.MINSTRET:
+                return  is_tolerate_rocket_minstret()
+        elif "cva6" in design_name:
+            if instr.csr_id == CSR_IDS.MHPMCOUNTER3:
+                return is_tolerate_cva6_mhpmcounter()
+            if instr.csr_id == CSR_IDS.MHPMEVENT31:
+                return is_tolerate_cva6_mhpmevent31()
+
+    return True
+
+
 
 class FailTypeEnum(enum.IntEnum):
     SPIKE_TIMEOUT = enum.auto()
@@ -52,7 +77,6 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         rtl_elfpath = fuzzerstate.rtl_elfpath
         interm_elfpath = fuzzerstate.interm_elfpath
 
-    # exit()
     # Retrieve register stream and final intregvals from spike.
     pc_reg_pairs = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
     for req, regval in zip(expected_regvals[2],expected_regvals[3]):
@@ -150,9 +174,9 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             # value validation between in-situ simulation and spike
             mismatch = fuzzerstate.intregpickstate.regs[id+1].check(expected_intregvals[id])
             if mismatch and not IGNORE_SPIKE_MISMATCH:
-                raise ValueError(f"(SPIKE) Value mismatch between in-situ and spike for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}")
+                raise ValueError(f"(SPIKE) Value mismatch between in-situ and spike for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}. \n\t This should not happen!")
 
-            # value validation between in-situ simulation and RTL
+            # value validation between in-situ (and spike) simulation and RTL
             mismatch = fuzzerstate.intregpickstate.regs[id+1].check(value)
             if mismatch:
                 last_instr = filter_reg_traceback(id+1, None, fuzzerstate, None, False)
@@ -162,7 +186,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     pass # TODO check that *cause values are either misaligned/pagefault
                 elif isinstance(last_instr, GenericCSRWriterInstruction) and last_instr.csr_instr.csr_id in (CSR_IDS.SCAUSE, CSR_IDS.MCAUSE):
                     pass
-                elif not IGNORE_VALUE_MISMATCH:    
+                elif not IGNORE_VALUE_MISMATCH and is_tolerate(design_name, last_instr):
                     raise MismatchError(f"(RTL) Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}", fail_type=FailTypeEnum.VALUE_MISMATCH)
 
             if TAINT_EN:
