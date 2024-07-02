@@ -177,6 +177,9 @@ def is_ready_to_descend_privileges(fuzzerstate):
     elif USE_MMU and fuzzerstate.is_design_64bit and fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE and ((fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.SUPERVISOR] | 0x7fffffff) - (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.USER] | 0x7fffffff)) != 0:
         return False
 
+    # Don't return from machine mode if we are not leaving bare translation too.
+    elif USE_MMU and fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and fuzzerstate.real_curr_layout == -1:
+        return False
     # If the current state is machine, then we can descend privileges only if we can come back.
     # - If we go to supervisor, only if mtvec is required.
     # - If we go to user, we require mtvec, and stvec if all exceptions are delegated.

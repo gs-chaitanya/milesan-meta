@@ -21,6 +21,7 @@ class MemStoreState:
 
     # Should be called once the first basic block is already allocated
     def init_store_locations(self, num_store_locations: int, memview: MemoryView):
+        raise NotImplementedError("This is depricated.")
         for store_location_id in range(num_store_locations):
             next_store_location = memview.gen_random_free_addr(ALIGNMENT_BITS_MAX, 1 << ALIGNMENT_BITS_MAX, 0, memview.memsize)
             if next_store_location is None:
@@ -39,6 +40,7 @@ class MemStoreState:
     # @param alignment_bits is equal to the requested size. This means we do not support misaligned mem reqs.
     # @return the picked location, in addition to updating the state.
     def pick_store_location(self, alignment_bits: int):
+        raise NotImplementedError("This is depricated.")
         if DO_ASSERT:
             assert alignment_bits >= 0
             assert alignment_bits <= ALIGNMENT_BITS_MAX

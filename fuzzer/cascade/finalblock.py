@@ -146,10 +146,10 @@ def finalblock(fuzzerstate, design_name: str):
             RegImmInstruction(fuzzerstate,"addi", MPP_BOTH_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, addi_imm_stopreq, is_rd_nonpickable_ok=True)
         ]
     else:
-        if DEBUG_PRINT: print(f"physical regdump addr is: {hex(stopsig_addr)}")
+        if DEBUG_PRINT: print(f"physical stopsig addr is: {hex(stopsig_addr)}")
         if USE_MMU:
             _, stopsig_addr = fuzzerstate.pagetablestate.finalblock_sig_vaddr[fuzzerstate.real_curr_layout]
-        if DEBUG_PRINT: print(f"virtual regdump addr is: {hex(stopsig_addr)}")
+        if DEBUG_PRINT: print(f"virtual stopsig addr is: {hex(stopsig_addr)}")
         
         # We re-purpose MPP_BOTH_ENDIS_REGISTER_ID, because we will not need it anymore.
         # Compute the register dump address

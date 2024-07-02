@@ -139,7 +139,7 @@ class PageTablesGen:
         ret             = []
         prev_level_base = leaf_base
         pte_per_page    = PHYSICAL_PAGE_SIZE/fuzzerstate.ptesize
-
+        pte_locs = []
         # Get all the node page table addresses
         for level in range(n_node_levels-1, -1, -1):
             # Calculate the number of PTE required on the current level, based on the allignment of the previous level
@@ -166,11 +166,11 @@ class PageTablesGen:
             
             # Allocate the right ammount of memory
             fuzzerstate.memview.alloc_mem_range(addr, addr + fuzzerstate.ptesize * n_entries_required)
-            
+            pte_locs += [pte_loc for pte_loc in range(addr, addr + fuzzerstate.ptesize * n_entries_required, fuzzerstate.ptesize)]
             # Update 
             ret.append(addr + SPIKE_STARTADDR)
             prev_level_base = addr # Save previous base
-        return ret
+        return ret, pte_locs
     
     # @brief makes a page table entry
     def gen_page_table_entry(self, ppn, is_global, is_user: bool = False, is_node: bool = False, is_executable: bool = True):
@@ -189,6 +189,7 @@ class PageTablesGen:
 
     # @brief allocates space for all level of the page table
     def gen_mmu_dependencies(self, fuzzerstate):
+        all_pte_locs = []
         for layout_id, (mode, n_level) in enumerate(fuzzerstate.prog_mmu_params):
             if DEBUG_PRINT:
                 print(f"\n======= allocating pages for layout {layout_id} ===========================")
@@ -212,6 +213,7 @@ class PageTablesGen:
 
             # Entangle the pages, we generate new PTEs for the upper levels, we randomly choose the level at which the PTEs will be identical to a randomly selected previous mapping
             if self.ptr_pt_base_list_per_layout != [] and random.random() < PROBA_ENTANGLE_LAYOUT and n_level > 1:
+                raise NotImplementedError("Entangled layouts not implemented.")
                 # We can only entangle with layouts that have the same levels and page size
                 possible_layouts = []
                 for layout_id, (mode_entagle, n_level_entangle) in enumerate(fuzzerstate.prog_mmu_params):
@@ -259,14 +261,18 @@ class PageTablesGen:
                 if addr is None:
                     return False
                 fuzzerstate.memview.alloc_mem_range(addr, addr + n_leaves_with_duplicate * fuzzerstate.ptesize) #+ (2*fuzzerstate.ptesize) to map sig addr
+                all_pte_locs += [pte_loc for pte_loc in range(addr, addr + n_leaves_with_duplicate * fuzzerstate.ptesize, fuzzerstate.ptesize)] # collect leaf ptes
                 leaf_pt_addr.append(addr + SPIKE_STARTADDR)
 
                 # Get all the node page table addresses, and the number of pte accross levels
-                addrs = self.get_node_pte_addr(fuzzerstate, n_level - 1, n_entries_per_level, leaf_pt_addr[-1])
+                addrs, pte_locs = self.get_node_pte_addr(fuzzerstate, n_level - 1, n_entries_per_level, leaf_pt_addr[-1])
                 if addrs == False:
                     return False
                 for addr in addrs:
                     pte_addr.append(addr)
+
+                all_pte_locs += pte_locs 
+
 
                 # reset the number of leave PTE
                 n_entries_per_level[-1] = n_leaf_pte
@@ -328,55 +334,39 @@ class PageTablesGen:
                     if (self.ptr_pt_base_list_per_layout[i][0] & PAGE_ALIGNMENT_MASK) == (self.ptr_pt_base_list_per_layout[j][0] & PAGE_ALIGNMENT_MASK):
                         self.common_base_page[i].append(j)
 
-        # Allocate a whole page for each page table.
-        # if ALLOC_PAGE_PER_PT:
-        #     for pt_base_list in self.ptr_pt_base_list_per_layout:
-        #         # Allocate space from page start until first PTE.
-        #         page_addr = pt_base_list[0]&PAGE_ALIGNMENT_MASK
-        #         space_until_first_pte = fuzzerstate.memview.get_available_contig_space(page_addr)
-        #         if DO_ASSERT:
-        #             assert page_addr+space_until_first_pte == pt_base_list[0], f"Distance from page start address to first PTE does not match PTE address: {hex(page_addr+space_until_first_pte)} != {hex(pt_base_list[0])}"
-        #         fuzzerstate.memview.alloc_mem_range(page_addr, page_addr+space_until_first_pte)
-        #         # Allocate the space between the PTEs.
-        #         for pte_idx, pte_addr in enumerate(pt_base_list[:-1]):
-        #             space_until_next_pte = fuzzerstate.memview.get_available_contig_space(pte_addr+fuzzerstate.ptesize)
-        #             if DO_ASSERT:
-        #                 assert pte_addr+fuzzerstate.ptesize+space_until_next_pte == pt_base_list[pte_idx+1]
-        #             fuzzerstate.memview.alloc_mem_range(pte_addr+fuzzerstate.ptesize, pte_addr+fuzzerstate.ptesize+space_until_next_pte)
-        #         # Allocate the space from the final PTE until the end of the page.
-        #         last_pte_addr = pt_base_list[-1]
-        #         fuzzerstate.memview.alloc_mem_range(last_pte_addr+fuzzerstate.ptesize, last_pte_addr&PAGE_ALIGNMENT_MASK+PHYSICAL_PAGE_SIZE)
-
-        if ALLOC_PAGE_PER_PT:
-            allocated_pages = []
-            for pt_base_list in self.ptr_pt_base_list_per_layout:
-                # Allocate space from page start until first PTE.
-                for pte_base in pt_base_list:
-                    page_addr = pte_base&PAGE_ALIGNMENT_MASK-SPIKE_STARTADDR
-                    if page_addr in allocated_pages: continue
-                    allocated_pages += [page_addr]
-                    space_until_first_pte = fuzzerstate.memview.get_available_contig_space(page_addr)
-                    if space_until_first_pte > 0:
-                        if DEBUG_PRINT:
-                            print(f"Allocating until first PTE {hex(page_addr)} - {hex(page_addr+space_until_first_pte)}")
-                        fuzzerstate.memview.alloc_mem_range(page_addr, page_addr+space_until_first_pte)
-                    pte_addr = page_addr + space_until_first_pte
-                    # Allocate the space between the PTEs.
-                    while pte_addr < page_addr + PHYSICAL_PAGE_SIZE:
-                        space_until_next_pte = fuzzerstate.memview.get_available_contig_space(pte_addr+fuzzerstate.ptesize)
-                        if DO_ASSERT:
-                            assert fuzzerstate.memview.get_available_contig_space(pte_addr) == 0
-                        if space_until_next_pte > 0:
-                            if (pte_addr+fuzzerstate.ptesize+space_until_next_pte)&PAGE_ALIGNMENT_MASK == page_addr:
-                                if DEBUG_PRINT:
-                                    print(f"Allocating until next PTE {hex(pte_addr+fuzzerstate.ptesize)} - {hex(pte_addr+fuzzerstate.ptesize+space_until_next_pte)}")
-                                fuzzerstate.memview.alloc_mem_range(pte_addr+fuzzerstate.ptesize, pte_addr+fuzzerstate.ptesize+space_until_next_pte)
-                            elif pte_addr+fuzzerstate.ptesize < page_addr+PHYSICAL_PAGE_SIZE:
-                                if DEBUG_PRINT:
-                                    print(f"Allocating until end of page {hex(pte_addr+fuzzerstate.ptesize)} - {hex(page_addr+PHYSICAL_PAGE_SIZE)}")
-                                fuzzerstate.memview.alloc_mem_range(pte_addr+fuzzerstate.ptesize, page_addr+PHYSICAL_PAGE_SIZE)
-                                break
-                        pte_addr += space_until_next_pte + fuzzerstate.ptesize
+                
+        all_pte_locs.sort()
+        pages_holding_ptes = set([pte&PAGE_ALIGNMENT_MASK for pte in all_pte_locs])
+        page_base_addr_to_ptes_dict = {page_addr: [] for page_addr in list(pages_holding_ptes)}
+        for pte in all_pte_locs:
+            page_base_addr_to_ptes_dict[pte&PAGE_ALIGNMENT_MASK] += [pte]
+        
+        # for page_addr, ptes in page_base_addr_to_ptes_dict.items():
+        #     print(f"{hex(page_addr)}: {[hex(addr) for addr in ptes]}")
+        for page_addr, ptes_in_page in page_base_addr_to_ptes_dict.items():
+            space_until_first_pte = fuzzerstate.memview.get_available_contig_space(page_addr)
+            pte_addr = page_addr + space_until_first_pte
+            assert pte_addr == ptes_in_page[0], f"{hex(pte_addr)} does not match expected addr of first PTE in page {hex(page_addr)} at {hex(ptes_in_page[0])}. {hex(space_until_first_pte)}"
+            if DEBUG_PRINT:
+                print(f"Allocating until first pte {hex(page_addr)} - {hex(pte_addr)}")
+            if pte_addr>page_addr:
+                fuzzerstate.memview.alloc_mem_range(page_addr, pte_addr)
+            while pte_addr < page_addr+PHYSICAL_PAGE_SIZE:
+                space_until_next_pte = fuzzerstate.memview.get_available_contig_space(pte_addr+fuzzerstate.ptesize)
+                if space_until_next_pte==0:
+                    pte_addr+=fuzzerstate.ptesize
+                    continue
+                if pte_addr+fuzzerstate.ptesize+space_until_next_pte > page_addr+PHYSICAL_PAGE_SIZE: # last pte in this page
+                    if DEBUG_PRINT:
+                        print(f"Allocating until end of page {hex(pte_addr+fuzzerstate.ptesize)} - {hex(page_addr+PHYSICAL_PAGE_SIZE)}")
+                    if pte_addr+fuzzerstate.ptesize<page_addr+PHYSICAL_PAGE_SIZE:
+                        fuzzerstate.memview.alloc_mem_range(pte_addr+fuzzerstate.ptesize, page_addr+PHYSICAL_PAGE_SIZE)
+                    break
+                else:
+                    if DEBUG_PRINT:
+                        print(f"Allocating until next base pte {hex(pte_addr+fuzzerstate.ptesize)} - {hex(pte_addr+fuzzerstate.ptesize+space_until_next_pte)}")
+                    fuzzerstate.memview.alloc_mem_range(pte_addr+fuzzerstate.ptesize, pte_addr + fuzzerstate.ptesize + space_until_next_pte)
+                    pte_addr += fuzzerstate.ptesize + space_until_next_pte
 
 
 
@@ -452,8 +442,12 @@ class PageTablesGen:
             if DEBUG_PRINT:
                 print(f"Generating {self.n_entries_per_level[layout_id][-1]} leaves for layout {layout_id}")
             
+            mapped_initial_block = False
+            mapped_final_block = False
             # priv = PrivilegeStateEnum.MACHINE
             for _ in range(self.n_entries_per_level[layout_id][-1]):
+                assert (ppn_leaf^self.stopsig_addr)&PAGE_ALIGNMENT_MASK != 0, f"Page table allocated in same frame as stopsig addr. This should not happen."
+                assert (ppn_leaf^self.regdump_addr)&PAGE_ALIGNMENT_MASK != 0, f"Page table allocated in same frame as stopsig addr. This should not happen."
                 # Make user and supervisor
                 is_pt = ppn_leaf in [i&PAGE_ALIGNMENT_MASK for j in self.ptr_pt_base_list_per_layout for i in j]
                 if is_pt:
@@ -478,12 +472,14 @@ class PageTablesGen:
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=False)
                     self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
                 elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.final_bb_base_addr&PAGE_ALIGNMENT_MASK or ppn_leaf - SPIKE_STARTADDR == ((fuzzerstate.final_bb_base_addr+get_finalblock_max_size())&PAGE_ALIGNMENT_MASK):
+                    mapped_final_block = True
                     # print("Mapping final block")
                     # If the page belongs to the final block, also map it for both priveleges.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=True)
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=True)
                     self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
                 elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.bb_start_addr_seq[0]&PAGE_ALIGNMENT_MASK:
+                    mapped_initial_block = True
                     # print("(Not) mapping initial block.")
                     # If it is the first basic block, don't map it as it will only be used in machine mode.
                     curr_pte            = 0
@@ -505,6 +501,8 @@ class PageTablesGen:
                 curr_layout_pt_content.append(curr_pte)
                 curr_layout_pt_content_supervisor.append(curr_pte_supervisor)
                 ppn_leaf += self.page_size_per_layout[layout_id]
+            assert mapped_initial_block
+            assert mapped_final_block
             # Coalesce the results and store bookeeping data
             curr_layout_pt_content += curr_layout_pt_content_supervisor
             self.all_pt_entries[layout_id].append(curr_layout_pt_content)
@@ -547,9 +545,13 @@ class PageTablesGen:
             assert ppn_leaf_stopsig + self.page_size_per_layout[layout_id] > self.stopsig_addr
 
             # Make supervisor regdump and stopsig
-            curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf_regdump, True, is_user=False)
             curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf_stopsig, True, is_user=False)
+            if DEBUG_PRINT:
+                print(f"stopsig pte: {hex(curr_pte_supervisor)}: {hex(ppn_leaf_stopsig)} at {hex(self.stopsig_addr)}")
             final_block_addr_ptes.append(curr_pte_supervisor)
+            curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf_regdump, True, is_user=False)
+            if DEBUG_PRINT:
+                print(f"regdump pte: {hex(curr_pte_supervisor)}: {hex(ppn_leaf_regdump)} at {hex(self.regdump_addr)}")
             final_block_addr_ptes.append(curr_pte_supervisor)
             self.all_pt_entries[layout_id][-1] += final_block_addr_ptes
 

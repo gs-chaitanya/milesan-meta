@@ -27,10 +27,8 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     if DO_ASSERT:
         assert offset_addr >= 0
         assert offset_addr < 1 << 32
-        assert not fuzzerstate.instr_objs_seq
+        # assert not fuzzerstate.instr_objs_seq
         assert csr_init_rounding_mode >= 0 and csr_init_rounding_mode <= 4
-
-    fuzzerstate.init_new_bb() # Update fuzzer state to support a new basic block
     
     # Interleave a cache line inbetween initial basic block and random register values if bug is disabled
     interleave_cl_bytes_until_random_reg_vals = get_design_cl_size(fuzzerstate.design_name) * int(not is_tolerate_ras0(fuzzerstate.design_name))
@@ -249,11 +247,12 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     # Allocate the initial block before choosing an address for the next bb.
     intended_initial_block_plus_reginit_size = len(fuzzerstate.instr_objs_seq[-1]) * 4 + 4 + len(fuzzerstate.initial_reg_data_content) * 8 + int(has_padding) * 4 + interleave_cl_bytes_until_random_reg_vals # NO_COMPRESSED
     # fuzzerstate.memview.alloc_mem_range(fuzzerstate.curr_bb_start_addr, fuzzerstate.curr_bb_start_addr+intended_initial_block_plus_reginit_size+4) # NO_COMPRESSED
-    fuzzerstate.memview.alloc_mem_range(fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK, (fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK)+PHYSICAL_PAGE_SIZE) # NO_COMPRESSED
+    # fuzzerstate.memview.alloc_mem_range(fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK, (fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK)+PHYSICAL_PAGE_SIZE) # NO_COMPRESSED
 
     # Jump to the next basic block, say, with jal for simplicity
     range_bits_each_direction = get_range_bits_per_instrclass(ISAInstrClass.JAL)
     fuzzerstate.next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction))
+
     if fuzzerstate.next_bb_addr is None:
         return False
     

@@ -59,14 +59,12 @@ if __name__ == '__main__':
     if NO_REMOVE_TMPFILES:
         print("NO_REMOVE_TMPFILES is enabled. This might eat up a lot of memory.")
 
-    assert not PRINT_INSTRUCTION_EXECUTION_IN_SITU
-    assert not PRINT_INSTRUCTION_EXECUTION_FINAL
-    
     design_name = sys.argv[1]
     n_cores = 40
     if len(sys.argv) > 2:
         n_cores = int(sys.argv[2])
     
+    assert n_cores < 50
     n_total_tests = -1
     if len(sys.argv) > 3:
         n_total_tests = int(sys.argv[3])

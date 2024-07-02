@@ -13,7 +13,7 @@ from params.runparams import INSERT_REGDUMPS, INSERT_FENCE, GET_DATA, DEBUG_PRIN
 from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memop_instrobjs
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 from cascade.randomize.pickisainstrclass import gen_next_isainstrclass, ISAInstrClass
-from cascade.randomize.pickmemop import pick_memop_addr, get_alignment_bits, is_instrstr_load
+from cascade.randomize.pickmemop import get_alignment_bits, is_instrstr_load
 from cascade.randomize.pickfpuop import gen_fpufsm_instrs
 from cascade.randomize.pickexceptionop import gen_exception_instr, gen_tvecfill_instr, gen_epcfill_instr, gen_medeleg_instr, gen_ppfill_instrs
 from cascade.randomize.pickrandomcsrop import gen_random_csr_op
@@ -57,15 +57,14 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
 
 def is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor, required_space: int = BASIC_BLOCK_MIN_SPACE):
     if USE_MMU:
-        return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space and fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[((curr_alloc_cursor+required_space)&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
-    return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-CURR_ALLOC_CURSOR_INC > required_space
+        return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor) > required_space and fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[((curr_alloc_cursor+required_space)&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
+    return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor) > required_space
 # The first BASIC_BLOCK_MIN_SPACE must be pre-allocated. The rationale is that we want to pre-allocate at least for the first basic block, to prevent the store data from landing exactly there.
 # @return True iff the creation is successful
 def gen_basicblock(fuzzerstate):
     fuzzerstate.init_new_bb() # Update fuzzer state to support a new basic block
     # This points to the first address after the current basic block allocation. The block allocation takes 16 bytes in advance, to avoid storing and then not being able to continue expanding the basic block.
     curr_alloc_cursor = fuzzerstate.curr_bb_start_addr + BASIC_BLOCK_MIN_SPACE
-
     curr_isa_class = None # This is used in case there is only space for control flow
 
     # We stop the instruction generation either when there is no more space available, or when we encounter an end-of-state instruction
@@ -342,7 +341,6 @@ def gen_random_data_block(fuzzerstate, page_has_taint = False):
     if TAINT_EN:
         fuzzerstate.random_data_block_has_taint[random_data_block_start_addr] = page_has_taint
     fuzzerstate.random_data_block_ranges += [(random_data_block_start_addr, random_data_block_end_addr)]
-    
     random_block_content4by4bytes = []
     fuzzerstate.memview.alloc_mem_range(random_data_block_start_addr, random_data_block_end_addr)
     # Generate the random data
@@ -367,11 +365,23 @@ def alloc_final_basic_block(fuzzerstate):
     fuzzerstate.final_bb_base_addr = random.randrange(final_bb_page_addr, final_bb_page_addr+PHYSICAL_PAGE_SIZE-lenbytes, 4)
     fuzzerstate.memview.alloc_mem_range(final_bb_page_addr, final_bb_page_addr+PHYSICAL_PAGE_SIZE)
 
+
+def alloc_initial_basic_block(fuzzerstate):
+    fuzzerstate.reset()
+    # Setup the address of the initial BB and allocate a page for it. This way we avoid that any PTEs are written to the same page.
+    fuzzerstate.init_new_bb() # Update fuzzer state to support a new basic block.
+    fuzzerstate.memview.alloc_mem_range(fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK, (fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK)+PHYSICAL_PAGE_SIZE) # NO_COMPRESSED
+
 # This must be done early, say, just after generating the final basic block, to ensure that we have enough space.
 def alloc_context_saver_bb(fuzzerstate):
     # For the contextsaver, we first want to know the base address before we generate the basic block because we do loads and stores, which require absolute addresses.
-    fuzzerstate.next_ctxsv_bb_start_addr = fuzzerstate.memview.gen_random_free_addr(2, fuzzerstate.ctxsv_size_upperbound, 0, fuzzerstate.memsize)
-    fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_ctxsv_bb_start_addr, fuzzerstate.next_ctxsv_bb_start_addr+fuzzerstate.ctxsv_size_upperbound)
+    # fuzzerstate.next_ctxsv_bb_start_addr = fuzzerstate.memview.gen_random_free_addr(2, fuzzerstate.ctxsv_size_upperbound, 0, fuzzerstate.memsize)
+    # fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_ctxsv_bb_start_addr, fuzzerstate.next_ctxsv_bb_start_addr+fuzzerstate.ctxsv_size_upperbound)
+    n_pages = fuzzerstate.ctxsv_size_upperbound//PHYSICAL_PAGE_SIZE+1
+    fuzzerstate.next_ctxsv_bb_start_addr = fuzzerstate.memview.gen_random_free_addr(PAGE_ALIGNMENT_SHIFT, n_pages*PHYSICAL_PAGE_SIZE, 0, fuzzerstate.memsize)
+    if DO_ASSERT:
+        assert fuzzerstate.next_ctxsv_bb_start_addr is not None, f"Maybe you should create the final basic block earlier in the creation of the test case."
+    fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_ctxsv_bb_start_addr, fuzzerstate.next_ctxsv_bb_start_addr+n_pages*PHYSICAL_PAGE_SIZE)
 
 def free_context_saver_bb(fuzzerstate, ctxsv_bb_id):
     raise NotImplementedError("not implemented yet")
@@ -431,19 +441,19 @@ def pop_last_bbs_to_connect_with_final_block(fuzzerstate):
 
     return False
 
-# @return a list of addresses for the memory operations, in their order of occurrence
-def gen_memop_addrs(fuzzerstate):
-    ret = []
-    for bb_instrlist in fuzzerstate.instr_objs_seq:
-        for bb_instr in bb_instrlist:
-            if is_placeholder(bb_instr):
-                continue
-            elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM64] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPU] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPUD]:
-                ret.append(pick_memop_addr(fuzzerstate, is_instrstr_load(bb_instr.instr_str), get_alignment_bits(bb_instr.instr_str)))
-    return ret
+# # @return a list of addresses for the memory operations, in their order of occurrence
+# def gen_memop_addrs(fuzzerstate):
+#     ret = []
+#     for bb_instrlist in fuzzerstate.instr_objs_seq:
+#         for bb_instr in bb_instrlist:
+#             if is_placeholder(bb_instr):
+#                 continue
+#             elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM64] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPU] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPUD]:
+#                 ret.append(pick_memop_addr(fuzzerstate, is_instrstr_load(bb_instr.instr_str), get_alignment_bits(bb_instr.instr_str)))
+#     return ret
 
 # @brief This function generates the producer_id_to_tgtaddr dictionary and the producer_id_to_noreloc_spike dictionaries.
-def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
+def gen_producer_id_to_tgtaddr(fuzzerstate):
     # Two steps. First, generate producer_id_to_tgtaddr. Then, use it to populate the producers with target addresses. The second step is done in another function.
 
     # Step 1
@@ -633,17 +643,6 @@ def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
                     producer_id_to_tgtaddr[bb_instr.producer_id] = phys2virt(addr, bb_instr.priv_level, bb_instr.va_layout, fuzzerstate)
                     consumer_inst_va_layout[bb_instr.producer_id] = (bb_instr.va_layout, bb_instr.priv_level)
 
-            # Since we include the memory reads and writes in the data and taint flow, we can't retrospectively
-            # feed the addresses back, but have to compute them in-situ.
-            # Alternatively, we could 'tag' each load and store, and only later allocate an address for each tag. However,
-            # then the concrete address values must be exluded from the data flow.
-            # elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEM64] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPU] or bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.MEMFPUD]:
-            #     if DO_ASSERT:
-            #         assert bb_instr.producer_id == -1 or not bb_instr.producer_id in producer_id_to_tgtaddr, "producer_id `{}` of instruction `{}` already of in producer_id_to_tgtaddr".format(bb_instr.producer_id, bb_instr.get_str())
-            #     producer_id_to_tgtaddr[bb_instr.producer_id] = phys2virt(memop_addrs[index_in_memaddr_array], bb_instr.priv_level, bb_instr.va_layout, fuzzerstate)
-            #     consumer_inst_va_layout[bb_instr.producer_id] = (bb_instr.va_layout, bb_instr.priv_level)
-            #     index_in_memaddr_array += 1
-
             elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.JAL] or (bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.BRANCH] and bb_instr.plan_taken):
                 # If this is the last before the final block, we need to steer toward the final block.
                 if index_in_bb_start_addr_seq == len(fuzzerstate.bb_start_addr_seq):
@@ -657,8 +656,6 @@ def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
             elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.SPECIAL]:
                 pass
 
-    if DO_ASSERT:
-        index_in_memaddr_array = len(memop_addrs)
 
     assert len(consumer_inst_va_layout) == len(producer_id_to_tgtaddr), f"lenghts {len(consumer_inst_va_layout)}, {len(producer_id_to_tgtaddr)}"
 
@@ -670,14 +667,12 @@ def gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs):
 def gen_basicblocks(fuzzerstate):
     # Until the generation succeeds
     while True:
-
-        fuzzerstate.reset()
-        # print(f"Allowing taint in {[p.name for p in fuzzerstate.taint_in_priv]}")
-
-        if not gen_initial_basic_block(fuzzerstate, SPIKE_STARTADDR): continue
-
-        # Reserve space for the second basic block (whose address is already fixed).
-        fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
+        # Reserve space for initial block.
+        alloc_initial_basic_block(fuzzerstate)
+        # Reserve space for the final basic block.
+        alloc_final_basic_block(fuzzerstate)
+        # Reserve space for the context setter basic block, but do not instantiate it because we do not know yet what it will look like until we have a concrete context to restore. Until then, we just know arbitrary bounds.
+        alloc_context_saver_bb(fuzzerstate)
 
         # We need at least one random data block with taint and one without s.t. all privileges can read and write memory
         gen_random_data_block(fuzzerstate, False)
@@ -686,23 +681,17 @@ def gen_basicblocks(fuzzerstate):
         for _ in range(2, random.randint(MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS)):
             gen_random_data_block(fuzzerstate, random.random() < P_PAGE_HAS_TAINT)
 
-        #WARNING: The state we save here accounts for the random data block, integer registers and CSRs. However, the taints
-        # that are generated with the immediates during program generation, are not accounted for! Therefore, they need to be explicitly written to
-        # memory using fuzzerstate.write_imm_t0_to_mem() before calling fuzzerstate.dump_memview_t0().
-        fuzzerstate.save_states()
-
-        # Reserve space for the final basic block.
-        alloc_final_basic_block(fuzzerstate)
-        # Reserve space for the context setter basic block, but do not instantiate it because we do not know yet what it will look like until we have a concrete context to restore. Until then, we just know arbitrary bounds.
-        alloc_context_saver_bb(fuzzerstate)
-
-        # Finally, generate the store locations. This can be swapped with generating the final basic block.
-        fuzzerstate.memstorestate.init_store_locations(fuzzerstate.num_store_locations, fuzzerstate.memview)
-
+        # Set up the page tables and map the initial, final and context block. All other pages are distributed randomly among the privileges.
         if USE_MMU and not fuzzerstate.design_has_no_mmu:
             if not fuzzerstate.pagetablestate.gen_mmu_dependencies(fuzzerstate): continue #if there is not enough contiguous space for the last page table level skip to the next block
-            #gen_mmu_init_block(fuzzerstate) first commit shows how to use this, it needs some modif for spikedoublecheck and above to get the space
             fuzzerstate.pagetablestate.gen_pt_in_mem(fuzzerstate)
+
+        # Now we have setup the page tables and can generate the program.
+        if not gen_initial_basic_block(fuzzerstate, SPIKE_STARTADDR): continue
+
+        # Reserve space for the second basic block (whose address is already fixed).
+        fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
+        fuzzerstate.save_states()
 
         while True:
             # print('len(fuzzerstate.instr_objs_seq)', len(fuzzerstate.instr_objs_seq))
@@ -732,9 +721,6 @@ def gen_basicblocks(fuzzerstate):
     blacklist_final_block(fuzzerstate) # Must be done once the bb is created, else we could also blacklist upper bounds over the basic block size.
     blacklist_context_setters(fuzzerstate)
 
-    # Generate addresses for memory operations
-    memop_addrs = gen_memop_addrs(fuzzerstate)
-
-    fuzzerstate.consumer_inst_va_layout, fuzzerstate.producer_id_to_tgtaddr, fuzzerstate.producer_id_to_noreloc_spike = gen_producer_id_to_tgtaddr(fuzzerstate, memop_addrs)
+    fuzzerstate.consumer_inst_va_layout, fuzzerstate.producer_id_to_tgtaddr, fuzzerstate.producer_id_to_noreloc_spike = gen_producer_id_to_tgtaddr(fuzzerstate)
 
     return fuzzerstate

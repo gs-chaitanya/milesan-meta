@@ -81,6 +81,7 @@ class MemoryView:
         if DO_ASSERT:
             assert end > start, f"Expected start ({start}) > end ({end}) in alloc_mem_range."
         self.occupied_addrs += end-start
+        # print(f"Allocating {hex(start)} - {hex(end)}")
         for curr_pair_id, curr_pair in enumerate(self.freepairs):
             if start < curr_pair[1]:
                 # Check that the range is initially free.
