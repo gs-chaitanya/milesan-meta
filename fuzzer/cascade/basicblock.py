@@ -53,16 +53,25 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     # If we could not find a new address where to place the next basic block, then return and consider this stage complete.
     if fuzzerstate.next_bb_addr is None:
         return False
+
+    if USE_MMU and DO_ASSERT:
+        assert fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.next_bb_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR], f"Generated BB addr does not match required privilege: {fuzzerstate.privilegestate.privstate.name} not in {[p.name for p in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]]}"
+
     return True
 
 def is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor, required_space: int = BASIC_BLOCK_MIN_SPACE):
     if USE_MMU:
-        return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor) > required_space and fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[((curr_alloc_cursor+required_space)&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
+        ret = fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor) > required_space and fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[((curr_alloc_cursor+required_space)&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
+        # print(f"Request for {hex(curr_alloc_cursor)} - {hex(curr_alloc_cursor+required_space)}: {ret}")
+        return ret
     return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor) > required_space
 # The first BASIC_BLOCK_MIN_SPACE must be pre-allocated. The rationale is that we want to pre-allocate at least for the first basic block, to prevent the store data from landing exactly there.
 # @return True iff the creation is successful
 def gen_basicblock(fuzzerstate):
     fuzzerstate.init_new_bb() # Update fuzzer state to support a new basic block
+    if DO_ASSERT:
+        if USE_MMU:
+            assert fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR], f"Trying to allocate BB in page that does not match it's privilege: {fuzzerstate.privilegestate.privstate.name} not in {[p.name for p in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]]}"
     # This points to the first address after the current basic block allocation. The block allocation takes 16 bytes in advance, to avoid storing and then not being able to continue expanding the basic block.
     curr_alloc_cursor = fuzzerstate.curr_bb_start_addr + BASIC_BLOCK_MIN_SPACE
     curr_isa_class = None # This is used in case there is only space for control flow

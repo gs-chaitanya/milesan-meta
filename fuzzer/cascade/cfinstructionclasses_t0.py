@@ -308,7 +308,7 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         # Compute the taint results of the operation. The address is never tainted.
         res_t0 = self.instr_func_t0(self.paddr, 0x0, self.imm, self.imm_t0, self.fuzzerstate.is_design_64bit)
         # Compute alternative results if other soruce registers had been choosen.
-        res_t0 |= self.compute_alt_res_t0(res)
+        # res_t0 |= self.compute_alt_res_t0(res)
         # Writeback taints according to tainted bits in rd.
         self.writeback_t0(res_t0, res, is_spike_resolution)
 

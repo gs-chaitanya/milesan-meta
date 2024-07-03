@@ -505,8 +505,10 @@ def auipc_t0(pc: int, pc_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     uimm_t0 = to_unsigned(imm_t0, is_design_64bit) & 0xFFFFF # 20 bit immediate
     uimm_t0 = uimm_t0 << 12
     if is_design_64bit:
-        msb = (uimm_t0>>31)&1
-        uimm_t0 |= (MAX_64b^MAX_32b)*msb
+        msb_t0 = (uimm_t0>>31)&1
+        uimm_t0 |= (MAX_64b^MAX_32b)*msb_t0
+        msb= (uimm>>31)&1
+        uimm |= (MAX_64b^MAX_32b)*msb
 
     res_t0 = add_t0(pc, pc_t0, uimm, uimm_t0, is_design_64bit)
     return res_t0

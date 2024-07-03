@@ -82,7 +82,6 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     
     fuzzerstate.write_imm_t0_to_mem() # Write the immediate taints from the program code to the imem.
     fuzzerstate.dump_memview_t0()
-
     try:
         regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(env, fuzzerstate.design_name)
         regstream_rtl_val, regstream_rtl_val_t0 = regstream_rtl

@@ -236,6 +236,7 @@ assert USE_TAINT_TANH or USE_TAINT_BIN or USE_TAINT_HW
 INSERT_SPECTRE_GADGETS = False
 # Tainting immediates of branches could taint the pc without taking the branch as the BPU is updated speculatively.
 TAINT_NONTAKEN_BRANCH_IMM = False
+# Tainting the immediates might taint the PC if instruction code is loaded and speculated on.
 TAINT_IMMRD_IMM = True
 TAINT_REGIMM_IMM = True
 
@@ -243,13 +244,13 @@ TAINT_REGIMM_IMM = True
 ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = False
 
 # Abort fuzzing run if the computed program does not execute in taint sink privilege.
-ASSERT_EXEC_IN_TAINT_SINK_PRIV = False
+ASSERT_EXEC_IN_TAINT_SINK_PRIV = True
 
 # Ignore exception types to e.g. only fuzz for leakage and ignore architectural bugs that trigger timeouts or value mismatches.
 IGNORE_RTL_TIMEOUT = False
 IGNORE_SPIKE_TIMEOUT = False
 IGNORE_VALUE_MISMATCH = False
-IGNORE_TAINT_MISMATCH = True
+IGNORE_TAINT_MISMATCH = False
 IGNORE_SPIKE_MISMATCH = False
 
 # Use the uninstrumented design for fuzzing/reducing. This helps checking if theres a translation bug in yosys.

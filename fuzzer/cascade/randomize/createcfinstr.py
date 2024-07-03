@@ -88,7 +88,7 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
 
-    if TAINT_IMMRD_IMM and n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+    if "auipc" not in instr_str and TAINT_IMMRD_IMM and n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
         imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
         rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
     else:
