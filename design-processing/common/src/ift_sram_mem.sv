@@ -193,7 +193,7 @@ module ift_sram_mem #(
 
   function _dump_memory();
     begin
-      string path = Get_SRAM_DumpPath();
+      static string path = Get_SRAM_DumpPath();
       integer  fd;
       fd = $fopen(path, "w");
       foreach (mem[i]) begin
