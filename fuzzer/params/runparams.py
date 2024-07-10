@@ -27,9 +27,9 @@ PRINT_FSM_TRANSITIONS = False # Print transitions between states for register FS
 CHECK_REGS_T0_PRECISE = False
 CHECK_MEM_T0_PRECISE = False
 CHECK_MEM = False
-PRINT_CHECK_REGS_T0 = False # Print taint propagation checks.
+PRINT_CHECK_REGS_T0 = True # Print taint propagation checks.
 PRINT_CHECK_REGS_T0_MISMATCH_OK = False
-PRINT_CHECK_REGS = False
+PRINT_CHECK_REGS = True
 PRINT_WRITEBACK_T0 = False # Print taint writeback of instructions.
 PRINT_WRITEBACK = False
 
@@ -45,7 +45,7 @@ PRINT_FILTERED_REG_TRACEBACK = False
 PRINT_ENVIRONMENT = False
 
 INSERT_REGDUMPS = False # Speculative bugs will likely diappear when enabled. Used to test correctness of dataflow computation.
-INSERT_FENCE = False # The stores should become architectually visible in order, so this should not be necessary
+INSERT_FENCE = False # The stores should become architectually visible in order, so this should not be necessary in most cases with WT caches. CVA6 needs it.
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
 assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not supported when spectre gadgets enabled."
 assert not (TAINT_NONTAKEN_BRANCH_IMM and INSERT_REGDUMPS), "Enabling TAINT_NONTAKEN_BRANCH_IMM might render INSERT_REGDUMPS useless as pc might get tainted if non-taken branch is predicted taken."

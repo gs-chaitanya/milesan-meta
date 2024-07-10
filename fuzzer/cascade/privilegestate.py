@@ -7,7 +7,7 @@ from enum import IntEnum
 class PrivilegeStateEnum(IntEnum):
     USER       = 0
     SUPERVISOR = 1
-    HYPERVISOR = 2 # We do not support it atm, as no open source design implements it afawk to date.
+    # HYPERVISOR = 2 # We do not support it atm, as no open source design implements it afawk to date.
     MACHINE    = 3
 
 # Represents the privilege and MMU state, evolving during the fuzzing process

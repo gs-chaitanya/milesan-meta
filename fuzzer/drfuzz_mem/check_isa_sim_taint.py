@@ -59,9 +59,9 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
         fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
-        n_instr_in_per_priv, taint_sink_priv = fuzzerstate.compute_context_stats()
+        n_instr_in_priv, forbidden_privs = fuzzerstate.compute_context_stats()
         if USE_MMU and ASSERT_EXEC_IN_TAINT_SINK_PRIV:
-            assert n_instr_in_per_priv[taint_sink_priv] != 0, f"Computed program does not execute in taint sink privilege."
+            assert sum([n_instr_in_priv[priv] for priv in forbidden_privs]) != 0, f"Computed program does not execute in taint sink privilege(s) {[p.name for p in forbidden_privs]}."
         fuzzerstate.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         fuzzerstate.memview.restore(0) # Restore contents before anything was executed.
         fuzzerstate.csrfile.reset() # Reset all CSRs to zero.

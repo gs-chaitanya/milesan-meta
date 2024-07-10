@@ -383,6 +383,11 @@ class MemoryView:
                 if addr in dumped_addresses:
                     continue
                 n_bytes = 8 if self.fuzzerstate.is_design_64bit else 4
+                # Some weird behaviour in CVA6 requires an offset of 8 bytes, could be a verilator bug?
+                # See the signals dache_rd_shift_d(_t0) and dcache_rd_shift_q(_t0) in i_wt_dcache in CVA6, second
+                # 8 bytes of memory response not appended to frist 8 bytes to form 16 byte CL for taints, always first 
+                # 8 bytes used twice??
+                # f.write("0 {:x} {:x} ".format(addr + 8 * int("cva6" in self.fuzzerstate.design_name), n_bytes))
                 f.write("0 {:x} {:x} ".format(addr, n_bytes))
                 for i in range(n_bytes):
                     # Little endian.

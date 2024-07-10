@@ -571,8 +571,8 @@ class FuzzerState:
         if print_stats:
                 print({p.name:v for p,v in n_instr_in_priv.items()})
 
-        forbidden_priv = list(set(list(PrivilegeStateEnum))-set(self.taint_in_priv))[0]
-        return n_instr_in_priv, forbidden_priv
+        forbidden_privs = list(set(list(PrivilegeStateEnum))-set(self.taint_in_priv))
+        return n_instr_in_priv, forbidden_privs
 
     def log(self, log_msg):
         with open(f"{self.tmp_dir}/log.txt", "a") as f:
