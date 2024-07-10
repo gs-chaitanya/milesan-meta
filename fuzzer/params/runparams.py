@@ -18,7 +18,7 @@ DO_EXPENSIVE_ASSERT = False # More expensive assertions
 
 NO_REMOVE_TMPFILES = False # Used for debugging purposes
 # TODO: below currently need to be enabled for reduction with pillar.
-NO_REMOVE_TMPDIRS = True # When disabled, removes the /cascade-data/[design-name]/[ID] directories even when leakage (or bug) detected. Enable to save storage.
+NO_REMOVE_TMPDIRS = False # When disabled, removes the /cascade-data/[design-name]/[ID] directories even when leakage (or bug) detected. Enable to save storage when fuzzing multi-threaded.
 
 RUN_TIMEOUT_SECONDS = 60*3 # A program is not supposed to run longer than this in RTL simulation.
 
@@ -45,12 +45,13 @@ PRINT_FILTERED_REG_TRACEBACK = False
 PRINT_ENVIRONMENT = False
 
 INSERT_REGDUMPS = False # Speculative bugs will likely diappear when enabled. Used to test correctness of dataflow computation.
+INSERT_FENCE = False # The stores should become architectually visible in order, so this should not be necessary
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
 assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not supported when spectre gadgets enabled."
 assert not (TAINT_NONTAKEN_BRANCH_IMM and INSERT_REGDUMPS), "Enabling TAINT_NONTAKEN_BRANCH_IMM might render INSERT_REGDUMPS useless as pc might get tainted if non-taken branch is predicted taken."
 CHECK_PC_SPIKE_AGAIN = False
 assert not (INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN)
-INSERT_FENCE = False # The stores should become architectually visible in order, so this should not be necessary
+assert not (INSERT_FENCE and not INSERT_REGDUMPS), f"INSERT_REGDUMPS must be enabled."
 
 PRINT_REGISTER_VALIDATION = False
 PRINT_MEMORY_VALIDATION = False
@@ -71,9 +72,7 @@ PRINT_PRIV_STATS = False
 
 DO_DOUBLECHECK_SIM = True
 
+# Trace settings
 TRACE_EN = False
-TRACE_VCD = True
 TRACE_FST = False
-assert not (TRACE_VCD and TRACE_FST), f"Only one of VCD and FST tracing can be enabled at a time."
-assert not TRACE_EN or TRACE_VCD or TRACE_FST, f"When TRACE_EN is enabled, either TRACE_VCD or TRACE_FST must be enabled."
 

@@ -130,10 +130,9 @@ def gen_next_instrstr_from_isaclass(isaclass: ISAInstrClass, fuzzerstate) -> str
     if isaclass == ISAInstrClass.SPECIAL:
         fuzzerstate.special_instrs_count += 1
 
-    if isaclass in [ISAInstrClass.ALU, ISAInstrClass.ALU64]:
-        n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
-        if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS+1: # Use an lui to overwrite a tainted register with untainted value.
-            return "lui"
+    # If there's no tainted register and we are in a privilege that should process tainted data, load tainted data from memory.
+    if isaclass in [ISAInstrClass.MEM] and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and fuzzerstate.intregpickstate.get_num_tainted_regs_in_state(IntRegIndivState.FREE) == 0:
+        return random.choice(["lb","lbu","lh", "lhu", "lw"])
 
     if fuzzerstate.design_name == "cva6":
         # Double precision
@@ -160,9 +159,6 @@ def gen_next_instrstr_from_isaclass(isaclass: ISAInstrClass, fuzzerstate) -> str
         assert isaclass != ISAInstrClass.PPFSM    , "ISAInstrClass.PPFSM must be treated separately"
         assert isaclass != ISAInstrClass.EPCFSM   , "ISAInstrClass.EPCFSM must be treated separately"
     
-    # if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS+1:
-    #     keys_and_weights_dict["lui"] = max(keys_and_weights_dict.values())
-
     ret = None
     while ret is None or keys_and_weights_dict[ret] == 0:
         ret = random.choices(list(keys_and_weights_dict.keys()), weights=keys_and_weights_dict.values())[0]

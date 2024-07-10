@@ -7,14 +7,14 @@ import numpy as np
 
 from params.runparams import DO_ASSERT, PRINT_FSM_TRANSITIONS
 
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED, NUM_MAX_PRODUCED0_REGS, NUM_MAX_PRODUCED1_REGS, TAINT_NONTAKEN_BRANCH_IMM, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED, NUM_MAX_PRODUCED0_REGS, NUM_MAX_PRODUCED1_REGS, TAINT_NONTAKEN_BRANCH_IMM, TAINT_IMMRD_IMM, P_LOAD_TAINT
 from params.runparams import GET_DATA
 from cascade.util import IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS, ISAInstrClass
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import *
 from cascade.toleratebugs import is_tolerate_branchpred
 from cascade.spikeresolution import get_current_layout
-from cascade.mmu_utils import li_doubleword
+from cascade.mmu_utils import li_doubleword, PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_BITS, PAGE_ALIGNMENT_MASK
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
 # This module creates an instruction from its instruction string, and some state which will condition which registers and immediates will be picked, and with which probability.
 
@@ -85,18 +85,34 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in ImmRdInstructions
 
-    n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
+    # n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
 
-    if "auipc" not in instr_str and TAINT_IMMRD_IMM and n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
-        imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
-        rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
-    else:
-        imm_t0 = 0
-        rd = fuzzerstate.intregpickstate.pick_tainted_int_outputreg()
+    # if "auipc" not in instr_str and TAINT_IMMRD_IMM and n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+    #     imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
+    #     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
+    # else:
+    #     imm_t0 = 0
+    #     rd = fuzzerstate.intregpickstate.pick_tainted_int_outputreg()
     
 
-    if instr_str == "auipc" and rd > 0:
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+        n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
+        if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS: # There's too much taint, remove some.
+            imm_t0 = 0 
+            rd = fuzzerstate.intregpickstate.pick_tainted_int_outputreg()
+        else:
+            if TAINT_IMMRD_IMM:
+                imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
+            else:
+                imm_t0 = 0
+            rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
+    else:
+        imm_t0 = 0
+        rd = fuzzerstate.intregpickstate.pick_int_outputreg_nonzero()
+
+
+    if rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
 
     return ImmRdInstruction_t0(fuzzerstate,instr_str, rd, imm, imm_t0, iscompressed)
@@ -105,19 +121,28 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in RegImmInstructions
 
-    n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
-    
     
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
 
-    if TAINT_REGIMM_IMM and n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and  fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
-        imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
-        rs1 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg()
-        rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+        n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
+        if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS: # There's too much taint, remove some.
+            imm_t0 = 0 
+            rs1 = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
+            rd = fuzzerstate.intregpickstate.pick_tainted_int_outputreg()
+        else:
+            if TAINT_IMMRD_IMM:
+                imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
+            else:
+                imm_t0 = 0
+            rs1 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg()
+            rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
     else:
-        imm_t0 = 0 
-        rs1 = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
-        rd = fuzzerstate.intregpickstate.pick_tainted_int_outputreg()
+        imm_t0 = 0
+        rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
+        rd = fuzzerstate.intregpickstate.pick_int_outputreg_nonzero()
+
+
 
 
     return RegImmInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, imm_t0, iscompressed)
@@ -147,11 +172,6 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
         for addr_pair in fuzzerstate.random_data_block_ranges:
             is_random_data_block_in_reach |= abs(addr_pair[0] - curr_addr) < (1<<11) and abs(addr_pair[1] - 4 - curr_addr) < (1<<11)
         if is_random_data_block_in_reach and random.random() < NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA:
-            # lowest_random_data_reachable_addr = max(fuzzerstate.random_data_block_start_addr+4, curr_addr - (1<<11))
-            # highest_random_data_reachable_addr = min(fuzzerstate.random_data_block_end_addr-4, curr_addr + (1<<11))
-
-            # target_addr_in_random_data_block = random.randrange(lowest_random_data_reachable_addr//2, highest_random_data_reachable_addr//2)*2
-            # imm = target_addr_in_random_data_block-curr_addr
             target_addr =  None
             # TODO do we need to modify this for virtual addresses? Think not since we can't jump further than a page anyway
             while target_addr is None or (fuzzerstate.memview.is_cl_tainted(curr_addr+imm+SPIKE_STARTADDR) and not is_tolerate_branchpred(fuzzerstate.design_name)):
@@ -202,28 +222,44 @@ def _create_SpecialInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
 def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in IntLoadInstructions
-    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
-    rd = fuzzerstate.intregpickstate.pick_int_outputreg()
-    imm = 0
-    producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
-    if DO_ASSERT:
-        assert producer_id > 0
+        if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
+        else:
+            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR)
 
-    return IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
+    if TAINT_EN:
+        if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+            if fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
+                taint = random.random() < P_LOAD_TAINT
+            else:
+                taint = True
+        else:
+            taint = False
+    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_T0_ADDR if taint else IntRegIndivState.PAGE_ADDR)
+    rd = fuzzerstate.intregpickstate.pick_int_outputreg()
+    alignment = 1 if instr_str in ["lb","lbu"] else 2 if instr_str in ["lh","lhu"] else 4 if instr_str in ["lw","lwu"] else 8 if instr_str == "ld" else None
+    assert alignment is not None, f"Invalid instr_str: {instr_str}"
+    imm = random.randrange(-PHYSICAL_PAGE_SIZE//2,PHYSICAL_PAGE_SIZE//2, alignment)
+
+    return IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, None, iscompressed)
 
 def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in IntStoreInstructions
-    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
-    rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
-    imm = 0
-    producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-    fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
-    if DO_ASSERT:
-        assert producer_id > 0
+        if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
+        else:
+            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR)
 
-    return IntStoreInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, producer_id, iscompressed)
+    if TAINT_EN:
+        taint = fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv
+    rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_T0_ADDR if taint else IntRegIndivState.PAGE_ADDR)
+    rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
+    alignment = 1 if instr_str == "sb" else 2 if instr_str == "sh" else 4 if instr_str == "sw" else 8 if instr_str == "sd" else None
+    assert alignment is not None, f"Invalid instr_str: {instr_str}"
+    imm = random.randrange(-PHYSICAL_PAGE_SIZE//2,PHYSICAL_PAGE_SIZE//2, alignment)
+
+    return IntStoreInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, None, iscompressed)
 
 # Floating-point instructions
 
@@ -384,68 +420,68 @@ def create_targeted_consumer_instrobj(fuzzerstate):
         # return [PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
         # return [PlaceholderConsumerInstr_t0], [(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
         return [PlaceholderConsumerInstr_t0(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
-# Creates the instruction sequence that prepares valid addresses for the load and stores. Returns the respective sequence of constructors and parameters as zip.
-# The objects cannot be created inside the class because their current address for the next instruction needs to be increased, which is done outside of this function. 
-# TODO use FSM for this
-def create_memop_instrobjs(fuzzerstate, instr_str):
-    assert instr_str in IntLoadInstruction_t0.authorized_instr_strs or instr_str in IntStoreInstruction_t0.authorized_instr_strs, f"{instr_str} not in a valid memory operation."
-    if instr_str in ["lb","sb","lbu"]:
-        alignment_bits = 0
-        min_space = 1
-    elif instr_str in ["lh","sh","lhu"]:
-        alignment_bits = 1
-        min_space = 2
-    elif instr_str in ["lw","sw"]:
-        alignment_bits = 2
-        min_space = 4
 
+# TODO: create exception when reading from tainted memory region from priv that does not have access
+def create_memfsm_instrobjs(fuzzerstate):
     if len(fuzzerstate.instr_objs_seq[-1]):
         last_instr = fuzzerstate.instr_objs_seq[-1][-1] # We need the layout from the previous instruction
     else: # In case its the first instruciton of a block.
         last_instr = fuzzerstate.instr_objs_seq[-2][-1] # We need the layout from the previous instruction
 
     va_layout, priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
-    is_store = instr_str in ["sb","sh","sw"]
-    rs2 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg(force = False)
 
-    if priv_level not in fuzzerstate.taint_in_priv: # We are not in the privelege that can process taints, so only non-tainted pages are allowed.
-        tainted_ok = False
-        not_tainted_ok = True
+    if priv_level in  fuzzerstate.taint_in_priv:
+        if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+            tainted = True
+        elif not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
+            tainted = False
+        else:
+            tainted = random.random() < 0.5
     else:
-        tainted_ok = True # We can read from or write to tainted pages
-        not_tainted_ok = not is_store or not fuzzerstate.intregpickstate.regs[rs2].get_val_t0() # We can only write tainted values to tainted pages, untainted values can go anywhere
-    addr  = fuzzerstate.memview.gen_random_addr_from_randomblock(alignment_bits,min_space,tainted_ok=tainted_ok, not_tainted_ok=not_tainted_ok)
+        tainted = False
+    addr  = fuzzerstate.memview.gen_random_page_addr_from_randomblocks(tainted=tainted)
     assert addr is not None
 
     if va_layout == -1: # We don't need 64bit values in bare.
         assert not USE_MMU or priv_level == PrivilegeStateEnum.MACHINE, f"We need to be in machine mode to use bare translation when the MMU is enabled."
-        rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.
-        uimm0, uimm1 = li_into_reg(to_unsigned(addr, fuzzerstate.is_design_64bit), False)
-        if is_store:
-            # if fuzzerstate.intregpickstate.exists_free_intreg_in_range()
-            return [
-                ImmRdInstruction_t0(fuzzerstate, "lui", rd, uimm0),
-                RegImmInstruction_t0(fuzzerstate, "addi",rd,rd,uimm1),
-                R12DInstruction_t0(fuzzerstate, "xor",rd,rd,RELOCATOR_REGISTER_ID),
-                IntStoreInstruction_t0(fuzzerstate, instr_str, rd, rs2, 0x0, None)
-            ]
+        if tainted:
+            if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+                rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.
+            else:
+                rd =  fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
         else:
-            return [
-                ImmRdInstruction_t0(fuzzerstate, "lui", rd, uimm0),
-                RegImmInstruction_t0(fuzzerstate,"addi",rd,rd,uimm1),
-                R12DInstruction_t0(fuzzerstate, "xor",rd,rd ,RELOCATOR_REGISTER_ID),
-                IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rd, 0x0, None)
-            ]
+            if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
+                rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False) # Rd will be untainted after execution.
+            else:
+                rd =  fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_ADDR)
+
+        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PAGE_T0_ADDR if tainted else IntRegIndivState.PAGE_ADDR, force=True)
+        uimm0, uimm1 = li_into_reg(to_unsigned(addr, fuzzerstate.is_design_64bit), False)
+        # if fuzzerstate.intregpickstate.exists_free_intreg_in_range()
+        return [
+            ImmRdInstruction_t0(fuzzerstate, "lui", rd, uimm0),
+            RegImmInstruction_t0(fuzzerstate, "addi",rd,rd,uimm1),
+            R12DInstruction_t0(fuzzerstate, "xor",rd,rd,RELOCATOR_REGISTER_ID),
+        ]
 
     else: # if we use the MMU, we need to get the virtual address and use one extra instruction to set up the 64 bit vaddress.
         assert priv_level != PrivilegeStateEnum.MACHINE, f"We can't be in machine mode and use vaddr translation."
-        (rd,tmp) = fuzzerstate.intregpickstate.pick_untainted_int_outputregs_nonzero(2,force = False) # Rd and tmp will be untainted after execution.
+        if tainted:
+            if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+                (rd,tmp) = fuzzerstate.intregpickstate.pick_untainted_int_outputregs_nonzero(2,force = False) # Rd and tmp will be untainted after execution.
+            else:
+                rd =  fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
+                tmp =  fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False)
+        else:
+            if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
+                (rd,tmp) = fuzzerstate.intregpickstate.pick_untainted_int_outputregs_nonzero(2,force = False) # Rd and tmp will be untainted after execution.
+            else:
+                rd =  fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_ADDR)
+                tmp =  fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(force = False)
+
+        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PAGE_T0_ADDR if tainted else IntRegIndivState.PAGE_ADDR, force=True)
         addr = phys2virt(addr, priv_level, va_layout,fuzzerstate,absolute_addr=True)
         instr_objs = li_doubleword(addr, rd, tmp, fuzzerstate)
-        if is_store:
-            instr_objs += [IntStoreInstruction_t0(fuzzerstate, instr_str, rd, rs2, 0x0, None)]
-        else:
-            instr_objs += [IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rd, 0x0, None)]
         return instr_objs
 
 # The reservation in the MemoryView is already done ahead and should not be reiterated here.
@@ -469,10 +505,10 @@ def create_instr(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool
         return _create_JALRInstruction(instr_str, fuzzerstate, iscompressed)
     elif instr_str in SpecialInstructions:
         return _create_SpecialInstruction(instr_str, fuzzerstate, iscompressed)
-    # elif instr_str in IntLoadInstructions:
-    #     return _create_IntLoadInstruction(instr_str, fuzzerstate, iscompressed)
-    # elif instr_str in IntStoreInstructions:
-    #     return _create_IntStoreInstruction(instr_str, fuzzerstate, iscompressed)
+    elif instr_str in IntLoadInstructions:
+        return _create_IntLoadInstruction(instr_str, fuzzerstate, iscompressed)
+    elif instr_str in IntStoreInstructions:
+        return _create_IntStoreInstruction(instr_str, fuzzerstate, iscompressed)
     # Floating point instructions
     elif instr_str in FloatLoadInstructions:
         return _create_FloatLoadInstruction(instr_str, fuzzerstate, iscompressed)

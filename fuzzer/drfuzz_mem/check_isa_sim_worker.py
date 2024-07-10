@@ -39,7 +39,7 @@ def test_done_callback(ret):
 
 def __check_isa_sim_worker(design_name, seed):
     try:
-        check_isa_sim_taint(design_name,seed).remove_tmp_files()
+        check_isa_sim_taint(design_name,seed).remove_tmp_dir()
         return None
     except Exception as e:
         print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")

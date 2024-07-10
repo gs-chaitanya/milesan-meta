@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT
 from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_fence, is_forbid_vexriscv_csrs, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_picorv32_writehpm, is_tolerate_picorv32_readnonimplcsr
 from cascade.util import ISAInstrClass, IntRegIndivState, MmuState, BASIC_BLOCK_MIN_SPACE
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, USE_MMU, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, USE_MMU, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM
 from cascade.privilegestate import PrivilegeStateEnum, is_ready_to_descend_privileges
 from cascade.util import IntRegIndivState
 import random
@@ -30,7 +30,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.JAL :        0.01,
     ISAInstrClass.JALR:        0.01,
     ISAInstrClass.BRANCH:      0.01,
-    ISAInstrClass.MEM:         0.3,
+    ISAInstrClass.MEM:         0.6,
     ISAInstrClass.MEM64:       0,
     ISAInstrClass.MEMFPU:      0,
     ISAInstrClass.FPU:         0,
@@ -48,7 +48,8 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.SPECIAL:     0.01,
     ISAInstrClass.MMU:         0.5,
     ISAInstrClass.MSTATUS:     0,
-    ISAInstrClass.CLEARTAINT:  0.00
+    ISAInstrClass.CLEARTAINT:  0.00,
+    ISAInstrClass.MEMFSM:      0.01
 }
 
 
@@ -153,7 +154,11 @@ def _get_isainstrclass_filtered_weights(fuzzerstate, curr_alloc_cursor):
         or (((fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.SUPERVISOR] | 0x7fffffff) - (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.USER] | 0x7fffffff)) != 0 and fuzzerstate.is_design_64bit) \
         or "cva6" in fuzzerstate.design_name: #cva6 does not use the same ISA than spike, hard to change
         ret_dict[ISAInstrClass.MSTATUS] = 0
-    if USE_MMU and (fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) + fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.RELOCUSED)) < 3: # we need two and theres always the zero reg
+    # if USE_MMU and (fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.FREE) + fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.RELOCUSED)) < 3: # we need two and theres always the zero reg
+    #     ret_dict[ISAInstrClass.MEM] = 0
+    if fuzzerstate.privilegestate.privstate not in fuzzerstate.taint_in_priv and not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
+        ret_dict[ISAInstrClass.MEM] = 0
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
         ret_dict[ISAInstrClass.MEM] = 0
 
     # Normalize the weights
@@ -217,25 +222,44 @@ def _filter_sensitive_instr_weights(fuzzerstate, filtered_weights: list):
         filtered_weights[ISAInstrClass.TVECFSM] = 0
         filtered_weights[ISAInstrClass.EPCFSM]  = 0
         filtered_weights[ISAInstrClass.JALR]    = 0
-        filtered_weights[ISAInstrClass.MEM]     = 0
-        filtered_weights[ISAInstrClass.MEM64]   = 0
+        # filtered_weights[ISAInstrClass.MEM]     = 0
+        # filtered_weights[ISAInstrClass.MEM64]   = 0
         filtered_weights[ISAInstrClass.MEMFPU]  = 0
         filtered_weights[ISAInstrClass.MEMFPUD] = 0
         filtered_weights[ISAInstrClass.MSTATUS] = 0
     return filtered_weights
 
-# When there's too much taint, we choose an RegImm or ImmRd to untaint some register(s).
-# When there's only little taint, we increase chance for RegImm or ImmRd to add taint.
+# When there's too much taint, we untaint some register(s).
+# When there's only little taint, we add taint with loads or immediates.
 def _filter_taint(fuzzerstate, filtered_weights: list):
-    n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
-    if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS:
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+        n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
+        if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS:
+            filtered_weights = dict.fromkeys(filtered_weights,0)
+            filtered_weights[ISAInstrClass.CLEARTAINT] = 1
+
+        elif fuzzerstate.intregpickstate.get_num_tainted_regs_in_state(IntRegIndivState.FREE) == 0:
+            filtered_weights = dict.fromkeys(filtered_weights,0)
+            if TAINT_IMMRD_IMM or TAINT_REGIMM_IMM:
+                filtered_weights[ISAInstrClass.ALU] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU]
+                filtered_weights[ISAInstrClass.ALU64] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU64]
+            if fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+                filtered_weights[ISAInstrClass.MEM] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MEM] # Add taint with load from tainted region if we are in the alowed privileges only.
+            else:
+                filtered_weights[ISAInstrClass.MEMFSM] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MEMFSM] # Add taint with load from tainted region if we are in the alowed privileges only.
+
+        elif n_free_untainted_regs > NUM_MIN_UNTAINTED_INTREGS*2:
+            if TAINT_IMMRD_IMM or TAINT_REGIMM_IMM:
+                filtered_weights[ISAInstrClass.ALU] *= TAINT_IMM_PROTURBANCE_FACTOR # Add taint with immediates if we are in the alowed privileges only.
+                filtered_weights[ISAInstrClass.ALU64] *= TAINT_IMM_PROTURBANCE_FACTOR
+            elif fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+                filtered_weights[ISAInstrClass.MEM] *= TAINT_IMM_PROTURBANCE_FACTOR # Add taint with load from tainted region if we are in the alowed privileges only.
+            else:
+                filtered_weights[ISAInstrClass.MEMFSM] *= TAINT_IMM_PROTURBANCE_FACTOR # Add taint with load from tainted region if we are in the alowed privileges only.
+
+    elif not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
         filtered_weights = dict.fromkeys(filtered_weights,0)
-        filtered_weights[ISAInstrClass.ALU] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU]
-        filtered_weights[ISAInstrClass.ALU64] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.ALU64]
-        filtered_weights[ISAInstrClass.CLEARTAINT] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.CLEARTAINT]
-    elif n_free_untainted_regs > NUM_MIN_UNTAINTED_INTREGS*2 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
-        filtered_weights[ISAInstrClass.ALU] *= TAINT_IMM_PROTURBANCE_FACTOR # Add taint with immediates if we are in the alowed priveleges only.
-        filtered_weights[ISAInstrClass.ALU64] *= TAINT_IMM_PROTURBANCE_FACTOR
+        filtered_weights[ISAInstrClass.MEMFSM] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MEMFSM] # Add taint with load from tainted region if we are in the alowed privileges only.
 
     if DO_ASSERT:
         if not (fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv or not fuzzerstate.intregpickstate.exists_tainted_reg()):
@@ -254,9 +278,10 @@ def gen_next_isainstrclass(fuzzerstate, curr_alloc_cursor, no_mmu_op: bool = Fal
     filtered_weights = _filter_regfsm_weight(fuzzerstate, filtered_weights)
     filtered_weights = _filter_csr_weight(fuzzerstate, filtered_weights)
     filtered_weights = _filter_sensitive_instr_weights(fuzzerstate, filtered_weights)
+    filtered_weights = _filter_taint(fuzzerstate, filtered_weights)
+
     if no_mmu_op:
         filtered_weights[ISAInstrClass.MMU] = 0
 
-    filtered_weights = _filter_taint(fuzzerstate, filtered_weights)
 
     return _gen_next_isainstrclass_from_weights(filtered_weights)

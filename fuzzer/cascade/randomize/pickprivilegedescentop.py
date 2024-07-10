@@ -33,8 +33,10 @@ def gen_priv_descent_instr(fuzzerstate):
     is_mret = fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE
 
     # If there should not be any taint propagation from the privelege we're in to the one we are returning to.
-    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and fuzzerstate.privilegestate.curr_mstatus_mpp not in fuzzerstate.taint_in_priv:
-        instr_objs += clear_taints_with_random_instructions(fuzzerstate)
+    if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and fuzzerstate.privilegestate.curr_mstatus_mpp not in fuzzerstate.taint_in_priv:
+        instr_objs += clear_taints_with_random_instructions(fuzzerstate, untaint_all=True)
+    elif fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR and PrivilegeStateEnum.SUPERVISOR in fuzzerstate.taint_in_priv and fuzzerstate.privilegestate.curr_mstatus_spp not in fuzzerstate.taint_in_priv:
+        instr_objs += clear_taints_with_random_instructions(fuzzerstate, untaint_all=True)
 
     # Invalidate the corresponding epc and update the current privilege level.
     # Do not update or invalidate mpp/spp bits.
@@ -93,15 +95,11 @@ def gen_priv_descent_instr(fuzzerstate):
             if ((old_priv_state == PrivilegeStateEnum.SUPERVISOR and fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.USER) or (old_priv_state == PrivilegeStateEnum.USER and fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR)) and (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.SUPERVISOR] | 0x7fffffff) - (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.USER] | 0x7fffffff) != 0:
                 assert False, "We are going from user to supervisor with page too larger, we do not handle that yet"
     
-    # if INSERT_SPECTRE_GADGETS:
-    #     instr_objs += [
-
-    #     ]
     # If we fuzz the MMU, we want to stay in priviledged mode longer
     if USE_MMU:
         fuzzerstate.num_instr_to_stay_in_prv = random.randint(MIN_NUM_INSTR_IN_PRV, MAX_NUM_INSTR_IN_PRV)
         if DEBUG_PRINT: print(f"will stay in this mode for {fuzzerstate.num_instr_to_stay_in_prv} instructions")
     instr_objs += [PrivilegeDescentInstruction_t0(fuzzerstate, is_mret)]
-
+    fuzzerstate.intregpickstate.free_pageregs()
     return instr_objs
 

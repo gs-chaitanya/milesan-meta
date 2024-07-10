@@ -93,7 +93,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             for next_instr in bb_instrs:
                 addr = next_instr.paddr if not USE_MMU else next_instr.vaddr
                 if DO_DOUBLECHECK_SIM:
-                    ## RTL SIM CHECK ##
+                    ## RTL SIM CHECK WHEN INSERT_REGDUMPS IS ENABLED ##
                     if isinstance(next_instr, RegdumpInstruction_t0):
                         assert INSERT_REGDUMPS, f"Encountered RegdumpInstruction with INSERT_REGDUMPS disabled."
                         try:
@@ -203,8 +203,9 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 fuzzerstate.memview.print_and_compare(final_sramdump_rtl)
         print(f"Failed for seed {seed}")
         if "There are less" in str(e) or "Computed program does not execute" in str(e) or remove_tmpdirs :
-            fuzzerstate.remove_tmp_files()
+            fuzzerstate.remove_tmp_dir()
         else:
+
             fuzzerstate.log(str(e))
         if isinstance(e, subprocess.CalledProcessError):
             if "spike" in str(e):
@@ -222,7 +223,6 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=e.fail_type)
         else:
             raise Exception
-            
     return fuzzerstate
 
 

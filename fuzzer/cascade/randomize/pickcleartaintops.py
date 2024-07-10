@@ -5,14 +5,19 @@
 
 from cascade.cfinstructionclasses_t0 import R12DInstruction_t0, RegImmInstruction_t0, ImmRdInstruction_t0
 from params.runparams import DO_ASSERT
+from params.fuzzparams import NUM_MIN_UNTAINTED_INTREGS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
-from cascade.util import ISAInstrClass, INSTRUCTIONS_BY_ISA_CLASS
+from cascade.util import ISAInstrClass, INSTRUCTIONS_BY_ISA_CLASS, IntRegIndivState
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 import random
-def clear_taints_with_random_instructions(fuzzerstate):
+def clear_taints_with_random_instructions(fuzzerstate, untaint_all: bool = False):
     instr_objs = []
     tainted_reg_ids = fuzzerstate.intregpickstate.get_tainted_free_regs()
+    random.shuffle(tainted_reg_ids)
     untainted_reg_ids = fuzzerstate.intregpickstate.get_untainted_free_regs()
+    random.shuffle(untainted_reg_ids)
+    # print(f"Clearing taint from {len(untainted_reg_ids)}.")
+    # fuzzerstate.intregpickstate.print()
     for tainted_reg_id in tainted_reg_ids:
         instr_str = gen_next_instrstr_from_isaclass(ISAInstrClass.ALU, fuzzerstate)
         assert instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.ALU]
@@ -26,7 +31,6 @@ def clear_taints_with_random_instructions(fuzzerstate):
             imm = random.randint(0,1<<(curr_param_size-1))
 
         del curr_param_size
-
         if instr_str in R12DInstruction_t0.authorized_instr_strs:
             rs1 = random.choice(untainted_reg_ids)
             rs2 = random.choice(untainted_reg_ids)
@@ -39,7 +43,9 @@ def clear_taints_with_random_instructions(fuzzerstate):
         else:
             assert False, f"{instr_str}"
         untainted_reg_ids += [tainted_reg_id]
-
+        if len(untainted_reg_ids) > NUM_MIN_UNTAINTED_INTREGS+1 and not untaint_all:
+            # print([i.get_str() for i in instr_objs])
+            return instr_objs
     if DO_ASSERT:
         assert set(tainted_reg_ids) <= set(untainted_reg_ids), f"Not all tainted registers were overwritten."
     return instr_objs

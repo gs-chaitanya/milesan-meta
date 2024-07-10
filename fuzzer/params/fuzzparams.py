@@ -103,7 +103,7 @@ def reset_reg_settings():
     MIN_NUM_PICKABLE_REGS = 8
 
 # # Reduce the registers that we allow ourselves to pick randomly
-MIN_NUM_PICKABLE_REGS = 8
+MIN_NUM_PICKABLE_REGS = 10
 NUM_MAX_CONSUMED_INTREGS = 2
 # When we have more than NUM_MAX_CONSUMED_INTREGS consumed registers,
 # we nudge the program generation to use them, preferably with privilege switches
@@ -191,10 +191,12 @@ USE_SPIKE_INTERM_ELF = False # When both this and INSERT_REGDUMPS are enabled, t
 
 TAINT_EN = True
 
-P_TAINT_REG = 0.5
-P_TAINT_IN_MACHINE = 1
+P_TAINT_REG = 0 # Probability that an initial register value is tainted. If non-zero, might be loaded into icache as the register values are stored right after the instruction code. TODO: use loads from (non-)tainted page instead
 if USE_MMU:
+        P_TAINT_IN_MACHINE = 0.5
+else:
     P_TAINT_IN_MACHINE = 1
+
 MAX_NUM_INIT_TAINTED_REGS = 5
 
 # There should be at least this number of untainted regs
@@ -202,15 +204,16 @@ NUM_MIN_UNTAINTED_INTREGS = 2
 
 NUM_MIN_TAINTED_REGS = 1
 
-P_RANDOM_DATA_TAINTED = 0.5
-P_PAGE_HAS_TAINT = 1
+P_RANDOM_DATA_TAINTED = 1
+P_PAGE_HAS_TAINT = 0.8
+P_LOAD_TAINT = 0.8
 
 MIN_WEIGHT_T0 = 0.01
 MAX_WEIGHT_T0 = 1
 
 # The maximal probability proturbance introduced when a register is fully tainted i.e. relative taint hamming weight is one.
-REGPICK_PROTUBERANCE_RATIO_T0_POS = 0.3
-REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.05
+REGPICK_PROTUBERANCE_RATIO_T0_POS = 0.6 # Prefer tainted registers for rs.
+REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.8 # Prefer untainted registers for rd.
 
 
 ALLOW_CSR_TAINT = False
@@ -223,7 +226,7 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MAX_BBS_UPPERBOUND = 100
+NUM_MAX_BBS_UPPERBOUND = 200
 NUM_MIN_BBS_LOWERBOUND = 20
 NUM_BBS = 0
 
@@ -237,8 +240,8 @@ INSERT_SPECTRE_GADGETS = False
 # Tainting immediates of branches could taint the pc without taking the branch as the BPU is updated speculatively.
 TAINT_NONTAKEN_BRANCH_IMM = False
 # Tainting the immediates might taint the PC if instruction code is loaded and speculated on.
-TAINT_IMMRD_IMM = True
-TAINT_REGIMM_IMM = True
+TAINT_IMMRD_IMM = False
+TAINT_REGIMM_IMM = False
 
 # We can disable non-taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges.
 ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = False

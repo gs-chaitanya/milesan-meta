@@ -912,7 +912,7 @@ class CSRImmInstruction_t0(CSRImmInstruction, RDInstruction_t0):
 
 # Used to check if a register dump should be inserted after instruction in Fuzzerstate::appen_and_execute if enabled.
 def has_taint_trace(obj):
-    return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0, CSRImmInstruction_t0, CSRRegInstruction_t0)) and not isinstance(obj, SpeculativeInstructionEncapsulator)
+    return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0, CSRImmInstruction_t0, CSRRegInstruction_t0, IntLoadInstruction_t0)) and not isinstance(obj, SpeculativeInstructionEncapsulator)
 
 class MstatusWriterInstruction_t0(MstatusWriterInstruction, BaseInstruction_t0):
     def __init__(self, rd: int, rs1: int, producer_id: int, instr_str: str, mstatus_mask: int, old_sum_mprv=...):

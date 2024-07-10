@@ -2,7 +2,7 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_VCD, TRACE_FST
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE
 from params.fuzzparams import reset_reg_settings
@@ -57,10 +57,11 @@ class FuzzerState:
             self.random_data_block_has_taint = {} # Is true if the random data block at that page can have taint.
             if USE_MMU:
                 self.taint_in_priv = {PrivilegeStateEnum.USER if random.random() < 0.5 else PrivilegeStateEnum.SUPERVISOR} # Subset of priveleges has access to tainted data.
+                if random.random() < P_TAINT_IN_MACHINE:
+                    self.taint_in_priv.add(PrivilegeStateEnum.MACHINE)
+
             else: 
                 self.taint_in_priv = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
-            if random.random() < P_TAINT_IN_MACHINE:
-                self.taint_in_priv.add(PrivilegeStateEnum.MACHINE)
         # For benchmarks
         if GET_DATA:
             self.num_hardcoded_instr_mmufsm = 0
@@ -287,7 +288,8 @@ class FuzzerState:
             ISAInstrClass.DESCEND_PRV: (random.random() + 0.05) * ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.DESCEND_PRV],
             ISAInstrClass.SPECIAL:     (random.random() + 0.05) * ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.SPECIAL],
             ISAInstrClass.MMU:         (random.random() + 0.05) * ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MMU],
-            ISAInstrClass.MSTATUS:     (random.random() + 0.05) * ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MSTATUS]
+            ISAInstrClass.MSTATUS:     (random.random() + 0.05) * ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MSTATUS],
+            ISAInstrClass.MEMFSM:     (random.random() + 0.05) * ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MEMFSM],
         }
         self.exceptionoppickweights = {
             ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED:        (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED],
@@ -400,16 +402,16 @@ class FuzzerState:
 
     def gen_tmp_dir(self):
         os.makedirs(self.tmp_dir,exist_ok=True)
-
+        
     def setup_env(self, rtl_elfpath, seed):
         ## temp dirs below
         os.makedirs(self.tmp_dir,exist_ok=True)
         env_path = os.path.join(self.tmp_dir,f'env.sh')
-        regdump_path = os.path.join(self.tmp_dir, f"regump.json")
+        regdump_path = os.path.join(self.tmp_dir, f"regdump.json")
         sramdump_path = os.path.join(self.tmp_dir, f"sramdump.json")
         regstream_path = os.path.join(self.tmp_dir, f"regstream.json")
         simsramtaint_path = os.path.join(self.tmp_dir, f"{rtl_elfpath.split('/')[-1].split('.')[0]}.simsramtaint.txt")
-        tracefile_path = os.path.join(self.tmp_dir, f"{self.instance_to_str()}.trace{'.vcd' if TRACE_VCD else '.fst' if TRACE_FST else ''}")
+        tracefile_path = os.path.join(self.tmp_dir, f"{self.instance_to_str()}.trace{'.fst' if TRACE_FST else '.vcd'}")
         num_instrs = len(list(itertools.chain.from_iterable(self.instr_objs_seq)))
         simlen = str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
         env = os.environ.copy()
@@ -444,7 +446,7 @@ class FuzzerState:
 
         return env
 
-    def remove_tmp_files(self):
+    def remove_tmp_dir(self):
         shutil.rmtree(self.tmp_dir)
 
 

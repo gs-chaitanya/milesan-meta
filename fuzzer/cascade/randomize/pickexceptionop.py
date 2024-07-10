@@ -17,7 +17,6 @@ from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS, INTERESTING_CSRS_INACCESSIBLE_FROM_SUPERVISOR, INTERESTING_CSRS_INACCESSIBLE_FROM_USER
 from copy import copy
 import random
-
 ###
 # Exception type
 ###
@@ -269,9 +268,10 @@ def gen_exception_instr(fuzzerstate):
             if DO_ASSERT:
                 assert fuzzerstate.privilegestate.medeleg_val is not None
             is_mtvec = not (fuzzerstate.privilegestate.medeleg_val & (1 << exception_op_type.value))
-        if not is_mtvec and PrivilegeStateEnum.SUPERVISOR not in fuzzerstate.taint_in_priv: # We return to supervisor, but don't allow taint in that mode.
-            instr_objs += clear_taints_with_random_instructions(fuzzerstate)
-            
+
+        if not is_mtvec and PrivilegeStateEnum.SUPERVISOR not in fuzzerstate.taint_in_priv or is_mtvec and PrivilegeStateEnum.MACHINE not in fuzzerstate.taint_in_priv:
+            instr_objs += clear_taints_with_random_instructions(fuzzerstate, untaint_all=True) # We untaint the registers if we either delegate the exception to a privilege that does not have taint access, or we do not delegate and M mode does not have taint access.
+    fuzzerstate.intregpickstate.free_pageregs()
     return instr_objs + [gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type)]
 
 

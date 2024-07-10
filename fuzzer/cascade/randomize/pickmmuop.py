@@ -223,7 +223,7 @@ def update_mmu_fsm_rv32(fuzzerstate, curr_addr):
                     fuzzerstate.satp_write_supervisor += 1
                 else:
                     fuzzerstate.satp_write_machine += 1
-
+            fuzzerstate.intregpickstate.free_pageregs()
             return [CSRRegInstruction_t0(fuzzerstate,"csrrw", tmp, 0, CSR_IDS.SATP, is_satp_smode=is_satp_smode)]
         else:
             fuzzerstate.target_layout = target_layout
@@ -373,6 +373,7 @@ def handle_idle_state_rv64(fuzzerstate, curr_addr):
             else:
                 fuzzerstate.satp_write_machine += 1
         assert fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE
+        fuzzerstate.intregpickstate.free_pageregs()
         return [CSRRegInstruction_t0(fuzzerstate,"csrrw", tmp, 0, CSR_IDS.SATP, is_satp_smode=is_satp_smode)]
     
     # Otherwise, if we are in S mode, and the virtual addresses changes, select the path to make STVEC, else just RPROD
@@ -551,6 +552,7 @@ def gen_satp_write(fuzzerstate, curr_addr):
     if GET_DATA:
         fuzzerstate.num_hardcoded_instr_mmufsm += len(instr_objs)
 
+    fuzzerstate.intregpickstate.free_pageregs()
     fuzzerstate.curr_asid = new_asid
     return instr_objs
 
@@ -577,5 +579,5 @@ def gen_jump_new_layout(fuzzerstate, curr_addr):
 
     if GET_DATA:
         fuzzerstate.num_hardcoded_instr_mmufsm += len(instr_objs)
-
+    fuzzerstate.intregpickstate.free_pageregs()
     return instr_objs

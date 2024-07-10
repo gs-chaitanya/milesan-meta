@@ -10,7 +10,7 @@ from rv.csrids import CSR_IDS
 from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES
 from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, INSERT_SPECTRE_GADGETS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS
 from params.runparams import INSERT_REGDUMPS, INSERT_FENCE, GET_DATA, DEBUG_PRINT
-from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memop_instrobjs
+from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memfsm_instrobjs
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 from cascade.randomize.pickisainstrclass import gen_next_isainstrclass, ISAInstrClass
 from cascade.randomize.pickmemop import get_alignment_bits, is_instrstr_load
@@ -126,7 +126,6 @@ def gen_basicblock(fuzzerstate):
             del new_instrobjs
             continue
 
-        # If this is an instruction that influences offset register states
         if curr_isa_class == ISAInstrClass.CLEARTAINT:
             new_instrobjs = clear_taints_with_random_instructions(fuzzerstate)
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
@@ -214,9 +213,8 @@ def gen_basicblock(fuzzerstate):
             del new_instrobjs # For safety, we prevent accidental reuse of this variable
             return True
         
-        elif curr_isa_class == ISAInstrClass.MEM:
-            instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
-            new_instrobjs = create_memop_instrobjs(fuzzerstate, instr_str)
+        elif curr_isa_class == ISAInstrClass.MEMFSM:
+            new_instrobjs = create_memfsm_instrobjs(fuzzerstate)
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
             for new_instrobj_id in range(1, len(new_instrobjs)):
                 fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
@@ -224,6 +222,17 @@ def gen_basicblock(fuzzerstate):
                 fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
             del new_instrobjs
             continue
+
+        # elif curr_isa_class == ISAInstrClass.MEM:
+        #     instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
+        #     new_instrobjs = create_memop_instrobjs(fuzzerstate, instr_str)
+        #     fuzzerstate.append_and_execute_instr(new_instrobjs[0])
+        #     for new_instrobj_id in range(1, len(new_instrobjs)):
+        #         fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+        #         curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+        #         fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
+        #     del new_instrobjs
+        #     continue
 
         # Discriminate non-taken branches
         fuzzerstate.curr_branch_taken = False

@@ -10,7 +10,7 @@ from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, 
 from cascade.util import IntRegIndivState
 from cascade.registers import IntRegister, ABI_INAMES
 from common.spike import SPIKE_STARTADDR, SPIKE_BOOTVAL_A1
-from cascade.registers import ABI_INAMES,MAX_32b
+from cascade.registers import ABI_INAMES,MAX_32b, MAX_64b
 from copy import copy, deepcopy
 import math
 import numpy as np
@@ -47,11 +47,12 @@ class IntRegPickState:
         self.set_spike_boot_values()
 
     def set_initial_values(self, fuzzerstate): # Reset seed to starting value to ensure random values match if this function is called twice.
+        raise NotImplementedError("Depricated.")
         random.seed(fuzzerstate.randseed)
         for i,reg_data_content in enumerate(fuzzerstate.initial_reg_data_content):
             self.regs[i+1].set_val(reg_data_content) # skip reg 0
-            if random.choices([0,1],[1-P_TAINT_REG,P_TAINT_REG],k=1)[0]:
-                self.regs[i+1].set_val_t0(random.randint(1,MAX_32b))
+            if random.random() < P_TAINT_REG:
+                self.regs[i+1].set_val_t0(random.randint(1,MAX_64b if self.fuzzerstate.is_design_64bit else MAX_32b))
             else:
                 self.regs[i+1].set_val_t0(0x0)
         self.regs[RELOCATOR_REGISTER_ID].set_val(SPIKE_STARTADDR)
@@ -84,11 +85,11 @@ class IntRegPickState:
 
     def get_untainted_regs_onehot(self):
         ret = [int(self.regs[reg_id].get_val_t0() == 0) for reg_id in range(self.num_pickable_regs)]
-        if DO_ASSERT:
+        # if DO_ASSERT:
             # if sum(ret) < NUM_MIN_UNTAINTED_INTREGS:
             #     # self.print()
             #     assert False,f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
-            assert sum(ret) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
+            # assert sum(ret) >= NUM_MIN_UNTAINTED_INTREGS, f"There are less than {NUM_MIN_UNTAINTED_INTREGS} untainted integer registers available."
         return np.asarray(ret)
 
     def get_tainted_regs_onehot(self):
@@ -161,7 +162,7 @@ class IntRegPickState:
 
         if DO_ASSERT:
             assert math.isclose(sum(taint_ps), 1, abs_tol=0.001), f"{sum(taint_ps)} {str(taint_ps)}"
-
+        # print({ABI_INAMES[i]:[j,k,l] for i,(j,k,l) in enumerate(zip(self.__reg_weights,taint_ps,authorized_regs_onehot))})
         return  taint_ps * authorized_regs_onehot
 
     # Returns a free inputreg.
@@ -483,10 +484,10 @@ class IntRegPickState:
         return any([r.get_val_t0() for r in self.regs.values()])
 
     def get_tainted_free_regs(self):
-        return [reg_id for reg_id, r in self.regs.items() if r.get_val_t0() and r.fsm_state == IntRegIndivState.FREE]
+        return [reg_id for reg_id in range(self.num_pickable_regs) if self.regs[reg_id].get_val_t0() and self.regs[reg_id].fsm_state == IntRegIndivState.FREE] 
 
     def get_untainted_free_regs(self):
-        return [reg_id for reg_id, r in self.regs.items() if r.get_val_t0() == 0 and r.fsm_state == IntRegIndivState.FREE] 
+        return [reg_id for reg_id in range(self.num_pickable_regs) if self.regs[reg_id].get_val_t0() == 0 and self.regs[reg_id].fsm_state == IntRegIndivState.FREE] 
 
     def exists_untainted_reg_in_state(self, req_state: IntRegIndivState, allow_zero = False) -> bool:
         untainted_regs_oneshot = self.get_untainted_regs_onehot()
@@ -622,6 +623,14 @@ class IntRegPickState:
                 if property_func(reg0_val,reg1_val):
                     return reg0_id, reg1_id
 
+    def free_pageregs(self):
+        while self.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
+            reg_id = self.pick_int_reg_in_state(IntRegIndivState.PAGE_ADDR)
+            self.set_regstate(reg_id, IntRegIndivState.FREE, force=True)
+        while self.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+            reg_id = self.pick_int_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
+            self.set_regstate(reg_id, IntRegIndivState.FREE, force=True)
+
 # Float registers are never forbidden, therefore this is simpler than integer registers.
 class FloatRegPickState:
     def __init__(self, fuzzerstate):
@@ -655,4 +664,5 @@ class FloatRegPickState:
                 # We also do it (for performance) for outreg and we overwrite it later
                 self.__reg_weights[reg_id] = self.__reg_weights[reg_id] * (1-REGPICK_PROTUBERANCE_RATIO) / sum_of_others
             self.__reg_weights[outreg] = REGPICK_PROTUBERANCE_RATIO
+
 
