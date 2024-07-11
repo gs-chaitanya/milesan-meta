@@ -253,7 +253,7 @@ ASSERT_EXEC_IN_TAINT_SINK_PRIV = True
 IGNORE_RTL_TIMEOUT = False
 IGNORE_SPIKE_TIMEOUT = False
 IGNORE_VALUE_MISMATCH = False
-IGNORE_TAINT_MISMATCH = True
+IGNORE_TAINT_MISMATCH = False
 IGNORE_SPIKE_MISMATCH = False
 
 # Use the uninstrumented design for fuzzing/reducing. This helps checking if theres a translation bug in yosys.
