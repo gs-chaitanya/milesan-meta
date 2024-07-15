@@ -62,7 +62,7 @@ class FuzzerState:
                     if random.random() < P_TAINT_IN_MACHINE:
                         self.taint_in_priv.add(PrivilegeStateEnum.MACHINE)
                 else:
-                    self.taint_in_priv = {}
+                    self.taint_in_priv = set()
                     if "M" in TAINT_IN_PRIVS:
                         self.taint_in_priv.add(PrivilegeStateEnum.MACHINE)
                     if "S" in TAINT_IN_PRIVS:
@@ -476,6 +476,7 @@ class FuzzerState:
         regdumps_t0 = []
         reached_end = False
         # Retrieve the register values from the requests
+        assert not USE_MMU, f"Not tested with MMU enabled!"
         self.curr_pc = SPIKE_STARTADDR
         for bb_instrs in self.instr_objs_seq:
             for next_instr in bb_instrs:

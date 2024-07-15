@@ -4,11 +4,12 @@
 
 from enum import IntEnum, auto
 import numpy as np
+import os 
 
 ##
 # MMU
 ##
-USE_MMU = True
+USE_MMU = False
 
 MAX_NUM_LAYOUTS = 5
 PROBA_ENTANGLE_LAYOUT = 0
@@ -96,10 +97,14 @@ else:
 def reset_reg_settings():
     global MAX_NUM_PICKABLE_REGS
     global MIN_NUM_PICKABLE_REGS
+    global NUM_MIN_FREE_INTREGS
+    global USE_MMU
     if USE_MMU:
         MAX_NUM_PICKABLE_REGS = 22
+        NUM_MIN_FREE_INTREGS = 3
     else:
         MAX_NUM_PICKABLE_REGS = 24
+        NUM_MIN_FREE_INTREGS = 2
     MIN_NUM_PICKABLE_REGS = 8
 
 # # Reduce the registers that we allow ourselves to pick randomly
@@ -226,8 +231,8 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MAX_BBS_UPPERBOUND = 200
-NUM_MIN_BBS_LOWERBOUND = 20
+NUM_MAX_BBS_UPPERBOUND = 20
+NUM_MIN_BBS_LOWERBOUND = 10
 NUM_BBS = 0
 
 # The tanh saturates, so that we don't neglect registers that have only few bits tainted when there are regs that have much more bits tainted
@@ -261,4 +266,22 @@ IGNORE_SPIKE_MISMATCH = False
 USE_VANILLA = False
 
 
+
+if "TAINT_IN_PRIVS" in os.environ:
+    TAINT_IN_PRIVS = os.environ["TAINT_IN_PRIVS"]
+    print(f"Setting TAINT_IN_PRIVS = {TAINT_IN_PRIVS} from env vars.")
+if "USE_MMU" in os.environ:
+    USE_MMU = int(os.environ["USE_MMU"]) == 1
+    print(f"Setting USE_MMU = {USE_MMU} from env vars.")
+if "TAINT_IMMRD_IMM" in os.environ:
+    TAINT_IMMRD_IMM = int(os.environ["TAINT_IMMRD_IMM"]) == 1
+    print(f"Setting TAINT_IMMRD_IMM = {TAINT_IMMRD_IMM} from env vars.")
+if "TAINT_REGIMM_IMM" in os.environ:
+    TAINT_REGIMM_IMM = int(os.environ["TAINT_REGIMM_IMM"]) == 1
+    print(f"Setting TAINT_REGIMM_IMM = {TAINT_REGIMM_IMM} from env vars.")
+if "TAINT_NONTAKEN_BRANCHES" in os.environ:
+    TAINT_NONTAKEN_BRANCH_IMM = int(os.environ["TAINT_NONTAKEN_BRANCHES"]) == 1
+    print(f"Setting TAINT_NONTAKEN_BRANCHES = {TAINT_NONTAKEN_BRANCH_IMM} from env vars.")
+
+reset_reg_settings()
 

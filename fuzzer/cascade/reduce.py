@@ -86,11 +86,11 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
     ctx_regdump_reqs, storenumbytes = gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider)
     dumpedvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags_nocompressed(fuzzerstate.design_name), SPIKE_STARTADDR, ctx_regdump_reqs, False, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
-    if TAINT_EN:
+    if TAINT_EN and DO_ASSERT:
         dumpedvals_in_situ, dumpedvals_t0 = fuzzerstate.get_regdumps_from_reqs(ctx_regdump_reqs, True, None, False, True)
         assert len(dumpedvals_in_situ) == len(dumpedvals)
         for idx, (in_situ_d, in_situ_d_t0, spike_d) in enumerate(zip(dumpedvals_in_situ, dumpedvals_t0, dumpedvals)):
-            assert in_situ_d == spike_d or in_situ_d_t0 == 0, f"Mismatch between in-situ simulation and spike at addr {hex(ctx_regdump_reqs[idx][0])} for reg ID {ctx_regdump_reqs[idx][2]}: {filter_reg_traceback(ctx_regdump_reqs[idx][2],ctx_regdump_reqs[idx][0]+SPIKE_STARTADDR,fuzzerstate,spike_d).get_str()}: {hex(in_situ_d)} != {hex(spike_d)}, {hex(in_situ_d_t0)}" # Some dumps differ between in-situ and spike (e.g. generated and consumed registers)
+            assert in_situ_d == spike_d or in_situ_d_t0 == 0, f"Mismatch between in-situ simulation and spike at addr {hex(ctx_regdump_reqs[idx][0])} for reg ID {ctx_regdump_reqs[idx][2]}: {filter_reg_traceback(ctx_regdump_reqs[idx][2],ctx_regdump_reqs[idx][0],fuzzerstate,spike_d).get_str()}: {hex(in_situ_d)} != {hex(spike_d)}, {hex(in_situ_d_t0)}" # Some dumps differ between in-situ and spike (e.g. generated and consumed registers)
     del ctx_regdump_reqs
 
     # Remove the ELF
