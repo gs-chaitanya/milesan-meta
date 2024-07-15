@@ -45,8 +45,8 @@ build_drfuzz_mem_notrace_modelsim:         $(MODELSIM_PATH_TO_BUILD_TCL) $(MODEL
 	touch modelsim/drfuzz_mem.log
 
 
-RERUN_MODELSIM_TARGETS_NOTRACE   = rerun_vanilla_notrace_modelsim,rerun_drfuzz_mem_notrace_modelsim
-RERUN_MODELSIM_TARGETS_TRACE     = rerun_vanilla_trace_modelsim,rerun_drfuzz_mem_trace_modelsim
+RERUN_MODELSIM_TARGETS_NOTRACE   = rerun_vanilla_notrace_modelsim, rerun_drfuzz_mem_notrace_modelsim
+RERUN_MODELSIM_TARGETS_TRACE     = rerun_vanilla_trace_modelsim, rerun_drfuzz_mem_trace_modelsim
 RERUN_MODELSIM_TARGETS_TRACE_FST = rerun_vanilla_trace_fst_modelsim
 $(RERUN_MODELSIM_TARGETS_NOTRACE):   rerun_%_notrace_modelsim:   $(CASCADE_DESIGN_PROCESSING_ROOT)/common/modelsim/modelsim_run.tcl | $(MODELSIM_WORKDIR) modelsim traces logs
 	cd $(MODELSIM_WORKDIR); TOP_SOC=$(TOP_SOC) CASCADE_DIR=$(CASCADE_DIR) VARIANT_ID=$(VARIANT_ID) TRACE=notrace   INSTRUMENTATION=$* TRACEFILE=$(TRACEFILE)                   MODELSIM_VSIM_COVERFLAG=$(MODELSIM_VSIM_COVERFLAG) MODELSIM_VSIM_COVERPATH=$(MODELSIM_VSIM_COVERPATH) $(MODELSIM_VERSION) vsim -64 -c -do $<
