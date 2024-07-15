@@ -143,8 +143,6 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
         rd = fuzzerstate.intregpickstate.pick_int_outputreg_nonzero()
 
 
-
-
     return RegImmInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, imm_t0, iscompressed)
 
 

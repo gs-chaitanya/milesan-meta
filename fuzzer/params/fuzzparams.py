@@ -193,7 +193,7 @@ TAINT_EN = True
 
 P_TAINT_REG = 0 # Probability that an initial register value is tainted. If non-zero, might be loaded into icache as the register values are stored right after the instruction code. TODO: use loads from (non-)tainted page instead
 if USE_MMU:
-        P_TAINT_IN_MACHINE = 0.5
+        P_TAINT_IN_MACHINE = 1
 else:
     P_TAINT_IN_MACHINE = 1
 
@@ -242,7 +242,8 @@ TAINT_NONTAKEN_BRANCH_IMM = False
 # Tainting the immediates might taint the PC if instruction code is loaded and speculated on.
 TAINT_IMMRD_IMM = False
 TAINT_REGIMM_IMM = False
-
+# We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
+TAINT_IN_PRIVS = None
 # We can disable non-taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges.
 ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = False
 

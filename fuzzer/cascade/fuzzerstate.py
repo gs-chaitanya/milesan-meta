@@ -4,7 +4,7 @@
 
 from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS
-from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE
+from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_IN_PRIVS, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, TAINT_NONTAKEN_BRANCH_IMM
 from params.fuzzparams import reset_reg_settings
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
@@ -27,6 +27,7 @@ import random
 import os
 import itertools
 import shutil
+import json
 
 class FuzzerState:
     # @param randseed for identification purposes only.
@@ -50,16 +51,26 @@ class FuzzerState:
         self.design_has_supervisor_mode        : bool = design_has_supervisor_mode(design_name)
         self.design_has_user_mode              : bool = design_has_user_mode(design_name)
         self.design_has_pmp                    : bool = design_has_pmp(design_name)
-
+        
         self.random_block_contents4by4bytes = []
         self.random_data_block_ranges = []
         if TAINT_EN:
             self.random_data_block_has_taint = {} # Is true if the random data block at that page can have taint.
             if USE_MMU:
-                self.taint_in_priv = {PrivilegeStateEnum.USER if random.random() < 0.5 else PrivilegeStateEnum.SUPERVISOR} # Subset of priveleges has access to tainted data.
-                if random.random() < P_TAINT_IN_MACHINE:
-                    self.taint_in_priv.add(PrivilegeStateEnum.MACHINE)
-
+                if TAINT_IN_PRIVS is None:
+                    self.taint_in_priv = {PrivilegeStateEnum.USER if random.random() < 0.5 else PrivilegeStateEnum.SUPERVISOR} # Subset of priveleges has access to tainted data.
+                    if random.random() < P_TAINT_IN_MACHINE:
+                        self.taint_in_priv.add(PrivilegeStateEnum.MACHINE)
+                else:
+                    self.taint_in_priv = {}
+                    if "M" in TAINT_IN_PRIVS:
+                        self.taint_in_priv.add(PrivilegeStateEnum.MACHINE)
+                    if "S" in TAINT_IN_PRIVS:
+                        self.taint_in_priv.add(PrivilegeStateEnum.SUPERVISOR)
+                    if "U" in TAINT_IN_PRIVS:
+                        self.taint_in_priv.add(PrivilegeStateEnum.USER)
+                    if DO_ASSERT:
+                        assert len(self.taint_in_priv), f"At least one privilige must have taint access when TAINT_EN is on."
             else: 
                 self.taint_in_priv = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
         # For benchmarks
@@ -92,8 +103,8 @@ class FuzzerState:
         self.expected_regvals = None
         self.interm_elfpath = None
         self.rtl_elfpath = None
-        
-        self.tmp_dir = os.path.join(PATH_TO_TMP, self.design_name, self.instance_to_str())
+
+        self.tmp_dir = os.path.join(PATH_TO_TMP, self.design_name, self.instance_to_str()) 
         os.makedirs(self.tmp_dir,exist_ok=True)
 
     # @brief return the MMU capabilities of the design 
@@ -577,3 +588,4 @@ class FuzzerState:
     def log(self, log_msg):
         with open(f"{self.tmp_dir}/log.txt", "a") as f:
             f.write(log_msg)
+

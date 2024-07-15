@@ -5,7 +5,7 @@
 # This script is used to pick an instruction from the privileged descent instruction ISA class.
 
 from params.runparams import DO_ASSERT,DEBUG_PRINT
-from params.fuzzparams import USE_MMU, MAX_NUM_INSTR_IN_PRV, MIN_NUM_INSTR_IN_PRV, INSERT_SPECTRE_GADGETS
+from params.fuzzparams import USE_MMU, MAX_NUM_INSTR_IN_PRV, MIN_NUM_INSTR_IN_PRV, USE_MMU
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.cfinstructionclasses_t0 import PrivilegeDescentInstruction_t0
 from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions

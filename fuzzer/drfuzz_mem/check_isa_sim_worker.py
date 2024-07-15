@@ -3,14 +3,12 @@ from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
 from workers.reduce_worker import reduce_programs
 from cascade.util import CFInstructionClass
-from params.runparams import PATH_TO_TMP
-
+from params.runparams import PATH_TO_TMP, TIMESTAMP_START
 import multiprocessing as mp
 import time
 import threading
 import os
 
-DO_REDUCE = False
 LOG_EXCEPTIONS = True
 PRINT_THREAD_STATUS = False
 callback_lock = threading.Lock()
@@ -49,6 +47,8 @@ def __check_isa_sim_worker(design_name, seed):
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.{e.fail_type.name.lower()}.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
+                    if TIMESTAMP_START is not None:
+                        f.write(f"\ttimestamp: {time.time()-TIMESTAMP_START}\n")
                 return (e.fail_type, seed)
 
             else:
@@ -56,34 +56,36 @@ def __check_isa_sim_worker(design_name, seed):
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.failed.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
+                    if TIMESTAMP_START is not None:
+                        f.write(f"\ttimestamp: {time.time()-TIMESTAMP_START}\n")
+
                 return None
 
 
 
 
 
-def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offset: int):
+def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offset: int, timeout: int = None):
     global newly_finished_tests
     global callback_lock
-
     process_instance_id = 0
     if seed_offset is not None:
         process_instance_id += seed_offset
     num_workers = num_cores
     assert num_workers > 0
-    calibrate_spikespeed()
-    profile_get_medeleg_mask(design_name)
+    start_time = time.time()
     if num_workers == 1:
         print(f"Starting sequential ISA sim validation on `{design_name}` with {total_tests} total tests.")
         for _ in range(total_tests):
             check_isa_sim_taint(design_name,process_instance_id)
             process_instance_id += 1
-        exit(0)
+        return seed_to_fail_type_dict
+
     if total_tests == -1:
         print(f"Starting parallel ISA sim validation of `{design_name}` on {num_workers} threads. No max number of tests given.")
     else:
         print(f"Starting parallel ISA sim validation on {total_tests} total tests of `{design_name}` on {num_workers} threads.")
-
+    
     pool = mp.Pool(processes=num_workers)
     for _ in range(num_workers):
         if PRINT_THREAD_STATUS:
@@ -92,6 +94,11 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offs
         process_instance_id += 1
 
     while True:
+        if timeout is not None and time.time()-start_time >= timeout:
+            print(f"Timed out after {timeout}s. Exiting.")
+            pool.terminate()
+            return seed_to_fail_type_dict
+
         time.sleep(2)
         with callback_lock:
             if newly_finished_tests > 0:
@@ -104,11 +111,7 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offs
             if total_finished_tests >= total_tests and total_tests != -1:
                 print(f"Finished {total_finished_tests} threads. Exiting.")
                 pool.terminate()
-                break
-
-    if DO_REDUCE:
-        print(f"Starting reduction.")
-        reduce_programs(design_name, num_cores, seed_to_fail_type_dict[FailTypeEnum.TAINT_MISMATCH])
+                return seed_to_fail_type_dict
 
 
 

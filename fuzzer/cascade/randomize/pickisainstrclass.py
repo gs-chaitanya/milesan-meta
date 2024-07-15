@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT
 from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_fence, is_forbid_vexriscv_csrs, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_picorv32_writehpm, is_tolerate_picorv32_readnonimplcsr
 from cascade.util import ISAInstrClass, IntRegIndivState, MmuState, BASIC_BLOCK_MIN_SPACE
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, USE_MMU, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, USE_MMU
 from cascade.privilegestate import PrivilegeStateEnum, is_ready_to_descend_privileges
 from cascade.util import IntRegIndivState
 import random
@@ -123,11 +123,12 @@ def _get_isainstrclass_filtered_weights(fuzzerstate, curr_alloc_cursor):
     if (not fuzzerstate.authorize_privileges) or not ((fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not (fuzzerstate.privilegestate.is_mepc_populated and fuzzerstate.privilegestate.is_sepc_populated)) or \
         fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR and not fuzzerstate.privilegestate.is_sepc_populated) or \
         "picorv32" in fuzzerstate.design_name \
-        or "vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs():
+        or "vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs() \
+        or "kronos" in fuzzerstate.design_name and fuzzerstate.privilegestate.is_mepc_populated: # there's no supervisor mode in kronos
         ret_dict[ISAInstrClass.EPCFSM] = 0
     # Do not descend privileges as long as medeleg is undefined because we have no way of certainly coming back up
     # However, this ISA class still encompasses setting mpp and spp bits, to we tolerate this ISA class at all times when executing as a non-user.
-    if not is_ready_to_descend_privileges(fuzzerstate) or fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-(5*4) < BASIC_BLOCK_MIN_SPACE\
+    if not is_ready_to_descend_privileges(fuzzerstate) or fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-(5*4) < BASIC_BLOCK_MIN_SPACE \
         or fuzzerstate.curr_mmu_state == MmuState.MMU_PROD_J or fuzzerstate.curr_mmu_state == MmuState.MMU_PROD_1:
         ret_dict[ISAInstrClass.DESCEND_PRV] = 0
     # Decrease the proba if we know it will be a mpp/spp
@@ -252,7 +253,7 @@ def _filter_taint(fuzzerstate, filtered_weights: list):
             if TAINT_IMMRD_IMM or TAINT_REGIMM_IMM:
                 filtered_weights[ISAInstrClass.ALU] *= TAINT_IMM_PROTURBANCE_FACTOR # Add taint with immediates if we are in the alowed privileges only.
                 filtered_weights[ISAInstrClass.ALU64] *= TAINT_IMM_PROTURBANCE_FACTOR
-            elif fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+            if fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
                 filtered_weights[ISAInstrClass.MEM] *= TAINT_IMM_PROTURBANCE_FACTOR # Add taint with load from tainted region if we are in the alowed privileges only.
             else:
                 filtered_weights[ISAInstrClass.MEMFSM] *= TAINT_IMM_PROTURBANCE_FACTOR # Add taint with load from tainted region if we are in the alowed privileges only.

@@ -7,11 +7,9 @@ from workers.reduce_worker import reduce_programs
 from common.spike import calibrate_spikespeed
 from params.runparams import NO_REMOVE_TMPDIRS, NO_REMOVE_TMPFILES
 from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask
-from params.runparams import TIMESTAMP_START, PATH_TO_TMP
 
 import os
 import json
-import time
 
 def load_fuzzconfigs(path: str):
     with open(path, "r") as f:
@@ -39,11 +37,6 @@ if __name__ == '__main__':
     for cfg in cfgs:
         # set_cfg(cfg)
         for design_name in cfg["duts"]:
-            profile_get_medeleg_mask(design_name)
-            profile_get_asid_mask(design_name)
-            # reset_timestamp()
-            seed_to_fail_type_dict = check_isa_sims(design_name,cfg["n_threads"],cfg["n_tests"],0,timeout=300,cfg=cfg)
-            reduce_programs(design_name, cfg["n_threads"], seed_to_fail_type_dict[FailTypeEnum.TAINT_MISMATCH])
 
     
 else:
