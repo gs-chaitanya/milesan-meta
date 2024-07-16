@@ -20,7 +20,7 @@ if { [string equal $TRACE trace_fst] } {
     set VOPTARGS "-voptargs=+acc"
     set DEBUGDBARG "-debugdb"
 } elseif {[string equal $TRACE trace]} {
-    set VOPTARGS "-voptargs=-debug" 
+    set VOPTARGS "-voptargs=+acc" 
     set DEBUGDBARG "-debugdb"
 } else {
     set VOPTARGS ""
@@ -33,8 +33,7 @@ if { [string equal $TRACE trace_fst] } {
     log -r /*
 } elseif { [string equal $TRACE trace] } {
     vcd file $TRACEFILE
-    # vcd add -r i_dut/*
-    vcd add -r i_dut/i_ariane_mem_top/i_ariane/i_cva6/*
+    vcd add -r i_dut/*
 }
 
 run -a
