@@ -4,7 +4,7 @@ sys.path.append("../")
 import subprocess
 import os
 import json
-
+TIMEOUT_REDUCE=7200
 def load_fuzzconfigs(path: str):
     with open(path, "r") as f:
         cfgs = json.load(f)
@@ -25,12 +25,16 @@ if __name__ == '__main__':
     env = os.environ.copy()
     cmd = []
     for cfg in cfgs:
-        for design_name in cfg["duts"]:
+        print(f"Fuzzing {cfg}")
+        for design_name in cfg["duts"]: 
             env["USE_MMU"] = str(int(cfg["use_mmu"]))
             env["TAINT_IN_PRIVS"] = cfg["taint_in_privs"]
             env["TAINT_IMMRD_IMM"] = str(int(cfg["taint_immrd_imm"]))
             env["TAINT_REGIMM_IMM"] = str(int(cfg["taint_regimm_imm"]))
             env["TAINT_NONTAKEN_BRANCHES"] = str(int(cfg["taint_nontaken_branches"]))
+            if "allow_nontaken_branches_in_taint_privs" in cfg:
+                env["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS"] = str(int(cfg["allow_nontaken_branches_in_taint_privs"]))
+
             datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["name"])
             env["CASCADE_DATADIR"] = datadir
             os.makedirs(datadir, exist_ok=True)
@@ -44,8 +48,18 @@ if __name__ == '__main__':
                     "0",
                     str(cfg["timeout"])
                 ]
-                subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
+                if "TM0" != cfg["name"]:
+                    subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
+
+            except Exception as e:
+                print(f"Failed running {' '.join(cmd)}: {e}")
+            
+            try:
                 log_file = os.path.join(datadir, "logs", f"{design_name}.taint_mismatch.log")
+                if not os.path.exists(log_file):
+                    print(f"Log-file not found: {log_file}")
+                    continue
+
                 cmd = [
                     "python",
                     "do_reducemany.py",
@@ -53,11 +67,10 @@ if __name__ == '__main__':
                     str(cfg["n_threads"]),
                     f"--log-file={log_file}"
                 ]
-                subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
+                subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
             except Exception as e:
-                print(f"Failed running {' '.join(cmd)}")
+                print(f"Failed running {' '.join(cmd)}: {e}")
 
-            exit(0)
 
 else:
     raise Exception("This module must be at the toplevel.")

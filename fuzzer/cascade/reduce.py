@@ -894,7 +894,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 # @param target_dir: If not None, the directory where to save the generated files. Else, will be saved in the design's directory
 # @param find_pillars: If false, the front of the test case will not be reduced.
 # @return a boolean indicating whether the reduction was successful, a float measuring the elapesd time (in seconds), and the number of instructions in the test case.
-def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool = not USE_MMU, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False, start_time: int = None):
+def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool = not USE_MMU, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
     from cascade.fuzzerstate import FuzzerState
 
     ###
@@ -1017,13 +1017,12 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
         if not IGNORE_TAINT_MISMATCH and fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level not in fuzzerstate.taint_in_priv:
             ret_msg += f"\tLeakage from {[p.name for p in fuzzerstate.taint_in_priv]} to {fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level.name} found!\n"
-        if start_time is not None:
-            ret_msg += f"\Total time for reduction : {start_time-time.time()}"
+    if start_time is not None:
+        ret_msg += f"\tTotal time for reduction : {time.time()-start_time}\n"
     if not quiet:
         print(ret_msg)
     
-    if USE_MMU:
-        return ret_msg
+    return ret_msg
     ###
     # Cut the first bbs until the problem disappears.
     ###

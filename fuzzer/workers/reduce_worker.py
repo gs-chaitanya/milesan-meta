@@ -35,7 +35,7 @@ def test_done_callback(ret):
 def __reduce_program_worker(design_name, seed):
     try:
         ret = reduce_program(*gen_new_test_instance(design_name,seed,True),
-                        True, check_pc_spike_again=True,quiet=True, start_time = time.time())
+                        True, check_pc_spike_again=True,quiet=True)
         if LOG_EN:
             logdir = os.path.join(PATH_TO_TMP, "logs")
             os.makedirs(logdir, exist_ok=True)
@@ -69,7 +69,7 @@ def reduce_programs(design_name: str, num_cores: int, seeds, mute_output: bool =
         print(f"Starting sequential reduction on `{design_name}` with {len(seeds)} total tests")
         for seed in seeds:
             reduce_program(*gen_new_test_instance(design_name,seed,True),
-                            True, check_pc_spike_again=True, start_time=time.time())
+                            True, check_pc_spike_again=True)
         exit(0)
     print(f"Starting parallel reduction of `{design_name}` on {num_workers} processes for {len(seeds)} seeds.")
     pool = mp.Pool(processes=num_workers, initializer=mute if mute_output else None)

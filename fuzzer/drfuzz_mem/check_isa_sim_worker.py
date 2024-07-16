@@ -47,8 +47,7 @@ def __check_isa_sim_worker(design_name, seed):
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.{e.fail_type.name.lower()}.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
-                    if TIMESTAMP_START is not None:
-                        f.write(f"\ttimestamp: {time.time()-TIMESTAMP_START}\n")
+                    f.write(f"\ttimestamp: {e.timestamp}\n")
                 return (e.fail_type, seed)
 
             else:
@@ -56,8 +55,6 @@ def __check_isa_sim_worker(design_name, seed):
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.failed.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
-                    if TIMESTAMP_START is not None:
-                        f.write(f"\ttimestamp: {time.time()-TIMESTAMP_START}\n")
 
                 return None
 

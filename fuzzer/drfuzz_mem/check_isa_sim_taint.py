@@ -19,7 +19,7 @@ from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
 from cascade.registers import ABI_INAMES,MAX_32b
 import enum
 import subprocess
-
+import time
 def is_tolerate(design_name: str, instr: BaseInstruction):
     if isinstance(instr, (CSRInstruction, EPCWriterInstruction, GenericCSRWriterInstruction)):
         if "boom" in design_name:
@@ -45,10 +45,11 @@ class FailTypeEnum(enum.IntEnum):
     TAINT_MISMATCH = enum.auto()
 
 class FuzzerStateException(Exception):
-    def __init__(self, *args: object, fuzzerstate, fail_type: FailTypeEnum) -> None:
+    def __init__(self, *args: object, fuzzerstate, fail_type: FailTypeEnum, timestamp) -> None:
         super().__init__(*args)
         self.fuzzerstate = fuzzerstate
         self.fail_type = fail_type
+        self.timestamp = timestamp
 
 class MismatchError(ValueError):
     def __init__(self, *args: object, fail_type: FailTypeEnum) -> None:
@@ -56,6 +57,7 @@ class MismatchError(ValueError):
         self.fail_type = fail_type
 
 def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None, remove_tmpdirs: bool = not NO_REMOVE_TMPDIRS):   
+    start_time = time.time()
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
         fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
@@ -212,15 +214,15 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 if IGNORE_SPIKE_TIMEOUT:
                     pass
                 else:
-                    raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.SPIKE_TIMEOUT)
+                    raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.SPIKE_TIMEOUT, timestamp=time.time()-start_time)
             if "make" in str(e):
                 if IGNORE_RTL_TIMEOUT:
                     pass
                 else:
-                    raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.RTL_TIMEOUT)
+                    raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.RTL_TIMEOUT, timestamp=time.time()-start_time)
 
         elif isinstance(e, MismatchError):
-            raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=e.fail_type)
+            raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=e.fail_type, timestamp=time.time()-start_time)
         else:
             raise Exception
     return fuzzerstate
