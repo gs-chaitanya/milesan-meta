@@ -197,7 +197,7 @@ USE_SPIKE_INTERM_ELF = False # When both this and INSERT_REGDUMPS are enabled, t
 TAINT_EN = True
 
 P_TAINT_REG = 0 # Probability that an initial register value is tainted. If non-zero, might be loaded into icache as the register values are stored right after the instruction code. TODO: use loads from (non-)tainted page instead
-if USE_MMU:
+if USE_MMU: # not used if TAINT_IN_PRIVS fixed.
         P_TAINT_IN_MACHINE = 1
 else:
     P_TAINT_IN_MACHINE = 1
@@ -231,8 +231,8 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MAX_BBS_UPPERBOUND = 20
-NUM_MIN_BBS_LOWERBOUND = 10
+NUM_MAX_BBS_UPPERBOUND = 200
+NUM_MIN_BBS_LOWERBOUND = 20
 NUM_BBS = 0
 
 # The tanh saturates, so that we don't neglect registers that have only few bits tainted when there are regs that have much more bits tainted
@@ -285,6 +285,10 @@ if "TAINT_NONTAKEN_BRANCHES" in os.environ:
 if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS" in os.environ:
     ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS"]) == 1
     print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS} from env vars.")
-
+if "NUM_MIN_BBS_LOWERBOUND" in os.environ:
+    NUM_MIN_BBS_LOWERBOUND = int(os.environ["NUM_MIN_BBS_LOWERBOUND"])
+if "NUM_MAX_BBS_UPPERBOUND" in os.environ:
+    NUM_MAX_BBS_UPPERBOUND = int(os.environ("NUM_MAX_BBS_UPPERBOUND"))
+    
 reset_reg_settings()
 

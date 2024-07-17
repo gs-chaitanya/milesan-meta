@@ -34,7 +34,11 @@ if __name__ == '__main__':
             env["TAINT_NONTAKEN_BRANCHES"] = str(int(cfg["taint_nontaken_branches"]))
             if "allow_nontaken_branches_in_taint_privs" in cfg:
                 env["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS"] = str(int(cfg["allow_nontaken_branches_in_taint_privs"]))
-
+            if "num_min_bbs_lowerbound" in cfg:
+                env["NUN_MIN_BBS_LOWERBOUND"] = str(cfg["num_min_bbs_lowerbound"])
+            if "num_max_bbs_upperbound" in cfg:
+                env["NUM_MAX_BBS_UPPERBOUND"] = str(cfg["num_max_bbs_upperbound"])
+                
             datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["name"])
             env["CASCADE_DATADIR"] = datadir
             os.makedirs(datadir, exist_ok=True)
@@ -48,8 +52,8 @@ if __name__ == '__main__':
                     "0",
                     str(cfg["timeout"])
                 ]
-                if "TM0" != cfg["name"]:
-                    subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
+
+                subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
 
             except Exception as e:
                 print(f"Failed running {' '.join(cmd)}: {e}")

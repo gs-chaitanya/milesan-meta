@@ -33,7 +33,7 @@ PRINT_CHECK_REGS = False
 PRINT_WRITEBACK_T0 = False # Print taint writeback of instructions.
 PRINT_WRITEBACK = False
 
-PRINT_INSTRUCTION_EXECUTION_IN_SITU = False # Prints execution during program generation.
+PRINT_INSTRUCTION_EXECUTION_IN_SITU = True # Prints execution during program generation.
 PRINT_INSTRUCTION_EXECUTION_FINAL = False # Prints execution during register value checks.
 PRINT_INSTRUCTION_EXECUTION_REDUCE = False # Prints execution during program reduction.
 PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS = False
