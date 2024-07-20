@@ -1,5 +1,5 @@
-from params.runparams import DO_ASSERT
-from params.fuzzparams import INSERT_SPECTRE_GADGETS, USE_MMU
+from params.runparams import DO_ASSERT, INSERT_FENCE, INSERT_REGDUMPS
+from params.fuzzparams import USE_MMU
 import enum
 
 
@@ -321,3 +321,5 @@ class IntRegIndivState(IntEnum):
 BASIC_BLOCK_MIN_SPACE = 24 + 12*USE_MMU# bytes.
 LI_DOUBLEWORD_SPACE = 7*4 # 7 instructions to prepare one virtual address.
 SPECTRE_GADGET_MIN_SPACE = 2*LI_DOUBLEWORD_SPACE + 4*4 # 4 speculative instructions.
+BASIC_BLOCK_MIN_SPACE += BASIC_BLOCK_MIN_SPACE * int(INSERT_REGDUMPS)
+BASIC_BLOCK_MIN_SPACE += BASIC_BLOCK_MIN_SPACE * int(INSERT_FENCE)

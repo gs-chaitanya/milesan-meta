@@ -17,7 +17,7 @@ from cascade.toleratebugs import tolerate_bug_for_bug_timing
 from params.runparams import NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_FINAL
 import os
 import sys
-
+MAX_N_THREADS = 60
 BUG_NAME_TO_ID = {
     #### b3 ####
     # The random values loaded into the registers map to the same cache line as some program code. It is thus loaded into
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 2:
         n_cores = int(sys.argv[2])
     
-    assert n_cores < 50
+    assert n_cores <= MAX_N_THREADS
     n_total_tests = -1
     if len(sys.argv) > 3:
         n_total_tests = int(sys.argv[3])

@@ -85,18 +85,9 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in ImmRdInstructions
 
-    # n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
-    imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
+    imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)    
 
-    # if "auipc" not in instr_str and TAINT_IMMRD_IMM and n_free_untainted_regs > fuzzerstate.intregpickstate.num_pickable_regs//2 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
-    #     imm_t0 = gen_random_imm_t0(instr_str, fuzzerstate)
-    #     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
-    # else:
-    #     imm_t0 = 0
-    #     rd = fuzzerstate.intregpickstate.pick_tainted_int_outputreg()
-    
-
-    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and "auipc" not in instr_str:
         n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
         if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS: # There's too much taint, remove some.
             imm_t0 = 0 

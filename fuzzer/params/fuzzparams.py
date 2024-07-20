@@ -10,6 +10,9 @@ import os
 # MMU
 ##
 USE_MMU = False
+if "USE_MMU" in os.environ:
+    USE_MMU = int(os.environ["USE_MMU"]) == 1
+    print(f"Setting USE_MMU = {USE_MMU} from env vars.")
 
 MAX_NUM_LAYOUTS = 5
 PROBA_ENTANGLE_LAYOUT = 0
@@ -198,7 +201,7 @@ TAINT_EN = True
 
 P_TAINT_REG = 0 # Probability that an initial register value is tainted. If non-zero, might be loaded into icache as the register values are stored right after the instruction code. TODO: use loads from (non-)tainted page instead
 if USE_MMU: # not used if TAINT_IN_PRIVS fixed.
-        P_TAINT_IN_MACHINE = 1
+        P_TAINT_IN_MACHINE = 0.5
 else:
     P_TAINT_IN_MACHINE = 1
 
@@ -231,9 +234,18 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MAX_BBS_UPPERBOUND = 200
 NUM_MIN_BBS_LOWERBOUND = 20
-NUM_BBS = 0
+if "NUM_MIN_BBS_LOWERBOUND" in os.environ:
+    NUM_MIN_BBS_LOWERBOUND = int(os.environ["NUM_MIN_BBS_LOWERBOUND"])
+    print(f"Setting NUM_MIN_BBS_LOWERBOUND = {NUM_MIN_BBS_LOWERBOUND} from env vars.")
+
+NUM_MAX_BBS_UPPERBOUND = 200
+if "NUM_MAX_BBS_UPPERBOUND" in os.environ:
+    NUM_MAX_BBS_UPPERBOUND = int(os.environ("NUM_MAX_BBS_UPPERBOUND"))
+    print(f"Setting NUM_MAX_BBS_UPPERBOUND = {NUM_MAX_BBS_UPPERBOUND} from env vars.")
+
+
+NUM_BBS = 0 # When set to a positive value, fixes the number of BBs.
 
 # The tanh saturates, so that we don't neglect registers that have only few bits tainted when there are regs that have much more bits tainted
 USE_TAINT_TANH = True
@@ -242,15 +254,35 @@ USE_TAINT_BIN = False
 assert USE_TAINT_TANH or USE_TAINT_BIN or USE_TAINT_HW
 
 INSERT_SPECTRE_GADGETS = False
-# Tainting immediates of branches could taint the pc without taking the branch as the BPU is updated speculatively.
-TAINT_NONTAKEN_BRANCH_IMM = False
+
 # Tainting the immediates might taint the PC if instruction code is loaded and speculated on.
 TAINT_IMMRD_IMM = False
+if "TAINT_IMMRD_IMM" in os.environ:
+    TAINT_IMMRD_IMM = int(os.environ["TAINT_IMMRD_IMM"]) == 1
+    print(f"Setting TAINT_IMMRD_IMM = {TAINT_IMMRD_IMM} from env vars.")
+
 TAINT_REGIMM_IMM = False
-# We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
-TAINT_IN_PRIVS = None
+if "TAINT_REGIMM_IMM" in os.environ:
+    TAINT_REGIMM_IMM = int(os.environ["TAINT_REGIMM_IMM"]) == 1
+    print(f"Setting TAINT_REGIMM_IMM = {TAINT_REGIMM_IMM} from env vars.")
+
+# Tainting immediates of branches could taint the pc without taking the branch as the BPU is updated speculatively.
+TAINT_NONTAKEN_BRANCH_IMM = False
+if "TAINT_NONTAKEN_BRANCHES" in os.environ:
+    TAINT_NONTAKEN_BRANCH_IMM = int(os.environ["TAINT_NONTAKEN_BRANCHES"]) == 1
+    print(f"Setting TAINT_NONTAKEN_BRANCHES = {TAINT_NONTAKEN_BRANCH_IMM} from env vars.")
+
 # We can disable non-taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges.
 ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = False
+if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS" in os.environ:
+    ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS"]) == 1
+    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS} from env vars.")
+
+# We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
+TAINT_IN_PRIVS = None
+if "TAINT_IN_PRIVS" in os.environ:
+    TAINT_IN_PRIVS = os.environ["TAINT_IN_PRIVS"]
+    print(f"Setting TAINT_IN_PRIVS = {TAINT_IN_PRIVS} from env vars.")
 
 # Abort fuzzing run if the computed program does not execute in taint sink privilege.
 ASSERT_EXEC_IN_TAINT_SINK_PRIV = True
@@ -266,29 +298,4 @@ IGNORE_SPIKE_MISMATCH = False
 USE_VANILLA = False
 
 
-
-if "TAINT_IN_PRIVS" in os.environ:
-    TAINT_IN_PRIVS = os.environ["TAINT_IN_PRIVS"]
-    print(f"Setting TAINT_IN_PRIVS = {TAINT_IN_PRIVS} from env vars.")
-if "USE_MMU" in os.environ:
-    USE_MMU = int(os.environ["USE_MMU"]) == 1
-    print(f"Setting USE_MMU = {USE_MMU} from env vars.")
-if "TAINT_IMMRD_IMM" in os.environ:
-    TAINT_IMMRD_IMM = int(os.environ["TAINT_IMMRD_IMM"]) == 1
-    print(f"Setting TAINT_IMMRD_IMM = {TAINT_IMMRD_IMM} from env vars.")
-if "TAINT_REGIMM_IMM" in os.environ:
-    TAINT_REGIMM_IMM = int(os.environ["TAINT_REGIMM_IMM"]) == 1
-    print(f"Setting TAINT_REGIMM_IMM = {TAINT_REGIMM_IMM} from env vars.")
-if "TAINT_NONTAKEN_BRANCHES" in os.environ:
-    TAINT_NONTAKEN_BRANCH_IMM = int(os.environ["TAINT_NONTAKEN_BRANCHES"]) == 1
-    print(f"Setting TAINT_NONTAKEN_BRANCHES = {TAINT_NONTAKEN_BRANCH_IMM} from env vars.")
-if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS" in os.environ:
-    ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS"]) == 1
-    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS} from env vars.")
-if "NUM_MIN_BBS_LOWERBOUND" in os.environ:
-    NUM_MIN_BBS_LOWERBOUND = int(os.environ["NUM_MIN_BBS_LOWERBOUND"])
-if "NUM_MAX_BBS_UPPERBOUND" in os.environ:
-    NUM_MAX_BBS_UPPERBOUND = int(os.environ("NUM_MAX_BBS_UPPERBOUND"))
-    
-reset_reg_settings()
 

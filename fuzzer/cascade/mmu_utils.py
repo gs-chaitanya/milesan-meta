@@ -459,20 +459,24 @@ class PageTablesGen:
                     continue
                 is_random_data_block = ppn_leaf-SPIKE_STARTADDR in [addr[0] for addr in fuzzerstate.random_data_block_ranges]
                 if TAINT_EN and is_random_data_block and fuzzerstate.random_data_block_has_taint[ppn_leaf-SPIKE_STARTADDR]:
-                    # print("Mapping random data block with taints")
+                    if DEBUG_PRINT:
+                        print(f"{hex(ppn_leaf)} maps data page with taints")
                     # If this is a random data block with taint and we only allow taint in one privilege, we map it accordingly s.t. only that privelege has access.
                     # We then need to ensure that tainted data is also only written to pages that were tainted initially.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_in_priv, is_executable=False)
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_in_priv, is_executable=False)
                     self.ppn_leaf_to_priv_dict[ppn_leaf] = fuzzerstate.taint_in_priv
                 elif is_random_data_block:
-                    # print("Mapping random data block without taints")
+                    if DEBUG_PRINT:
+                        print(f"{hex(ppn_leaf)} maps data page without taints")
                     # If it is a random data block without taint, map it to both privileges. It will be a shared memory, where only untainted data can be written to.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=False)
                     curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=False)
                     self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
                 elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.final_bb_base_addr&PAGE_ALIGNMENT_MASK or ppn_leaf - SPIKE_STARTADDR == ((fuzzerstate.final_bb_base_addr+get_finalblock_max_size())&PAGE_ALIGNMENT_MASK):
                     mapped_final_block = True
+                    if DEBUG_PRINT:
+                        print(f"{hex(ppn_leaf)} maps the final BB.")
                     # print("Mapping final block")
                     # If the page belongs to the final block, also map it for both priveleges.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=True)
@@ -480,7 +484,8 @@ class PageTablesGen:
                     self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
                 elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.bb_start_addr_seq[0]&PAGE_ALIGNMENT_MASK:
                     mapped_initial_block = True
-                    # print("(Not) mapping initial block.")
+                    if DEBUG_PRINT:
+                        print(f"{hex(ppn_leaf)} maps the initial BB.")
                     # If it is the first basic block, don't map it as it will only be used in machine mode.
                     curr_pte            = 0
                     curr_pte_supervisor = 0
