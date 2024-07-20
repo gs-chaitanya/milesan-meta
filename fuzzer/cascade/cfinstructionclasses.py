@@ -3,11 +3,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, RPROD_MASK_REGISTER_ID
-from params.fuzzparams import USE_MMU, USE_SPIKE_INTERM_ELF, NONPICKABLE_REGISTERS
+from params.fuzzparams import USE_MMU, USE_COMPRESSED, USE_SPIKE_INTERM_ELF, NONPICKABLE_REGISTERS
 from params.runparams import DO_ASSERT, PRINT_CHECK_REGS, PRINT_REG_TRACEBACK, PRINT_FILTERED_REG_TRACEBACK, ASSERT_ADDR
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
 from cascade.util import CFInstructionClass
+from cascade.util_compressed import COMPRESSED_INST_EQUIV
 from cascade.mmu_utils import phys2virt
 from rv.asmutil import li_into_reg, twos_complement, to_unsigned, INSTR_FUNCS, INSTR_FUNCS_T0
 from rv.rvprivileged import rvprivileged_mret, rvprivileged_sret
@@ -21,6 +22,9 @@ from rv.rv64i import *
 from rv.rv64f import *
 from rv.rv64d import *
 from rv.rv64m import *
+#COMPRESSED
+from rv.rv32ic import *
+from rv.rv64ic import *
 from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
 from common.spike import SPIKE_STARTADDR
 from cascade.registers import ABI_INAMES, MAX_32b, MAX_64b, MAX_20b
@@ -110,15 +114,18 @@ class BaseInstruction:
     instr_func = None
     instr_func_t0 = None
     priv_level = None
+    iscompressed = False
     if USE_MMU:
         va_layout = -1
     else:
         va_layout = None
 
-    def __init__(self, fuzzerstate, instr_str):
+    def __init__(self, fuzzerstate, instr_str,):
         assert fuzzerstate is not None
         self.fuzzerstate = fuzzerstate
         self.instr_str = instr_str
+        if "c." in self.instr_str:
+            self.iscompressed = True
         self.instr_func = INSTR_FUNCS[self.instr_str]
 
     def reset_addr(self):
@@ -135,10 +142,10 @@ class BaseInstruction:
 
         if DO_ASSERT:
             assert self.priv_level is not None
-            assert self.va_layout is not None
+            assert not (USE_MMU and self.va_layout is None)
             if self.va_layout == -1:
                 assert not USE_MMU or self.priv_level == PrivilegeStateEnum.MACHINE, f"We need to be in machine mode to use bare translation when the MMU is enabled."
-            if self.priv_level == PrivilegeStateEnum.MACHINE:
+            if USE_MMU and self.priv_level == PrivilegeStateEnum.MACHINE:
                 assert self.va_layout == -1,  f"Need to use bare translation when in MACHINE mode."
         self.paddr = self.fuzzerstate.curr_bb_start_addr + 4*len(self.fuzzerstate.instr_objs_seq[-1]) + SPIKE_STARTADDR
         if USE_MMU:
@@ -160,7 +167,7 @@ class BaseInstruction:
                 return "(Undetermined)"
         else:
             if self.priv_level is not None and self.paddr is not None:
-                return f"({self.priv_level.name[0]}): {hex(self.paddr)}"
+                return f"({self.priv_level.name[0]},{self.va_layout}): {hex(self.paddr)}"
             else:
                 return "(Undetermined)"
 
@@ -199,8 +206,6 @@ class CFInstruction(BaseInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, iscompressed: bool = False):
         super().__init__(fuzzerstate,instr_str)
-        self.iscompressed = iscompressed
-        assert not iscompressed, "Compressed instructions are not yet supported."
         self.assert_authorized_instr_strs()
 
     # @param is_spike_resolution: some rare instructions (typically offset management placeholders) are treated differently between spike resolution and the subsequent actual simulation.
@@ -217,8 +222,10 @@ class CFInstruction(BaseInstruction):
 class ImmInstruction(CFInstruction):
     # static
     authorized_instr_strs = ("lui", "auipc", "jal", "jalr", "beq", "bne", "blt", "bge", "bltu", "bgeu", "lb", "lh", "lw", "lbu", "lhu", "sb", "sh", "sw", "addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai", "lwu", "ld", "sd", "addiw", "slliw", "srliw", "sraiw", "flw", "fsw", "fld", "fsd")
+    authorized_instr_strs += ("c.lui","c.slli","c.srli","c.srai","c.andi")
     # Checks the immediate size.
     def assert_imm_size(self):
+        # print(f"{PARAM_SIZES_BITS_64[INSTRUCTION_IDS[self.instr_str]][-1]}, {INSTRUCTION_IDS[self.instr_str]}, {self.instr_str}")
         if DO_ASSERT:
             assert hasattr(self, 'imm')
             if self.fuzzerstate.is_design_64bit:
@@ -244,7 +251,7 @@ class ImmInstruction(CFInstruction):
 ###
 
 # Instructions with rs1, rs2 and rd
-R12DInstructions = ("add", "sub", "sll", "slt", "sltu", "xor", "srl", "sra", "or", "and", "addw", "subw", "sllw", "srlw", "sraw", "mul", "mulh", "mulhsu", "mulhu", "div", "divu", "rem", "remu", "mulw", "divw", "divuw", "remw", "remuw")
+R12DInstructions = ("add", "sub", "sll", "slt", "sltu", "xor", "srl", "sra", "or", "and", "addw", "subw", "sllw", "srlw", "sraw", "mul", "mulh", "mulhsu", "mulhu", "div", "divu", "rem", "remu", "mulw", "divw", "divuw", "remw", "remuw","c.and","c.or","c.xor","c.add","c.sub","c.mv")
 class R12DInstruction(CFInstruction):
     authorized_instr_strs = R12DInstructions
 
@@ -325,6 +332,25 @@ class R12DInstruction(CFInstruction):
             return rv64m_remw(self.rd, self.rs1, self.rs2)
         elif self.instr_str == "remuw":
             return rv64m_remuw(self.rd, self.rs1, self.rs2)
+        # rv32ic
+        elif self.instr_str == "c.mv":
+            return rv32ic_mv(self.rd, self.rs2)
+        elif self.instr_str == "c.add":
+            return rv32ic_add(self.rd, self.rs2)
+        elif self.instr_str == "c.and":
+            return rv32ic_and(self.rd, self.rs2)
+        elif self.instr_str == "c.or":
+            return rv32ic_or(self.rd, self.rs2)
+        elif self.instr_str == "c.xor":
+            return rv32ic_xor(self.rd, self.rs2)
+        elif self.instr_str == "c.sub":
+            return rv32ic_sub(self.rd, self.rs2)
+        # rv64ic
+        elif self.instr_str == "c.addw":
+            return rv64ic_addw(self.rd, self.rs2)
+        elif self.instr_str == "c.subw":
+            return rv64ic_subw(self.rd, self.rs2)
+
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
@@ -336,7 +362,7 @@ class R12DInstruction(CFInstruction):
 
     
 # Instructions with imm and rd
-ImmRdInstructions = ("lui", "auipc")
+ImmRdInstructions = ("lui", "auipc", "c.lui")
 class ImmRdInstruction(ImmInstruction):
     authorized_instr_strs = ImmRdInstructions
 
@@ -346,7 +372,6 @@ class ImmRdInstruction(ImmInstruction):
             assert rd >= 0
             assert is_rd_nonpickable_ok and rd in NONPICKABLE_REGISTERS or rd < MAX_NUM_PICKABLE_REGS, f"{rd} not in NONPICKABLE_REGISTERS " if is_rd_nonpickable_ok else f"{rd} > MAX_NUM_PICKABLE_REGS ({MAX_NUM_PICKABLE_REGS})"
         self.rd =  rd
-        # self.compute_taints()
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
@@ -357,6 +382,9 @@ class ImmRdInstruction(ImmInstruction):
             return rv32i_lui(self.rd, self.imm)
         elif self.instr_str == "auipc":
             return rv32i_auipc(self.rd, self.imm)
+        #rv32ic
+        elif self.instr_str == "c.lui":
+            return rv32ic_lui(self.rd, self.imm)
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
@@ -367,7 +395,7 @@ class ImmRdInstruction(ImmInstruction):
 
 
 # Instructions with rs1, imm and rd
-RegImmInstructions = ("addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai", "addiw", "slliw", "srliw", "sraiw")
+RegImmInstructions = ("addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai", "addiw", "slliw", "srliw", "sraiw", "c.addi","c.li","c.addi16sp","c.addi4spn","c.slli","c.srli","c.srai","c.andi")
 RegImmShiftInstructions = ("slli", "srli", "srai", "slliw", "srliw", "sraiw")
 class RegImmInstruction(ImmInstruction):
     authorized_instr_strs = RegImmInstructions
@@ -423,14 +451,36 @@ class RegImmInstruction(ImmInstruction):
             return rv64i_srliw(self.rd, self.rs1, self.imm)
         elif self.instr_str == "sraiw":
             return rv64i_sraiw(self.rd, self.rs1, self.imm)
+        #rv32ic
+        elif self.instr_str == "c.addi16sp":
+            return rv32ic_addi16sp(self.rd, self.imm)
+        elif self.instr_str == "c.addi4spn":
+            return rv32ic_addi4spn(self.rd, self.imm)
+        elif self.instr_str == "c.addi":
+            return rv32ic_addi(self.rd, self.imm)
+        elif self.instr_str == "c.li":
+            return rv32ic_li(self.rd, self.imm)
+        elif self.instr_str == "c.slli":
+            return rv32ic_slli(self.rd, self.imm)
+        elif self.instr_str == "c.andi":
+            return rv32ic_andi(self.rs1, self.imm)
+        elif self.instr_str == "c.srli":
+            return rv32ic_srli(self.rs1, self.imm)
+        elif self.instr_str == "c.srai":
+            return rv32ic_srai(self.rs1, self.imm)
+        #rv64ic
+        elif self.instr_str == "c.addiw":
+            return rv64ic_addiw(self.rd, self.imm)
+
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
 # Branch instructions: with rs1, rs2 and an immediate
 BranchInstructions = ("beq", "bne", "blt", "bge", "bltu", "bgeu")
+BranchInstructionsCompressed = ("c.beqz", "c.bnez") #this should not be part of the random choices
 class BranchInstruction(ImmInstruction):
-    authorized_instr_strs = BranchInstructions
+    authorized_instr_strs = BranchInstructions + BranchInstructionsCompressed
 
     # @param plan_taken is True iff the branch instruction is planned to be taken.
     def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, plan_taken: bool, iscompressed: bool = False):
@@ -466,6 +516,22 @@ class BranchInstruction(ImmInstruction):
         ]
 
         self.instr_str = random.choices(BranchInstructions, can_take_opcodes, k=1)[0]
+        if USE_COMPRESSED and self.iscompressed:
+            if self.plan_taken:
+                if rs1_content == 0:
+                    #print(f"chose {self.instr_str}, taken = {self.plan_taken} with rs1 = {rs1_content} rs2 = {rs2_content}, so we use c.beqz")
+                    self.instr_str = "c.beqz"
+                else:
+                    #print(f"chose {self.instr_str}, taken = {self.plan_taken} with rs1 = {rs1_content} rs2 = {rs2_content}, so we use c.bnez")
+                    self.instr_str = "c.bnez"
+            else:
+                if rs1_content == 0:
+                    #print(f"chose {self.instr_str}, taken = {self.plan_taken} with rs1 = {rs1_content} rs2 = {rs2_content}, so we use c.bnez")
+                    self.instr_str = "c.bnez"
+                else:
+                    #print(f"chose {self.instr_str}, taken = {self.plan_taken} with rs1 = {rs1_content} rs2 = {rs2_content}, so we use c.beqz")
+                    self.instr_str = "c.beqz"
+
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         if is_spike_resolution:
@@ -487,12 +553,17 @@ class BranchInstruction(ImmInstruction):
                 return rv32i_bltu(self.rs1, self.rs2, self.imm)
             elif self.instr_str == "bgeu":
                 return rv32i_bgeu(self.rs1, self.rs2, self.imm)
+            #rv32ic
+            elif self.instr_str == "c.beqz":
+                return rv32ic_beqz(self.rs1, self.imm)
+            elif self.instr_str == "c.bnez":
+                return rv32ic_bnez(self.rs1, self.imm)
             # Default case
             else:
                 raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
 # The jal instruction
-JALInstructions = ("jal",)
+JALInstructions = ("jal","c.jal","c.j")
 class JALInstruction(ImmInstruction):
     authorized_instr_strs = JALInstructions
 
@@ -509,12 +580,22 @@ class JALInstruction(ImmInstruction):
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
-        return rv32i_jal(self.rd, self.imm)
+        if self.instr_str == "jal":
+            return rv32i_jal(self.rd, self.imm)
+        #rv32ic
+        elif self.instr_str == "c.jal":
+            return rv32ic_jal(self.imm)
+        elif self.instr_str == "c.j":
+            return rv32ic_j(self.imm)
+        # Default case
+        else:
+            raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
+
 
 
 
 # The jalr instruction
-JALRInstructions = ("jalr",)
+JALRInstructions = ("jalr","c.jalr","c.jr")
 class JALRInstruction(ImmInstruction):
     authorized_instr_strs = JALRInstructions
 
@@ -537,7 +618,17 @@ class JALRInstruction(ImmInstruction):
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
-        return rv32i_jalr(self.rd, self.rs1, self.imm)
+        if self.instr_str == "jalr":
+            return rv32i_jalr(self.rd, self.rs1, self.imm)
+        #rv32ic
+        elif self.instr_str == "c.jr":
+            return rv32ic_jr(self.rs1)
+        elif self.instr_str == "c.jalr":
+            return rv32ic_jalr(self.rs1)
+        # Default case
+        else:
+            raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
+
 
 # Instructions that create no (explicit) information flow
 SpecialInstructions = ("fence", "fence.i", "sfence.vma")
@@ -585,7 +676,7 @@ class EcallEbreakInstruction(CFInstruction):
 
 
 # Integer load instructions
-IntLoadInstructions = ("lb", "lh", "lw", "lbu", "lhu", "lwu", "ld")
+IntLoadInstructions = ("lb", "lh", "lw", "lbu", "lhu", "lwu", "ld", "c.lwsp","c.lw","c.ldsp","c.ld")
 class IntLoadInstruction(ImmInstruction):
     authorized_instr_strs = IntLoadInstructions
 
@@ -621,12 +712,22 @@ class IntLoadInstruction(ImmInstruction):
             return rv64i_lwu(self.rd, self.rs1, self.imm)
         elif self.instr_str == "ld":
             return rv64i_ld(self.rd, self.rs1, self.imm)
+        # rv32ic
+        elif self.instr_str == "c.lwsp":
+            return rv32ic_lwsp(self.rd, self.imm)
+        elif self.instr_str == "c.lw":
+            return rv32ic_lw(self.rd, self.rs1, self.imm)
+        # rv64ic
+        elif self.instr_str == "c.ldsp":
+            return rv64ic_ldsp(self.rd, self.imm)
+        elif self.instr_str == "c.ld":
+            return rv64ic_ld(self.rd, self.rs1, self.imm)
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
 
 # Integer store instructions
-IntStoreInstructions = ("sb", "sh", "sw", "sd")
+IntStoreInstructions = ("sb", "sh", "sw", "sd","c.swsp","c.sw","c.sdsp","c.sd")
 class IntStoreInstruction(ImmInstruction):
     authorized_instr_strs = IntStoreInstructions
 
@@ -656,6 +757,16 @@ class IntStoreInstruction(ImmInstruction):
         # rv64i
         elif self.instr_str == "sd":
             return rv64i_sd(self.rs1, self.rs2, self.imm)
+        #rv32ic
+        elif self.instr_str == "c.sw":
+            return rv32ic_sw(self.rs1, self.rs2, self.imm)
+        elif self.instr_str == "c.swsp":
+            return rv32ic_swsp(self.rs2, self.imm)
+        #rv64ic
+        elif self.instr_str == "c.sd":
+            return rv64ic_sd(self.rs1, self.rs2, self.imm)
+        elif self.instr_str == "c.sdsp":
+            return rv64ic_sdsp(self.rs2, self.imm)
         # Default case
         else:
             raise ValueError(f"Unexpected instruction string: `{self.instr_str}`.")
@@ -686,7 +797,7 @@ class FloatLoadInstruction(ImmInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, imm: int, producer_id: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-
+        raise NotImplementedError
         if DO_ASSERT:
             assert frd >= 0
             assert frd < MAX_NUM_PICKABLE_REGS
@@ -712,9 +823,10 @@ FloatStoreInstructions = ("fsw", "fsd")
 class FloatStoreInstruction(ImmInstruction):
     authorized_instr_strs = FloatStoreInstructions
 
-    def __init__(self, fuzzerstate, instr_str: str, rs1: int, frs2: int, imm: int, producer_id: int, iscompressed: bool = False):
+    def __init__(self, fuzzerstate, instr_str: str, rs1: int, frs2: int, imm: int, producer_id: int, iscompressed: bool = False):        
         super().__init__(fuzzerstate, instr_str, imm, iscompressed)
-        
+        raise NotImplementedError
+
         if DO_ASSERT:
             assert rs1 >= 0
             assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID)
@@ -742,6 +854,7 @@ class FloatToIntInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, frs1: int, rm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
+        raise NotImplementedError
 
         if DO_ASSERT:
             assert rm >= 0
@@ -792,6 +905,7 @@ class IntToFloatInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, rm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate,instr_str, iscompressed)
+        raise NotImplementedError
         if DO_ASSERT:
             assert rm >= 0
             assert rm < 8
@@ -840,7 +954,7 @@ class Float4Instruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, frs2: int, frs3: int, rm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-    
+        raise NotImplementedError
         if DO_ASSERT:
             assert rm >= 0
             assert rm < 8
@@ -896,7 +1010,7 @@ class Float3Instruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, frs2: int, rm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        
+        raise NotImplementedError
         if DO_ASSERT:
             assert rm >= 0
             assert rm < 8
@@ -948,8 +1062,7 @@ class Float3NoRmInstruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, frs2: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        
-        
+        raise NotImplementedError
 
         if DO_ASSERT:
             assert frs1 >= 0
@@ -1000,9 +1113,9 @@ class Float2Instruction(CFInstruction):
     authorized_instr_strs = Float2Instructions
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, frs1: int, rm: int, iscompressed: bool = False):
-        super().__init__(fuzzerstate, instr_str, iscompressed)
-        
-        
+        super().__init__(fuzzerstate, instr_str, iscompressed)        
+        raise NotImplementedError
+
         if DO_ASSERT:
             assert rm >= 0
             assert rm < 8
@@ -1043,7 +1156,7 @@ class FloatIntRd2Instruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, frs1: int, frs2: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        
+        raise NotImplementedError
         
         if DO_ASSERT:
             assert frs1 >= 0
@@ -1087,7 +1200,7 @@ class FloatIntRd1Instruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, rd: int, frs1: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        
+        raise NotImplementedError
         
         if DO_ASSERT:
             assert frs1 >= 0
@@ -1124,7 +1237,7 @@ class FloatIntRs1Instruction(CFInstruction):
 
     def __init__(self, fuzzerstate, instr_str: str, frd: int, rs1: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
-        
+        raise NotImplementedError
         
         if DO_ASSERT:
             assert rs1 >= 0

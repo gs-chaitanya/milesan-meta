@@ -10,6 +10,15 @@ import os
 # MMU
 ##
 USE_MMU = False
+
+##
+# RVC
+##
+USE_COMPRESSED = True
+COMPRESS_INSTRUCTION = 1
+
+assert not (USE_MMU and USE_COMPRESSED)
+
 if "USE_MMU" in os.environ:
     USE_MMU = int(os.environ["USE_MMU"]) == 1
     print(f"Setting USE_MMU = {USE_MMU} from env vars.")
@@ -234,12 +243,12 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MIN_BBS_LOWERBOUND = 20
+NUM_MIN_BBS_LOWERBOUND = 10
 if "NUM_MIN_BBS_LOWERBOUND" in os.environ:
     NUM_MIN_BBS_LOWERBOUND = int(os.environ["NUM_MIN_BBS_LOWERBOUND"])
     print(f"Setting NUM_MIN_BBS_LOWERBOUND = {NUM_MIN_BBS_LOWERBOUND} from env vars.")
 
-NUM_MAX_BBS_UPPERBOUND = 200
+NUM_MAX_BBS_UPPERBOUND = 50
 if "NUM_MAX_BBS_UPPERBOUND" in os.environ:
     NUM_MAX_BBS_UPPERBOUND = int(os.environ("NUM_MAX_BBS_UPPERBOUND"))
     print(f"Setting NUM_MAX_BBS_UPPERBOUND = {NUM_MAX_BBS_UPPERBOUND} from env vars.")

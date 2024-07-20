@@ -94,6 +94,9 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         for bb_id, bb_instrs in enumerate(fuzzerstate.instr_objs_seq):
             for next_instr in bb_instrs:
                 addr = next_instr.paddr if not USE_MMU else next_instr.vaddr
+                if PRINT_INSTRUCTION_EXECUTION_FINAL:
+                    next_instr.print(USE_SPIKE_INTERM_ELF)
+
                 if DO_DOUBLECHECK_SIM:
                     ## RTL SIM CHECK WHEN INSERT_REGDUMPS IS ENABLED ##
                     if isinstance(next_instr, RegdumpInstruction_t0):
@@ -101,12 +104,14 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                         try:
                             next_instr.check_regs(regstream_rtl_val[regdump_idx]) # check value before executing instruction
                         except AssertionError as e:
-                            raise MismatchError(str(e), fail_type=FailTypeEnum.VALUE_MISMATCH)
+                            if not IGNORE_VALUE_MISMATCH:
+                                raise MismatchError(str(e), fail_type=FailTypeEnum.VALUE_MISMATCH)
                         if TAINT_EN:
                             try:
                                 next_instr.check_regs_t0(regstream_rtl_val_t0[regdump_idx]) # check value before executing instruction
                             except AssertionError as e:
-                                raise MismatchError(str(e), fail_type=FailTypeEnum.TAINT_MISMATCH)
+                                if not IGNORE_TAINT_MISMATCH:
+                                    raise MismatchError(str(e), fail_type=FailTypeEnum.TAINT_MISMATCH)
                         regdump_idx += 1
                     
                     ## SPIKE SIM CHECK ##
@@ -120,8 +125,6 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     elif PRINT_SKIPPED_CHECKS:
                         print(f"Skipping check for {next_instr.get_str(USE_SPIKE_INTERM_ELF)}")
 
-                    if PRINT_INSTRUCTION_EXECUTION_FINAL:
-                        next_instr.print(USE_SPIKE_INTERM_ELF)
 
                 next_instr.execute(is_spike_resolution=USE_SPIKE_INTERM_ELF)
                 
@@ -135,12 +138,14 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                             try:
                                 next_instr.check_regs(regstream_rtl_val[regdump_idx]) # check value before executing instruction
                             except AssertionError as e:
-                                raise MismatchError(str(e), fail_type=FailTypeEnum.VALUE_MISMATCH)
+                                if not IGNORE_VALUE_MISMATCH:
+                                    raise MismatchError(str(e), fail_type=FailTypeEnum.VALUE_MISMATCH)
                             if TAINT_EN:
                                 try:
                                     next_instr.check_regs_t0(regstream_rtl_val_t0[regdump_idx]) # check value before executing instruction
                                 except AssertionError as e:
-                                    raise MismatchError(str(e), fail_type=FailTypeEnum.TAINT_MISMATCH)
+                                    if not IGNORE_TAINT_MISMATCH:
+                                        raise MismatchError(str(e), fail_type=FailTypeEnum.TAINT_MISMATCH)
                             regdump_idx += 1
 
                         ## SPIKE SIM CHECK ##

@@ -691,7 +691,37 @@ INSTR_FUNCS = {
     # mret and sret have no function
     "mret": None,
     "sret": None,
-    "sfence.vma": None
+    "sfence.vma": None,
+    # compressed
+    "c.add": add,
+    "c.mv" : add,
+    "c.and": and_,
+    "c.or": or_,
+    "c.xor": xor,
+    "c.sub": sub,
+    "c.lui": lui,
+    "c.slli": slli,
+    "c.srli": srli,
+    "c.srai": srai,
+    "c.andi": andi,
+    "c.addi": addi,
+    "c.li":addi,
+    "c.addi16sp":addi,
+    "c.addi4spn":addi,
+    "c.j": jal,
+    "c.jal": jal,
+    "c.jalr": jalr,
+    "c.jr": jalr,
+    "c.beqz" : None,
+    "c.bnez" : None,
+    "c.lsdp":ld,
+    "c.ld": ld,
+    "c.lwsp":lw,
+    "c.lw": lw,
+    "c.sd": None,
+    "c.sdsp": None,
+    "c.sw": None,
+    "c.swsp": None
 }
 
 INSTR_FUNCS_T0 = {
@@ -772,7 +802,38 @@ INSTR_FUNCS_T0 = {
     # mret and sret have no function
     "mret": None,
     "sret": None,
-    "sfence.vma": None
+    "sfence.vma": None,
+    # compressed
+    "c.add": add_t0,
+    "c.mv" : add_t0,
+    "c.and": and_t0,
+    "c.or": or_t0,
+    "c.xor": xor_t0,
+    "c.sub": sub_t0,
+    "c.lui": lui_t0,
+    "c.slli": slli_t0_imprecise if SLL_IMPRECISE else conji if SLL_CONJ else slli_t0_precise,
+    "c.srli": srli_t0_imprecise if SRL_IMPRECISE else conji if SRL_IMPRECISE else srl_t0_precise,
+    "c.srai": srai_t0,
+    "c.andi": andi_t0,
+    "c.addi": addi_t0,
+    "c.li":addi_t0,
+    "c.addi16sp":addi_t0,
+    "c.addi4spn":addi_t0,
+    "c.j": jal_t0,
+    "c.jal": jal_t0,
+    "c.jalr": jalr_t0,
+    "c.jr": jalr_t0,
+    "c.beqz" : None,
+    "c.bnez" : None,
+    "c.lsdp":ld_t0,
+    "c.ld": ld_t0,
+    "c.lwsp":lw_t0,
+    "c.lw": lw_t0,
+    "c.sd": None,
+    "c.sdsp": None,
+    "c.sw": None,
+    "c.swsp": None
+
 }
 
 
