@@ -5,7 +5,7 @@
 # This script is responsible for running the RTL simulations from the fuzzer.
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA
-from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, TRACE_FST, TRACE_EN, CHECK_MEM
+from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_FST, TRACE_EN, CHECK_MEM, PATH_TO_MNT
 from cascade.util import IntRegIndivState
 from common.sim.modelsim import get_next_worker_id
 from common.sim.commonsim import setup_sim_env
@@ -18,6 +18,9 @@ import subprocess
 import sys
 from enum import Enum
 import json
+from distutils import dir_util
+import time
+import shutil
 
 # Either Verilator or Modelsim
 class SimulatorEnum(Enum):
@@ -262,7 +265,11 @@ def runtest_modelsim_forcoverage(fuzzerstate, elfpath: str, coveragepath: str):
         raise Exception(f"Timeout during modelsim testing of design `{fuzzerstate.design_name}` for tuple ({fuzzerstate.memsize}, design_name, {fuzzerstate.randseed}, {fuzzerstate.nmax_bbs}).")
 
 
-def run_rtl_and_load_regstream(env,design_name: str):
+def run_rtl_and_load_regstream(fuzzerstate):
+    design_name = fuzzerstate.design_name
+    env = fuzzerstate.env
+    if 'cva6' in design_name:
+        return wait_and_load_regstream(fuzzerstate)
     cmd = ["make",f"rerun_{'drfuzz_mem' if not USE_VANILLA else 'vanilla'}_{'notrace' if not TRACE_EN else 'trace' if not TRACE_FST else 'trace_fst'}"]
     cascadedir = designcfgs.get_design_cascade_path(design_name)
     subprocess.run(cmd,cwd=cascadedir,env=env,capture_output=True,check=True)
@@ -291,4 +298,43 @@ def run_rtl_and_load_regstream(env,design_name: str):
                 sramdump_rtl[addr] = {}
                 sramdump_rtl[addr]["val"] = int(d["value"],16)
                 sramdump_rtl[addr]["val_t0"] = int(d["value_t0"],16)
+    return (regstream_rtl_val, regstream_rtl_val_t0), regdumps_rtl, sramdump_rtl
+
+
+# Use this when fuzzing with modelsim as we can't start it from the container. Need second script to run natively in parallel and a shared mount.
+def wait_and_load_regstream(fuzzerstate):
+
+    tmp_mnt_dir = f"{PATH_TO_MNT}/{fuzzerstate.tmp_dir}"
+    tmp_mnt_regdump_path = f"{PATH_TO_MNT}/{fuzzerstate.env['REGDUMP_PATH']}"
+    os.makedirs(tmp_mnt_dir,exist_ok=True)
+    dir_util.copy_tree(fuzzerstate.tmp_dir, tmp_mnt_dir)
+    # print(f"Copied sources from {fuzzerstate.tmp_dir} to {tmp_mnt_dir}")
+    assert "REGDUMP_PATH" in fuzzerstate.env
+    while(not os.path.exists(tmp_mnt_regdump_path)):
+        time.sleep(2)
+        # print(f"Waiting for modelsim results at {tmp_mnt_regdump_path}...")
+
+    # print(f"Modelsim results are ready. Loading...")
+    while(1):
+        try:
+            with open(tmp_mnt_regdump_path, "rb") as f:
+                regdumps_rtl = json.load(f)
+                # print(f"Modelsim results loaded succesfully.")
+                break
+        except json.JSONDecodeError:
+            time.sleep(1)
+    
+    if not USE_VANILLA:
+        assert "REGSTREAM_PATH" in fuzzerstate.env
+        tmp_mnt_regstream_path = f"{PATH_TO_MNT}/{fuzzerstate.env['REGSTREAM_PATH']}"
+        assert os.path.exists(tmp_mnt_regstream_path), f"{tmp_mnt_regstream_path} does not exist"
+        with open(tmp_mnt_regstream_path, "rb") as f:
+            regstream_rtl = json.load(f)
+    
+    if not NO_REMOVE_TMPDIRS:
+        shutil.rmtree(tmp_mnt_dir)
+    regstream_rtl_val_t0 = {int(r["id"],16): int(r["value_t0"],16) for r in regstream_rtl}
+    regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
+
+    sramdump_rtl = {}
     return (regstream_rtl_val, regstream_rtl_val_t0), regdumps_rtl, sramdump_rtl
