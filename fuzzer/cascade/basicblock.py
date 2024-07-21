@@ -55,7 +55,7 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
         return False
 
     if USE_MMU and DO_ASSERT:
-        assert fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.next_bb_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR], f"Generated BB addr does not match required privilege: {fuzzerstate.privilegestate.privstate.name} not in {[p.name for p in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]]}"
+        assert fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.next_bb_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR], f"Generated BB addr does not match required privilege: {fuzzerstate.privilegestate.privstate.name} not in {[p.name for p in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.next_bb_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]]}"
 
     return True
 

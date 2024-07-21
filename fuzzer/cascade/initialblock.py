@@ -250,12 +250,10 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     # fuzzerstate.memview.alloc_mem_range(fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK, (fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK)+PHYSICAL_PAGE_SIZE) # NO_COMPRESSED
 
     # Jump to the next basic block, say, with jal for simplicity
-    range_bits_each_direction = get_range_bits_per_instrclass(ISAInstrClass.JAL)
-    fuzzerstate.next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction))
-
-    if fuzzerstate.next_bb_addr is None:
-        return False
-    
+    # range_bits_each_direction = get_range_bits_per_instrclass(ISAInstrClass.JAL)
+    # fuzzerstate.next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction))
+    from cascade.basicblock import gen_next_bb_addr
+    gen_next_bb_addr(fuzzerstate, ISAInstrClass.JAL,curr_addr)
     # JAL at end of initial block is the first to modify the architectural state of the pickable registers, so execute it.
     next_instr = create_instr("jal", fuzzerstate, curr_addr)
     # curr_addr += fuzzerstate.append_and_execute_instr(next_instr, insert_regdump = False) # first instruction that is considered for ISA cascade simulation crosscheck

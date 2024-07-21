@@ -81,7 +81,6 @@ class MemoryView:
         if DO_ASSERT:
             assert end > start, f"Expected start ({start}) > end ({end}) in alloc_mem_range."
         self.occupied_addrs += end-start
-        # print(f"Allocating {hex(start)} - {hex(end)}")
         for curr_pair_id, curr_pair in enumerate(self.freepairs):
             if start < curr_pair[1]:
                 # Check that the range is initially free.
@@ -150,15 +149,13 @@ class MemoryView:
 
         for _ in range(max_attempts):
             picked_addr = random.randrange((left_bound+(1 << alignment_bits)-1) >> alignment_bits, ((right_bound-min_space) >> alignment_bits)) << alignment_bits
-            cl_addr = picked_addr - picked_addr%self.cl_size
-            if min_space == 0 or self.is_mem_range_free(cl_addr, picked_addr+min_space+self.cl_size) and \
-                 (priv == PrivilegeStateEnum.MACHINE or not USE_MMU or priv in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(picked_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]): # is_mem_range_free returns False if it goes beyond the memory boundaries.
+            if min_space == 0 or self.is_mem_range_free(picked_addr, picked_addr+min_space) and \
+                 (not USE_MMU or len(self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict) == 0 or priv in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(picked_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]): # is_mem_range_free returns False if it goes beyond the memory boundaries.
                 if DO_ASSERT:
                     assert picked_addr >= 0
                     assert picked_addr + min_space <= self.memsize
                     assert picked_addr % (1 << alignment_bits) == 0
-                    assert not self.is_cl_tainted(picked_addr)
-                # print(f"BB at addr {hex(picked_addr)} at page at addr {hex(picked_addr&PAGE_ALIGNMENT_MASK)} in priv {priv.name}")
+                # print(f"BB at addr {hex(picked_addr+SPIKE_STARTADDR)} at page at addr {hex((picked_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR)} in priv {priv.name}")
                 return picked_addr
         return None
 

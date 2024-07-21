@@ -492,7 +492,9 @@ class PageTablesGen:
                     self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.MACHINE}
                 else:
                     if ppn_leaf not in self.ppn_leaf_to_priv_dict:
-                        priv = {PrivilegeStateEnum.USER if random.random() < 0.5 else PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE} # Dont map any hypervisor
+                        priv = {random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE])} # Dont map any hypervisor
+                        if DEBUG_PRINT:
+                            print(f"{hex(ppn_leaf)} assigned to {[p.name for p in priv]}.")
                         self.ppn_leaf_to_priv_dict[ppn_leaf] = priv
                     else:
                         priv = self.ppn_leaf_to_priv_dict[ppn_leaf]

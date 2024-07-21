@@ -44,8 +44,8 @@ PRINT_FILTERED_REG_TRACEBACK = False
 
 PRINT_ENVIRONMENT = False
 
-INSERT_REGDUMPS = True # Speculative bugs will likely diappear when enabled. Used to test correctness of dataflow computation.
-INSERT_FENCE = True # The stores should become architectually visible in order, so this should not be necessary in most cases with WT caches. CVA6 needs it.
+INSERT_REGDUMPS = False # Speculative bugs will likely diappear when enabled. Used to test correctness of dataflow computation.
+INSERT_FENCE = False # The stores should become architectually visible in order, so this should not be necessary in most cases with WT caches. CVA6 needs it.
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled." # We would have to translate the regdump address for each context switch, otherwise not difficult to implement.
 assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not supported when spectre gadgets enabled."
 assert not (TAINT_NONTAKEN_BRANCH_IMM and INSERT_REGDUMPS), "Enabling TAINT_NONTAKEN_BRANCH_IMM might render INSERT_REGDUMPS useless as pc might get tainted if non-taken branch is predicted taken."

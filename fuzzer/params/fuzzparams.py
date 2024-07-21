@@ -9,7 +9,7 @@ import os
 ##
 # MMU
 ##
-USE_MMU = False
+USE_MMU = True
 if "USE_MMU" in os.environ:
     USE_MMU = int(os.environ["USE_MMU"]) == 1
     print(f"Setting USE_MMU = {USE_MMU} from env vars.")
