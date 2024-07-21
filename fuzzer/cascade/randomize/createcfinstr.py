@@ -419,16 +419,17 @@ def create_memfsm_instrobjs(fuzzerstate):
 
     va_layout, priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
 
-    if priv_level in  fuzzerstate.taint_in_priv:
-        if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
-            tainted = True
-        elif not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
-            tainted = False
-        else:
-            tainted = random.random() < 0.5
-    else:
+    # if priv_level in  fuzzerstate.taint_in_priv:
+    if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+        tainted = True
+    elif not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
         tainted = False
+    else:
+        tainted = random.random() < 0.5
+    # else:
+    #     tainted = False
     addr  = fuzzerstate.memview.gen_random_page_addr_from_randomblocks(tainted=tainted)
+    # print(f"Paddr: {hex(addr)}")
     assert addr is not None
 
     if va_layout == -1: # We don't need 64bit values in bare.
@@ -470,6 +471,7 @@ def create_memfsm_instrobjs(fuzzerstate):
 
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PAGE_T0_ADDR if tainted else IntRegIndivState.PAGE_ADDR, force=True)
         addr = phys2virt(addr, priv_level, va_layout,fuzzerstate,absolute_addr=True)
+        # print(f"Vaddr: {hex(addr)}, tainted: {tainted}")
         instr_objs = li_doubleword(addr, rd, tmp, fuzzerstate)
         return instr_objs
 

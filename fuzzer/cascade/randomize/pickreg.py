@@ -507,7 +507,7 @@ class IntRegPickState:
 
     def pick_int_reg_in_state(self, req_state: IntRegIndivState):
         if DO_ASSERT:
-            assert self.exists_reg_in_state(req_state), f"No reg in state `{req_state}`"
+            assert self.exists_reg_in_state(req_state), f"No reg in state `{req_state.name}`"
         ret = None
         while ret is None or not self.__regs_in_state_onehot[req_state][ret]:
             ret = random.choices(range(self.num_pickable_regs), self.__regs_in_state_onehot[req_state], k=1)[0]

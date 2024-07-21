@@ -52,9 +52,13 @@ class PrivilegeState:
             ExceptionCauseVal.ID_LOAD_ACCESS_FAULT: False,
             ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT: False,
             ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT: False,
-            ExceptionCauseVal.ID_LOAD_PAGE_FAULT: False, # TODO enable this
+            ExceptionCauseVal.ID_LOAD_PAGE_FAULT: True,
             ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT: False
         }
+
+        if not USE_MMU:
+            supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
+            supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
 
         # Remove all entries with weight zero
         for exception_cause_val in list(supported_exceptions_dict.keys()):
@@ -68,9 +72,9 @@ class PrivilegeState:
             supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED] = False
         if fuzzerstate.design_has_compressed_support:
             supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED] = False
+        
         # Not yet supported
         supported_exceptions_dict[ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT] = False
-        supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
         supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT] = False
 
         # Make sure there are consumed registers for some of the misaligned accesses
@@ -84,13 +88,15 @@ class PrivilegeState:
             supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED] = False
             supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED] = False
 
+        if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+            supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
+
         # Will not cause an exception if translation is not used
         if fuzzerstate.effective_curr_layout == -1:
             supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
 
-        _, mprv_bit = fuzzerstate.status_sum_mprv
-        if not mprv_bit or fuzzerstate.privilegestate.curr_mstatus_mpp == PrivilegeStateEnum.MACHINE or fuzzerstate.real_curr_layout == -1:
-            # Without the mprv bit, we cannot generate page faults in machine mode
+
+        if self.privstate in fuzzerstate.taint_in_priv:
             supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
 
         # Cannot write to SATP in user mode
@@ -101,6 +107,13 @@ class PrivilegeState:
             supported_exceptions_dict[ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE] = False
             supported_exceptions_dict[ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE] = False
             supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
+            supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_ACCESS_FAULT] = False
+            
+            _, mprv_bit = fuzzerstate.status_sum_mprv
+            if not (mprv_bit and fuzzerstate.privilegestate.curr_mstatus_mpp == PrivilegeStateEnum.MACHINE):
+                # Without the mprv bit, we cannot generate page faults in machine mode
+                supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
+
 
             if not self.is_mtvec_populated:
                 # Forbid all exceptions
@@ -112,7 +125,6 @@ class PrivilegeState:
                 supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED] = False
                 supported_exceptions_dict[ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE] = False
                 supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
-                supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
 
         else:
             if DO_ASSERT:
@@ -152,7 +164,6 @@ class PrivilegeState:
             ret |= (v << k)
         return ret
 
-    # FUTURE Add page faults and access faults here.
     def is_ready_to_take_exception(self, fuzzerstate):
         curr_dict = self.gen_takable_exception_dict(fuzzerstate)
         return reduce(lambda x, y: x | y, list(curr_dict.values()))

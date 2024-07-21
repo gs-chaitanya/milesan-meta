@@ -5,12 +5,13 @@
 # This module is responsible for picking specific operations among exceptions.
 
 from cascade.cfinstructionclasses import JALInstruction, SimpleIllegalInstruction, SimpleExceptionEncapsulator, MisalignedMemInstruction, EcallEbreakInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, CSRRegInstruction, PrivilegeDescentInstruction, CSRRegInstructions, Float3Instruction, Float3Instructions
-from cascade.cfinstructionclasses_t0 import TvecWriterInstruction_t0, EPCWriterInstruction_t0, GenericCSRWriterInstruction_t0, SimpleExceptionEncapsulator_t0, CSRRegInstruction_t0, SimpleIllegalInstruction_t0, MisalignedMemInstruction_t0, MstatusWriterInstruction_t0, R12DInstruction_t0, RegImmInstruction_t0, ImmRdInstruction_t0
+from cascade.cfinstructionclasses_t0 import TvecWriterInstruction_t0, EPCWriterInstruction_t0, GenericCSRWriterInstruction_t0, SimpleExceptionEncapsulator_t0, CSRRegInstruction_t0, SimpleIllegalInstruction_t0, MisalignedMemInstruction_t0, MstatusWriterInstruction_t0, R12DInstruction_t0, RegImmInstruction_t0, ImmRdInstruction_t0, IntLoadInstruction_t0
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.randomize.createcfinstr import gen_random_rounding_mode
 from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
 from cascade.toleratebugs import is_tolerate_rocket_minstret, is_tolerate_kronos_readbadcsr, is_tolerate_picorv32_readnonimplcsr, is_forbid_vexriscv_csrs, is_tolerate_vexriscv_fpu_disabled, is_tolerate_vexriscv_fpu_leak
 from cascade.util import ExceptionCauseVal, IntRegIndivState
+from cascade.mmu_utils import PHYSICAL_PAGE_SIZE
 from common.spike import SPIKE_MEDELEG_MASK, SPIKE_STARTADDR
 from params.fuzzparams import MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, SIMPLE_ILLEGAL_INSTRUCTION_PROBA, PROBA_PICK_WRONG_FPU, MAX_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_REGS, TAINT_EN, USE_MMU
 from params.runparams import DO_ASSERT
@@ -34,7 +35,7 @@ EXCEPTION_OP_TYPE_INITIAL_BOOSTERS = {
     ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE: 0.1,
     ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE: 0.1,
     ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT:       0, # 4,
-    ExceptionCauseVal.ID_LOAD_PAGE_FAULT:              0, # 2,
+    ExceptionCauseVal.ID_LOAD_PAGE_FAULT:              5, # 2,
     ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT:         0  # 2
 }
 
@@ -219,6 +220,7 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, True)
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
         raise NotImplementedError("ID_LOAD_ACCESS_FAULT not yet supported")
+        raise 
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
@@ -248,7 +250,19 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
     elif exception_op_type == ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT:
         raise NotImplementedError("ID_INSTRUCTION_PAGE_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_PAGE_FAULT:
-        raise NotImplementedError("ID_LOAD_PAGE_FAULT not yet supported")
+        if DO_ASSERT:
+            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
+            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
+            assert fuzzerstate.privilegestate.prev_privstate not in fuzzerstate.taint_in_priv # we only do page faults to tainted pages
+        instr_str = random.choice(IntLoadInstruction_t0.authorized_instr_strs)
+        alignment = 1 if instr_str in ["lb","lbu"] else 2 if instr_str in ["lh","lhu"] else 4 if instr_str in ["lw","lwu"] else 8 if instr_str == "ld" else None
+        assert alignment is not None, f"Invalid instr_str: {instr_str}"
+        imm = random.randrange(-PHYSICAL_PAGE_SIZE//2,PHYSICAL_PAGE_SIZE//2, alignment)
+        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
+        # RD needs to be a free register. Otherwise, it might be set free, but not actually be free because it's not overwritten.
+        rd = fuzzerstate.intregpickstate.pick_int_inputreg() 
+        return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, None, False),exception_op_type)
+
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT:
         raise NotImplementedError("ID_STORE_AMO_PAGE_FAULT not yet supported")
 
@@ -272,8 +286,9 @@ def gen_exception_instr(fuzzerstate):
         # We untaint the registers if we either delegate the exception to a privilege that does not have taint access, or we do not delegate and M mode does not have taint access.
         if not is_mtvec and PrivilegeStateEnum.SUPERVISOR not in fuzzerstate.taint_in_priv or is_mtvec and PrivilegeStateEnum.MACHINE not in fuzzerstate.taint_in_priv:
             instr_objs += clear_taints_with_random_instructions(fuzzerstate, untaint_all=True)
+    instr_objs += [gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type)]
     fuzzerstate.intregpickstate.free_pageregs()
-    return instr_objs + [gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type)]
+    return instr_objs
 
 
 ###

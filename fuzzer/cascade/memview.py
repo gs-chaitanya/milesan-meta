@@ -170,7 +170,7 @@ class MemoryView:
                 assert len(allowed_pages), f"No pages matched required criteria: tainted: {tainted}"
             page_start_end_addr = random.choice(allowed_pages)
             picked_addr = random.choice([addr for addr in range(page_start_end_addr[0], page_start_end_addr[1]) if addr % (1 << alignment_bits) == 0 and addr+min_space<page_start_end_addr[1]])
-            # print(f"Picked addr {hex(picked_addr)} in page {hex(page_start_end_addr[0])}")
+
             if min_space == 0 or picked_addr+min_space<page_start_end_addr[1]:
                 if DO_ASSERT:
                     assert picked_addr >= 0

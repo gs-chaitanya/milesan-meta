@@ -49,7 +49,7 @@ INSERT_FENCE = False # The stores should become architectually visible in order,
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled." # We would have to translate the regdump address for each context switch, otherwise not difficult to implement.
 assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not supported when spectre gadgets enabled."
 assert not (TAINT_NONTAKEN_BRANCH_IMM and INSERT_REGDUMPS), "Enabling TAINT_NONTAKEN_BRANCH_IMM might render INSERT_REGDUMPS useless as pc might get tainted if non-taken branch is predicted taken."
-CHECK_PC_SPIKE_AGAIN = False
+CHECK_PC_SPIKE_AGAIN = True
 assert not (INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN)
 assert not (INSERT_FENCE and not INSERT_REGDUMPS), f"INSERT_REGDUMPS must be enabled."
 
