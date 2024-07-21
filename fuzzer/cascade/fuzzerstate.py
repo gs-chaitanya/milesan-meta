@@ -2,7 +2,7 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, DEBUG_RVC
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_IN_PRIVS, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, TAINT_NONTAKEN_BRANCH_IMM
 from params.fuzzparams import reset_reg_settings
@@ -361,6 +361,8 @@ class FuzzerState:
         instr.reset_addr()
         if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
             instr.print(is_spike_resolution=True)
+        if DEBUG_RVC and instr.iscompressed:
+            print(f"RVC: {instr.get_str()}")
         self.instr_objs_seq[-1].append(instr)
         instr.execute(is_spike_resolution = True)
         if insert_regdump: # TODO for vaddr, we need to bring the REGDUMP_REGISTER to the appropriate state for each layout.

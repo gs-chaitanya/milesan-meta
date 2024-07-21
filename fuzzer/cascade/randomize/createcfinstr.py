@@ -213,7 +213,7 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
         instr_str_cmp, is_compressable = handle_Branch(rs1, rs2, imm, instr_str)
         if is_compressable and (random.random() < COMPRESS_INSTRUCTION):
             iscompressed = True
-            # print(f"compressed {instr_str} into {instr_str_cmp}") #DEBUG
+            print(f"compressed {instr_str} into {instr_str_cmp}") #DEBUG
             instr_str = instr_str_cmp
 
 
