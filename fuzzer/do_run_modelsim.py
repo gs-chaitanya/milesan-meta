@@ -7,7 +7,7 @@ import multiprocessing as mp
 
 PRINT_THREAD_STATUS = True
 MAX_N_THREADS = 30
-MUTE = True
+MUTE = False
 callback_lock = threading.Lock()
 n_finished_threads = 0
 
@@ -63,7 +63,8 @@ if __name__ == '__main__':
             all_sources = []
             for rootdir, dirs, files in os.walk(source):
                 for subdir in dirs:
-                    all_sources += [os.path.join(rootdir,subdir)]
+                    if "cva6" in subdir:
+                        all_sources += [os.path.join(rootdir,subdir)]
             if not len(all_sources):
                 if PRINT_THREAD_STATUS:
                     print("Waiting for sources...")
