@@ -5,7 +5,7 @@ from cascade.util import ExceptionCauseVal
 from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from cascade.registers import ABI_INAMES
 from rv.csrids import CSR_ABI_NAMES
-from params.runparams import PRINT_CHECK_REGS_T0, PRINT_COLOR_TAINT, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT, PRINT_WRITEBACK_T0, PRINT_WRITEBACK
+from params.runparams import PRINT_CHECK_REGS_T0, PRINT_COLOR_TAINT, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT, PRINT_WRITEBACK_T0, PRINT_WRITEBACK, DUMP_WRITEBACK, DUMP_WRITEBACK_T0
 from common.spike import SPIKE_STARTADDR
 from cascade.registers import IntRegIndivState
 import numpy as np
@@ -775,12 +775,20 @@ class RegdumpInstruction_t0(IntStoreInstruction_t0):
             print(f"{hex(self.paddr)}: Checking register taint: {ABI_INAMES[self.rs2]}:{hex(val_t0)}")
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check_t0(val_t0)
         assert not mismatch, f"{hex(self.paddr)}: {self.instr_str}: (Regdump) Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.paddr,self.fuzzerstate,val_t0,False).get_str(False)}"
+        if DUMP_WRITEBACK_T0:
+            with open(self.fuzzerstate.env["WRITEBACK_PATH"], "a") as f:
+                f.write(f"taint: {hex(self.paddr if not USE_MMU else self.vaddr)}, {self.rs2}, {hex( self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0())}, {hex(val_t0)}\n")
+
 
     def check_regs(self,val):
         if PRINT_CHECK_REGS:
             print(f"{hex(self.paddr)}: Checking register value: {ABI_INAMES[self.rs2]}:{hex(val)}")
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check(val)
         assert not mismatch, f"{hex(self.paddr)}: {self.instr_str}: (Regdump) Value mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.paddr,self.fuzzerstate,val,False).get_str(False)}"
+
+        if DUMP_WRITEBACK:
+            with open(self.fuzzerstate.env["WRITEBACK_PATH"], "a") as f:
+                f.write(f"value: {hex(self.paddr if not USE_MMU else self.vaddr)}, {self.rs2}, {hex( self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0())}, {hex(val)}\n")
 
     def execute(self, is_spike_resolution: bool = True):
         assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"Regdump register is tainted, this should not happen."

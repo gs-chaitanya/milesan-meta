@@ -421,6 +421,7 @@ class FuzzerState:
         regdump_path = os.path.join(self.tmp_dir, f"regdump.json")
         sramdump_path = os.path.join(self.tmp_dir, f"sramdump.json")
         regstream_path = os.path.join(self.tmp_dir, f"regstream.json")
+        writeback_path = os.path.join(self.tmp_dir, f"writeback.txt")
         simsramtaint_path = os.path.join(self.tmp_dir, f"{rtl_elfpath.split('/')[-1].split('.')[0]}.simsramtaint.txt")
         tracefile_path = os.path.join(self.tmp_dir, f"{self.instance_to_str()}.trace{'.fst' if TRACE_FST else '.vcd'}")
         num_instrs = len(list(itertools.chain.from_iterable(self.instr_objs_seq)))
@@ -436,7 +437,7 @@ class FuzzerState:
         env["SRAMDUMP_PATH"] = sramdump_path
         env["SIMSRAMTAINT"] = simsramtaint_path
         env["TRACEFILE"] = tracefile_path
-
+        env["WRITEBACK_PATH"] = writeback_path
         with open(env_path, "w") as f:
             f.write(f"export SIMSRAMELF={env['SIMSRAMELF']}\n")
             f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF']}.dump\n")
@@ -448,7 +449,8 @@ class FuzzerState:
             f.write(f"export REGDUMP_PATH={regdump_path}\n")
             f.write(f"export SRAMDUMP_PATH={sramdump_path}\n")
             f.write(f"export TRACEFILE={tracefile_path}\n")
-
+            f.write(f"export WRITEBACK_PATH={writeback_path}\n")
+            
         if PRINT_ENVIRONMENT:
             print("*** ENVIRONMENT ***")
             print(f"source {env_path}")
