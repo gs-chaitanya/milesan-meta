@@ -12,7 +12,7 @@
 
 from drfuzz_mem.check_isa_sim_worker import check_isa_sims
 from common.spike import calibrate_spikespeed
-from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask
+from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask, profile_get_ct_instrs
 from cascade.toleratebugs import tolerate_bug_for_bug_timing
 from params.runparams import NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_FINAL
 import os
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
     profile_get_asid_mask(design_name)
-
+    # profile_get_ct_instrs(design_name)
     check_isa_sims(design_name,n_cores,n_total_tests,seed_offset,timeout)
     
 else:
