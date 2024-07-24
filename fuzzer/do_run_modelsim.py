@@ -4,10 +4,12 @@ import time
 import subprocess
 import threading
 import multiprocessing as mp
-
+import re
+import shutil
 PRINT_THREAD_STATUS = True
 MAX_N_THREADS = 30
 MUTE = False
+TRACE_EN = False
 callback_lock = threading.Lock()
 n_finished_threads = 0
 
@@ -23,14 +25,20 @@ def test_done_callback(ret):
 def modelsim_worker(new_source):
     if PRINT_THREAD_STATUS:
         print(f"Found new design source at {new_source}")
+    rtl_elf_path = None
+    simsramtaint_path = None
     for root, dirs, files in os.walk(new_source):
         for file in files: 
             if file.startswith("rtl") and file.endswith(".elf"):
                 rtl_elf_path = root+'/'+str(file)
-            elif file.startswith(f"rtl") and file.endswith(".simsramtaint.txt"):
+            elif file.startswith("ctprofiling") and file.endswith(".elf"):
+                rtl_elf_path = root+'/'+str(file)
+            elif file.endswith(".simsramtaint.txt"):
                 simsramtaint_path =  root+'/'+str(file)
+    print(f"Running {rtl_elf_path} with {simsramtaint_path}")
 
-
+    assert rtl_elf_path is not None
+    assert simsramtaint_path is not None
     env = os.environ.copy()
     env["SIMSRAMELF"] = rtl_elf_path
     env["REGDUMP_PATH"] = f"{new_source}/regdump.json"
@@ -40,20 +48,21 @@ def modelsim_worker(new_source):
 
     cmd = [
         "make",
-        "rerun_drfuzz_mem_notrace_modelsim"
+        "rerun_drfuzz_mem_notrace_modelsim" if not TRACE_EN else "rerun_drfuzz_mem_trace_modelsim"
     ]
     subprocess.run(cmd, cwd=design_dir, env=env, capture_output=MUTE)
     if PRINT_THREAD_STATUS:
         print(f"Finished processing design source at {new_source}")
-    return new_source
+    return new_source if not "ctprofiling" in rtl_elf_path else None
 
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
-        raise Exception("Usage: python3 do_run_modelsim.py <design-dir> <design-run-source>")
+        raise Exception("Usage: python3 do_run_modelsim.py <design-name> <design-dir> <design-run-source>")
     
-    design_dir = sys.argv[1]
-    source = sys.argv[2]
+    design_name = sys.argv[1]
+    design_dir = sys.argv[2]
+    source = sys.argv[3]
     assert os.path.exists(source)
     processed_sources = []
     with mp.Pool(processes=MAX_N_THREADS) as pool:
@@ -63,7 +72,7 @@ if __name__ == '__main__':
             all_sources = []
             for rootdir, dirs, files in os.walk(source):
                 for subdir in dirs:
-                    if "cva6" in subdir:
+                    if len(re.findall(f"[0-9]+_{design_name}_[0-9]+_[0-9]+",subdir)):
                         all_sources += [os.path.join(rootdir,subdir)]
             if not len(all_sources):
                 if PRINT_THREAD_STATUS:
