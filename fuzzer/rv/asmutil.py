@@ -155,6 +155,10 @@ def sign_extend(a,n_bit,is_design_64bit):
 def add(a: int, b: int,  is_design_64bit: bool):
     return a + b
 
+def addw(a: int, b: int,  is_design_64bit: bool):
+    res32 = add(a&MAX_32b,b&MAX_32b,is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+
 def add_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
     # Compute the smallest possible result
     a_and_not_a_t0 = a&~a_t0
@@ -173,6 +177,10 @@ def add_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
     transport = a_t0 | b_t0
 
     return polarization | transport
+
+def addw_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
+    res32 =  add_t0(a&MAX_32b,a_t0&MAX_32b,b&MAX_32b,b_t0&MAX_32b,is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
 
 def sub(a: int, b: int,  is_design_64bit: bool):
     return a - b
@@ -204,12 +212,20 @@ def sll(a: int, b: int,  is_design_64bit: bool):
     shamt = b & 0x3F if is_design_64bit else b & 0x1F
     return a<<shamt
 
+def sllw(a: int, b: int,  is_design_64bit: bool):
+    res32 = sll(a&MAX_32b, b&0x1f, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+
 def sll_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     # if b_t0&(0x3f if is_design_64bit else 0x1f):
     if b_t0: # overaproximate
         return MAX_64b if is_design_64bit else MAX_32b
     else:
         return sll(a_t0, b, is_design_64bit)
+
+def sllw_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    res32 = sll_t0_imprecise(a&MAX_32b, a_t0&MAX_32b, b&0x1F, b_t0&0x1F, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
 
 def sll_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     # The first cell of the decomposition shifts a and a_t0 by b_0 (i.e. b&~b_t0)
@@ -228,6 +244,11 @@ def sll_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     y_t0 &= MAX_64b if is_design_64bit else MAX_32b
     # print(f"a: {hex(a)}, a_t0: {hex(a_t0)}, b: {hex(b)}, b_t0: {hex(b_t0)}")
     return y_t0
+
+def sllw_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    res32 = sll_t0_precise(a&MAX_32b, a_t0&MAX_32b, b&0x1f, b_t0&0x1f, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+
 
 def slt(a: int, b: int, is_design_64bit: bool):
     return twos_complement(a,is_design_64bit) < twos_complement(b, is_design_64bit)
@@ -323,12 +344,21 @@ def srl(a: int, b: int,  is_design_64bit: bool):
     shamt = b & 0x3F if is_design_64bit else b & 0x1F
     return a>>shamt
 
+def srlw(a: int, b: int,  is_design_64bit: bool):
+    res32 = srl(a&MAX_32b, b&MAX_32b, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+    
 def srl_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     # if b_t0&(0x3f if is_design_64bit else 0x1f):
     if b_t0: # overaproximate
         return MAX_64b if is_design_64bit else MAX_32b
     else:
         return srl(a_t0,b, is_design_64bit)
+
+def srlw_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    res32 = srl_t0_imprecise(a&MAX_32b, a_t0&MAX_32b, b&MAX_32b, b_t0&MAX_32b, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+
 
 def srl_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     # The first cell of the decomposition shifts the a_t0 by b_0 (i.e. b&~b_t0)
@@ -347,6 +377,9 @@ def srl_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     y_t0 &= MAX_64b if is_design_64bit else MAX_32b
     return y_t0
 
+def srlw_t0_precise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    res32 = srl_t0_precise(a&MAX_32b, a_t0&MAX_32b, b&MAX_32b, b_t0&MAX_32b, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
 
 def sra(a: int, b: int, is_design_64bit: bool):
     n_bits = 64 if is_design_64bit else 32
@@ -356,6 +389,8 @@ def sra(a: int, b: int, is_design_64bit: bool):
     mask &= (MAX_64b if is_design_64bit else MAX_32b)
     return (a >> shamt) | (mask*msb)
 
+def sraw(a: int, b: int, is_design_64bit: bool):
+    return sra(a&MAX_32b, b&MAX_32b, is_design_64bit)&MAX_32b
 
 def sra_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     # if b_t0&(0x3F if is_design_64bit else 0x1F):
@@ -363,6 +398,9 @@ def sra_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
         return MAX_64b if is_design_64bit else MAX_32b
     else:
         return sra(a_t0, b, is_design_64bit)
+
+def sraw_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    return sra_t0(a&MAX_32b, a_t0&MAX_32b, b&MAX_32b, b_t0&MAX_32b, is_design_64bit)&MAX_32b
 
 def or_(a: int, b: int, is_design_64bit: bool):
     return a | b
@@ -407,19 +445,40 @@ def addi(a: int, imm: int, is_design_64bit: bool):
     imm = sign_extend(imm,12,is_design_64bit)
     return a + imm
 
+def addiw(a: int, imm: int, is_design_64bit: bool):
+    res32 = addi(a&MAX_32b, imm, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+
 def addi_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit):
     imm = sign_extend(imm,12,is_design_64bit)
     imm_t0 = sign_extend(imm_t0,12,is_design_64bit)
     return add_t0(a,a_t0,imm,imm_t0,is_design_64bit)
 
+def addiw_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit):
+    res32 = addi_t0(a&MAX_32b, a_t0&MAX_32b, imm, imm_t0, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+
 def slli(a: int, imm: int, is_design_64bit: bool):
     return sll(a,imm,is_design_64bit)
+
+def slliw(a: int, imm: int, is_design_64bit: bool):
+    assert (imm>>5)&1 == 0
+    res32 = sll(a&MAX_32b, imm, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
 
 def slli_t0_precise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     return sll_t0_precise(a,a_t0,imm,imm_t0,is_design_64bit)
 
+def slliw_t0_precise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    res32 = slli_t0_precise(a&MAX_32b, a_t0&MAX_32b, imm, imm_t0,is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+
 def slli_t0_imprecise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     return sll_t0_imprecise(a,a_t0,imm,imm_t0,is_design_64bit)
+
+def slliw_t0_imprecise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    res32 =  slli_t0_imprecise(a&MAX_32b, a_t0&MAX_32b, imm, imm_t0, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
 
 def slti(a: int, imm: int, is_design_64bit: bool):
     return twos_complement(a,is_design_64bit) < sign_extend(imm, 12,is_design_64bit)
@@ -450,17 +509,39 @@ def xori_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
 def srli(a: int, imm: int, is_design_64bit: bool):
     return srl(a,imm, is_design_64bit)
 
+def srliw(a: int, imm: int, is_design_64bit: bool):
+    assert (imm>>5)&1 == 0
+    res32 = srli(a&MAX_32b, imm, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+
 def srli_t0_precise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     return srl_t0_precise(a, a_t0, imm, imm_t0, is_design_64bit)
+
+def srliw_t0_precise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    res32 = srli_t0_precise(a&MAX_32b, a_t0&MAX_32b, imm, imm_t0, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
 
 def srli_t0_imprecise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     return srl_t0_imprecise(a, a_t0, imm, imm_t0, is_design_64bit)
 
+def srliw_t0_imprecise(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    res32 = srli_t0_imprecise(a&MAX_32b, a_t0&MAX_32b, imm, imm_t0, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+
 def srai(a: int, imm: int, is_design_64bit: bool):
     return sra(a, imm, is_design_64bit)
 
+def sraiw(a: int, imm: int, is_design_64bit: bool):
+    assert (imm>>5)&1 == 0
+    res32 = srai(sign_extend(a,32,False), imm, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+
 def srai_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     return sra_t0(a, a_t0, imm, imm_t0, is_design_64bit)
+
+def sraiw_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
+    res32 = srai_t0(sign_extend(a,32,False), sign_extend(a_t0,32,False), imm, imm_t0, is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
 
 def ori(a: int, imm: int, is_design_64bit: bool):
     imm = sign_extend(imm,12,is_design_64bit)
@@ -611,7 +692,8 @@ def ld_t0(a, is_design_64bit: bool):
     return sign_extend(a,64,is_design_64bit)
 
 
-
+def mul(a, b, is_design_64bit: bool):
+    return (a*b)&(MAX_64b if is_design_64bit else MAX_32b)
 
 INSTR_FUNCS = {
     # register instructions
@@ -718,10 +800,22 @@ INSTR_FUNCS = {
     "c.ld": ld,
     "c.lwsp":lw,
     "c.lw": lw,
+    "c.addiw": addiw,
+    "c.addw": addw,
     "c.sd": None,
     "c.sdsp": None,
     "c.sw": None,
-    "c.swsp": None
+    "c.swsp": None,
+    # alu64
+    "addiw": addiw,
+    "slliw": slliw,
+    "srliw": srliw,
+    "sraiw": sraiw,
+    "addw": addw,
+    "sllw": sllw,
+    "srlw": srlw,
+    "sraw": sraw,
+    "mul": mul
 }
 
 INSTR_FUNCS_T0 = {
@@ -803,11 +897,11 @@ INSTR_FUNCS_T0 = {
     "mret": None,
     "sret": None,
     "sfence.vma": None,
-    # compressed
+    # rvc
     "c.add": add_t0,
     "c.mv" : add_t0,
     "c.and": and_t0,
-    "c.or": or_t0,
+    "c.or": conj,
     "c.xor": xor_t0,
     "c.sub": sub_t0,
     "c.lui": lui_t0,
@@ -829,11 +923,23 @@ INSTR_FUNCS_T0 = {
     "c.ld": ld_t0,
     "c.lwsp":lw_t0,
     "c.lw": lw_t0,
+    "c.addiw": addiw_t0,
+    "c.addw": addw_t0,
     "c.sd": None,
     "c.sdsp": None,
     "c.sw": None,
-    "c.swsp": None
-
+    "c.swsp": None,
+    # alu64
+    "addiw": addiw_t0,
+    "slliw": slliw_t0_imprecise if SLL_IMPRECISE else conji if SLL_CONJ else slliw_t0_precise,
+    "srliw": srliw_t0_imprecise if SRL_IMPRECISE else conji if SRL_IMPRECISE else srlw_t0_precise,
+    "sraiw": sraiw_t0,
+    "addw": addw_t0,
+    "sllw": sllw_t0_imprecise if SLL_IMPRECISE else conj if SLL_IMPRECISE else sllw_t0_precise,
+    "srlw": srlw_t0_imprecise if SRL_IMPRECISE else conj if SRL_IMPRECISE else srlw_t0_precise,
+    "sraw": sraw_t0 if not SRA_CONJ else conj,
+    # muldiv
+    "mul": conj
 }
 
 
