@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, RPROD_MASK_REGISTER_ID
-from params.fuzzparams import USE_MMU, USE_COMPRESSED, USE_SPIKE_INTERM_ELF, NONPICKABLE_REGISTERS
+from params.fuzzparams import USE_MMU, USE_COMPRESSED, USE_SPIKE_INTERM_ELF, NONPICKABLE_REGISTERS, FENCE_CF_INSTR
 from params.runparams import DO_ASSERT, PRINT_CHECK_REGS, PRINT_REG_TRACEBACK, PRINT_FILTERED_REG_TRACEBACK, ASSERT_ADDR
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
@@ -251,7 +251,7 @@ class ImmInstruction(CFInstruction):
 ###
 
 # Instructions with rs1, rs2 and rd
-R12DInstructions = ("add", "sub", "sll", "slt", "sltu", "xor", "srl", "sra", "or", "and", "addw", "subw", "sllw", "srlw", "sraw", "mul", "mulh", "mulhsu", "mulhu", "div", "divu", "rem", "remu", "mulw", "divw", "divuw", "remw", "remuw","c.and","c.or","c.xor","c.add","c.sub","c.mv")
+R12DInstructions = ("add", "sub", "sll", "slt", "sltu", "xor", "srl", "sra", "or", "and", "addw", "subw", "sllw", "srlw", "sraw", "mul", "mulh", "mulhsu", "mulhu", "div", "divu", "rem", "remu", "mulw", "divw", "divuw", "remw", "remuw","c.and","c.or","c.xor","c.add","c.sub","c.mv","c.addw","c.subw")
 class R12DInstruction(CFInstruction):
     authorized_instr_strs = R12DInstructions
 
@@ -372,13 +372,16 @@ class ImmRdInstruction(ImmInstruction):
             assert rd >= 0
             assert is_rd_nonpickable_ok and rd in NONPICKABLE_REGISTERS or rd < MAX_NUM_PICKABLE_REGS, f"{rd} not in NONPICKABLE_REGISTERS " if is_rd_nonpickable_ok else f"{rd} > MAX_NUM_PICKABLE_REGS ({MAX_NUM_PICKABLE_REGS})"
         self.rd =  rd
-
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
+
         # rv32i
         if self.instr_str == "lui":
+            if self.paddr == 0x80036560:
+                print(f"Flipping immediate")
+                return rv32i_lui(self.rd, self.imm^(1<<9))
             return rv32i_lui(self.rd, self.imm)
         elif self.instr_str == "auipc":
             return rv32i_auipc(self.rd, self.imm)
@@ -395,8 +398,8 @@ class ImmRdInstruction(ImmInstruction):
 
 
 # Instructions with rs1, imm and rd
-RegImmInstructions = ("addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai", "addiw", "slliw", "srliw", "sraiw", "c.addi","c.li","c.addi16sp","c.addi4spn","c.slli","c.srli","c.srai","c.andi")
-RegImmShiftInstructions = ("slli", "srli", "srai", "slliw", "srliw", "sraiw")
+RegImmInstructions = ("addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai", "addiw", "slliw", "srliw", "sraiw", "c.addi","c.li","c.addi16sp","c.addi4spn","c.slli","c.srli","c.srai","c.andi", "c.addiw")
+RegImmShiftInstructions = ("slli", "srli", "srai", "slliw", "srliw", "sraiw", "c.slli","c.srli","c.srai")
 class RegImmInstruction(ImmInstruction):
     authorized_instr_strs = RegImmInstructions
 
@@ -490,6 +493,7 @@ class BranchInstruction(ImmInstruction):
             assert rs1 < MAX_NUM_PICKABLE_REGS
             assert rs2 >= 0
             assert rs2 < MAX_NUM_PICKABLE_REGS
+
         self.rs1 = rs1
         self.rs2 = rs2
         self.plan_taken = plan_taken
@@ -612,9 +616,16 @@ class JALRInstruction(ImmInstruction):
         self.producer_id = producer_id
         self.to_new_layout = to_new_layout
         self.va_layout_after_op = fuzzerstate.target_layout
-
+            
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {ABI_INAMES[self.rs1]}, {hex(self.imm)}"
+
+
+    def reset_addr(self):
+        super().reset_addr()
+        if DO_ASSERT:
+            assert not FENCE_CF_INSTR or len(self.fuzzerstate.instr_objs_seq[-1]) == 0 or "fence" in self.fuzzerstate.instr_objs_seq[-1][-1].instr_str, f"{self.get_str()} not fenced."
+
 
     def gen_bytecode_int(self, is_spike_resolution: bool):
         # rv32i
