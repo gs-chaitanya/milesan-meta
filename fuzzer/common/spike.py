@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES
 from functools import cache
+from params.fuzzparams import USE_COMPRESSED
 
 SPIKE_STARTADDR = 0x80000000
 SPIKE_BOOTVAL_A1 = 0x00001020
@@ -217,7 +218,7 @@ def run_trace_all_pcs(identifier_str: str, elfpath: str, rvflags: str, numinstrs
     addr_str_splitted = spike_out.split(b"\n")
     addr_str_splitted = list(filter(lambda s: b'exception' not in s and b'tval 0x' not in s, addr_str_splitted))
     ret = []
-    for instr_id in range(numinstrs):
+    for instr_id in range(numinstrs+fuzzerstate_for_debug.n_mising_r_cmds):
         # If there is no exception.
         # print(addr_str_splitted[instr_id+1])
         if addr_str_splitted[instr_id+1][10:12] == b"0x":
