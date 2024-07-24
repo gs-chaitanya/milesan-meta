@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, DEBUG_RVC
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_IN_PRIVS, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, TAINT_NONTAKEN_BRANCH_IMM
-from params.fuzzparams import reset_reg_settings
+from params.fuzzparams import reset_reg_settings, FENCE_CF_INSTR
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
 
@@ -20,6 +20,7 @@ from cascade.randomize.pickreg import IntRegPickState, FloatRegPickState
 from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
 from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0, RDInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0
+from cascade.cfinstructionclasses import JALRInstruction, BranchInstruction
 from cascade.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen
 from rv.csrids import CSR_IDS, CSR_ABI_NAMES
 from cascade.registers import ABI_INAMES
@@ -358,11 +359,14 @@ class FuzzerState:
         self.csrfile.regs[CSR_IDS.MINSTRET].set_val(curr_val+1)
 
     def append_and_execute_instr(self, instr, insert_regdump: bool = INSERT_REGDUMPS):
+        n_instr = 1            
         instr.reset_addr()
         if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
             instr.print(is_spike_resolution=True)
         if DEBUG_RVC and instr.iscompressed:
             print(f"RVC: {instr.get_str()}")
+        if instr.iscompressed:
+            self.n_mising_r_cmds += 1
         self.instr_objs_seq[-1].append(instr)
         instr.execute(is_spike_resolution = True)
         if insert_regdump: # TODO for vaddr, we need to bring the REGDUMP_REGISTER to the appropriate state for each layout.
@@ -373,6 +377,7 @@ class FuzzerState:
                     store_instr.print(is_spike_resolution=True)
                 store_instr.execute(is_spike_resolution=True)
                 self.instr_objs_seq[-1].append(store_instr)
+                n_instr += 1
                 if INSERT_FENCE:
                     fence_instr = SpecialInstruction_t0(self,"fence")
                     fence_instr.reset_addr()
@@ -380,9 +385,9 @@ class FuzzerState:
                         fence_instr.print(is_spike_resolution=True)
                     fence_instr.execute(is_spike_resolution=True)
                     self.instr_objs_seq[-1].append(fence_instr)
-                    return 12
-                return 8
-        return 4
+                    n_instr += 1
+
+        return 4*n_instr
 
     def write_imm_t0_to_mem(self):
         for bb_instrs in self.instr_objs_seq:
