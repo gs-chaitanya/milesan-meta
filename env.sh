@@ -49,6 +49,7 @@ export CASCADE_JOBS=250 # Feel free to change this
 # Where to store a lot of data?
 export CASCADE_DATADIR=$CASCADE_META_ROOT/experimental-data # Feel free to change this
 
+export CASCADE_META_COMMON=$CASCADE_DESIGN_PROCESSING_ROOT/common
 # Where the common HDL processing Python scripts are located.
 export CASCADE_PYTHON_COMMON=$CASCADE_DESIGN_PROCESSING_ROOT/common/python_scripts
 
