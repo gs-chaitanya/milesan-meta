@@ -5,7 +5,7 @@
 import json
 import os
 from functools import cache
-
+from params.fuzzparams import USE_COMPRESSED
 DESIGN_REPOS_JSON_NAME = "design_repos.json"
 
 def is_design_name_known(design_name: str):
@@ -67,7 +67,9 @@ def get_design_march_ccflags_nocompressed(design_name) -> int:
 # @param design_name: must be one of the keys of the design_repos.json dict.
 # @return for example `rv64gc`.
 def get_design_march_flags(design_name) -> str:
-    return get_design_march_ccflags(design_name).split('-march=')[1].split(' ')[0].lower()
+    flags = get_design_march_ccflags(design_name).split('-march=')[1].split(' ')[0].lower()
+    assert not (USE_COMPRESSED and 'c' not in flags)
+    return flags
 
 def get_design_march_flags_nocompressed(design_name) -> str:
     return get_design_march_ccflags(design_name).split('-march=')[1].split(' ')[0].lower().replace('c', '')
