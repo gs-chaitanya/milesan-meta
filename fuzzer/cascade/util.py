@@ -118,25 +118,25 @@ INSTRUCTIONS_BY_ISA_CLASS = {
         "and"
     ],
     ISAInstrClass.ALU64: [
-        "addiw",
+        # "addiw",
         "slliw",
         "srliw",
-        "sraiw",
+        # "sraiw",
         "addw",
-        "subw",
+        # "subw",
         "sllw",
-        "srlw",
-        "sraw"
+        # "srlw",
+        # "sraw"
     ],
     ISAInstrClass.MULDIV: [
         "mul",
-        "mulh",
-        "mulhsu",
-        "mulhu",
-        "div",
-        "divu",
-        "rem",
-        "remu"
+        # "mulh",
+        # "mulhsu",
+        # "mulhu",
+        # "div",
+        # "divu",
+        # "rem",
+        # "remu"
     ],
     ISAInstrClass.MULDIV64: [
         "mulw",
