@@ -16,7 +16,7 @@ PATH_TO_FIGURES = os.environ['CASCADE_PATH_TO_FIGURES']
 DO_ASSERT = True
 DO_EXPENSIVE_ASSERT = False # More expensive assertions
 
-NO_REMOVE_TMPFILES = False # Used for debugging purposes
+NO_REMOVE_TMPFILES = True # Used for debugging purposes
 # TODO: below currently need to be enabled for reduction with pillar.
 NO_REMOVE_TMPDIRS = True # When disabled, removes the /cascade-data/[design-name]/[ID] directories even when leakage (or bug) detected. Enable to save storage when fuzzing multi-threaded.
 
@@ -51,6 +51,7 @@ assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not suppo
 assert not (TAINT_NONTAKEN_BRANCH_IMM and INSERT_REGDUMPS), "Enabling TAINT_NONTAKEN_BRANCH_IMM might render INSERT_REGDUMPS useless as pc might get tainted if non-taken branch is predicted taken."
 CHECK_PC_SPIKE_AGAIN = False
 assert not (INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN)
+assert (INSERT_REGDUMPS or CHECK_PC_SPIKE_AGAIN), f"Enable CHECK_PC_SPIKE_AGAIN when INSERT_REGDUMPS is off."
 assert not (INSERT_FENCE and not INSERT_REGDUMPS), f"INSERT_REGDUMPS must be enabled."
 
 PRINT_REGISTER_VALIDATION = False

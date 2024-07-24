@@ -11,6 +11,7 @@ ABI_INAMES += [f"s{i}" for i in range(2,12)] + [f"t{i}" for i in range(3,7)]
 MAX_32b = 0xFFFFFFFF
 MAX_64b = 0xFFFFFFFFFFFFFFFF
 MAX_20b = 0xFFFFF
+MAX_12b = 0xFFF
 
 class __Register(ABC):
     def __init__(self,id: int = None, is_design_64bit: bool = False, val: int = 0, val_t0: int = 0, pickable: bool = False):
