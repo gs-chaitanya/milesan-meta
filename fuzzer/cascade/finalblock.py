@@ -5,7 +5,7 @@
 # This module defines the final block.
 
 from params.runparams import DO_ASSERT, DEBUG_PRINT
-from params.fuzzparams import USE_MMU
+from params.fuzzparams import USE_MMU, DUMP_MCYCLES
 from rv.csrids import CSR_IDS
 from common.designcfgs import is_design_32bit, get_design_stop_sig_addr, get_design_reg_dump_addr, design_has_float_support, get_design_fpreg_dump_addr
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, RPROD_MASK_REGISTER_ID
@@ -120,11 +120,13 @@ def finalblock(fuzzerstate, design_name: str):
 
 
     # Get the mcycle value
-    ret += [
-        CSRImmInstruction(fuzzerstate,"csrrci", 1, 0, CSR_IDS.MCYCLE),
-        IntStoreInstruction(fuzzerstate,"sd" if fuzzerstate.is_design_64bit else "sw",  MPP_BOTH_ENDIS_REGISTER_ID, 1, 0, -1),
-        SpecialInstruction(fuzzerstate,"fence")
-    ]
+    if DUMP_MCYCLES:
+        assert fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE
+        ret += [
+            CSRImmInstruction(fuzzerstate,"csrrci", 1, 0, CSR_IDS.MCYCLE),
+            IntStoreInstruction(fuzzerstate,"sd" if fuzzerstate.is_design_64bit else "sw",  MPP_BOTH_ENDIS_REGISTER_ID, 1, 0, -1),
+            SpecialInstruction(fuzzerstate,"fence")
+        ]
 
     # Store the floating values as well, if FPU is supported and if there is no risk of it being deactivated
     if design_has_fpu and not fuzzerstate.is_fpu_activated:

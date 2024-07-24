@@ -27,3 +27,5 @@ SRAI_CONJ = False
 ORI_CONJ = True
 ANDI_CONJ = False
 
+USE_TAG = True # Instead of propagating by some rule, mark as either fully tainted or not tainted at all
+

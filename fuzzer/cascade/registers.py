@@ -1,7 +1,7 @@
 from abc import ABC
+import json
 
 from cascade.util import IntRegIndivState
-import enum
 from rv.csrids import CSR_IDS, CSR_TYPES, CSRTypeEnum
 from rv.csrids import SSTATUS_MASK, MSTATUS_MASK, MSTATUS_START_VAL, SSTATUS_START_VAL
 from params.runparams import PRINT_CHECK_REGS_T0, CHECK_REGS_T0_PRECISE, PRINT_CHECK_REGS_T0_MISMATCH_OK, DO_ASSERT

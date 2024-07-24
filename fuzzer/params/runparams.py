@@ -32,6 +32,8 @@ PRINT_CHECK_REGS_T0_MISMATCH_OK = False
 PRINT_CHECK_REGS = False
 PRINT_WRITEBACK_T0 = False # Print taint writeback of instructions.
 PRINT_WRITEBACK = False
+DUMP_WRITEBACK = False
+DUMP_WRITEBACK_T0 = False
 
 PRINT_INSTRUCTION_EXECUTION_IN_SITU = False # Prints execution during program generation.
 PRINT_INSTRUCTION_EXECUTION_FINAL = False # Prints execution during register value checks.
@@ -49,8 +51,8 @@ INSERT_FENCE = False # The stores should become architectually visible in order,
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled." # We would have to translate the regdump address for each context switch, otherwise not difficult to implement.
 assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not supported when spectre gadgets enabled."
 assert not (TAINT_NONTAKEN_BRANCH_IMM and INSERT_REGDUMPS), "Enabling TAINT_NONTAKEN_BRANCH_IMM might render INSERT_REGDUMPS useless as pc might get tainted if non-taken branch is predicted taken."
-CHECK_PC_SPIKE_AGAIN = True
-assert not (INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN)
+CHECK_PC_SPIKE_AGAIN = False
+assert not (INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN), f"Cannot check pc trace from spike when INSERT_REGDUMPS is enabled."
 assert not (INSERT_FENCE and not INSERT_REGDUMPS), f"INSERT_REGDUMPS must be enabled."
 
 PRINT_REGISTER_VALIDATION = False

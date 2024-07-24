@@ -5,7 +5,7 @@ import json
 
 from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, DO_DOUBLECHECK_SIM, CHECK_MEM
 from params.fuzzparams import IGNORE_RTL_TIMEOUT, IGNORE_SPIKE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
-from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, USE_VANILLA
+from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, DUMP_MCYCLES
 from cascade.toleratebugs import  is_tolerate_cva6_mhpmcounter,  is_tolerate_cva6_mhpmevent31
 from cascade.toleratebugs import is_tolerate_boom_minstret
 from cascade.toleratebugs import is_tolerate_rocket_minstret
@@ -190,12 +190,13 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     raise MismatchError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}.\n\t Taint allowed in {[p.name for p in fuzzerstate.taint_in_priv]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
 
 
-        assert len(final_regvals_rtl) == MAX_NUM_PICKABLE_REGS, f"Did not dump MCYCLES CSR." # We dump the MCYCLES CSR after all integer registers
-        mcycle = int(final_regvals_rtl[MAX_NUM_PICKABLE_REGS-1]["value"],16)
-        mcycle_t0 = int(final_regvals_rtl[MAX_NUM_PICKABLE_REGS-1]["value_t0"],16)
-        
-        if TAINT_EN and mcycle_t0:
-            raise MismatchError(f"(RTL) MCYCLE CSR got tainted: {hex(mcycle)}, {hex(mcycle_t0)}.\n\t Taint allowed in {[p.name for p in fuzzerstate.taint_in_priv]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
+        if DUMP_MCYCLES:
+            assert len(final_regvals_rtl) == MAX_NUM_PICKABLE_REGS, f"Did not dump MCYCLES CSR." # We dump the MCYCLES CSR after all integer registers
+            mcycle = int(final_regvals_rtl[MAX_NUM_PICKABLE_REGS-1]["value"],16)
+            mcycle_t0 = int(final_regvals_rtl[MAX_NUM_PICKABLE_REGS-1]["value_t0"],16)
+            
+            if TAINT_EN and mcycle_t0:
+                raise MismatchError(f"(RTL) MCYCLE CSR got tainted: {hex(mcycle)}, {hex(mcycle_t0)}.\n\t Taint allowed in {[p.name for p in fuzzerstate.taint_in_priv]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
 
         if CHECK_MEM:
             if PRINT_MEMORY_VALIDATION:

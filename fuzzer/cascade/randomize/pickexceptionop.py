@@ -29,7 +29,7 @@ EXCEPTION_OP_TYPE_INITIAL_BOOSTERS = {
     ExceptionCauseVal.ID_BREAKPOINT:                   0.1,
     ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:         1,
     ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:            0, # 2,
-    ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:    1,
+    ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:    0,
     ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:       0, # 2,
     ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE: 0.1,
     ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE: 0.1,

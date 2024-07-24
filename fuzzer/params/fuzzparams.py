@@ -273,10 +273,16 @@ if "TAINT_NONTAKEN_BRANCHES" in os.environ:
     print(f"Setting TAINT_NONTAKEN_BRANCHES = {TAINT_NONTAKEN_BRANCH_IMM} from env vars.")
 
 # We can disable non-taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges.
-ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = False
+ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = True
 if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS" in os.environ:
     ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS"]) == 1
     print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS} from env vars.")
+
+ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS = False
+if "ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS" in os.environ:
+    ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS"]) == 1
+    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS} from env vars.")
+
 
 # We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
 TAINT_IN_PRIVS = None
@@ -297,5 +303,4 @@ IGNORE_SPIKE_MISMATCH = False
 # Use the uninstrumented design for fuzzing/reducing. This helps checking if theres a translation bug in yosys.
 USE_VANILLA = False
 
-
-
+DUMP_MCYCLES = False
