@@ -272,23 +272,32 @@ if "TAINT_NONTAKEN_BRANCHES" in os.environ:
     TAINT_NONTAKEN_BRANCH_IMM = int(os.environ["TAINT_NONTAKEN_BRANCHES"]) == 1
     print(f"Setting TAINT_NONTAKEN_BRANCHES = {TAINT_NONTAKEN_BRANCH_IMM} from env vars.")
 
-# We can disable non-taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges.
+# We can disable non-taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges. Useful if we look for leakage through e.g. shared BPU and we probe it in one of the NO_TAINT privs 
 ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = True
 if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS" in os.environ:
     ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS"]) == 1
     print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS} from env vars.")
 
-ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS = False
+# We can disable non-taken branches in the privileges that have no access to taint to avoid tainting the pc in those privileges. Useful if we search for e.g. BNE in taint privs that leaks
+ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS = True
 if "ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS" in os.environ:
     ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS"]) == 1
     print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS} from env vars.")
 
+# We can disable non-taken branches in M mode s.t. we don't get any prediction based on unmapped data where M is a confused deputy.
+ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE = False
+if "ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE" in os.environ:
+    ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE"]) == 1
+    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE = {ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE} from env vars.")
 
+ALLOW_JALR_IN_MACHINE_MODE = False
+ALLOW_BRANCH_IN_MACHINE_MODE = False
 # We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
 TAINT_IN_PRIVS = None
 if "TAINT_IN_PRIVS" in os.environ:
     TAINT_IN_PRIVS = os.environ["TAINT_IN_PRIVS"]
     print(f"Setting TAINT_IN_PRIVS = {TAINT_IN_PRIVS} from env vars.")
+
 
 # Abort fuzzing run if the computed program does not execute in taint sink privilege.
 ASSERT_EXEC_IN_TAINT_SINK_PRIV = True

@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT
 from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_fence, is_forbid_vexriscv_csrs, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_picorv32_writehpm, is_tolerate_picorv32_readnonimplcsr
 from cascade.util import ISAInstrClass, IntRegIndivState, MmuState, BASIC_BLOCK_MIN_SPACE
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, USE_MMU
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, USE_MMU, ALLOW_JALR_IN_MACHINE_MODE, ALLOW_BRANCH_IN_MACHINE_MODE
 from cascade.privilegestate import PrivilegeStateEnum, is_ready_to_descend_privileges
 from cascade.util import IntRegIndivState
 import random
@@ -268,6 +268,13 @@ def _filter_taint(fuzzerstate, filtered_weights: list):
 
     return filtered_weights
 
+def _filter_cf_instr(fuzzerstate, filtered_weights: list):
+    if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
+        if not ALLOW_BRANCH_IN_MACHINE_MODE:
+            filtered_weights[ISAInstrClass.BRANCH] = 0
+        if not ALLOW_JALR_IN_MACHINE_MODE:
+            filtered_weights[ISAInstrClass.JALR] = 0
+    return filtered_weights
 ###
 # Exposed function
 ###
@@ -275,11 +282,12 @@ def _filter_taint(fuzzerstate, filtered_weights: list):
 # Do NOT @cache this function, as it is a random function.
 def gen_next_isainstrclass(fuzzerstate, curr_alloc_cursor, no_mmu_op: bool = False) -> ISAInstrClass:
     filtered_weights = _get_isainstrclass_filtered_weights(fuzzerstate, curr_alloc_cursor)
+    filtered_weights = _filter_cf_instr(fuzzerstate, filtered_weights)
     filtered_weights = _filter_regfsm_weight(fuzzerstate, filtered_weights)
     filtered_weights = _filter_csr_weight(fuzzerstate, filtered_weights)
     filtered_weights = _filter_sensitive_instr_weights(fuzzerstate, filtered_weights)
     filtered_weights = _filter_taint(fuzzerstate, filtered_weights)
-
+    
     if no_mmu_op:
         filtered_weights[ISAInstrClass.MMU] = 0
 

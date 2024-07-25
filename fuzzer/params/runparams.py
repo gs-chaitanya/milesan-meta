@@ -19,6 +19,9 @@ DO_EXPENSIVE_ASSERT = False # More expensive assertions
 NO_REMOVE_TMPFILES = False # Used for debugging purposes
 # TODO: below currently need to be enabled for reduction with pillar.
 NO_REMOVE_TMPDIRS = False # When disabled, removes the /cascade-data/[design-name]/[ID] directories even when leakage (or bug) detected. Enable to save storage when fuzzing multi-threaded.
+if "NO_REMOVE_TMPDIRS" in os.environ:
+    NO_REMOVE_TMPDIRS = int(os.environ["NO_REMOVE_TMPDIRS"]) == 1
+    print(f"Setting NO_REMOVE_TMPDIRS = {NO_REMOVE_TMPDIRS} from env vars.")
 
 RUN_TIMEOUT_SECONDS = 60*3 # A program is not supposed to run longer than this in RTL simulation.
 
@@ -76,6 +79,10 @@ DO_DOUBLECHECK_SIM = True
 
 # Trace settings
 TRACE_EN = False
+if "TRACE_EN" in os.environ:
+    TRACE_EN = int(os.environ["TRACE_EN"]) == 1
+    print(f"Setting TRACE_EN = {TRACE_EN} from env vars.")
+
 TRACE_FST = False
 
 # Use this as global parameter to set start time of fuzzing.
