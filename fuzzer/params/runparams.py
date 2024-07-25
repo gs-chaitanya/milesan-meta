@@ -1,90 +1,124 @@
 import os
 from params.fuzzparams import USE_MMU, INSERT_SPECTRE_GADGETS, TAINT_NONTAKEN_BRANCH_IMM
-# tmpdir
+
+# Ensure Cascade environment is sourced
 if "CASCADE_ENV_SOURCED" not in os.environ:
     raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
+# Paths
 PATH_TO_TMP = os.path.join(os.environ['CASCADE_DATADIR'])
 os.makedirs(PATH_TO_TMP, exist_ok=True)
-
 PATH_TO_MNT = os.path.join(os.environ['LOCAL_MNT'])
-
 PATH_TO_COV = os.path.join(os.environ['COVDUMP_DIR'])
-
 PATH_TO_FIGURES = os.environ['CASCADE_PATH_TO_FIGURES']
 
-DO_ASSERT = True
-DO_EXPENSIVE_ASSERT = False # More expensive assertions
+# Helper functions for environment variables with default values
+def get_env_bool(var_name, default):
+    value = bool(int(os.getenv(var_name, default)))
+    if var_name in os.environ:
+        print(f"Setting {var_name} = {value} from env vars.")
+    return value
 
-NO_REMOVE_TMPFILES = False # Used for debugging purposes
-# TODO: below currently need to be enabled for reduction with pillar.
-NO_REMOVE_TMPDIRS = False # When disabled, removes the /cascade-data/[design-name]/[ID] directories even when leakage (or bug) detected. Enable to save storage when fuzzing multi-threaded.
-if "NO_REMOVE_TMPDIRS" in os.environ:
-    NO_REMOVE_TMPDIRS = int(os.environ["NO_REMOVE_TMPDIRS"]) == 1
-    print(f"Setting NO_REMOVE_TMPDIRS = {NO_REMOVE_TMPDIRS} from env vars.")
+def get_env_int(var_name, default):
+    value = int(os.getenv(var_name, default))
+    if var_name in os.environ:
+        print(f"Setting {var_name} = {value} from env vars.")
+    return value
 
-RUN_TIMEOUT_SECONDS = 60*3 # A program is not supposed to run longer than this in RTL simulation.
+# Default values
+DO_ASSERT_DEFAULT = True
+DO_EXPENSIVE_ASSERT_DEFAULT = False
+NO_REMOVE_TMPFILES_DEFAULT = False
+NO_REMOVE_TMPDIRS_DEFAULT = False
+RUN_TIMEOUT_SECONDS_DEFAULT = 60 * 3
+PRINT_FSM_TRANSITIONS_DEFAULT = False
+CHECK_REGS_T0_PRECISE_DEFAULT = False
+CHECK_MEM_T0_PRECISE_DEFAULT = False
+CHECK_MEM_DEFAULT = False
+PRINT_CHECK_REGS_T0_DEFAULT = False
+PRINT_CHECK_REGS_T0_MISMATCH_OK_DEFAULT = False
+PRINT_CHECK_REGS_DEFAULT = False
+PRINT_WRITEBACK_T0_DEFAULT = False
+PRINT_WRITEBACK_DEFAULT = False
+DUMP_WRITEBACK_DEFAULT = False
+DUMP_WRITEBACK_T0_DEFAULT = False
+PRINT_INSTRUCTION_EXECUTION_IN_SITU_DEFAULT = False
+PRINT_INSTRUCTION_EXECUTION_FINAL_DEFAULT = False
+PRINT_INSTRUCTION_EXECUTION_REDUCE_DEFAULT = False
+PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS_DEFAULT = False
+PRINT_COLOR_TAINT_DEFAULT = True
+PRINT_REG_TRACEBACK_DEFAULT = False
+PRINT_FILTERED_REG_TRACEBACK_DEFAULT = False
+PRINT_ENVIRONMENT_DEFAULT = False
+INSERT_REGDUMPS_DEFAULT = False
+INSERT_FENCE_DEFAULT = False
+CHECK_PC_SPIKE_AGAIN_DEFAULT = False
+PRINT_REGISTER_VALIDATION_DEFAULT = False
+PRINT_MEMORY_VALIDATION_DEFAULT = False
+PRINT_AND_COMPARE_DEFAULT = False
+PRINT_SKIPPED_CHECKS_DEFAULT = False
+PRINT_MEM_LOADS_DEFAULT = False
+PRINT_MEM_LOADS_T0_DEFAULT = False
+PRINT_MEM_STORES_DEFAULT = False
+PRINT_MEM_STORES_T0_DEFAULT = False
+GET_DATA_DEFAULT = False
+DEBUG_PRINT_DEFAULT = False
+ASSERT_ADDR_DEFAULT = True
+PRINT_PRIV_STATS_DEFAULT = False
+DO_DOUBLECHECK_SIM_DEFAULT = True
+TRACE_EN_DEFAULT = False
+TRACE_FST_DEFAULT = False
 
-PRINT_FSM_TRANSITIONS = False # Print transitions between states for register FSM instructions.
+# Actual values set from environment variables or defaults
+DO_ASSERT = get_env_bool('DO_ASSERT', str(int(DO_ASSERT_DEFAULT)))
+DO_EXPENSIVE_ASSERT = get_env_bool('DO_EXPENSIVE_ASSERT', str(int(DO_EXPENSIVE_ASSERT_DEFAULT)))
+NO_REMOVE_TMPFILES = get_env_bool('NO_REMOVE_TMPFILES', str(int(NO_REMOVE_TMPFILES_DEFAULT)))
+NO_REMOVE_TMPDIRS = get_env_bool('NO_REMOVE_TMPDIRS', str(int(NO_REMOVE_TMPDIRS_DEFAULT)))
+RUN_TIMEOUT_SECONDS = get_env_int('RUN_TIMEOUT_SECONDS', RUN_TIMEOUT_SECONDS_DEFAULT)
+PRINT_FSM_TRANSITIONS = get_env_bool('PRINT_FSM_TRANSITIONS', str(int(PRINT_FSM_TRANSITIONS_DEFAULT)))
+CHECK_REGS_T0_PRECISE = get_env_bool('CHECK_REGS_T0_PRECISE', str(int(CHECK_REGS_T0_PRECISE_DEFAULT)))
+CHECK_MEM_T0_PRECISE = get_env_bool('CHECK_MEM_T0_PRECISE', str(int(CHECK_MEM_T0_PRECISE_DEFAULT)))
+CHECK_MEM = get_env_bool('CHECK_MEM', str(int(CHECK_MEM_DEFAULT)))
+PRINT_CHECK_REGS_T0 = get_env_bool('PRINT_CHECK_REGS_T0', str(int(PRINT_CHECK_REGS_T0_DEFAULT)))
+PRINT_CHECK_REGS_T0_MISMATCH_OK = get_env_bool('PRINT_CHECK_REGS_T0_MISMATCH_OK', str(int(PRINT_CHECK_REGS_T0_MISMATCH_OK_DEFAULT)))
+PRINT_CHECK_REGS = get_env_bool('PRINT_CHECK_REGS', str(int(PRINT_CHECK_REGS_DEFAULT)))
+PRINT_WRITEBACK_T0 = get_env_bool('PRINT_WRITEBACK_T0', str(int(PRINT_WRITEBACK_T0_DEFAULT)))
+PRINT_WRITEBACK = get_env_bool('PRINT_WRITEBACK', str(int(PRINT_WRITEBACK_DEFAULT)))
+DUMP_WRITEBACK = get_env_bool('DUMP_WRITEBACK', str(int(DUMP_WRITEBACK_DEFAULT)))
+DUMP_WRITEBACK_T0 = get_env_bool('DUMP_WRITEBACK_T0', str(int(DUMP_WRITEBACK_T0_DEFAULT)))
+PRINT_INSTRUCTION_EXECUTION_IN_SITU = get_env_bool('PRINT_INSTRUCTION_EXECUTION_IN_SITU', str(int(PRINT_INSTRUCTION_EXECUTION_IN_SITU_DEFAULT)))
+PRINT_INSTRUCTION_EXECUTION_FINAL = get_env_bool('PRINT_INSTRUCTION_EXECUTION_FINAL', str(int(PRINT_INSTRUCTION_EXECUTION_FINAL_DEFAULT)))
+PRINT_INSTRUCTION_EXECUTION_REDUCE = get_env_bool('PRINT_INSTRUCTION_EXECUTION_REDUCE', str(int(PRINT_INSTRUCTION_EXECUTION_REDUCE_DEFAULT)))
+PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS = get_env_bool('PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS', str(int(PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS_DEFAULT)))
+PRINT_COLOR_TAINT = get_env_bool('PRINT_COLOR_TAINT', str(int(PRINT_COLOR_TAINT_DEFAULT)))
+PRINT_REG_TRACEBACK = get_env_bool('PRINT_REG_TRACEBACK', str(int(PRINT_REG_TRACEBACK_DEFAULT)))
+PRINT_FILTERED_REG_TRACEBACK = get_env_bool('PRINT_FILTERED_REG_TRACEBACK', str(int(PRINT_FILTERED_REG_TRACEBACK_DEFAULT)))
+PRINT_ENVIRONMENT = get_env_bool('PRINT_ENVIRONMENT', str(int(PRINT_ENVIRONMENT_DEFAULT)))
+INSERT_REGDUMPS = get_env_bool('INSERT_REGDUMPS', str(int(INSERT_REGDUMPS_DEFAULT)))
+INSERT_FENCE = get_env_bool('INSERT_FENCE', str(int(INSERT_FENCE_DEFAULT)))
+CHECK_PC_SPIKE_AGAIN = get_env_bool('CHECK_PC_SPIKE_AGAIN', str(int(CHECK_PC_SPIKE_AGAIN_DEFAULT)))
+PRINT_REGISTER_VALIDATION = get_env_bool('PRINT_REGISTER_VALIDATION', str(int(PRINT_REGISTER_VALIDATION_DEFAULT)))
+PRINT_MEMORY_VALIDATION = get_env_bool('PRINT_MEMORY_VALIDATION', str(int(PRINT_MEMORY_VALIDATION_DEFAULT)))
+PRINT_AND_COMPARE = get_env_bool('PRINT_AND_COMPARE', str(int(PRINT_AND_COMPARE_DEFAULT)))
+PRINT_SKIPPED_CHECKS = get_env_bool('PRINT_SKIPPED_CHECKS', str(int(PRINT_SKIPPED_CHECKS_DEFAULT)))
+PRINT_MEM_LOADS = get_env_bool('PRINT_MEM_LOADS', str(int(PRINT_MEM_LOADS_DEFAULT)))
+PRINT_MEM_LOADS_T0 = get_env_bool('PRINT_MEM_LOADS_T0', str(int(PRINT_MEM_LOADS_T0_DEFAULT)))
+PRINT_MEM_STORES = get_env_bool('PRINT_MEM_STORES', str(int(PRINT_MEM_STORES_DEFAULT)))
+PRINT_MEM_STORES_T0 = get_env_bool('PRINT_MEM_STORES_T0', str(int(PRINT_MEM_STORES_T0_DEFAULT)))
+GET_DATA = get_env_bool('GET_DATA', str(int(GET_DATA_DEFAULT)))
+DEBUG_PRINT = get_env_bool('DEBUG_PRINT', str(int(DEBUG_PRINT_DEFAULT)))
+ASSERT_ADDR = get_env_bool('ASSERT_ADDR', str(int(ASSERT_ADDR_DEFAULT)))
+PRINT_PRIV_STATS = get_env_bool('PRINT_PRIV_STATS', str(int(PRINT_PRIV_STATS_DEFAULT)))
+DO_DOUBLECHECK_SIM = get_env_bool('DO_DOUBLECHECK_SIM', str(int(DO_DOUBLECHECK_SIM_DEFAULT)))
+TRACE_EN = get_env_bool('TRACE_EN', str(int(TRACE_EN_DEFAULT)))
+TRACE_FST = get_env_bool('TRACE_FST', str(int(TRACE_FST_DEFAULT)))
 
-CHECK_REGS_T0_PRECISE = False
-CHECK_MEM_T0_PRECISE = False
-CHECK_MEM = False
-PRINT_CHECK_REGS_T0 = False # Print taint propagation checks.
-PRINT_CHECK_REGS_T0_MISMATCH_OK = False
-PRINT_CHECK_REGS = False
-PRINT_WRITEBACK_T0 = False # Print taint writeback of instructions.
-PRINT_WRITEBACK = False
-DUMP_WRITEBACK = False
-DUMP_WRITEBACK_T0 = False
-
-PRINT_INSTRUCTION_EXECUTION_IN_SITU = False # Prints execution during program generation.
-PRINT_INSTRUCTION_EXECUTION_FINAL = False # Prints execution during register value checks.
-PRINT_INSTRUCTION_EXECUTION_REDUCE = False # Prints execution during program reduction.
-PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS = False
-PRINT_COLOR_TAINT = True
-
-PRINT_REG_TRACEBACK = False
-PRINT_FILTERED_REG_TRACEBACK = False
-
-PRINT_ENVIRONMENT = False
-
-INSERT_REGDUMPS = False # Speculative bugs will likely diappear when enabled. Used to test correctness of dataflow computation.
-INSERT_FENCE = False # The stores should become architectually visible in order, so this should not be necessary in most cases with WT caches. CVA6 needs it.
-assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled." # We would have to translate the regdump address for each context switch, otherwise not difficult to implement.
+# Ensure specific assertions
+assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
 assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not supported when spectre gadgets enabled."
 assert not (TAINT_NONTAKEN_BRANCH_IMM and INSERT_REGDUMPS), "Enabling TAINT_NONTAKEN_BRANCH_IMM might render INSERT_REGDUMPS useless as pc might get tainted if non-taken branch is predicted taken."
-CHECK_PC_SPIKE_AGAIN = False
 assert not (INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN), f"Cannot check pc trace from spike when INSERT_REGDUMPS is enabled."
 assert not (INSERT_FENCE and not INSERT_REGDUMPS), f"INSERT_REGDUMPS must be enabled."
 
-PRINT_REGISTER_VALIDATION = False
-PRINT_MEMORY_VALIDATION = False
-PRINT_AND_COMPARE = False
-PRINT_SKIPPED_CHECKS = False
-
-PRINT_MEM_LOADS = False
-PRINT_MEM_LOADS_T0 = False
-PRINT_MEM_STORES = False
-PRINT_MEM_STORES_T0 = False
-
-GET_DATA = False
-DEBUG_PRINT = False
-
-ASSERT_ADDR = True
-
-PRINT_PRIV_STATS = False
-
-DO_DOUBLECHECK_SIM = True
-
-# Trace settings
-TRACE_EN = False
-if "TRACE_EN" in os.environ:
-    TRACE_EN = int(os.environ["TRACE_EN"]) == 1
-    print(f"Setting TRACE_EN = {TRACE_EN} from env vars.")
-
-TRACE_FST = False
-
-# Use this as global parameter to set start time of fuzzing.
+# Timestamp
 TIMESTAMP_START = None
-

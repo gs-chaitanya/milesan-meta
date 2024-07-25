@@ -26,31 +26,21 @@ if __name__ == '__main__':
     cmd = []
     for cfg in cfgs:
         print(f"Fuzzing {cfg}")
-        for design_name in cfg["duts"]: 
-            env["USE_MMU"] = str(int(cfg["use_mmu"]))
-            env["TAINT_IN_PRIVS"] = cfg["taint_in_privs"]
-            env["TAINT_IMMRD_IMM"] = str(int(cfg["taint_immrd_imm"]))
-            env["TAINT_REGIMM_IMM"] = str(int(cfg["taint_regimm_imm"]))
-            env["TAINT_NONTAKEN_BRANCHES"] = str(int(cfg["taint_nontaken_branches"]))
-            if "allow_nontaken_branches_in_taint_privs" in cfg:
-                env["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS"] = str(int(cfg["allow_nontaken_branches_in_taint_privs"]))
-            if "num_min_bbs_lowerbound" in cfg:
-                env["NUN_MIN_BBS_LOWERBOUND"] = str(cfg["num_min_bbs_lowerbound"])
-            if "num_max_bbs_upperbound" in cfg:
-                env["NUM_MAX_BBS_UPPERBOUND"] = str(cfg["num_max_bbs_upperbound"])
-                
-            datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["name"])
-            env["CASCADE_DATADIR"] = datadir
+        for design_name in cfg["DUTS"]: 
+            cfg_cpy = cfg.copy()
+            cfg_cpy.pop("DUTS")
+            env.update(cfg_cpy)                
+            datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["NAME"])
             os.makedirs(datadir, exist_ok=True)
             try:
                 cmd = [
                     "python",
                     "do_check_isa_sim.py",
                     design_name,
-                    str(cfg["n_threads"]),
-                    str(cfg["n_tests"]),
+                    str(cfg["N_THREADS"]),
+                    str(cfg["N_TESTS"]),
                     "0",
-                    str(cfg["timeout"])
+                    str(cfg["TIMEOUT"])
                 ]
 
                 subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
@@ -68,7 +58,7 @@ if __name__ == '__main__':
                     "python",
                     "do_reducemany.py",
                     design_name,
-                    str(cfg["n_threads"]),
+                    str(cfg["N_THREADS"]),
                     f"--log-file={log_file}"
                 ]
                 subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/", timeout=TIMEOUT_REDUCE)

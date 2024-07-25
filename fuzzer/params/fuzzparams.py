@@ -291,7 +291,15 @@ if "ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE" in os.environ:
     print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE = {ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE} from env vars.")
 
 ALLOW_JALR_IN_MACHINE_MODE = False
+if "ALLOW_JALR_IN_MACHINE_MODE" in os.environ:
+    ALLOW_JALR_IN_MACHINE_MODE = int(os.environ["ALLOW_JALR_IN_MACHINE_MODE"]) == 1
+    print(f"Setting ALLOW_JALR_IN_MACHINE_MODE = {ALLOW_JALR_IN_MACHINE_MODE} from env vars.")
+
 ALLOW_BRANCH_IN_MACHINE_MODE = False
+if "ALLOW_BRANCH_IN_MACHINE_MODE" in os.environ:
+    ALLOW_BRANCH_IN_MACHINE_MODE = int(os.environ["ALLOW_BRANCH_IN_MACHINE_MODE"]) == 1
+    print(f"Setting ALLOW_BRANCH_IN_MACHINE_MODE = {ALLOW_BRANCH_IN_MACHINE_MODE} from env vars.")
+
 # We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
 TAINT_IN_PRIVS = None
 if "TAINT_IN_PRIVS" in os.environ:
@@ -313,3 +321,4 @@ IGNORE_SPIKE_MISMATCH = False
 USE_VANILLA = False
 
 DUMP_MCYCLES = False
+
