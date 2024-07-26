@@ -122,22 +122,18 @@ class IntRegPickState:
         return np.asarray([np.tanh(self.regs[reg_id].get_val_t0().bit_count()*np.pi/self.regs[reg_id].n_bits) for reg_id in range(self.num_pickable_regs)])
 
     def _get_taint_ps(self, inverse: bool):
-        if not DISABLE_COMPUTATION_ON_TAINT:
-            if USE_TAINT_TANH:
-                taint_ps = self._get_rel_taint_tanh()
-            elif USE_TAINT_HW:
-                taint_ps = self._get_rel_taint_hw()
-            elif USE_TAINT_BIN:
-                taint_ps = self._get_taint_bin()
-            if not inverse: # taint makes them more likely
-                taint_ps = self.__reg_weights + taint_ps*REGPICK_PROTUBERANCE_RATIO_T0_POS # Add pertubation to drive probability up for registers with higher taint hamming weight.
-                taint_ps = np.asarray([i if i<MAX_WEIGHT_T0 else MAX_WEIGHT_T0 for i in taint_ps]) # upper bound with MAX_WEIGHT_T0
-            else: # taint makes them less likely
-                taint_ps = self.__reg_weights - taint_ps*REGPICK_PROTUBERANCE_RATIO_T0_NEG # Substract to do the opposite.            
-                taint_ps = np.asarray([i if i>MIN_WEIGHT_T0 else MIN_WEIGHT_T0 for i in taint_ps]) # lower bound with MIN_WEIGHT_T0
-        else:
+        if USE_TAINT_TANH:
+            taint_ps = self._get_rel_taint_tanh()
+        elif USE_TAINT_HW:
+            taint_ps = self._get_rel_taint_hw()
+        elif USE_TAINT_BIN:
             taint_ps = self._get_taint_bin()
-            taint_ps = [0 for i in taint_ps if taint_ps > 0]
+        if not inverse: # taint makes them more likely
+            taint_ps = self.__reg_weights + taint_ps*REGPICK_PROTUBERANCE_RATIO_T0_POS # Add pertubation to drive probability up for registers with higher taint hamming weight.
+            taint_ps = np.asarray([i if i<MAX_WEIGHT_T0 else MAX_WEIGHT_T0 for i in taint_ps]) # upper bound with MAX_WEIGHT_T0
+        else: # taint makes them less likely
+            taint_ps = self.__reg_weights - taint_ps*REGPICK_PROTUBERANCE_RATIO_T0_NEG # Substract to do the opposite.            
+            taint_ps = np.asarray([i if i>MIN_WEIGHT_T0 else MIN_WEIGHT_T0 for i in taint_ps]) # lower bound with MIN_WEIGHT_T0
         return taint_ps
 
     # Weights after deducting the forbidden registers

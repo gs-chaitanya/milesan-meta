@@ -261,9 +261,6 @@ def _filter_taint(fuzzerstate, filtered_weights: list):
         filtered_weights = dict.fromkeys(filtered_weights,0)
         filtered_weights[ISAInstrClass.MEMFSM] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MEMFSM] # Add taint with load from tainted region if we are in the alowed privileges only. Otherwise, use for exceptions.
 
-    elif DISABLE_COMPUTATION_ON_TAINT and fuzzerstate.intregpickstate.get_num_tainted_regs_in_state(IntRegIndivState.FREE) != 0:
-        filtered_weights[ISAInstrClass.CLEARTAINT] *= TAINT_IMM_PROTURBANCE_FACTOR
-
     if DO_ASSERT:
         if not (fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv or not fuzzerstate.intregpickstate.exists_tainted_reg()):
             fuzzerstate.intregpickstate.print()

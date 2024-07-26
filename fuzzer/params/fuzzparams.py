@@ -301,7 +301,7 @@ if "ALLOW_BRANCH_IN_MACHINE_MODE" in os.environ:
     print(f"Setting ALLOW_BRANCH_IN_MACHINE_MODE = {ALLOW_BRANCH_IN_MACHINE_MODE} from env vars.")
 
 # When this is enabled, tainted data will be loaded but not computed on. This allows testing if leakage is coming from the dataflow.
-DISABLE_COMPUTATION_ON_TAINT = False
+DISABLE_COMPUTATION_ON_TAINT = True
 if "DISABLE_COMPUTATION_ON_TAINT" in os.environ:
     DISABLE_COMPUTATION_ON_TAINT = int(os.environ["DISABLE_COMPUTATION_ON_TAINT"]) == 1
     print(f"Setting DISABLE_COMPUTATION_ON_TAINT = {DISABLE_COMPUTATION_ON_TAINT} from env vars.")
