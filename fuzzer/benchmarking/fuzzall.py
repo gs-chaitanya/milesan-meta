@@ -31,6 +31,7 @@ if __name__ == '__main__':
             cfg_cpy.pop("DUTS")
             env.update(cfg_cpy)                
             datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["NAME"])
+            env["CASCADE_DATADIR"] = datadir
             os.makedirs(datadir, exist_ok=True)
             try:
                 cmd = [
