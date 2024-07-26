@@ -300,6 +300,12 @@ if "ALLOW_BRANCH_IN_MACHINE_MODE" in os.environ:
     ALLOW_BRANCH_IN_MACHINE_MODE = int(os.environ["ALLOW_BRANCH_IN_MACHINE_MODE"]) == 1
     print(f"Setting ALLOW_BRANCH_IN_MACHINE_MODE = {ALLOW_BRANCH_IN_MACHINE_MODE} from env vars.")
 
+# When this is enabled, tainted data will be loaded but not computed on. This allows testing if leakage is coming from the dataflow.
+DISABLE_COMPUTATION_ON_TAINT = False
+if "DISABLE_COMPUTATION_ON_TAINT" in os.environ:
+    DISABLE_COMPUTATION_ON_TAINT = int(os.environ["DISABLE_COMPUTATION_ON_TAINT"]) == 1
+    print(f"Setting DISABLE_COMPUTATION_ON_TAINT = {DISABLE_COMPUTATION_ON_TAINT} from env vars.")
+
 # We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
 TAINT_IN_PRIVS = None
 if "TAINT_IN_PRIVS" in os.environ:

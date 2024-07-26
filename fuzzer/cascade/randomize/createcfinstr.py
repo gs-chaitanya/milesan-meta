@@ -7,7 +7,7 @@ import numpy as np
 
 from params.runparams import DO_ASSERT, PRINT_FSM_TRANSITIONS
 
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED, NUM_MAX_PRODUCED0_REGS, NUM_MAX_PRODUCED1_REGS, TAINT_NONTAKEN_BRANCH_IMM, TAINT_IMMRD_IMM, P_LOAD_TAINT
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED, NUM_MAX_PRODUCED0_REGS, NUM_MAX_PRODUCED1_REGS, TAINT_NONTAKEN_BRANCH_IMM, TAINT_IMMRD_IMM, P_LOAD_TAINT, DISABLE_COMPUTATION_ON_TAINT
 from params.runparams import GET_DATA
 from cascade.util import IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS, ISAInstrClass
 from cascade.cfinstructionclasses import *
@@ -77,7 +77,10 @@ def gen_random_rounding_mode():
 def _create_R12DInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in R12DInstructions
-    rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_tainted_int_inputregs(2))
+    if not DISABLE_COMPUTATION_ON_TAINT:
+        rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_tainted_int_inputregs(2))
+    else:
+        rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputregs(2))
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
     return R12DInstruction_t0(fuzzerstate, instr_str, rd, rs1, rs2, iscompressed)
 
@@ -87,7 +90,7 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
 
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)    
 
-    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and "auipc" not in instr_str:
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and "auipc" not in instr_str and not DISABLE_COMPUTATION_ON_TAINT:
         n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
         if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS: # There's too much taint, remove some.
             imm_t0 = 0 
@@ -115,7 +118,7 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
 
-    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and not DISABLE_COMPUTATION_ON_TAINT:
         n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
         if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS: # There's too much taint, remove some.
             imm_t0 = 0 

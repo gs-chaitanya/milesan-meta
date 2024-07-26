@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT, PRINT_FSM_TRANSITIONS, PRINT_WRITEBACK_T0
-from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG, NUM_MIN_TAINTED_REGS
+from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG, NUM_MIN_TAINTED_REGS, DISABLE_COMPUTATION_ON_TAINT
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
 from params.fuzzparams import USE_TAINT_HW, USE_TAINT_TANH, USE_TAINT_BIN, NONPICKABLE_REGISTERS, TAINT_EN
 from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
@@ -122,18 +122,22 @@ class IntRegPickState:
         return np.asarray([np.tanh(self.regs[reg_id].get_val_t0().bit_count()*np.pi/self.regs[reg_id].n_bits) for reg_id in range(self.num_pickable_regs)])
 
     def _get_taint_ps(self, inverse: bool):
-        if USE_TAINT_TANH:
-            taint_ps = self._get_rel_taint_tanh()
-        elif USE_TAINT_HW:
-            taint_ps = self._get_rel_taint_hw()
-        elif USE_TAINT_BIN:
+        if not DISABLE_COMPUTATION_ON_TAINT:
+            if USE_TAINT_TANH:
+                taint_ps = self._get_rel_taint_tanh()
+            elif USE_TAINT_HW:
+                taint_ps = self._get_rel_taint_hw()
+            elif USE_TAINT_BIN:
+                taint_ps = self._get_taint_bin()
+            if not inverse: # taint makes them more likely
+                taint_ps = self.__reg_weights + taint_ps*REGPICK_PROTUBERANCE_RATIO_T0_POS # Add pertubation to drive probability up for registers with higher taint hamming weight.
+                taint_ps = np.asarray([i if i<MAX_WEIGHT_T0 else MAX_WEIGHT_T0 for i in taint_ps]) # upper bound with MAX_WEIGHT_T0
+            else: # taint makes them less likely
+                taint_ps = self.__reg_weights - taint_ps*REGPICK_PROTUBERANCE_RATIO_T0_NEG # Substract to do the opposite.            
+                taint_ps = np.asarray([i if i>MIN_WEIGHT_T0 else MIN_WEIGHT_T0 for i in taint_ps]) # lower bound with MIN_WEIGHT_T0
+        else:
             taint_ps = self._get_taint_bin()
-        if not inverse: # taint makes them more likely
-            taint_ps = self.__reg_weights + taint_ps*REGPICK_PROTUBERANCE_RATIO_T0_POS # Add pertubation to drive probability up for registers with higher taint hamming weight.
-            taint_ps = np.asarray([i if i<MAX_WEIGHT_T0 else MAX_WEIGHT_T0 for i in taint_ps]) # upper bound with MAX_WEIGHT_T0
-        else: # taint makes them less likely
-            taint_ps = self.__reg_weights - taint_ps*REGPICK_PROTUBERANCE_RATIO_T0_NEG # Substract to do the opposite.            
-            taint_ps = np.asarray([i if i>MIN_WEIGHT_T0 else MIN_WEIGHT_T0 for i in taint_ps]) # lower bound with MIN_WEIGHT_T0
+            taint_ps = [0 for i in taint_ps if taint_ps > 0]
         return taint_ps
 
     # Weights after deducting the forbidden registers

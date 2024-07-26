@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT
 from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_fence, is_forbid_vexriscv_csrs, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_picorv32_writehpm, is_tolerate_picorv32_readnonimplcsr
 from cascade.util import ISAInstrClass, IntRegIndivState, MmuState, BASIC_BLOCK_MIN_SPACE
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, USE_MMU, ALLOW_JALR_IN_MACHINE_MODE, ALLOW_BRANCH_IN_MACHINE_MODE
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, USE_MMU, ALLOW_JALR_IN_MACHINE_MODE, ALLOW_BRANCH_IN_MACHINE_MODE, DISABLE_COMPUTATION_ON_TAINT
 from cascade.privilegestate import PrivilegeStateEnum, is_ready_to_descend_privileges
 from cascade.util import IntRegIndivState
 import random
@@ -232,7 +232,7 @@ def _filter_sensitive_instr_weights(fuzzerstate, filtered_weights: list):
 # When there's too much taint, we untaint some register(s).
 # When there's only little taint, we add taint with loads or immediates.
 def _filter_taint(fuzzerstate, filtered_weights: list):
-    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and not DISABLE_COMPUTATION_ON_TAINT:
         n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
         if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS:
             filtered_weights = dict.fromkeys(filtered_weights,0)
@@ -257,9 +257,12 @@ def _filter_taint(fuzzerstate, filtered_weights: list):
             else:
                 filtered_weights[ISAInstrClass.MEMFSM] *= TAINT_IMM_PROTURBANCE_FACTOR # Add taint with load from tainted region if we are in the alowed privileges only.
 
-    elif not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
+    elif not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR) or not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
         filtered_weights = dict.fromkeys(filtered_weights,0)
-        filtered_weights[ISAInstrClass.MEMFSM] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MEMFSM] # Add taint with load from tainted region if we are in the alowed privileges only.
+        filtered_weights[ISAInstrClass.MEMFSM] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MEMFSM] # Add taint with load from tainted region if we are in the alowed privileges only. Otherwise, use for exceptions.
+
+    elif DISABLE_COMPUTATION_ON_TAINT and fuzzerstate.intregpickstate.get_num_tainted_regs_in_state(IntRegIndivState.FREE) != 0:
+        filtered_weights[ISAInstrClass.CLEARTAINT] *= TAINT_IMM_PROTURBANCE_FACTOR
 
     if DO_ASSERT:
         if not (fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv or not fuzzerstate.intregpickstate.exists_tainted_reg()):
