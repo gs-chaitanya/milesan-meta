@@ -110,6 +110,7 @@ class BaseInstruction:
     instr_func = None
     instr_func_t0 = None
     priv_level = None
+    iscontext = False
     if USE_MMU:
         va_layout = -1
     else:
@@ -594,9 +595,8 @@ class IntLoadInstruction(ImmInstruction):
     
         if DO_ASSERT:
             assert rd >= 0
-            assert rd < MAX_NUM_PICKABLE_REGS
             assert rs1 >= 0
-            assert is_rd_nonpickable_ok or rs1 < MAX_NUM_PICKABLE_REGS
+            assert is_rd_nonpickable_ok and rd in NONPICKABLE_REGISTERS or rd < MAX_NUM_PICKABLE_REGS
         self.rd  = rd
         self.rs1 =  rs1
         self.producer_id = producer_id
@@ -1187,7 +1187,7 @@ class CSRRegInstruction(CSRInstruction):
             assert rd >= 0
             assert rd < MAX_NUM_PICKABLE_REGS, f"rd: {rd}, MAX_NUM_PICKABLE_REGS: {MAX_NUM_PICKABLE_REGS}"
             assert rs1 >= 0
-            assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in (FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID), f"rs1: {rs1}, MAX_NUM_PICKABLE_REGS: {MAX_NUM_PICKABLE_REGS}"
+            assert rs1 < MAX_NUM_PICKABLE_REGS or rs1 in NONPICKABLE_REGISTERS, f"rs1: {rs1}, MAX_NUM_PICKABLE_REGS: {MAX_NUM_PICKABLE_REGS}"
         self.rd  = rd
         self.rs1 =  rs1
         self.is_satp_smode = is_satp_smode
@@ -1458,7 +1458,7 @@ class RawDataWord:
     # @param intentionally_signed: When unset, we expect a non-negative wordval
     def __init__(self, fuzzerstate, wordval: int, signed: bool = False):
         self.fuzzerstate = fuzzerstate
-        self.paddr = fuzzerstate.curr_ctxsv_bb_start_addr + 4*len(fuzzerstate.ctxsv_bbs[-1]) + SPIKE_STARTADDR
+        self.paddr = fuzzerstate.ctxsv_bb_base_addr + 4*len(fuzzerstate.ctxsv_bb) + SPIKE_STARTADDR
         if DO_ASSERT:
             if signed:
                 assert wordval >= -(1 << 31)

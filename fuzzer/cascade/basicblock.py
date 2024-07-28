@@ -25,7 +25,7 @@ from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRIns
 from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, SPECTRE_GADGET_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
 from cascade.finalblock import get_finalblock_max_size,finalblock
 from cascade.initialblock import gen_initial_basic_block
-from cascade.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setters
+from cascade.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setter
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.toleratebugs import is_tolerate_ras1
 from cascade.mmu_utils import phys2virt
@@ -387,14 +387,11 @@ def alloc_initial_basic_block(fuzzerstate):
 
 # This must be done early, say, just after generating the final basic block, to ensure that we have enough space.
 def alloc_context_saver_bb(fuzzerstate):
-    # For the contextsaver, we first want to know the base address before we generate the basic block because we do loads and stores, which require absolute addresses.
-    # fuzzerstate.next_ctxsv_bb_start_addr = fuzzerstate.memview.gen_random_free_addr(2, fuzzerstate.ctxsv_size_upperbound, 0, fuzzerstate.memsize)
-    # fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_ctxsv_bb_start_addr, fuzzerstate.next_ctxsv_bb_start_addr+fuzzerstate.ctxsv_size_upperbound)
     n_pages = fuzzerstate.ctxsv_size_upperbound//PHYSICAL_PAGE_SIZE+1
-    fuzzerstate.next_ctxsv_bb_start_addr = fuzzerstate.memview.gen_random_free_addr(PAGE_ALIGNMENT_SHIFT, n_pages*PHYSICAL_PAGE_SIZE, 0, fuzzerstate.memsize)
+    fuzzerstate.ctxsv_bb_base_addr = fuzzerstate.memview.gen_random_free_addr(PAGE_ALIGNMENT_SHIFT, n_pages*PHYSICAL_PAGE_SIZE, 0, fuzzerstate.memsize)
     if DO_ASSERT:
-        assert fuzzerstate.next_ctxsv_bb_start_addr is not None, f"Maybe you should create the final basic block earlier in the creation of the test case."
-    fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_ctxsv_bb_start_addr, fuzzerstate.next_ctxsv_bb_start_addr+n_pages*PHYSICAL_PAGE_SIZE)
+        assert fuzzerstate.ctxsv_bb_base_addr is not None, f"Maybe you should create the final basic block earlier in the creation of the test case."
+    fuzzerstate.memview.alloc_mem_range(fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.ctxsv_bb_base_addr+n_pages*PHYSICAL_PAGE_SIZE)
 
 def free_context_saver_bb(fuzzerstate, ctxsv_bb_id):
     raise NotImplementedError("not implemented yet")
@@ -732,7 +729,7 @@ def gen_basicblocks(fuzzerstate):
     # Forbid loads from addresses where instructions change between spike resolution and RTL sim.
     blacklist_changing_instructions(fuzzerstate)
     blacklist_final_block(fuzzerstate) # Must be done once the bb is created, else we could also blacklist upper bounds over the basic block size.
-    blacklist_context_setters(fuzzerstate)
+    blacklist_context_setter(fuzzerstate)
 
     fuzzerstate.consumer_inst_va_layout, fuzzerstate.producer_id_to_tgtaddr, fuzzerstate.producer_id_to_noreloc_spike = gen_producer_id_to_tgtaddr(fuzzerstate)
 

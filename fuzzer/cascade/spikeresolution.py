@@ -72,6 +72,7 @@ def gen_regdump_reqs(fuzzerstate):
 def get_dumps_from_instr(bb_instr):
     ret = []
     addr = bb_instr.vaddr if USE_MMU else bb_instr.paddr
+    assert addr is not None, f"Address of {bb_instr.get_str()} was None!"
     if isinstance(bb_instr, R12DInstruction):
         ret.append((addr, False, bb_instr.rd))
         ret.append((addr, False, bb_instr.rs1))
@@ -124,9 +125,7 @@ def gen_regdump_reqs_all_rds(fuzzerstate, max_bb_id: int = None, max_instr_id: i
         assert max_bb_id is None or (max_bb_id >= 0 and max_bb_id <= len(fuzzerstate.instr_objs_seq))
         assert max_instr_id is None or max_instr_id >= 0
         assert len(fuzzerstate.instr_objs_seq) == len(fuzzerstate.bb_start_addr_seq)
-    if USE_MMU:
-        curr_addr_layout = -1
-        curr_priv_state = PrivilegeStateEnum.MACHINE
+
     ret = []
     for bb_id, (bb_start_addr, bb_instrs) in enumerate(zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq)):
         if bb_id > 0 and bb_id < index_first_bb_to_consider: #  we always generate the dumps for the initial and ctxsv BBs
@@ -140,14 +139,11 @@ def gen_regdump_reqs_all_rds(fuzzerstate, max_bb_id: int = None, max_instr_id: i
             if max_instr_id is not None and bb_instr_id >= max_instr_id and max_bb_id is not None and bb_id >= max_bb_id:
                 break
             [ret.append(d) for d in get_dumps_from_instr(bb_instr)]
-            if USE_MMU:
-                curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)
-        if bb_id in fuzzerstate.bb_id_to_ctxsv_id:
-            ctxsv_bb_id = fuzzerstate.bb_id_to_ctxsv_id[bb_id]
-            for bb_instr_id, bb_instr in enumerate(fuzzerstate.ctxsv_bbs[ctxsv_bb_id]):
-                [ret.append(d) for d in get_dumps_from_instr(bb_instr)]
-                if USE_MMU:
-                    curr_addr_layout, curr_priv_state = get_current_layout(bb_instr, curr_addr_layout, curr_priv_state)
+        if bb_id == fuzzerstate.last_bb_id_before_ctx_saver:
+            for bb_instr_id, bb_instr in enumerate(fuzzerstate.ctxsv_bb):
+                if not isinstance(bb_instr, RawDataWord):
+                    [ret.append(d) for d in get_dumps_from_instr(bb_instr)]
+                    # bb_instr.print()
 
     return ret
 
@@ -187,26 +183,26 @@ def gen_regdump_reqs_reduced(fuzzerstate, max_bb_id: int = None, max_instr_id: i
 
 # @brief generates the register dump requests made to spike for saving the architectural state.
 # @return a pair (the register dump requests: an iterable of pairs (pc, reg to dump) in program order, and store byte sizes in program order)
-def gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider: int, first_instr_id_in_first_bb_to_consider: int = 0):
-    if USE_MMU: raise NotImplementedError
+def gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider: int, first_instr_id_in_first_bb_to_consider: int = 0, tgt_pc: int = -1):
     if DO_ASSERT:
         assert index_first_bb_to_consider > 0
         assert index_first_bb_to_consider <= len(fuzzerstate.instr_objs_seq)
         assert first_instr_id_in_first_bb_to_consider >= 0
         assert first_instr_id_in_first_bb_to_consider < len(fuzzerstate.instr_objs_seq[index_first_bb_to_consider])
 
-    tgt_pc = fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] + 4*first_instr_id_in_first_bb_to_consider + SPIKE_STARTADDR # NO_COMPRESSED
     ret_dumpreqs = []
     ret_storesizes = []
-
+    insts = []
     # Get the addresses and values of all the store instructions until the target PC.
     for bb_start_addr, bb_instrs in zip(fuzzerstate.bb_start_addr_seq[:index_first_bb_to_consider], fuzzerstate.instr_objs_seq[:index_first_bb_to_consider]):
         for bb_instr_id, bb_instr in enumerate(bb_instrs):
             curr_addr = bb_start_addr + 4*bb_instr_id + SPIKE_STARTADDR
             assert curr_addr == bb_instr.paddr, f"Address mismatch: Expected {hex(curr_addr)}, got {bb_instr.paddr}"
             if isinstance(bb_instr, IntStoreInstruction):
-                ret_dumpreqs.append((curr_addr, False, bb_instr.rs1))
-                ret_dumpreqs.append((curr_addr, False, bb_instr.rs2))
+                ret_dumpreqs.append((bb_instr.paddr if not USE_MMU else bb_instr.vaddr, False, bb_instr.rs1))
+                ret_dumpreqs.append((bb_instr.paddr if not USE_MMU else bb_instr.vaddr, False, bb_instr.rs2))
+                insts += [bb_instr] # twice so it matches the dumpreqs
+                insts += [bb_instr]
                 if bb_instr.instr_str == 'sb':
                     ret_storesizes.append(1)
                 elif bb_instr.instr_str == 'sh':
@@ -218,8 +214,9 @@ def gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider: int, first_ins
                 else:
                     raise Exception('Unknown store instruction: ' + bb_instr.instr_str)
             elif isinstance(bb_instr, FloatStoreInstruction):
-                ret_dumpreqs.append((curr_addr, False, bb_instr.rs1))
-                ret_dumpreqs.append((curr_addr, True, FPREG_ABINAMES[bb_instr.frs2]))
+                raise NotImplementedError
+                ret_dumpreqs.append((bb_instr.paddr if not USE_MMU else bb_instr.vaddr, False, bb_instr.rs1))
+                ret_dumpreqs.append((bb_instr.paddr if not USE_MMU else bb_instr.vaddr, True, FPREG_ABINAMES[bb_instr.frs2]))
                 if bb_instr.instr_str == 'fsb':
                     ret_storesizes.append(1)
                 elif bb_instr.instr_str == 'fsh':
@@ -244,6 +241,9 @@ def gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider: int, first_ins
     ret_dumpreqs.append((tgt_pc, False, 'medeleg'))
     ret_dumpreqs.append((tgt_pc, False, 'mstatus'))
     ret_dumpreqs.append((tgt_pc, False, 'minstret'))
+    if USE_MMU: 
+        ret_dumpreqs.append((tgt_pc, False, 'satp'))
+        ret_dumpreqs.append((tgt_pc, False, RPROD_MASK_REGISTER_ID)) # Special register, used to produce virtual address, dynamic at runtime
     if not fuzzerstate.is_design_64bit:
         ret_dumpreqs.append((tgt_pc, False, 'minstreth'))
 
@@ -256,7 +256,7 @@ def gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider: int, first_ins
     for int_reg_id in range(fuzzerstate.num_pickable_regs):
         ret_dumpreqs.append((tgt_pc, False, int_reg_id))
 
-    return ret_dumpreqs, ret_storesizes
+    return ret_dumpreqs, ret_storesizes, insts
 
 # @return a regdump request for all PCs
 def gen_pc_trace(fuzzerstate):

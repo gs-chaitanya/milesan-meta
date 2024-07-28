@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST
-from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS
+from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS, NONPICKABLE_REGISTERS
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_IN_PRIVS, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, TAINT_NONTAKEN_BRANCH_IMM
 from params.fuzzparams import reset_reg_settings
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48
@@ -174,13 +174,11 @@ class FuzzerState:
         self.final_bb = []
         self.final_bb_base_addr = -1
         # Context setter
-        self.ctxsv_bbs = []
-        self.ctxsv_bb_start_addr_seq = []
-        self.bb_id_to_ctxsv_id = {} # map the id of the BB to the following context saver, if there is one
-        self.curr_ctxsv_bb_start_addr = -1
-        self.next_ctxsv_bb_start_addr = None
+        self.ctxsv_bb = []
+        self.ctxsv_bb_base_addr = -1
         self.ctxsv_bb_jal_instr_id = -1 # Useful because the last elements in ctxsv_bb are data.
-        self.last_bb_id_before_next_ctxsv_bb = None
+        self.last_bb_id_before_ctx_saver = None
+        self.first_bb_id_after_ctx_saver = None
 
         # Context dump, not used i think
         # self.ctxdmp_bb = []
@@ -241,17 +239,6 @@ class FuzzerState:
         self.curr_bb_start_addr = self.next_bb_addr
         self.next_bb_addr = None
         self.bb_start_addr_seq.append(self.curr_bb_start_addr)
-
-    def init_new_ctxsv_bb(self):
-        self.ctxsv_bbs.append([])
-        self.curr_ctxsv_bb_start_addr = self.next_ctxsv_bb_start_addr
-        if DO_ASSERT:
-            assert self.last_bb_id_before_next_ctxsv_bb is not None
-            assert self.last_bb_id_before_next_ctxsv_bb not in self.bb_id_to_ctxsv_id, f"Theres already a context saver that BB {last_bb_id_before_ctxsv_bb} jumps to."
-        self.bb_id_to_ctxsv_id[self.last_bb_id_before_next_ctxsv_bb] = len(self.ctxsv_bbs)-1
-        self.next_ctxsv_bb_start_addr = None
-        self.ctxsv_bb_start_addr_seq.append(self.curr_ctxsv_bb_start_addr)
-
 
     def save_states(self):
         self.saved_reg_states.append(self.intregpickstate.save_curr_state())
@@ -388,10 +375,9 @@ class FuzzerState:
                 if TAINT_EN and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0)):
                     next_instr.write_t0() # Write tainted bytecode to instruction memory if taint is enabled.
 
-        for bb_instrs in self.ctxsv_bbs:
-            for next_instr in bb_instrs:
-                if TAINT_EN and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0)):
-                    next_instr.write_t0() # Write tainted bytecode to instruction memory if taint is enabled.
+        for next_instr in self.ctxsv_bb:
+            if TAINT_EN and isinstance(next_instr, (ImmRdInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0)):
+                next_instr.write_t0() # Write tainted bytecode to instruction memory if taint is enabled.
 
 
     def dump_instructions_t0(self):
@@ -478,7 +464,6 @@ class FuzzerState:
         regdumps_t0 = []
         reached_end = False
         # Retrieve the register values from the requests
-        assert not USE_MMU, f"Not tested with MMU enabled!"
         self.curr_pc = SPIKE_STARTADDR
         for bb_instrs in self.instr_objs_seq:
             for next_instr in bb_instrs:
@@ -493,7 +478,7 @@ class FuzzerState:
                     else:
                         if DO_ASSERT:
                             if not USE_SPIKE_INTERM_ELF:
-                                assert reg_id in CSR_ABI_NAMES + ["priv"] or reg_id < self.num_pickable_regs, f"Invalid register id {reg_id}"
+                                assert reg_id in CSR_ABI_NAMES + ["priv"] or reg_id < self.num_pickable_regs or reg_id in NONPICKABLE_REGISTERS, f"Invalid register id {reg_id}"
                         if reg_id in CSR_ABI_NAMES + ["priv"]: # We dont dump CSR values here for now
                             regdumps += [None]
                             regdumps_t0 += [0]
@@ -540,9 +525,8 @@ class FuzzerState:
                     next_instr.print(is_spike_resolution)
                 
             # if this bb is followed by a context saver block, execute it
-            if bb_id in self.bb_id_to_ctxsv_id:
-                ctxsv_bb_id = self.bb_id_to_ctxsv_id[bb_id]
-                for next_instr in self.ctxsv_bbs[ctxsv_bb_id]:
+            if bb_id == self.last_bb_id_before_ctx_saver:
+                for next_instr in self.ctxsv_bb:
                     next_instr.execute(is_spike_resolution=is_spike_resolution)
                     if print_execution:
                         print(f"{next_instr.get_str(is_spike_resolution)} (ctx)")

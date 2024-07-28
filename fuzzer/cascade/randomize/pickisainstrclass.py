@@ -23,7 +23,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.FPUFSM:      0,
     ISAInstrClass.ALU:         0.3,
     ISAInstrClass.ALU64:       0.3,
-    ISAInstrClass.MULDIV:      0.1,
+    ISAInstrClass.MULDIV:      0,
     ISAInstrClass.MULDIV64:    0,
     ISAInstrClass.AMO:         0,
     ISAInstrClass.AMO64:       0,
@@ -257,7 +257,7 @@ def _filter_taint(fuzzerstate, filtered_weights: list):
             else:
                 filtered_weights[ISAInstrClass.MEMFSM] *= TAINT_IMM_PROTURBANCE_FACTOR # Add taint with load from tainted region if we are in the alowed privileges only.
 
-    elif not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR) or not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+    elif not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR): # also for PAGE_T0_ADDR?
         filtered_weights = dict.fromkeys(filtered_weights,0)
         filtered_weights[ISAInstrClass.MEMFSM] = ISAINSTRCLASS_INITIAL_BOOSTERS[ISAInstrClass.MEMFSM] # Add taint with load from tainted region if we are in the alowed privileges only. Otherwise, use for exceptions.
 

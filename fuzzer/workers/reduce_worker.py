@@ -68,8 +68,8 @@ def reduce_programs(design_name: str, num_cores: int, seeds, mute_output: bool =
     if num_workers == 1:
         print(f"Starting sequential reduction on `{design_name}` with {len(seeds)} total tests")
         for seed in seeds:
-            reduce_program(*gen_new_test_instance(design_name,seed,True),
-                            True, check_pc_spike_again=True)
+            __reduce_program_worker(design_name, seed)
+            
         exit(0)
     print(f"Starting parallel reduction of `{design_name}` on {num_workers} processes for {len(seeds)} seeds.")
     pool = mp.Pool(processes=num_workers, initializer=mute if mute_output else None)

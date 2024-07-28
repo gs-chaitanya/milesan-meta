@@ -490,6 +490,14 @@ class PageTablesGen:
                     curr_pte            = 0
                     curr_pte_supervisor = 0
                     self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.MACHINE}
+                elif ppn_leaf - SPIKE_STARTADDR == fuzzerstate.ctxsv_bb_base_addr&PAGE_ALIGNMENT_MASK:
+                    mapped_ctx_block = True
+                    if DEBUG_PRINT:
+                        print(f"{hex(ppn_leaf)} maps the initial BB.")
+                    # Map the context saver to all privileges
+                    curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=True)
+                    curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=False, is_executable=True)
+                    self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
                 else:
                     if ppn_leaf not in self.ppn_leaf_to_priv_dict:
                         priv = {random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE])} # Dont map any hypervisor
@@ -510,6 +518,7 @@ class PageTablesGen:
                 ppn_leaf += self.page_size_per_layout[layout_id]
             assert mapped_initial_block
             assert mapped_final_block
+            assert mapped_ctx_block
             # Coalesce the results and store bookeeping data
             curr_layout_pt_content += curr_layout_pt_content_supervisor
             self.all_pt_entries[layout_id].append(curr_layout_pt_content)

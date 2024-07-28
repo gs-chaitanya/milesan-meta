@@ -9,7 +9,7 @@ from common.spike import SPIKE_STARTADDR
 
 from cascade.basicblock import gen_basicblocks
 from cascade.finalblock import finalblock
-from cascade.mmu_utils import phys2virt
+from cascade.mmu_utils import phys2virt, PAGE_ALIGNMENT_MASK, virt2phys
 from cascade.cfinstructionclasses import filter_reg_traceback, is_placeholder, SpeculativeInstructionEncapsulator
 from cascade.cfinstructionclasses_t0 import JALInstruction_t0, RegImmInstruction_t0, JALRInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0, R12DInstruction_t0, BranchInstruction_t0
 from cascade.fuzzsim import SimulatorEnum, runtest_simulator
@@ -35,8 +35,9 @@ import time
 from pathlib import Path
 
 REDUCTION_SIMULATOR = SimulatorEnum.VERILATOR
-NOPIZE_SANDWICH_INSTRUCTIONS = False
+NOPIZE_SANDWICH_INSTRUCTIONS = True
 FLATTEN_SANDWICH_INSTRUCTIONS = False
+REDUCE_TAINT = False
 
 # @brief since stopsig and regdump addr are vitrual, the final block also needs some context, mainly, the translation scheme of stores in the current priviledge
 def gen_ctxt_finalbock(priv_level, layout_id, fuzzerstate, bb_id, instr_id):
@@ -77,18 +78,30 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
     spikereduce_elfpath = gen_elf_from_bbs(fuzzerstate, False, "spikereduce_savectx", f"{fuzzerstate.instance_to_str()}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", SPIKE_STARTADDR)
     print(f"elf at {spikereduce_elfpath}")
 
-    tgt_addr_layout, tgt_addr_priv = get_last_bb_layout_and_priv(fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider, False)
-    tgt_pc = phys2virt((fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] + 4*index_first_instr_to_consider), tgt_addr_priv, tgt_addr_layout, fuzzerstate, False)
-    final_addr = phys2virt((fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR), fuzzerstate.privilegestate.privstate, fuzzerstate.effective_curr_layout, fuzzerstate, False)
+    # tgt_addr_layout, tgt_addr_priv = get_last_bb_layout_and_priv(fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider, False)
+    # tgt_pc = phys2virt((fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] + 4*index_first_instr_to_consider + SPIKE_STARTADDR), tgt_addr_priv, tgt_addr_layout, fuzzerstate, False)
+    # final_addr = phys2virt((fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR), fuzzerstate.privilegestate.privstate, fuzzerstate.effective_curr_layout, fuzzerstate, False)
+    target_instr = fuzzerstate.instr_objs_seq[index_first_bb_to_consider][index_first_instr_to_consider]
+    tgt_pc =  target_instr.vaddr if USE_MMU else target_instr.paddr
+    assert tgt_pc is not None
+    tgt_addr_layout = target_instr.va_layout
+    assert tgt_addr_layout is not None
+    tgt_addr_priv = target_instr.priv_level
+    tgt_addr_priv is not None
+
+    final_instr = fuzzerstate.instr_objs_seq[-1][-1]
+    final_addr = final_instr.vaddr if USE_MMU else final_instr.paddr
     print(f"THE TARGET PC IS {hex((tgt_pc+SPIKE_STARTADDR))} ({hex(fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] + 4*index_first_instr_to_consider + SPIKE_STARTADDR)})")
+    print(f"TARGET LAYOUT IS {tgt_addr_layout}")
+    print(f"TARGET PRIV IS {tgt_addr_priv}")
 
+    ctx_regdump_reqs, storenumbytes, insts = gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider, tgt_pc)
 
-    ctx_regdump_reqs, storenumbytes = gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider)
-    dumpedvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags_nocompressed(fuzzerstate.design_name), SPIKE_STARTADDR, ctx_regdump_reqs, False, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
+    dumpedvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags_nocompressed(fuzzerstate.design_name), SPIKE_STARTADDR, ctx_regdump_reqs, False, final_addr, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
     if TAINT_EN and DO_ASSERT:
         dumpedvals_in_situ, dumpedvals_t0 = fuzzerstate.get_regdumps_from_reqs(ctx_regdump_reqs, True, None, False, True)
-        assert len(dumpedvals_in_situ) == len(dumpedvals)
+        assert len(dumpedvals_in_situ) == len(dumpedvals), f"Dumped {len(dumpedvals)} in spike but got only {len(dumpedvals_in_situ)} from in-situ."
         for idx, (in_situ_d, in_situ_d_t0, spike_d) in enumerate(zip(dumpedvals_in_situ, dumpedvals_t0, dumpedvals)):
             assert in_situ_d == spike_d or in_situ_d_t0 == 0, f"Mismatch between in-situ simulation and spike at addr {hex(ctx_regdump_reqs[idx][0])} for reg ID {ctx_regdump_reqs[idx][2]}: {filter_reg_traceback(ctx_regdump_reqs[idx][2],ctx_regdump_reqs[idx][0],fuzzerstate,spike_d).get_str()}: {hex(in_situ_d)} != {hex(spike_d)}, {hex(in_situ_d_t0)}" # Some dumps differ between in-situ and spike (e.g. generated and consumed registers)
     del ctx_regdump_reqs
@@ -112,7 +125,13 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
     curr_id_in_storenumbytes = 0
     for _ in range(num_stores_found):
         for byte_id in range(storenumbytes[curr_id_in_storenumbytes]):
-            addr = dumpedvals[curr_id_in_dumpedvals] + byte_id - SPIKE_STARTADDR
+            vaddr = dumpedvals[curr_id_in_dumpedvals] + byte_id
+            if insts[curr_id_in_dumpedvals].priv_level == PrivilegeStateEnum.MACHINE:
+                addr = vaddr - SPIKE_STARTADDR
+            else:
+                addr = virt2phys(vaddr, insts[curr_id_in_dumpedvals].priv_level, insts[curr_id_in_dumpedvals].va_layout, fuzzerstate)
+            # print(f"paddr: {hex(addr)}, vadd: {hex(vaddr)}, instr: {insts[curr_id_in_dumpedvals].get_str()}")
+            assert addr > 0 and addr < fuzzerstate.memsize, f"Address {hex(addr)} exceeds memory, maybe virtual?"
             val = (dumpedvals[curr_id_in_dumpedvals+1] >> (8*byte_id)) & 0xFF
             val_t0 = (dumpedvals_t0[curr_id_in_dumpedvals+1] >> (8*byte_id)) & 0xFF
             saved_stores[addr] = val
@@ -228,13 +247,17 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
                                     saved_regvals_t0,
                                     saved_rprod_mask)
 
-    fuzzerstate.init_new_ctxsv_bb()
-    gen_context_setter(fuzzerstate, saved_context, fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] + index_first_instr_to_consider * 4) # NO_COMPRESSED
+    # fuzzerstate.init_new_ctxsv_bb()
+    gen_context_setter(fuzzerstate, saved_context, fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] + index_first_instr_to_consider * 4, tgt_addr_layout, tgt_addr_priv) # NO_COMPRESSED
     # Jump from the last basic block to the context setter. For the first context setter, the last block is the initial block.
-    old_jump = fuzzerstate.instr_objs_seq[fuzzerstate.last_bb_id_before_next_ctxsv_bb][-1]
-    new_jump = JALInstruction_t0(fuzzerstate,"jal", 0, fuzzerstate.curr_ctxsv_bb_start_addr - 4*(len(fuzzerstate.instr_objs_seq[fuzzerstate.last_bb_id_before_next_ctxsv_bb])-1)) # NO_COMPRESSED
+    old_jump = fuzzerstate.instr_objs_seq[fuzzerstate.last_bb_id_before_ctx_saver][-1]
+    new_jump = JALInstruction_t0(fuzzerstate,"jal", 0, fuzzerstate.ctxsv_bb_base_addr - 4*(len(fuzzerstate.instr_objs_seq[fuzzerstate.last_bb_id_before_ctx_saver])-1)) # NO_COMPRESSED
     new_jump.paddr = old_jump.paddr
-    fuzzerstate.instr_objs_seq[fuzzerstate.last_bb_id_before_next_ctxsv_bb][-1] = new_jump
+    new_jump.priv_level = old_jump.priv_level
+    if USE_MMU:
+        new_jump.vaddr = old_jump.vaddr
+        new_jump.va_layout = old_jump.va_layout
+    fuzzerstate.instr_objs_seq[fuzzerstate.last_bb_id_before_ctx_saver][-1] = new_jump
     # print(f"Replacing {old_jump.get_str()} with {new_jump.get_str()}")
 
     return fuzzerstate, tgt_addr_layout, tgt_addr_priv
@@ -367,6 +390,7 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     # This is actually only needed for generating the final reg and freg values iirc.
     _, (finalintregvals_spikeresol, finalfloatregvals_spikeresol) = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags_nocompressed(test_fuzzerstate.design_name), SPIKE_STARTADDR, regdump_reqs, True, final_addr, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
 
+
     # Retrieves the rd stream throughout execution to compare to in-situ simulation, only for safety.
     rd_regdump_reqs = gen_regdump_reqs_all_rds(test_fuzzerstate, index_first_bb_to_consider=index_first_bb_to_consider, first_instr_id_in_first_bb_to_consider=index_first_instr_to_consider)
     rd_regvals = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags_nocompressed(test_fuzzerstate.design_name), SPIKE_STARTADDR, rd_regdump_reqs, False, final_addr, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
@@ -416,8 +440,105 @@ def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int =
         print(str(exception))
     return not is_success
 
+def is_mismatch_t0(test_fuzzerstate,quiet = False):
+    is_success, exception = runtest_simulator(test_fuzzerstate, test_fuzzerstate.rtl_elfpath,  test_fuzzerstate.expected_regvals)
+
+    if not is_success and exception.fail_type == FailTypeEnum.TAINT_MISMATCH and IGNORE_TAINT_MISMATCH:
+        is_success = True # We triggered leakage, but we are reducing for an architectural bug, not leakage.
 
 
+    assert is_success or exception.fail_type == FailTypeEnum.TAINT_MISMATCH
+
+    if not quiet and not is_success:
+        print(str(exception))
+    return not is_success
+
+
+def _find_right_taint_bound(test_fuzzerstate):
+    tainted_addresses = [i for i,j in test_fuzzerstate.memview.data_t0.items() if j != 0]
+    left_bound = 0
+    right_bound = len(tainted_addresses)
+    while right_bound - left_bound > 1:
+        tmp_fuzzerstate = deepcopy(test_fuzzerstate)
+        if DO_ASSERT:
+            assert right_bound > left_bound
+        candidate_bound = left_bound + (right_bound - left_bound) // 2
+        for tainted_addr in tainted_addresses[candidate_bound:]:
+            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
+        print(f"Testing {candidate_bound}.")
+        if is_mismatch_t0(tmp_fuzzerstate, len(tmp_fuzzerstate.instr_objs_seq)-1):
+            print(f"Leakage detected.")
+            right_bound = candidate_bound
+        else:
+            print(f"Leakage disappeared. Restoring taint.")
+            left_bound = candidate_bound
+
+    if DO_ASSERT:
+        assert left_bound + 1 == right_bound
+        tmp_fuzzerstate = deepcopy(test_fuzzerstate)
+        for tainted_addr in tainted_addresses[right_bound:]:
+            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
+        assert is_mismatch_t0(tmp_fuzzerstate, len(tmp_fuzzerstate.instr_objs_seq)-1), f"Failed detecting leakage with right bound {right_bound}"
+    return right_bound
+
+
+def _find_left_taint_bound(test_fuzzerstate):
+    tainted_addresses = [i for i,j in test_fuzzerstate.memview.data_t0.items() if j != 0]
+    left_bound = 0
+    right_bound = len(tainted_addresses)
+    while right_bound - left_bound > 1:
+        tmp_fuzzerstate = deepcopy(test_fuzzerstate)
+        if DO_ASSERT:
+            assert right_bound > left_bound
+        candidate_bound = left_bound + (right_bound - left_bound) // 2
+        for tainted_addr in tainted_addresses[:candidate_bound]:
+            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
+        print(f"Testing {candidate_bound}.")
+        if is_mismatch_t0(tmp_fuzzerstate, len(tmp_fuzzerstate.instr_objs_seq)-1):
+            print(f"Leakage detected.")
+            left_bound = candidate_bound
+        else:
+            print(f"Leakage disappeared. Restoring taint.")
+            right_bound = candidate_bound
+
+    if DO_ASSERT:
+        assert left_bound + 1 == right_bound
+        tmp_fuzzerstate = deepcopy(test_fuzzerstate)
+        for tainted_addr in tainted_addresses[:right_bound-1]:
+            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
+        assert is_mismatch_t0(tmp_fuzzerstate, len(tmp_fuzzerstate.instr_objs_seq)-1), f"Failed detecting leakage with left bound {left_bound}"
+
+    return right_bound-1
+
+
+# Does not remove taints off immediates!
+def reduce_taint(fuzzerstate):
+    # Only need to generate one elf and then just reduce simsramtaint
+    test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs = gen_reduced_elf(fuzzerstate, len(fuzzerstate.instr_objs_seq)-1)
+    test_fuzzerstate.expected_regvals = expected_regvals_pairs
+    test_fuzzerstate.rtl_elfpath = rtl_elfpath
+
+    tainted_addresses = [i for i,j in test_fuzzerstate.memview.data_t0.items() if j != 0]
+    print("Starting with taint reduction...")
+    # left_bound = _find_left_taint_bound(test_fuzzerstate)
+    # print(f"Left bound is {left_bound}")
+    # right_bound = _find_right_taint_bound(test_fuzzerstate)
+    # print(f"Right bound is {right_bound}")
+    right_bound = 3678 
+    left_bound = 3678
+    if DO_ASSERT:
+        tmp_fuzzerstate = deepcopy(test_fuzzerstate)
+        for tainted_addr in tainted_addresses[:left_bound]:
+            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
+        for tainted_addr in tainted_addresses[right_bound+1:]:
+            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
+        assert any(tmp_fuzzerstate.memview.data_t0.values())
+        assert is_mismatch_t0(tmp_fuzzerstate, len(tmp_fuzzerstate.instr_objs_seq)-1), f"Failed detecting leakage with bounds {left_bound} and {right_bound}"
+
+        leaked_addresses = [i for i,j in tmp_fuzzerstate.memview.data_t0.items() if j != 0]
+        privs = [fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[i&PAGE_ALIGNMENT_MASK] for i in leaked_addresses]
+    print(f"Found leaked data at {[hex(i) for i in leaked_addresses]}, belonging to {privs}")
+    return leaked_addresses
 # def _pick_matching_regs(fuzzerstate, instr_str, addr):
 #     fuzzerstate.simulate_execution(False,addr) # execute until here to get register values
 #     if instr_str == "beq":
@@ -490,7 +611,7 @@ def _try_flatten_cf(fuzzerstate, failing_bb, failing_instr, pillar_bb, pillar_in
     # print('Tgt addr', hex(flat_fuzzerstate.bb_start_addr_seq[1]))
     jal_inst = JALInstruction_t0(flat_fuzzerstate, "jal", 0, flat_fuzzerstate.bb_start_addr_seq[1] - (flat_fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*flat_fuzzerstate.ctxsv_bb_jal_instr_id))
     jal_inst.paddr = flat_fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*flat_fuzzerstate.ctxsv_bb_jal_instr_id + SPIKE_STARTADDR
-    flat_fuzzerstate.ctxsv_bbs[0][flat_fuzzerstate.ctxsv_bb_jal_instr_id] = jal_inst
+    flat_fuzzerstate.ctxsv_bb[flat_fuzzerstate.ctxsv_bb_jal_instr_id] = jal_inst
 
     is_flattening_success = is_mismatch(flat_fuzzerstate, 1)
 
@@ -799,7 +920,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
                     assert coarse_saved_instr.fuzzerstate == original_instr.fuzzerstate
 
             for instr_id in range(len(fuzzerstate.instr_objs_seq[bb_id])-1):
-                if is_placeholder(fuzzerstate.instr_objs_seq[bb_id][instr_id]): # Keep the placeholders as we risk tainting a source register for a cf ambiduous instruction otherwise.
+                if is_placeholder(fuzzerstate.instr_objs_seq[bb_id][instr_id]): # Keep the placeholders as we risk tainting a source register for a cf ambiguous instruction otherwise.
                     continue
                 nop_instr =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
                 nop_instr.paddr = fuzzerstate.instr_objs_seq[bb_id][instr_id].paddr
@@ -894,7 +1015,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 # @param target_dir: If not None, the directory where to save the generated files. Else, will be saved in the design's directory
 # @param find_pillars: If false, the front of the test case will not be reduced.
 # @return a boolean indicating whether the reduction was successful, a float measuring the elapesd time (in seconds), and the number of instructions in the test case.
-def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool = not USE_MMU, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
+def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool = True, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
     from cascade.fuzzerstate import FuzzerState
 
     ###
@@ -932,6 +1053,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         if DO_ASSERT:
             assert 'csr' in fuzzerstate.instr_objs_seq[block_id][instr_id].instr_str, f"Block id {block_id}, instr id {instr_id} was not a csr instruction but was {fuzzerstate.instr_objs_seq[block_id][instr_id].instr_str}"
         fuzzerstate.instr_objs_seq[block_id][instr_id] = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
+
+
+    if REDUCE_TAINT:
+        leaked_addresses = reduce_taint(fuzzerstate)
+
 
     ###
     # Find the first bb that causes trouble.
@@ -973,8 +1099,9 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     # failing_instr_id is the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore.
     # It is None if the failing instruction is actually the last one in the previous bb.
-    failing_instr_id = _find_failing_instr_in_bb(fuzzerstate, failing_bb_id, hint_left_bound_instr, hint_right_bound_instr, quiet=quiet)
-    # failing_instr_id = -1
+    # failing_instr_id = _find_failing_instr_in_bb(fuzzerstate, failing_bb_id, hint_left_bound_instr, hint_right_bound_instr, quiet=quiet)
+    # failing_instr_id = len(fuzzerstate.instr_objs_seq[failing_bb_id])-
+    failing_instr_id = 20
     # Regularize the case where the faulty instruction was a cf instruction at the end of a bb.
     # If the fault comes from the prev bb, by definition we keep failing_bb_id untouched, and we set failing_instr_id to -1.
     fault_from_prev_bb = False
@@ -1022,7 +1149,6 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     if not quiet:
         print(ret_msg)
     
-    return ret_msg
     ###
     # Cut the first bbs until the problem disappears.
     ###
@@ -1107,8 +1233,8 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             # Remove the instructions after and before
             fuzzerstate.instr_objs_seq[failing_bb_id] = fuzzerstate.instr_objs_seq[failing_bb_id][:failing_instr_id+2]
             jal_instr = JALInstruction_t0(fuzzerstate, "jal", 0, fuzzerstate.bb_start_addr_seq[1] + 4*(pillar_instr) - (fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*fuzzerstate.ctxsv_bb_jal_instr_id))
-            jal_instr.paddr = fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*fuzzerstate.ctxsv_bb_jal_instr_id + SPIKE_STARTADDR
-            fuzzerstate.ctxsv_bbs[0][fuzzerstate.ctxsv_bb_jal_instr_id] = jal_instr
+            jal_instr.paddr = fuzzerstate.ctxsv_bb_base_addr + 4*fuzzerstate.ctxsv_bb_jal_instr_id + SPIKE_STARTADDR
+            fuzzerstate.ctxsv_bb[fuzzerstate.ctxsv_bb_jal_instr_id] = jal_instr
             for instr_id in range(pillar_instr):
                 nop_instr = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0) # RawDataWord(0)
                 nop_instr.paddr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id + SPIKE_STARTADDR

@@ -32,16 +32,16 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
                     assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {hex(curr_addr)}"
                 addr_instrs[curr_addr] = curr_byte
 
-    for ctxsv_start_addr, ctxsv_bb_instrs in zip(fuzzerstate.ctxsv_bb_start_addr_seq, fuzzerstate.ctxsv_bbs):
-        for instr_id_in_bb, instr_obj in enumerate(ctxsv_bb_instrs):
-            if instr_obj is None:
-                raise ValueError(f"instrobj is None for ctxsv_bb at index {instr_id_in_bb}")
-            curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(4, 'little')
-            for curr_byte_id, curr_byte in enumerate(curr_bytecode):
-                curr_addr = ctxsv_start_addr + 4*instr_id_in_bb + curr_byte_id # NO_COMPRESSED
-                if DO_ASSERT:
-                    assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {hex(curr_addr)}"
-                addr_instrs[curr_addr] = curr_byte
+
+    for instr_id_in_bb, instr_obj in enumerate(fuzzerstate.ctxsv_bb):
+        if instr_obj is None:
+            raise ValueError(f"instrobj is None for ctxsv_bb at index {instr_id_in_bb}")
+        curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(4, 'little')
+        for curr_byte_id, curr_byte in enumerate(curr_bytecode):
+            curr_addr = ctxsv_start_addr + 4*instr_id_in_bb + curr_byte_id # NO_COMPRESSED
+            if DO_ASSERT:
+                assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {hex(curr_addr)}"
+            addr_instrs[curr_addr] = curr_byte
 
     # Add the initial register values
     for reg_data_id, reg_data_doubleword in enumerate(fuzzerstate.initial_reg_data_content):

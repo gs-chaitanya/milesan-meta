@@ -5,7 +5,7 @@ from cascade.util import ExceptionCauseVal
 from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from cascade.registers import ABI_INAMES
 from rv.csrids import CSR_ABI_NAMES
-from params.runparams import PRINT_CHECK_REGS_T0, PRINT_COLOR_TAINT, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT, PRINT_WRITEBACK_T0, PRINT_WRITEBACK, DUMP_WRITEBACK, DUMP_WRITEBACK_T0
+from params.runparams import PRINT_CHECK_REGS_T0, PRINT_COLOR_TAINT, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT, PRINT_WRITEBACK_T0, PRINT_WRITEBACK, DUMP_WRITEBACK, DUMP_WRITEBACK_T0, ASSERT_WRITEBACK_TRACE
 from common.spike import SPIKE_STARTADDR
 from cascade.registers import IntRegIndivState
 import numpy as np
@@ -143,12 +143,13 @@ class RDInstruction_t0(CFInstruction_t0):
             if self.fuzzerstate.intregpickstate.regs[self.rd].fsm_state !=  IntRegIndivState.FREE:
                 self.rd_unreliable = True
         if DO_ASSERT:
-            assert res_t0 == 0 or self.priv_level in self.fuzzerstate.taint_in_priv, f"{self.get_str()}: Taint detected in forbidden privelege: allowed are {[p.name for p in self.fuzzerstate.taint_in_priv]}. Taint is {hex(res_t0)}"
+            assert res_t0 == 0 or self.priv_level in self.fuzzerstate.taint_in_priv or self.iscontext, f"{self.get_str()}: Taint detected in forbidden privelege: allowed are {[p.name for p in self.fuzzerstate.taint_in_priv]}. Taint is {hex(res_t0)}"
         self.writeback_trace["in-situ" if is_spike_resolution else "final"] = (res, res_t0)
-        if not is_spike_resolution:
+        if not is_spike_resolution and ASSERT_WRITEBACK_TRACE:
             self.assert_writeback_trace()
 
     def assert_writeback_trace(self): # This will fail when reducing.
+        assert ASSERT_WRITEBACK_TRACE
         if not is_placeholder(self) and self.rd >0 and not self.rd_unreliable: # The placeholders will result in different values by construction.
             assert self.writeback_trace["in-situ"][0] == self.writeback_trace["final"][0], f"Writeback trace value mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'][0])} !=  {hex(self.writeback_trace['final'][0])}"
         assert self.writeback_trace["in-situ"][1] == self.writeback_trace["final"][1], f"Writeback trace taint mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'][1])} !=  {hex(self.writeback_trace['final'][1])}"
@@ -462,6 +463,9 @@ class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
             self.execute_t0(res, is_spike_resolution)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
+        if self.vaddr == 0x183c184674:
+            self.fuzzerstate.intregpickstate.print()
+            exit(0)
 
 
 ## Extended Placeholder Instructions ##

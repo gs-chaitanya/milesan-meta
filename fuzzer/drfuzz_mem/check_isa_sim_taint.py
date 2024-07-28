@@ -43,6 +43,7 @@ class FailTypeEnum(enum.IntEnum):
     RTL_TIMEOUT = enum.auto()
     VALUE_MISMATCH = enum.auto()
     TAINT_MISMATCH = enum.auto()
+    NO_FAILURE = enum.auto()
 
 class FuzzerStateException(Exception):
     def __init__(self, *args: object, fuzzerstate, fail_type: FailTypeEnum, timestamp) -> None:
@@ -77,7 +78,6 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     pc_reg_pairs = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
     for req, regval in zip(expected_regvals[2],expected_regvals[3]):
         pc_reg_pairs[req[0] + SPIKE_STARTADDR][req[2]] = regval
-        # print(f"{hex(req[0] + SPIKE_STARTADDR)}: {ABI_INAMES[req[2]]} = {hex(regval)}")
     expected_intregvals = expected_regvals[0]
     
     fuzzerstate.setup_env(interm_elfpath if USE_SPIKE_INTERM_ELF else rtl_elfpath,seed)
@@ -126,9 +126,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 next_instr.execute(is_spike_resolution=USE_SPIKE_INTERM_ELF)
                 
             # if this bb is followed by a context saver block, execute it
-            if bb_id in fuzzerstate.bb_id_to_ctxsv_id:
-                ctxsv_bb_id = fuzzerstate.bb_id_to_ctxsv_id[bb_id]
-                for next_instr in fuzzerstate.ctxsv_bbs[ctxsv_bb_id]:
+            if bb_id == fuzzerstate.last_bb_id_before_ctx_saver:
+                for next_instr in fuzzerstate.ctxsv_bb:
                     if DO_DOUBLECHECK_SIM:
                         if isinstance(next_instr, RegdumpInstruction_t0):
                             assert INSERT_REGDUMPS, f"Encountered RegdumpInstruction with INSERT_REGDUMPS disabled."

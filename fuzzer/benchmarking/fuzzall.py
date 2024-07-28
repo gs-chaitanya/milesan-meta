@@ -23,6 +23,7 @@ if __name__ == '__main__':
     
     cfgs = load_fuzzconfigs(cfgs_path)
     env = os.environ.copy()
+    assert not "TRACE_EN" in env or env["TRACE_EN"] == "0", f"This is a bad idea."
     cmd = []
     for cfg in cfgs:
         print(f"Fuzzing {cfg}")
