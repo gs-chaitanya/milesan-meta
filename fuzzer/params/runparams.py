@@ -9,6 +9,9 @@ if "CASCADE_ENV_SOURCED" not in os.environ:
 PATH_TO_TMP = os.path.join(os.environ['CASCADE_DATADIR'])
 os.makedirs(PATH_TO_TMP, exist_ok=True)
 PATH_TO_MNT = os.path.join(os.environ['LOCAL_MNT'])
+PATH_FROM_MODELSIM_TO_MNT = "/local/home/tkovats/ssh_mnt/"
+MODELSIM_REQ_DIR = os.path.join(PATH_TO_MNT, "modelsim_req")
+os.makedirs(MODELSIM_REQ_DIR, exist_ok=True)
 PATH_TO_COV = os.path.join(os.environ['COVDUMP_DIR'])
 PATH_TO_FIGURES = os.environ['CASCADE_PATH_TO_FIGURES']
 
