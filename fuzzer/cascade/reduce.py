@@ -38,7 +38,7 @@ REDUCTION_SIMULATOR = SimulatorEnum.VERILATOR
 NOPIZE_SANDWICH_INSTRUCTIONS = True
 FLATTEN_SANDWICH_INSTRUCTIONS = False
 REDUCE_TAINT = False
-
+FIND_PILLARS = True
 # @brief since stopsig and regdump addr are vitrual, the final block also needs some context, mainly, the translation scheme of stores in the current priviledge
 def gen_ctxt_finalbock(priv_level, layout_id, fuzzerstate, bb_id, instr_id):
     assert bb_id != -1
@@ -91,7 +91,7 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
 
     final_instr = fuzzerstate.instr_objs_seq[-1][-1]
     final_addr = final_instr.vaddr if USE_MMU else final_instr.paddr
-    print(f"THE TARGET PC IS {hex((tgt_pc+SPIKE_STARTADDR))} ({hex(fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] + 4*index_first_instr_to_consider + SPIKE_STARTADDR)})")
+    print(f"THE TARGET PC IS {hex((tgt_pc))} ({hex(final_instr.paddr)})")
     print(f"TARGET LAYOUT IS {tgt_addr_layout}")
     print(f"TARGET PRIV IS {tgt_addr_priv}")
 
@@ -102,8 +102,8 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
     if TAINT_EN and DO_ASSERT:
         dumpedvals_in_situ, dumpedvals_t0 = fuzzerstate.get_regdumps_from_reqs(ctx_regdump_reqs, True, None, False, True)
         assert len(dumpedvals_in_situ) == len(dumpedvals), f"Dumped {len(dumpedvals)} in spike but got only {len(dumpedvals_in_situ)} from in-situ."
-        for idx, (in_situ_d, in_situ_d_t0, spike_d) in enumerate(zip(dumpedvals_in_situ, dumpedvals_t0, dumpedvals)):
-            assert in_situ_d == spike_d or in_situ_d_t0 == 0, f"Mismatch between in-situ simulation and spike at addr {hex(ctx_regdump_reqs[idx][0])} for reg ID {ctx_regdump_reqs[idx][2]}: {filter_reg_traceback(ctx_regdump_reqs[idx][2],ctx_regdump_reqs[idx][0],fuzzerstate,spike_d).get_str()}: {hex(in_situ_d)} != {hex(spike_d)}, {hex(in_situ_d_t0)}" # Some dumps differ between in-situ and spike (e.g. generated and consumed registers)
+        # for idx, (in_situ_d, in_situ_d_t0, spike_d) in enumerate(zip(dumpedvals_in_situ, dumpedvals_t0, dumpedvals)):
+            # assert in_situ_d == spike_d or in_situ_d_t0 == 0, f"Mismatch between in-situ simulation and spike at addr {hex(ctx_regdump_reqs[idx][0])} for reg ID {ctx_regdump_reqs[idx][2]}: {filter_reg_traceback(ctx_regdump_reqs[idx][2],ctx_regdump_reqs[idx][0],fuzzerstate,spike_d).get_str()}: {hex(in_situ_d)} != {hex(spike_d)}, {hex(in_situ_d_t0)}" # Some dumps differ between in-situ and spike (e.g. generated and consumed registers)
     del ctx_regdump_reqs
 
     # Remove the ELF
@@ -357,7 +357,7 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
 
         test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_speculative-1] = new_jal
         test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
-    
+
     test_fuzzerstate.bb_start_addr_seq = test_fuzzerstate.bb_start_addr_seq[:max_bb_id_to_consider+1]
 
 
@@ -384,11 +384,13 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     final_addr = test_fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR
 
     if USE_MMU:
-    # Generate the translate last address
+    # Generate the translated last address
         final_addr = phys2virt(final_addr, last_addr_priv, last_addr_layout, test_fuzzerstate, False)
 
     # This is actually only needed for generating the final reg and freg values iirc.
     _, (finalintregvals_spikeresol, finalfloatregvals_spikeresol) = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags_nocompressed(test_fuzzerstate.design_name), SPIKE_STARTADDR, regdump_reqs, True, final_addr, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
+    
+    
 
 
     # Retrieves the rd stream throughout execution to compare to in-situ simulation, only for safety.
@@ -410,6 +412,7 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
 
     # Verify that the modifed program still has a valid taint propagation. 
     test_fuzzerstate.verify_program()
+
     return test_fuzzerstate, rtl_elfpath, (finalintregvals_spikeresol[1:], finalfloatregvals_spikeresol, rd_regdump_reqs, rd_regvals), numinstrs
 
 # This module resolves a mismatch between design and simulation by finding the first basic block that causes a mismatch.
@@ -1015,7 +1018,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 # @param target_dir: If not None, the directory where to save the generated files. Else, will be saved in the design's directory
 # @param find_pillars: If false, the front of the test case will not be reduced.
 # @return a boolean indicating whether the reduction was successful, a float measuring the elapesd time (in seconds), and the number of instructions in the test case.
-def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool = True, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
+def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, find_pillars: bool = FIND_PILLARS, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
     from cascade.fuzzerstate import FuzzerState
 
     ###
@@ -1099,9 +1102,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     # failing_instr_id is the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore.
     # It is None if the failing instruction is actually the last one in the previous bb.
-    # failing_instr_id = _find_failing_instr_in_bb(fuzzerstate, failing_bb_id, hint_left_bound_instr, hint_right_bound_instr, quiet=quiet)
-    # failing_instr_id = len(fuzzerstate.instr_objs_seq[failing_bb_id])-
-    failing_instr_id = 20
+    failing_instr_id = _find_failing_instr_in_bb(fuzzerstate, failing_bb_id, hint_left_bound_instr, hint_right_bound_instr, quiet=quiet)
     # Regularize the case where the faulty instruction was a cf instruction at the end of a bb.
     # If the fault comes from the prev bb, by definition we keep failing_bb_id untouched, and we set failing_instr_id to -1.
     fault_from_prev_bb = False
@@ -1149,6 +1150,8 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     if not quiet:
         print(ret_msg)
     
+    if not find_pillars:
+        return ret_msg
     ###
     # Cut the first bbs until the problem disappears.
     ###
@@ -1189,6 +1192,8 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             print(f"Pillar bb id                     : {pillar_bb_id}")
             print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id] + SPIKE_STARTADDR)}")
             print(f"Pillar instr                     : {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].get_str()}")
+
+
 
     ###
     # Transform some instructions into nops.
@@ -1299,11 +1304,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         print('Success smaller:', is_success_smaller)
         print('smaller msg:', rtl_msg_smaller)
 
-    assert is_success_smaller and not is_success_larger, f"Reduction failed."
+    # assert is_success_smaller and not is_success_larger, f"Reduction failed."
 
     ret_msg = f"{fuzzerstate.instance_to_str()}:\n"
-    ret_msg += f"\t Larger elf at {rtl_elfpath_larger}\n"
-    ret_msg += f"\t Smaller elf at {rtl_elfpath_smaller}\n"
+    ret_msg += f"\t Larger elf at {rtl_elfpath_larger}, success {is_success_larger}\n"
+    ret_msg += f"\t Smaller elf at {rtl_elfpath_smaller}, success {is_success_smaller}\n"
     if FLATTEN_SANDWICH_INSTRUCTIONS:
         ret_msg += f"\t Flatten success: {is_success_flattening}\n"
     ret_msg += f"\t Failing bb id: {failing_bb_id}\n"

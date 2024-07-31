@@ -763,7 +763,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
             instr.write() # Write both value and taint to DMEM
         if isinstance(instr, RegImmInstruction_t0):
             instr.write_t0() # Could have tainted immediates, only need to write taint to IMEM
-        instr.print()
+        # instr.print()
     # We store this state so we can reset the memview to it before (re-)simulating.
     # fuzzerstate.memview.store_state()
     fuzzerstate.memview.set_as_initial_state()

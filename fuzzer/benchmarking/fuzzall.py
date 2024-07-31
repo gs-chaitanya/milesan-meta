@@ -45,7 +45,7 @@ if __name__ == '__main__':
                     str(cfg["TIMEOUT"])
                 ]
 
-                subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
+                # subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
 
             except Exception as e:
                 print(f"Failed running {' '.join(cmd)}: {e}")

@@ -23,7 +23,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.FPUFSM:      0,
     ISAInstrClass.ALU:         0.3,
     ISAInstrClass.ALU64:       0.3,
-    ISAInstrClass.MULDIV:      0,
+    ISAInstrClass.MULDIV:      0.1,
     ISAInstrClass.MULDIV64:    0,
     ISAInstrClass.AMO:         0,
     ISAInstrClass.AMO64:       0,

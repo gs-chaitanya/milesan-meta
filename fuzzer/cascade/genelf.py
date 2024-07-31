@@ -38,7 +38,7 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
             raise ValueError(f"instrobj is None for ctxsv_bb at index {instr_id_in_bb}")
         curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(4, 'little')
         for curr_byte_id, curr_byte in enumerate(curr_bytecode):
-            curr_addr = ctxsv_start_addr + 4*instr_id_in_bb + curr_byte_id # NO_COMPRESSED
+            curr_addr =  fuzzerstate.ctxsv_bb_base_addr + 4*instr_id_in_bb + curr_byte_id # NO_COMPRESSED
             if DO_ASSERT:
                 assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {hex(curr_addr)}"
             addr_instrs[curr_addr] = curr_byte

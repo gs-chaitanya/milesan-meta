@@ -177,7 +177,7 @@ class FuzzerState:
         self.ctxsv_bb = []
         self.ctxsv_bb_base_addr = -1
         self.ctxsv_bb_jal_instr_id = -1 # Useful because the last elements in ctxsv_bb are data.
-        self.last_bb_id_before_ctx_saver = None
+        self.last_bb_id_before_ctx_saver = 0
         self.first_bb_id_after_ctx_saver = None
 
         # Context dump, not used i think
