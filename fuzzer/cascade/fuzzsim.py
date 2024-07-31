@@ -5,7 +5,7 @@
 # This script is responsible for running the RTL simulations from the fuzzer.
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA
-from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_FST, TRACE_EN, CHECK_MEM, PATH_TO_MNT
+from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_FST, TRACE_EN, CHECK_MEM, PATH_TO_MNT, MODELSIM_REQ_DIR, PATH_FROM_MODELSIM_TO_MNT, INSERT_REGDUMPS
 from cascade.util import IntRegIndivState
 from common.sim.modelsim import get_next_worker_id
 from common.sim.commonsim import setup_sim_env
@@ -309,6 +309,27 @@ def wait_and_load_regstream(fuzzerstate):
     os.makedirs(tmp_mnt_dir,exist_ok=True)
     dir_util.copy_tree(fuzzerstate.tmp_dir, tmp_mnt_dir)
     # print(f"Copied sources from {fuzzerstate.tmp_dir} to {tmp_mnt_dir}")
+    
+    simsramelf_modelsim = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['SIMSRAMELF'].split('/')[-1]}"
+    simsramtaint_modelsim = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['SIMSRAMTAINT'].split('/')[-1]}"
+    design_dir_modelsim =  f"{PATH_FROM_MODELSIM_TO_MNT}/{'/'.join(designcfgs.get_design_cascade_path(fuzzerstate.design_name).split('/')[2:])}"
+    regdump_path = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['REGDUMP_PATH'].split('/')[-1]}"
+    regstream_path = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['REGSTREAM_PATH'].split('/')[-1]}"
+    tracefile_path = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['TRACEFILE'].split('/')[-1]}"
+    req_dict = {
+        "SIMSRAMELF": simsramelf_modelsim,
+        "SIMSRAMTAINT" : simsramtaint_modelsim,
+        "DESIGN_DIR": design_dir_modelsim,
+        "DESIGN_NAME":fuzzerstate.design_name,
+        "REGDUMP_PATH": regdump_path,
+        "REGSTREAM_PATH":regstream_path,
+        "TRACEFILE" : tracefile_path
+    }
+    rtl_name = fuzzerstate.env['SIMSRAMELF'].split('/')[-1].split(".")[0]
+    req_path = f"{MODELSIM_REQ_DIR}/{rtl_name}.modelsim_req.json"
+    with open(req_path, "w") as f:
+        json.dump(req_dict, f)
+    # print(f"Dumped request to {req_path}")
     assert "REGDUMP_PATH" in fuzzerstate.env
     while(not os.path.exists(tmp_mnt_regdump_path)):
         time.sleep(2)
@@ -323,18 +344,19 @@ def wait_and_load_regstream(fuzzerstate):
                 break
         except json.JSONDecodeError:
             time.sleep(1)
-    
-    if not USE_VANILLA:
+    regstream_rtl_val_t0 = {}
+    regstream_rtl_val = {}
+    if not USE_VANILLA and INSERT_REGDUMPS:
         assert "REGSTREAM_PATH" in fuzzerstate.env
         tmp_mnt_regstream_path = f"{PATH_TO_MNT}/{fuzzerstate.env['REGSTREAM_PATH']}"
         assert os.path.exists(tmp_mnt_regstream_path), f"{tmp_mnt_regstream_path} does not exist"
         with open(tmp_mnt_regstream_path, "rb") as f:
             regstream_rtl = json.load(f)
-    
+        regstream_rtl_val_t0 = {int(r["id"],16): int(r["value_t0"],16) for r in regstream_rtl}
+        regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
+
     if not NO_REMOVE_TMPDIRS:
         shutil.rmtree(tmp_mnt_dir)
-    regstream_rtl_val_t0 = {int(r["id"],16): int(r["value_t0"],16) for r in regstream_rtl}
-    regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
 
     sramdump_rtl = {}
     return (regstream_rtl_val, regstream_rtl_val_t0), regdumps_rtl, sramdump_rtl

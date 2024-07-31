@@ -6,6 +6,8 @@ import threading
 import multiprocessing as mp
 import re
 import shutil
+import json
+
 PRINT_THREAD_STATUS = True
 MAX_N_THREADS = 30
 MUTE = False
@@ -22,70 +24,77 @@ def test_done_callback(ret):
                 print(f"Finished {n_finished_threads} threads.")
 
 
-def modelsim_worker(new_source):
+def modelsim_worker(new_req_path):
     if PRINT_THREAD_STATUS:
-        print(f"Found new design source at {new_source}")
-    rtl_elf_path = None
-    simsramtaint_path = None
-    for root, dirs, files in os.walk(new_source):
-        for file in files: 
-            if file.startswith("rtl") and file.endswith(".elf"):
-                rtl_elf_path = root+'/'+str(file)
-            elif file.startswith("ctprofiling") and file.endswith(".elf"):
-                rtl_elf_path = root+'/'+str(file)
-            elif file.endswith(".simsramtaint.txt"):
-                simsramtaint_path =  root+'/'+str(file)
-    print(f"Running {rtl_elf_path} with {simsramtaint_path}")
+        print(f"Found new design req at {new_req_path}")
 
-    assert rtl_elf_path is not None
-    assert simsramtaint_path is not None
+    with open(new_req_path, "r") as f:
+        req_env = json.load(f)
+
+
+    assert "SIMSRAMELF" in req_env,  "SIMSRAMELF not found in req!"
+    assert "SIMSRAMTAINT" in req_env,  "SIMSRAMTAINT not found in req!"
+    assert "DESIGN_DIR" in req_env, "DESIGN_DIR not found in req!"
+    assert "REGDUMP_PATH" in req_env, "REGDUMP_PATH not found in req!"
+    assert "REGSTREAM_PATH" in req_env, "REGSTREAM_PATH not found in req!"
+    assert not TRACE_EN or "TRACEFILE" in req_env, "TRACEFILE not found in req!"
+    simsramelf = req_env["SIMSRAMELF"]
+    simsramtaint = req_env["SIMSRAMTAINT"]
+
+    design_dir = req_env["DESIGN_DIR"]
+
+    while(not os.path.exists(simsramelf)):
+        time.sleep(2)
+        print(f"Waiting for {simsramelf}")
+
+    while(not os.path.exists(simsramtaint)):
+        time.sleep(1)
+        print(f"Waiting for {simsramtaint}")
+    
+    assert os.path.exists(design_dir), f"Design directory does not exists! {design_dir}"
+
+    print(f"Running {simsramelf} with {simsramtaint} in {design_dir}")
     env = os.environ.copy()
-    env["SIMSRAMELF"] = rtl_elf_path
-    env["REGDUMP_PATH"] = f"{new_source}/regdump.json"
-    env["REGSTREAM_PATH"] = f"{new_source}/regstream.json"
-    env["SIMSRAMTAINT"] = simsramtaint_path
-    env["TRACEFILE"] = rtl_elf_path.split(".")[0]+".trace.vcd"
-
+    env.update(req_env)
     cmd = [
         "make",
         "rerun_drfuzz_mem_notrace_modelsim" if not TRACE_EN else "rerun_drfuzz_mem_trace_modelsim"
     ]
     subprocess.run(cmd, cwd=design_dir, env=env, capture_output=MUTE)
     if PRINT_THREAD_STATUS:
-        print(f"Finished processing design source at {new_source}")
-    return new_source if not "ctprofiling" in rtl_elf_path else None
+        print(f"Finished processing design req at {new_req}")
+    return new_req
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        raise Exception("Usage: python3 do_run_modelsim.py <design-name> <design-dir> <design-run-source>")
+    if len(sys.argv) < 2:
+        raise Exception("Usage: python3 do_run_modelsim.py <mnt_dir>")
     
-    design_name = sys.argv[1]
-    design_dir = sys.argv[2]
-    source = sys.argv[3]
-    assert os.path.exists(source)
-    processed_sources = []
+    mnt_dir = sys.argv[1]
+    req_dir = f"{mnt_dir}/modelsim_req"
+    assert os.path.exists(req_dir)
+    processed_reqs = []
     with mp.Pool(processes=MAX_N_THREADS) as pool:
         while(1):
             time.sleep(2)
-            # all_sources = [os.path.join(source,i) for i in os.listdir(source)]
-            all_sources = []
-            for rootdir, dirs, files in os.walk(source):
-                for subdir in dirs:
-                    if len(re.findall(f"[0-9]+_{design_name}_[0-9]+_[0-9]+",subdir)):
-                        all_sources += [os.path.join(rootdir,subdir)]
-            if not len(all_sources):
+            # all_reqs = [os.path.join(req,i) for i in os.listdir(req)]
+            all_reqs = []
+            for rootdir, dirs, files in os.walk(req_dir):
+                for file in files:
+                    if file.endswith(".modelsim_req.json"):
+                        all_reqs += [os.path.join(rootdir,file)]
+            if not len(all_reqs):
                 if PRINT_THREAD_STATUS:
-                    print("Waiting for sources...")
+                    print("Waiting for requests...")
                 continue
             if PRINT_THREAD_STATUS:
-                print(f"Waiting for new design sources at {source}...\n started: {len(processed_sources)} threads, total: {len(all_sources)} in directory")
+                print(f"Waiting for requests at {req_dir}...\n started: {len(processed_reqs)} threads, total: {len(all_reqs)} in directory")
 
-            new_sources = [source for source in all_sources if source not in processed_sources]
+            new_reqs = [req for req in all_reqs if req not in processed_reqs]
 
-            for i, new_source in enumerate(new_sources):
-                processed_sources += [new_source]
+            for i, new_req in enumerate(new_reqs):
+                processed_reqs += [new_req]
                 if PRINT_THREAD_STATUS:
-                    print(f"Starting thread for {new_source}.")
-                pool.apply_async(modelsim_worker, args=(new_source,),callback=test_done_callback)
-
+                    print(f"Starting thread for {new_req}.")
+                pool.apply_async(modelsim_worker, args=(new_req,),callback=test_done_callback)
+                # modelsim_worker(new_req_path=new_req)
