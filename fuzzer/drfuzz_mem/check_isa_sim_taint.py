@@ -3,7 +3,7 @@ import shutil
 import glob
 import json
 
-from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, DO_DOUBLECHECK_SIM, CHECK_MEM
+from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, DO_DOUBLECHECK_SIM, CHECK_MEM, COLLECT_PERF_STATS, COLLECT_EXCEPTION_STATS, COLLECT_TAINT_STATS
 from params.fuzzparams import IGNORE_RTL_TIMEOUT, IGNORE_SPIKE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, DUMP_MCYCLES
 from cascade.toleratebugs import  is_tolerate_cva6_mhpmcounter,  is_tolerate_cva6_mhpmevent31
@@ -51,6 +51,15 @@ class FuzzerStateException(Exception):
         self.fuzzerstate = fuzzerstate
         self.fail_type = fail_type
         self.timestamp = timestamp
+        if COLLECT_EXCEPTION_STATS:
+            with open(os.path.join(fuzzerstate.tmp_dir, "exception.json"), "w") as f:
+                json.dump({
+                    "id": fuzzerstate.instance_to_str(),
+                    "dut": fuzzerstate.design_name,
+                    "t_total":timestamp,
+                    "fail_type": self.fail_type.name,
+                    "seed":fuzzerstate.randseed
+                }, f)
 
 class MismatchError(ValueError):
     def __init__(self, *args: object, fail_type: FailTypeEnum) -> None:
@@ -61,7 +70,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     start_time = time.time()
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
-        fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,_,_,_  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
+        fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
         n_instr_in_priv, forbidden_privs = fuzzerstate.compute_context_stats()
         if USE_MMU and ASSERT_EXEC_IN_TAINT_SINK_PRIV:
             assert sum([n_instr_in_priv[priv] for priv in forbidden_privs]) != 0, f"Computed program does not execute in taint sink privilege(s) {[p.name for p in forbidden_privs]}."
@@ -81,11 +90,17 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     expected_intregvals = expected_regvals[0]
     
     fuzzerstate.setup_env(interm_elfpath if USE_SPIKE_INTERM_ELF else rtl_elfpath,seed)
-    
+    if COLLECT_TAINT_STATS:
+        print(f'Dumping to {os.path.join(fuzzerstate.tmp_dir, "taint_stats.json")}')
+        with open(os.path.join(fuzzerstate.tmp_dir, "taint_stats.json"), "w") as f:
+            json.dump(fuzzerstate.compute_taint_stats(),f)
     fuzzerstate.write_imm_t0_to_mem() # Write the immediate taints from the program code to the imem.
     fuzzerstate.dump_memview_t0()
     try:
+        start_time_rtl = time.time()
         regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(fuzzerstate)
+        time_seconds_spent_in_rtl = time.time() - start_time_rtl
+
         regstream_rtl_val, regstream_rtl_val_t0 = regstream_rtl
 
         fuzzerstate.curr_pc = SPIKE_STARTADDR
@@ -230,6 +245,22 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.RTL_TIMEOUT, timestamp=time.time()-start_time)
 
         elif isinstance(e, MismatchError):
+            if COLLECT_PERF_STATS:
+                # print(f'dumping to {os.path.join(fuzzerstate.tmp_dir, "perfstats.json")}')
+                with open(os.path.join(fuzzerstate.tmp_dir, "perfstats.json"), "w") as f:
+                    json.dump({
+                        "id": fuzzerstate.instance_to_str(),
+                        "dut": fuzzerstate.design_name,
+                        "t_gen_bbs": time_seconds_spent_in_gen_bbs,
+                        "t_spike_resol": time_seconds_spent_in_spike_resol,
+                        "t_gen_elf": time_seconds_spent_in_gen_elf,
+                        "t_rtl" : time_seconds_spent_in_rtl,
+                        "n_bbs": len(fuzzerstate.instr_objs_seq),
+                        "n_instrs": sum([len(i) for i in fuzzerstate.instr_objs_seq]) + len(fuzzerstate.final_bb),
+                        "t_total":time.time() - start_time,
+                        "fail_type": e.fail_type.name,
+                        "seed":fuzzerstate.randseed
+                    }, f)
             raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=e.fail_type, timestamp=time.time()-start_time)
         else:
             raise Exception

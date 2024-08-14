@@ -2,13 +2,13 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, COLLECT_PERF_STATS, NO_REMOVE_TMPDIRS, NO_REMOVE_TMPFILES
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS, NONPICKABLE_REGISTERS
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_IN_PRIVS, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, TAINT_NONTAKEN_BRANCH_IMM
 from params.fuzzparams import reset_reg_settings
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
-
+from cascade.util import INSTRUCTIONS_BY_ISA_CLASS
 from cascade.util import ISAInstrClass, ExceptionCauseVal, MmuState
 from cascade.cfinstructionclasses import is_placeholder
 from cascade.memview import MemoryView
@@ -23,11 +23,12 @@ from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstru
 from cascade.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen
 from rv.csrids import CSR_IDS, CSR_ABI_NAMES
 from cascade.registers import ABI_INAMES
+from cascade.perfmonitor import PerformanceMonitor
 import random
 import os
 import itertools
 import shutil
-import json
+import glob
 
 class FuzzerState:
     # @param randseed for identification purposes only.
@@ -106,6 +107,8 @@ class FuzzerState:
 
         self.tmp_dir = os.path.join(PATH_TO_TMP, self.design_name, self.instance_to_str()) 
         os.makedirs(self.tmp_dir,exist_ok=True)
+
+        self.pmonitor = PerformanceMonitor(os.path.join(self.tmp_dir,'perf_stats.json'))
 
     # @brief return the MMU capabilities of the design 
     # @return [bool] : [sv32, sv39, sv48]
@@ -446,7 +449,17 @@ class FuzzerState:
         return env
 
     def remove_tmp_dir(self):
-        shutil.rmtree(self.tmp_dir)
+        if not NO_REMOVE_TMPDIRS:
+            shutil.rmtree(self.tmp_dir)
+        elif not NO_REMOVE_TMPFILES:
+            for file in glob.glob(f"{self.tmp_dir}/*.elf"):
+                os.remove(file)
+            for file in glob.glob(f"{self.tmp_dir}/*.txt"):
+                os.remove(file)
+            for file in glob.glob(f"{self.tmp_dir}/*.env"):
+                os.remove(file)
+            
+
 
 
     def load_init_regvals_from_memview(self):
@@ -571,6 +584,55 @@ class FuzzerState:
 
         forbidden_privs = list(set(list(PrivilegeStateEnum))-set(self.taint_in_priv))
         return n_instr_in_priv, forbidden_privs
+
+
+    def compute_taint_stats(self):
+        # Retrieve the register values from the requests
+        stats_per_cycle = []
+        self.curr_pc = SPIKE_STARTADDR
+        for bb_id, bb_instrs in enumerate(self.instr_objs_seq):
+            for next_instr in bb_instrs:
+                isa_class = None
+                for isac ,instrs in INSTRUCTIONS_BY_ISA_CLASS.items():
+                    if next_instr.instr_str in instrs:
+                        isa_class = isac
+                        break
+
+                stats = {
+                    "n_tainted_regs_ratio": sum([self.intregpickstate.regs[i].get_val_t0() != 0 for i in range(self.num_pickable_regs)])/self.num_pickable_regs,
+                    "all_reg_taints": [self.intregpickstate.regs[i].get_val_t0() for i in range(self.num_pickable_regs)],
+                    "priv": next_instr.priv_level,
+                    "instr_str": next_instr.instr_str,
+                    "rs1": None if not hasattr(next_instr, "rs1") else next_instr.rs1,
+                    "rs2": None if not hasattr(next_instr, "rs2") else next_instr.rs2,
+                    "rd": None if not hasattr(next_instr, "rd") else next_instr.rd,
+                    "rdep": None if not hasattr(next_instr, "rdep") else next_instr.rdep,
+                    "rdep_value":  None if not hasattr(next_instr, "rdep") else self.intregpickstate.regs[next_instr.rdep].get_val(),
+                    "rprod": None if not hasattr(next_instr, "rprod") else next_instr.rprod,
+                    "rprod_value":  None if not hasattr(next_instr, "rprod") else self.intregpickstate.regs[next_instr.rprod].get_val(),
+                    "rs1_value": None if not hasattr(next_instr, "rs1") else self.intregpickstate.regs[next_instr.rs1].get_val(),
+                    "rs2_value": None if not hasattr(next_instr, "rs2") else self.intregpickstate.regs[next_instr.rs2].get_val(),
+                    "rs1_value_t0": None if not hasattr(next_instr, "rs1") else self.intregpickstate.regs[next_instr.rs1].get_val_t0(),
+                    "rs2_value_t0": None if not hasattr(next_instr, "rs2") else self.intregpickstate.regs[next_instr.rs2].get_val_t0(),
+                    "imm_value": None if not hasattr(next_instr, "imm") else next_instr.imm,
+                    "imm_value_t0": None if not hasattr(next_instr, "imm_t0") else next_instr.imm_t0,
+                    "rd_value_before_exec": None if not hasattr(next_instr, "rd") else self.intregpickstate.regs[next_instr.rd].get_val(),
+                    "rd_value_t0_before_exec": None if not hasattr(next_instr, "rd") else self.intregpickstate.regs[next_instr.rd].get_val_t0(),
+                    "isa_class" : None if isa_class is None else isa_class.name,
+                    "instr_class": next_instr.__class__.__name__,
+                    "taint_in_privs": [i for i in self.taint_in_priv]
+                }
+                next_instr.execute(is_spike_resolution=False)
+                stats["rd_value_after_exec"] =  None if not hasattr(next_instr, "rd") else self.intregpickstate.regs[next_instr.rd].get_val()
+                stats["rd_value_t0_after_exec"] =  None if not hasattr(next_instr, "rd") else self.intregpickstate.regs[next_instr.rd].get_val_t0()
+                stats_per_cycle += [stats]
+            # if this bb is followed by a context saver block, execute it
+            # if bb_id == self.last_bb_id_before_ctx_saver:
+            #     assert False, f"Don't use this with ctxsaver"
+
+
+        self.reset_states()
+        return stats_per_cycle
 
     def log(self, log_msg):
         with open(f"{self.tmp_dir}/log.txt", "a") as f:
