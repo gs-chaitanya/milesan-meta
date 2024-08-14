@@ -72,6 +72,9 @@ PRINT_PRIV_STATS_DEFAULT = False
 DO_DOUBLECHECK_SIM_DEFAULT = True
 TRACE_EN_DEFAULT = False
 TRACE_FST_DEFAULT = False
+COLLECT_PERF_STATS_DEFAULT = False
+COLLECT_TAINT_STATS_DEFAULT = False
+COLLECT_EXCEPTION_STATS_DEFAULT = False
 
 # Actual values set from environment variables or defaults
 DO_ASSERT = get_env_bool('DO_ASSERT', str(int(DO_ASSERT_DEFAULT)))
@@ -117,6 +120,9 @@ PRINT_PRIV_STATS = get_env_bool('PRINT_PRIV_STATS', str(int(PRINT_PRIV_STATS_DEF
 DO_DOUBLECHECK_SIM = get_env_bool('DO_DOUBLECHECK_SIM', str(int(DO_DOUBLECHECK_SIM_DEFAULT)))
 TRACE_EN = get_env_bool('TRACE_EN', str(int(TRACE_EN_DEFAULT)))
 TRACE_FST = get_env_bool('TRACE_FST', str(int(TRACE_FST_DEFAULT)))
+COLLECT_PERF_STATS = get_env_bool('COLLECT_PERF_STATS', str(int(COLLECT_PERF_STATS_DEFAULT)))
+COLLECT_EXCEPTION_STATS = get_env_bool('COLLECT_EXCEPTION_STATS', str(int(COLLECT_EXCEPTION_STATS_DEFAULT)))
+COLLECT_TAINT_STATS = get_env_bool('COLLECT_TAINT_STATS', str(int(COLLECT_TAINT_STATS_DEFAULT)))
 
 # Ensure specific assertions
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
@@ -124,6 +130,5 @@ assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not suppo
 assert not (TAINT_NONTAKEN_BRANCH_IMM and INSERT_REGDUMPS), "Enabling TAINT_NONTAKEN_BRANCH_IMM might render INSERT_REGDUMPS useless as pc might get tainted if non-taken branch is predicted taken."
 assert not (INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN), f"Cannot check pc trace from spike when INSERT_REGDUMPS is enabled."
 assert not (INSERT_FENCE and not INSERT_REGDUMPS), f"INSERT_REGDUMPS must be enabled."
-
 # Timestamp
 TIMESTAMP_START = None
