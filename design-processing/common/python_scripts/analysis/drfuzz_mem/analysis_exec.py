@@ -11,7 +11,7 @@ FIGSIZE_FLAT = (8,2)
 LABELSIZE = 10
 TICKSIZE = 10
 LEGENDSIZE = 10
-CASCADE_DATADIR = "/cascade-data.BK/"
+CASCADE_DATADIR = "/cascade-data/"
 EXEC_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/exec"
 #%%
 exec_traces = []
@@ -264,8 +264,8 @@ mean = np.mean(traces["mismatch"])
 median = np.median(traces["mismatch"])
 for ax in [ax_b, ax_t]:
     sns.histplot(traces,x='mismatch', ax=ax,stat="percent",color="black",binwidth=5)
-    ax.axvline(x=mean, label="Mean percentage of overapproximated bits ({0:.1f}%)".format(mean),color="r")
-    ax.axvline(x=median, label="Median percentage of overapproximated bits ({0:.1f}%)".format(median))
+    ax.axvline(x=mean, label="Mean percentage of over-approximated bits ({0:.1f}%)".format(mean),color="r")
+    ax.axvline(x=median, label="Median percentage of over-approximated bits ({0:.1f}%)".format(median))
 ax_b.set_ylim(0,1)
 ax_b.set_yticks([0,0.5,1])
 ax_b.set_yticklabels([0,0.5,1], fontsize=TICKSIZE)
@@ -336,7 +336,7 @@ ax.set_xticks([0,1,2],labels=["U-mode","S-mode","M-mode"],fontsize=TICKSIZE)
 ax.set_yticks([0,15,30],labels=[0,15,30],fontsize=TICKSIZE)
 ax.set_ylim(0,50)
 ax.set_xlabel("Taint-source privilege", fontsize=LABELSIZE)
-ax.set_ylabel("Execution in privilege (%)", fontsize=LABELSIZE)
+ax.set_ylabel("Execution in privilege [%]", fontsize=LABELSIZE)
 ax.grid(axis="y")
 ax.legend(fontsize=LEGENDSIZE)
 plt.savefig(os.path.join(EXEC_PLOTS_PATH, "priv_stat.svg"))

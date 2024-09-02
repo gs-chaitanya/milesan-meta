@@ -82,7 +82,7 @@ ax.set_xticks(np.arange(4),labels=pretty_names,fontsize=TICKSIZE)
 ax.set_yticks([0,25,50,75,100],labels=[0,25,50,75,100],fontsize=TICKSIZE)
 
 ax.set_xlabel("DUT", fontsize=LABELSIZE)
-ax.set_ylabel("Time per step (%)", fontsize=LABELSIZE)
+ax.set_ylabel("Time per step [%]", fontsize=LABELSIZE)
 
 ax.grid(axis="y")
 ax.legend()
@@ -118,8 +118,10 @@ ax.set_xticks(np.arange(4),labels=pretty_names,fontsize=TICKSIZE)
 ax.set_yticks([0,50,100,150],labels=[0,50,100,150],fontsize=TICKSIZE)
 
 ax.set_xlabel("DUT", fontsize=LABELSIZE)
-ax.set_ylabel("Total runtime per program (s)", fontsize=LABELSIZE)
+ax.set_ylabel("Total runtime per program [s]", fontsize=LABELSIZE)
 
 ax.grid(axis="y")
 plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"total_time.svg"))
 # ax.legend()
+
+# %%
