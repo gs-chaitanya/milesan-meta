@@ -22,6 +22,7 @@ VARIANT_ID ?=
 
 MODELSIM_SV_VANILLA = generated/out/vanilla.sv dv/sv/tb_top.sv src/$(TOP_SOC).sv $(CASCADE_DESIGN_PROCESSING_ROOT)/common/src/sram_mem.sv
 MODELSIM_SV_DRFUZZ_MEM = generated/out/drfuzz_mem.sv dv/sv/tb_top_taints.sv src/$(TOP_SOC)_drfuzz_mem.sv $(CASCADE_DESIGN_PROCESSING_ROOT)/common/src/ift_sram_mem.sv
+MODELSIM_SV_PASSTHROUGH = generated/out/passthrough.sv dv/sv/tb_top.sv src/$(TOP_SOC).sv $(CASCADE_DESIGN_PROCESSING_ROOT)/common/src/sram_mem.sv
 
 MODELSIM_WORKDIR = $(MODELSIM_WORKROOT)/$(TOP_SOC)$(VARIANT_ID)_$(FUZZCOREID)
 
@@ -45,8 +46,17 @@ build_drfuzz_mem_notrace_modelsim:         $(MODELSIM_PATH_TO_BUILD_TCL) $(MODEL
 	touch modelsim/drfuzz_mem.log
 
 
-RERUN_MODELSIM_TARGETS_NOTRACE   = rerun_vanilla_notrace_modelsim, rerun_drfuzz_mem_notrace_modelsim
-RERUN_MODELSIM_TARGETS_TRACE     = rerun_vanilla_trace_modelsim, rerun_drfuzz_mem_trace_modelsim
+build_passthrough_notrace_modelsim:         $(MODELSIM_PATH_TO_BUILD_TCL) $(MODELSIM_SV_PASSTHROUGH)     | $(MODELSIM_WORKDIR) modelsim traces logs
+	cd $(MODELSIM_WORKDIR); CASCADE_DIR=$(CASCADE_DIR) TRACE=notrace     INSTRUMENTATION=passthrough CASCADE_META_COMMON=$(CASCADE_DESIGN_PROCESSING_ROOT)/common     MODELSIM_INCDIRSTR=$(MODELSIM_INCDIRSTR) MODELSIM_VLOG_COVERFLAG=$(MODELSIM_VLOG_COVERFLAG) TOP_SOC=$(TOP_SOC) VARIANT_ID=$(VARIANT_ID) SV_TOP=src/$(TOP_SOC).sv        SV_MEM=$(CASCADE_DESIGN_PROCESSING_ROOT)/common/src/sram_mem.sv SV_TB=dv/sv/tb_top.sv CURR_OPENTITAN_ROOT=$(CURR_OPENTITAN_ROOT) $(MODELSIM_VERSION) vsim -64 -vopt -c -do $<
+	touch modelsim/drfuzz_mem.log
+
+build_passthrough_trace_modelsim:         $(MODELSIM_PATH_TO_BUILD_TCL) $(MODELSIM_SV_PASSTHROUGH)     | $(MODELSIM_WORKDIR) modelsim traces logs
+	cd $(MODELSIM_WORKDIR); CASCADE_DIR=$(CASCADE_DIR) TRACE=trace     INSTRUMENTATION=passthrough CASCADE_META_COMMON=$(CASCADE_DESIGN_PROCESSING_ROOT)/common     MODELSIM_INCDIRSTR=$(MODELSIM_INCDIRSTR) MODELSIM_VLOG_COVERFLAG=$(MODELSIM_VLOG_COVERFLAG) TOP_SOC=$(TOP_SOC) VARIANT_ID=$(VARIANT_ID) SV_TOP=src/$(TOP_SOC).sv        SV_MEM=$(CASCADE_DESIGN_PROCESSING_ROOT)/common/src/sram_mem.sv SV_TB=dv/sv/tb_top.sv CURR_OPENTITAN_ROOT=$(CURR_OPENTITAN_ROOT) $(MODELSIM_VERSION) vsim -64 -vopt -c -do $<
+	touch modelsim/drfuzz_mem.log
+
+
+RERUN_MODELSIM_TARGETS_NOTRACE   = rerun_vanilla_notrace_modelsim rerun_drfuzz_mem_notrace_modelsim rerun_passthrough_notrace_modelsim
+RERUN_MODELSIM_TARGETS_TRACE     = rerun_vanilla_trace_modelsim rerun_drfuzz_mem_trace_modelsim rerun_passthrough_trace_modelsim
 RERUN_MODELSIM_TARGETS_TRACE_FST = rerun_vanilla_trace_fst_modelsim
 $(RERUN_MODELSIM_TARGETS_NOTRACE):   rerun_%_notrace_modelsim:   $(CASCADE_DESIGN_PROCESSING_ROOT)/common/modelsim/modelsim_run.tcl | $(MODELSIM_WORKDIR) modelsim traces logs
 	cd $(MODELSIM_WORKDIR); TOP_SOC=$(TOP_SOC) CASCADE_DIR=$(CASCADE_DIR) VARIANT_ID=$(VARIANT_ID) TRACE=notrace   INSTRUMENTATION=$* TRACEFILE=$(TRACEFILE)                   MODELSIM_VSIM_COVERFLAG=$(MODELSIM_VSIM_COVERFLAG) MODELSIM_VSIM_COVERPATH=$(MODELSIM_VSIM_COVERPATH) $(MODELSIM_VERSION) vsim -64 -c -do $<
