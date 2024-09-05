@@ -13,7 +13,7 @@ from cascade.randomize.createcfinstr import create_instr
 from cascade.randomize.pickisainstrclass import ISAInstrClass
 from cascade.randomize.forbidden_random_value import is_forbidden_random_value
 from cascade.util import get_range_bits_per_instrclass, BASIC_BLOCK_MIN_SPACE
-from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, USE_MMU
+from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, USE_MMU, INIT_MIE
 from params.runparams import INSERT_REGDUMPS
 from rv.asmutil import li_into_reg
 from common.spike import SPIKE_STARTADDR
@@ -138,6 +138,7 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
 
     # Start with enabled FPU, if the FPU exists.
     if fuzzerstate.design_has_fpu:
+        raise NotImplementedError
         # FUTURE Create dependencies on FPU_ENDIS_REGISTER_ID        
         # Enable the FPU
         curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, FPU_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), insert_regdump = False)
@@ -155,9 +156,11 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
         
         curr_addr += fuzzerstate.append_and_execute_instr(R12DInstruction_t0(fuzzerstate,"or", MPP_BOTH_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID,is_rd_nonpickable_ok=True),insert_regdump = False)
         
-        # Just for the alignment. Could be removed if we improved the alignment prediction. FUTURE.
-        curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0),insert_regdump = False)
-        
+        if INIT_MIE:
+            curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 0, CSR_IDS.MIE), insert_regdump = False)
+        else: # Just for the alignment.
+            curr_addr += fuzzerstate.append_and_execute_instr(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0),insert_regdump = False)
+
         # While it is not necesary to set the mpp initially, it is convenient to do so. If we don't, then we should adapt the initial values (typically to None) in privilegestate.py
         curr_addr += fuzzerstate.append_and_execute_instr(CSRRegInstruction_t0(fuzzerstate,"csrrs", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS), insert_regdump = False)
         

@@ -35,10 +35,10 @@ import time
 from pathlib import Path
 
 REDUCTION_SIMULATOR = SimulatorEnum.VERILATOR
-NOPIZE_SANDWICH_INSTRUCTIONS = True
+NOPIZE_SANDWICH_INSTRUCTIONS = False
 FLATTEN_SANDWICH_INSTRUCTIONS = False
 REDUCE_TAINT = False
-FIND_PILLARS = True
+FIND_PILLARS = False
 # @brief since stopsig and regdump addr are vitrual, the final block also needs some context, mainly, the translation scheme of stores in the current priviledge
 def gen_ctxt_finalbock(priv_level, layout_id, fuzzerstate, bb_id, instr_id):
     assert bb_id != -1

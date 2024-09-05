@@ -467,5 +467,6 @@ FUZZED_CSRS = [
             CSR_IDS.MTVAL,
             CSR_IDS.STVAL,
             CSR_IDS.SEPC,
-            CSR_IDS.MEPC
+            CSR_IDS.MEPC,
+            CSR_IDS.MIE
             ]

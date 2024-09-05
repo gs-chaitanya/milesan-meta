@@ -5,7 +5,7 @@
 # This script is responsible for running the RTL simulations from the fuzzer.
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA
-from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_FST, TRACE_EN, CHECK_MEM, PATH_TO_MNT, MODELSIM_REQ_DIR, PATH_FROM_MODELSIM_TO_MNT, INSERT_REGDUMPS
+from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_FST, TRACE_EN, CHECK_MEM, PATH_TO_MNT, MODELSIM_REQ_DIR, PATH_FROM_MODELSIM_TO_MNT, INSERT_REGDUMPS, USE_MODELSIM
 from cascade.util import IntRegIndivState
 from common.sim.modelsim import get_next_worker_id
 from common.sim.commonsim import setup_sim_env
@@ -30,7 +30,10 @@ class SimulatorEnum(Enum):
 # The maximum number of cycles that we allow per run is MAX_CYCLES_PER_INSTR * num_instrs + SETUP_CYCLES.
 MAX_CYCLES_PER_INSTR = 30
 SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
-
+if not USE_MODELSIM:
+    SIMULATOR = SimulatorEnum.VERILATOR
+else:
+    SIMULATOR = SimulatorEnum.MODELSIM
 # @param get_rfuzz_coverage_mask if True, then return a pair (is_stop_successful: bool, rfuzz_coverage_mask: int)
 # Return a pair (is_stop_successful: bool, reg_vals: int list of length <= MAX_NUM_PICKABLE_REGS-1 or None if is_stop_successful is False)
 def runsim_verilator(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PICKABLE_REGS-1, num_float_regs: int = MAX_NUM_PICKABLE_FLOATING_REGS, coveragepath = None, get_rfuzz_coverage_mask = False):
@@ -268,7 +271,7 @@ def runtest_modelsim_forcoverage(fuzzerstate, elfpath: str, coveragepath: str):
 def run_rtl_and_load_regstream(fuzzerstate):
     design_name = fuzzerstate.design_name
     env = fuzzerstate.env
-    if 'cva6' in design_name:
+    if 'cva6' in design_name or SIMULATOR == SimulatorEnum.MODELSIM:
         return wait_and_load_regstream(fuzzerstate)
     cmd = ["make",f"rerun_{'drfuzz_mem' if not USE_VANILLA else 'vanilla'}_{'notrace' if not TRACE_EN else 'trace' if not TRACE_FST else 'trace_fst'}"]
     cascadedir = designcfgs.get_design_cascade_path(design_name)
@@ -323,7 +326,8 @@ def wait_and_load_regstream(fuzzerstate):
         "DESIGN_NAME":fuzzerstate.design_name,
         "REGDUMP_PATH": regdump_path,
         "REGSTREAM_PATH":regstream_path,
-        "TRACEFILE" : tracefile_path
+        "TRACEFILE" : tracefile_path,
+        "SIMLEN": fuzzerstate.env["SIMLEN"]
     }
     rtl_name = fuzzerstate.env['SIMSRAMELF'].split('/')[-1].split(".")[0]
     req_path = f"{MODELSIM_REQ_DIR}/{rtl_name}.modelsim_req.json"
@@ -340,7 +344,7 @@ def wait_and_load_regstream(fuzzerstate):
         try:
             with open(tmp_mnt_regdump_path, "rb") as f:
                 regdumps_rtl = json.load(f)
-                # print(f"Modelsim results loaded succesfully.")
+                # print(f"Modelsim results loaded succesfully from {tmp_mnt_regdump_path}.")
                 break
         except json.JSONDecodeError:
             time.sleep(1)

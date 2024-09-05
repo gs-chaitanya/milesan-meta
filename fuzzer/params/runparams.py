@@ -75,6 +75,7 @@ TRACE_FST_DEFAULT = False
 COLLECT_PERF_STATS_DEFAULT = False
 COLLECT_TAINT_STATS_DEFAULT = False
 COLLECT_EXCEPTION_STATS_DEFAULT = False
+USE_MODELSIM_DEFAULT = False
 
 # Actual values set from environment variables or defaults
 DO_ASSERT = get_env_bool('DO_ASSERT', str(int(DO_ASSERT_DEFAULT)))
@@ -123,6 +124,7 @@ TRACE_FST = get_env_bool('TRACE_FST', str(int(TRACE_FST_DEFAULT)))
 COLLECT_PERF_STATS = get_env_bool('COLLECT_PERF_STATS', str(int(COLLECT_PERF_STATS_DEFAULT)))
 COLLECT_EXCEPTION_STATS = get_env_bool('COLLECT_EXCEPTION_STATS', str(int(COLLECT_EXCEPTION_STATS_DEFAULT)))
 COLLECT_TAINT_STATS = get_env_bool('COLLECT_TAINT_STATS', str(int(COLLECT_TAINT_STATS_DEFAULT)))
+USE_MODELSIM = get_env_bool('USE_MODELSIM', str(int(USE_MODELSIM_DEFAULT)))
 
 # Ensure specific assertions
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."

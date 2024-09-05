@@ -100,6 +100,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         start_time_rtl = time.time()
         regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(fuzzerstate)
         time_seconds_spent_in_rtl = time.time() - start_time_rtl
+        if not len(final_regvals_rtl):
+            raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: Modelsim timeout: Did not receive register requests.",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.RTL_TIMEOUT, timestamp=time.time()-start_time)
 
         regstream_rtl_val, regstream_rtl_val_t0 = regstream_rtl
 
@@ -263,7 +265,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     }, f)
             raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=e.fail_type, timestamp=time.time()-start_time)
         else:
-            raise Exception
+            raise e
     return fuzzerstate
 
 
