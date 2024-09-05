@@ -22,11 +22,11 @@ if [[ "${PWD}" == *"ssh_mnt"* ]];
 then
 echo "Running natively, modelsim workroot is ${PWD}"
 export LOCAL_MNT=/local/home/tkovats/ssh_mnt
+export PATH=$PATH:/usr/local/questa-2022-03/questasim/bin
 source $LOCAL_MNT/cellift-meta/env.sh
 else
 echo "Running inside container, modelsim workroot is ${PWD}"
 export LOCAL_MNT=/mnt
-export PATH=$PATH:/mnt/questa-2022-3/questasim/bin
 export LM_LICENSE_FILE=8161@lic-mentor.ethz.ch
 source /cellift-meta/env.sh
 fi
