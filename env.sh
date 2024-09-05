@@ -31,6 +31,8 @@ export LM_LICENSE_FILE=8161@lic-mentor.ethz.ch
 source /cellift-meta/env.sh
 fi
 
+export MODELSIM_REQ_DIR=$LOCAL_MNT/modelsim_req
+
 # Where are the design submodules located
 export CASCADE_DESIGN_PROCESSING_ROOT=$CASCADE_META_ROOT/design-processing
 

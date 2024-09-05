@@ -70,11 +70,11 @@ def modelsim_worker(new_req_path):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        raise Exception("Usage: python3 do_run_modelsim.py <mnt_dir>")
+    if len(sys.argv) < 1:
+        raise Exception("Usage: python3 do_run_modelsim.py")
     
-    mnt_dir = sys.argv[1]
-    req_dir = f"{mnt_dir}/modelsim_req"
+    assert "MODELSIM_REQ_DIR" in os.environ, f"MODELSIM_REQ_DIR not set. Did you source cascade-meta/env.sh?"
+    req_dir = os.environ["MODELSIM_REQ_DIR"]
     assert os.path.exists(req_dir)
     processed_reqs = []
     with mp.Pool(processes=MAX_N_THREADS) as pool:
