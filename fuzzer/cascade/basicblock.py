@@ -434,20 +434,22 @@ def pop_last_bbs_to_connect_with_final_block(fuzzerstate):
         # fuzzerstate.saved_reg_states.pop()
         fuzzerstate.pop_states()
 
-    if USE_MMU:
-        if DEBUG_PRINT: print(f"Updating fuzzerstate after a pop, old layout: {fuzzerstate.effective_curr_layout}, old_priv: ",fuzzerstate.privilegestate.privstate)
-        bb_id, instr_id = len(fuzzerstate.instr_objs_seq)-1, len(fuzzerstate.instr_objs_seq[-1])-1
-        layout_id, priv_level = get_last_bb_layout_and_priv(fuzzerstate, bb_id, instr_id)
-        fuzzerstate.privilegestate.privstate = priv_level
-        fuzzerstate.effective_curr_layout = layout_id
-        if priv_level == PrivilegeStateEnum.MACHINE:
-            fuzzerstate.real_curr_layout = get_last_real_layout(fuzzerstate, bb_id, instr_id)
-        else:
-            fuzzerstate.real_curr_layout = fuzzerstate.effective_curr_layout
-        # Get the last mpp
-        fuzzerstate.privilegestate.curr_mstatus_mpp = get_last_mpp(fuzzerstate, bb_id, instr_id)
-        # Update sum and mprv bits
-        fuzzerstate.status_sum_mprv = get_last_sum_mprv(fuzzerstate, bb_id, instr_id)
+        if USE_MMU:
+            if DEBUG_PRINT: print(f"Updating fuzzerstate after a pop, old layout: {fuzzerstate.effective_curr_layout}, old_priv: ",fuzzerstate.privilegestate.privstate)
+            bb_id, instr_id = len(fuzzerstate.instr_objs_seq)-1, len(fuzzerstate.instr_objs_seq[-1])-1
+            layout_id, priv_level = get_last_bb_layout_and_priv(fuzzerstate, bb_id, instr_id)
+            # assert layout_id == fuzzerstate.instr_objs_seq[-1][-1].va_layout_after_op
+            # assert priv_level == fuzzerstate.instr_objs_seq[-1][-1].priv_level_after_op
+            fuzzerstate.privilegestate.privstate = priv_level
+            fuzzerstate.effective_curr_layout = layout_id
+            if priv_level == PrivilegeStateEnum.MACHINE:
+                fuzzerstate.real_curr_layout = get_last_real_layout(fuzzerstate, bb_id, instr_id)
+            else:
+                fuzzerstate.real_curr_layout = fuzzerstate.effective_curr_layout
+            # Get the last mpp
+            fuzzerstate.privilegestate.curr_mstatus_mpp = get_last_mpp(fuzzerstate, bb_id, instr_id)
+            # Update sum and mprv bits
+            fuzzerstate.status_sum_mprv = get_last_sum_mprv(fuzzerstate, bb_id, instr_id)
 
     return False
 
