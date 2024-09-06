@@ -350,8 +350,9 @@ def _check_pc_trace_from_spike(fuzzerstate, spike_pc_seq):
             curr_id_in_spike_pc_seq += 1
             expected_pc = SPIKE_STARTADDR + fuzzerstate.bb_start_addr_seq[bb_id] + 4*bb_instr_id # NO_COMPRESSED
             if curr_addr_layout != -1: expected_pc = phys2virt(expected_pc, curr_priv_state, curr_addr_layout, fuzzerstate, False)
-
+            assert expected_pc == (bb_instr.vaddr if USE_MMU else bb_instr.paddr)
             # print(f"{hex(spike_pc)}/{hex(expected_pc)}")
+            # bb_instr.print()
             if spike_pc != expected_pc:
                 raise ValueError(f"PC mismatch: spike said `{hex(spike_pc)}`, but we expected `{hex(expected_pc)}`. BB id: `{hex(bb_id)}`, instr id: `{hex(bb_instr_id)}`. Prev pc: `{hex(prev_pc)}`. Spike instr id: {curr_id_in_spike_pc_seq}. Fuzzerstate identification: {fuzzerstate.instance_to_str()}")
             prev_pc = expected_pc

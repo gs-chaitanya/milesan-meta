@@ -32,6 +32,9 @@ def finalblock(fuzzerstate, design_name: str):
         assert regdump_addr < 0x80000000, f"For the destination address `{hex(regdump_addr)}`, we will need to manage sign extension, which is not yet implemented here."
         assert stopsig_addr < 0x80000000, f"For the destination address `{hex(stopsig_addr)}`, we will need to manage sign extension, which is not yet implemented here."
 
+    if DEBUG_PRINT: print(f"in final block, layout: {fuzzerstate.effective_curr_layout}, priv: ", fuzzerstate.privilegestate.privstate)
+        # assert fuzzerstate.effective_curr_layout == fuzzerstate.instr_objs_seq[-1][-1].va_layout_after_op, f"Effective layout does not match layout after op after final instruction before final block: {fuzzerstate.effective_curr_layout} != {fuzzerstate.instr_objs_seq[-1][-1].va_layout_after_op}, {fuzzerstate.instr_objs_seq[-1][-1].get_str()}"
+
     ret = []
     design_has_fpu = design_has_float_support(design_name)
     design_has_fpud = design_has_float_support(design_name)
@@ -60,7 +63,6 @@ def finalblock(fuzzerstate, design_name: str):
                 va_layout[-1][last_elem-1] &= 0xffffffffffffffef
                 va_layout[-1][last_elem] &= 0xffffffffffffffef
 
-    if DEBUG_PRINT: print(f"in final block, layout: {fuzzerstate.effective_curr_layout}, priv: ", fuzzerstate.privilegestate.privstate)
     if fuzzerstate.effective_curr_layout == -1 and not (fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and mprv_bit and (fuzzerstate.privilegestate.curr_mstatus_mpp != PrivilegeStateEnum.MACHINE) and fuzzerstate.real_curr_layout != -1):
         lui_imm_regdump, addi_imm_regdump = li_into_reg(regdump_addr)
         

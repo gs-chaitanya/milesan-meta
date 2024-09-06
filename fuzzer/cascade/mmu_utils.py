@@ -519,6 +519,7 @@ class PageTablesGen:
             assert mapped_initial_block
             assert mapped_final_block
             assert mapped_ctx_block
+
             # Coalesce the results and store bookeeping data
             curr_layout_pt_content += curr_layout_pt_content_supervisor
             self.all_pt_entries[layout_id].append(curr_layout_pt_content)
