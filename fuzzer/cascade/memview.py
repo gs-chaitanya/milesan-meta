@@ -58,6 +58,11 @@ class MemoryView:
                 return start >= curr_pair[0] and end <= curr_pair[1]
         return False
 
+    def is_mem_range_in_priv(self, priv:PrivilegeStateEnum, start: int, end:int): 
+        start_in_priv = priv in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(start&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
+        end_in_priv = priv in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(end&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
+        return start_in_priv & end_in_priv
+
     def is_cl_free(self, addr: int):
         cl_addr = addr - addr%self.cl_size
         return self.is_mem_range_free(cl_addr,cl_addr+self.cl_size)
@@ -150,7 +155,7 @@ class MemoryView:
         for _ in range(max_attempts):
             picked_addr = random.randrange((left_bound+(1 << alignment_bits)-1) >> alignment_bits, ((right_bound-min_space) >> alignment_bits)) << alignment_bits
             if min_space == 0 or self.is_mem_range_free(picked_addr, picked_addr+min_space) and \
-                 (not USE_MMU or len(self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict) == 0 or priv in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(picked_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]): # is_mem_range_free returns False if it goes beyond the memory boundaries.
+                 (not USE_MMU or len(self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict) == 0 or self.is_mem_range_in_priv(priv, picked_addr, picked_addr+min_space)):
                 if DO_ASSERT:
                     assert picked_addr >= 0
                     assert picked_addr + min_space <= self.memsize
