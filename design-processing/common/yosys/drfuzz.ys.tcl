@@ -13,7 +13,6 @@ if { [info exists ::env(MUXCOV_EN)]} {
     if { [info exists ::env(SHALLOW)] }      { set SHALLOW $::env(SHALLOW) }           else { set SHALLOW 0 }
 } else {set MUXCOV_EN 0}
 
-
 if { [info exists ::env(META_RESET)]} {
     set META_RESET $::env(META_RESET);
     if { [info exists ::env(SHALLOW)] }      { set SHALLOW $::env(SHALLOW) }           else { set SHALLOW 0 }
@@ -25,7 +24,6 @@ if { [info exists ::env(WIRE_PC_TO_TOP)]} {
     if { [info exists ::env(PC_TARGET_MODULE)] } { set PC_TARGET_MODULE $::env(PC_TARGET_MODULE) }  else { puts "Please set PC_TARGET_MODULE environment variable"; exit 1 }
     if { [info exists ::env(PC_TARGET)] } { set PC_TARGET $::env(PC_TARGET) }  else { puts "Please set PC_TARGET environment variable"; exit 1 }
 } else {set WIRE_PC_TO_TOP 0}
-
 
 if {[info exists ::env(CELLIFT_EN)]} {
     if { [info exists ::env(MUL_TO_ADDS)] }      { set MUL_TO_ADDS $::env(MUL_TO_ADDS) }           else { set MUL_TO_ADDS 0 }
