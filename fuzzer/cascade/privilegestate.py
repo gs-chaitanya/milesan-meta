@@ -3,7 +3,7 @@ from params.fuzzparams import USE_MMU
 from cascade.util import ExceptionCauseVal, IntRegIndivState
 from functools import reduce
 from enum import IntEnum
-
+ONLY_ALLOW_DELEGATED_EXCEPTIONS = False
 class PrivilegeStateEnum(IntEnum):
     USER       = 0
     SUPERVISOR = 1
@@ -59,6 +59,9 @@ class PrivilegeState:
         if not USE_MMU:
             supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
             supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
+
+        if ONLY_ALLOW_DELEGATED_EXCEPTIONS:
+            supported_exceptions_dict = {key:val and bool((self.medeleg_val>>val)&1) for key,val in supported_exceptions_dict.items()}
 
         # Remove all entries with weight zero
         for exception_cause_val in list(supported_exceptions_dict.keys()):

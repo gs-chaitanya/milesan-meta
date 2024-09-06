@@ -225,6 +225,7 @@ MAX_WEIGHT_T0 = 1
 REGPICK_PROTUBERANCE_RATIO_T0_POS = 0.6 # Prefer tainted registers for rs.
 REGPICK_PROTUBERANCE_RATIO_T0_NEG = 0.8 # Prefer untainted registers for rd.
 
+LEAVE_M_MODE_PROTURBANCE_RATIO = 4 # Factor by which increase M-mode leaving ISA classes when in M-mode.
 
 ALLOW_CSR_TAINT = False
 

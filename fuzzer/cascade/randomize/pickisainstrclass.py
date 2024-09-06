@@ -5,14 +5,13 @@
 from params.runparams import DO_ASSERT
 from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_fence, is_forbid_vexriscv_csrs, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_picorv32_writehpm, is_tolerate_picorv32_readnonimplcsr
 from cascade.util import ISAInstrClass, IntRegIndivState, MmuState, BASIC_BLOCK_MIN_SPACE
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, USE_MMU, ALLOW_JALR_IN_MACHINE_MODE, ALLOW_BRANCH_IN_MACHINE_MODE, DISABLE_COMPUTATION_ON_TAINT
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, USE_MMU, ALLOW_JALR_IN_MACHINE_MODE, ALLOW_BRANCH_IN_MACHINE_MODE, DISABLE_COMPUTATION_ON_TAINT, LEAVE_M_MODE_PROTURBANCE_RATIO
 from cascade.privilegestate import PrivilegeStateEnum, is_ready_to_descend_privileges
 from cascade.util import IntRegIndivState
 import random
 from copy import copy
 
 from cascade.randomize.pickmmuop import is_mmu_op_not_possible
-
 
 # This module helps picking an ISAInstrClass.
 # This is the first step of generating a random instruction without a specific structure.
@@ -44,7 +43,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.MEDELEG:     0.3,
     ISAInstrClass.EXCEPTION:   0.1,
     ISAInstrClass.RANDOM_CSR:  0.05,
-    ISAInstrClass.DESCEND_PRV: 0.5,
+    ISAInstrClass.DESCEND_PRV: 0.3,
     ISAInstrClass.SPECIAL:     0.01,
     ISAInstrClass.MMU:         0.5,
     ISAInstrClass.MSTATUS:     0,
@@ -176,7 +175,7 @@ def _filter_regfsm_weight(fuzzerstate, filtered_weights: list):
         filtered_weights[ISAInstrClass.REGFSM] = 0
         return filtered_weights
 
-    # When theres a lot of consumed registers, don't create mode and increase likeliness for the instructions that move them to RELOCUSED.
+    # When theres a lot of consumed registers, don't create more and increase likeliness for the instructions that move them to RELOCUSED.
     if fuzzerstate.intregpickstate.get_num_regs_in_state(IntRegIndivState.CONSUMED) > NUM_MAX_CONSUMED_INTREGS:
         filtered_weights[ISAInstrClass.REGFSM] = 0
         filtered_weights[ISAInstrClass.TVECFSM] *= PROTURBANCE_CONSUMED_REGS_TVECFSM
@@ -216,12 +215,11 @@ def _filter_csr_weight(fuzzerstate, filtered_weights: list):
 def _filter_sensitive_instr_weights(fuzzerstate, filtered_weights: list):
     if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED):
         filtered_weights[ISAInstrClass.JAL]     = 0
-        # We use branches with two dependent registers, so we don't need CONSUMED registers.
-        # filtered_weights[ISAInstrClass.BRANCH]  = 0
         filtered_weights[ISAInstrClass.MEDELEG] = 0
         filtered_weights[ISAInstrClass.TVECFSM] = 0
         filtered_weights[ISAInstrClass.EPCFSM]  = 0
         filtered_weights[ISAInstrClass.JALR]    = 0
+        # We have a seperate in-situ FSM for the MEM instructions now.
         # filtered_weights[ISAInstrClass.MEM]     = 0
         # filtered_weights[ISAInstrClass.MEM64]   = 0
         filtered_weights[ISAInstrClass.MEMFPU]  = 0
@@ -279,6 +277,13 @@ def _filter_cf_instr(fuzzerstate, filtered_weights: list):
 # Exposed function
 ###
 
+def _filter_privdescent(fuzzerstate, filtered_weights):
+    if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
+        filtered_weights[ISAInstrClass.DESCEND_PRV] *= LEAVE_M_MODE_PROTURBANCE_RATIO
+        filtered_weights[ISAInstrClass.EPCFSM] *= LEAVE_M_MODE_PROTURBANCE_RATIO
+        filtered_weights[ISAInstrClass.REGFSM] *= LEAVE_M_MODE_PROTURBANCE_RATIO
+    return filtered_weights
+
 # Do NOT @cache this function, as it is a random function.
 def gen_next_isainstrclass(fuzzerstate, curr_alloc_cursor, no_mmu_op: bool = False) -> ISAInstrClass:
     filtered_weights = _get_isainstrclass_filtered_weights(fuzzerstate, curr_alloc_cursor)
@@ -287,7 +292,7 @@ def gen_next_isainstrclass(fuzzerstate, curr_alloc_cursor, no_mmu_op: bool = Fal
     filtered_weights = _filter_csr_weight(fuzzerstate, filtered_weights)
     filtered_weights = _filter_sensitive_instr_weights(fuzzerstate, filtered_weights)
     filtered_weights = _filter_taint(fuzzerstate, filtered_weights)
-    
+    filtered_weights = _filter_privdescent(fuzzerstate, filtered_weights)
     if no_mmu_op:
         filtered_weights[ISAInstrClass.MMU] = 0
 

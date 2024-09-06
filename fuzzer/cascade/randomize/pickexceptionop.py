@@ -28,14 +28,14 @@ EXCEPTION_OP_TYPE_INITIAL_BOOSTERS = {
     ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION:          1,
     ExceptionCauseVal.ID_BREAKPOINT:                   0.1,
     ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:         1,
-    ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:            0, # 2,
+    ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:            1, # 2,
     ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:    0,
     ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:       0, # 2,
     ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE: 0.1,
     ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE: 0.1,
     ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE: 0.1,
     ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT:       0, # 4,
-    ExceptionCauseVal.ID_LOAD_PAGE_FAULT:              5, # 2,
+    ExceptionCauseVal.ID_LOAD_PAGE_FAULT:              1, # 2,
     ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT:         0  # 2
 }
 
@@ -220,7 +220,6 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, True)
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
         raise NotImplementedError("ID_LOAD_ACCESS_FAULT not yet supported")
-        raise 
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
@@ -443,16 +442,20 @@ def gen_ppfill_instrs(fuzzerstate):
         if not fuzzerstate.design_has_supervisor_mode and not fuzzerstate.design_has_user_mode or fuzzerstate.real_curr_layout == -1:
             target_privlvl = PrivilegeStateEnum.MACHINE
         elif fuzzerstate.design_has_supervisor_mode and not fuzzerstate.design_has_user_mode:
-            target_privlvl = random.choice([PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE])
+            # target_privlvl = random.choice([PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE])
+            target_privlvl = PrivilegeStateEnum.SUPERVISOR
         elif not fuzzerstate.design_has_supervisor_mode and fuzzerstate.design_has_user_mode:
-            target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.MACHINE])
+            # target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.MACHINE])
+            target_privlvl = PrivilegeStateEnum.USER
         else:
             target_privlvl = None
             for priv in forbidden_privs: # If we did not execute in all leakage sink privileges yet, prefer those.
                 if n_instr_in_priv[priv] == 0:
                     target_privlvl = priv
             if target_privlvl is None:
-                target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE])
+                # target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE])
+                target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR])
+
     else:
         if fuzzerstate.design_has_user_mode:
             target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR])
