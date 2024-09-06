@@ -34,6 +34,7 @@ if not USE_MODELSIM:
     SIMULATOR = SimulatorEnum.VERILATOR
 else:
     SIMULATOR = SimulatorEnum.MODELSIM
+PRINT_THREAD_STATUS = False
 # @param get_rfuzz_coverage_mask if True, then return a pair (is_stop_successful: bool, rfuzz_coverage_mask: int)
 # Return a pair (is_stop_successful: bool, reg_vals: int list of length <= MAX_NUM_PICKABLE_REGS-1 or None if is_stop_successful is False)
 def runsim_verilator(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PICKABLE_REGS-1, num_float_regs: int = MAX_NUM_PICKABLE_FLOATING_REGS, coveragepath = None, get_rfuzz_coverage_mask = False):
@@ -311,7 +312,8 @@ def wait_and_load_regstream(fuzzerstate):
     tmp_mnt_regdump_path = f"{PATH_TO_MNT}/{fuzzerstate.env['REGDUMP_PATH']}"
     os.makedirs(tmp_mnt_dir,exist_ok=True)
     dir_util.copy_tree(fuzzerstate.tmp_dir, tmp_mnt_dir)
-    # print(f"Copied sources from {fuzzerstate.tmp_dir} to {tmp_mnt_dir}")
+    if PRINT_THREAD_STATUS:
+        print(f"Copied sources from {fuzzerstate.tmp_dir} to {tmp_mnt_dir}")
     
     simsramelf_modelsim = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['SIMSRAMELF'].split('/')[-1]}"
     simsramtaint_modelsim = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['SIMSRAMTAINT'].split('/')[-1]}"
@@ -333,18 +335,22 @@ def wait_and_load_regstream(fuzzerstate):
     req_path = f"{MODELSIM_REQ_DIR}/{rtl_name}.modelsim_req.json"
     with open(req_path, "w") as f:
         json.dump(req_dict, f)
-    # print(f"Dumped request to {req_path}")
+    if PRINT_THREAD_STATUS:
+        print(f"Dumped request to {req_path}")
     assert "REGDUMP_PATH" in fuzzerstate.env
     while(not os.path.exists(tmp_mnt_regdump_path)):
         time.sleep(2)
-        # print(f"Waiting for modelsim results at {tmp_mnt_regdump_path}...")
-
-    # print(f"Modelsim results are ready. Loading...")
+        if PRINT_THREAD_STATUS:
+            print(f"Waiting for modelsim results at {tmp_mnt_regdump_path}...")
+    
+    if PRINT_THREAD_STATUS:
+        print(f"Modelsim results are ready. Loading...")
     while(1):
         try:
             with open(tmp_mnt_regdump_path, "rb") as f:
                 regdumps_rtl = json.load(f)
-                # print(f"Modelsim results loaded succesfully from {tmp_mnt_regdump_path}.")
+                if PRINT_THREAD_STATUS:
+                    print(f"Modelsim results loaded succesfully from {tmp_mnt_regdump_path}.")
                 break
         except json.JSONDecodeError:
             time.sleep(1)

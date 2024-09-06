@@ -405,14 +405,15 @@ class FuzzerState:
         
     def setup_env(self, rtl_elfpath, seed):
         ## temp dirs below
+        preamble = rtl_elfpath.split('/')[-1].split('.')[0]
         os.makedirs(self.tmp_dir,exist_ok=True)
-        env_path = os.path.join(self.tmp_dir,f'env.sh')
-        regdump_path = os.path.join(self.tmp_dir, f"regdump.json")
-        sramdump_path = os.path.join(self.tmp_dir, f"sramdump.json")
-        regstream_path = os.path.join(self.tmp_dir, f"regstream.json")
-        writeback_path = os.path.join(self.tmp_dir, f"writeback.txt")
-        simsramtaint_path = os.path.join(self.tmp_dir, f"{rtl_elfpath.split('/')[-1].split('.')[0]}.simsramtaint.txt")
-        tracefile_path = os.path.join(self.tmp_dir, f"{self.instance_to_str()}.trace{'.fst' if TRACE_FST else '.vcd'}")
+        env_path = os.path.join(self.tmp_dir,f'{preamble}.env.sh')
+        regdump_path = os.path.join(self.tmp_dir, f"{preamble}.regdump.json")
+        sramdump_path = os.path.join(self.tmp_dir, f"{preamble}.sramdump.json")
+        regstream_path = os.path.join(self.tmp_dir, f"{preamble}.regstream.json")
+        writeback_path = os.path.join(self.tmp_dir, f"{preamble}.writeback.txt")
+        simsramtaint_path = os.path.join(self.tmp_dir, f"{preamble}.simsramtaint.txt")
+        tracefile_path = os.path.join(self.tmp_dir, f"{preamble}.trace{'.fst' if TRACE_FST else '.vcd'}")
         num_instrs = len(list(itertools.chain.from_iterable(self.instr_objs_seq)))
         simlen = str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
         env = os.environ.copy()

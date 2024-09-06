@@ -4,8 +4,7 @@ import time
 import subprocess
 import threading
 import multiprocessing as mp
-import re
-import shutil
+import atexit
 import json
 
 PRINT_THREAD_STATUS = True
@@ -65,41 +64,44 @@ def modelsim_worker(new_req_path):
     ]
     subprocess.run(cmd, cwd=design_dir, env=env, capture_output=MUTE)
     if PRINT_THREAD_STATUS:
-        print(f"Finished processing design req at {new_req}")
-    return new_req
+        print(f"Finished processing design req at {new_req_path}")
+    return new_req_path
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 1:
-        raise Exception("Usage: python3 do_run_modelsim.py")
-    
-    assert "MODELSIM_REQ_DIR" in os.environ, f"MODELSIM_REQ_DIR not set. Did you source cascade-meta/env.sh?"
-    req_dir = os.environ["MODELSIM_REQ_DIR"]
-    assert os.path.exists(req_dir)
-    processed_reqs = []
-    with mp.Pool(processes=MAX_N_THREADS) as pool:
-        while(1):
-            time.sleep(2)
-            # all_reqs = [os.path.join(req,i) for i in os.listdir(req)]
-            all_reqs = []
-            for rootdir, dirs, files in os.walk(req_dir):
-                for file in files:
-                    if file.endswith(".modelsim_req.json"):
-                        req_path = os.path.join(rootdir,file)
-                        all_reqs += [req_path]
-            if not len(all_reqs):
-                if PRINT_THREAD_STATUS:
-                    print("Waiting for requests...")
-                continue
-            if PRINT_THREAD_STATUS:
-                print(f"Waiting for requests at {req_dir}...\n started: {len(processed_reqs)} threads, {len(all_reqs)} pending requests in directory")
+    if len(sys.argv) > 2:
+        raise Exception("Usage: python3 do_run_modelsim.py [path_to_req]")
 
-            new_reqs = [req for req in all_reqs if req not in processed_reqs]
-
-            for i, new_req in enumerate(new_reqs):
-                processed_reqs += [new_req]
+    if len(sys.argv) > 1:
+        path_to_req = sys.argv[1]
+        modelsim_worker(path_to_req)
+    else:
+        assert "MODELSIM_REQ_DIR" in os.environ, f"MODELSIM_REQ_DIR not set. Did you source cascade-meta/env.sh?"
+        req_dir = os.environ["MODELSIM_REQ_DIR"]
+        assert os.path.exists(req_dir)
+        initiated_reqs = []
+        with mp.Pool(processes=MAX_N_THREADS) as pool:
+            while(1):
+                time.sleep(2)
+                all_reqs = []
+                for rootdir, dirs, files in os.walk(req_dir):
+                    for file in files:
+                        if file.endswith(".modelsim_req.json"):
+                            req_path = os.path.join(rootdir,file)
+                            all_reqs += [req_path]
+                if not len(all_reqs):
+                    if PRINT_THREAD_STATUS:
+                        print("Waiting for requests...")
+                    continue
                 if PRINT_THREAD_STATUS:
-                    print(f"Starting thread for {new_req}.")
-                pool.apply_async(modelsim_worker, args=(new_req,),callback=test_done_callback)
+                    print(f"Waiting for requests at {req_dir}...\n started: {len(initiated_reqs)} threads, {len(all_reqs)} pending requests in directory")
+
+                new_reqs = [req for req in all_reqs if req not in initiated_reqs]
+
+                for i, new_req in enumerate(new_reqs):
+                    initiated_reqs += [new_req]
+                    if PRINT_THREAD_STATUS:
+                        print(f"Starting thread for {new_req}.")
+                    pool.apply_async(modelsim_worker, args=(new_req,),callback=test_done_callback)
 
             
