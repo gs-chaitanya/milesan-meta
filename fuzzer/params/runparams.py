@@ -6,10 +6,12 @@ if "CASCADE_ENV_SOURCED" not in os.environ:
     raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
 # Paths
-PATH_TO_TMP = os.path.join(os.environ['CASCADE_DATADIR'])
+PATH_TO_TMP_ENV_VAR = "CASCADE_DATADIR"
+PATH_TO_TMP = os.path.join(os.environ[PATH_TO_TMP_ENV_VAR])
 os.makedirs(PATH_TO_TMP, exist_ok=True)
 PATH_TO_MNT = os.path.join(os.environ['LOCAL_MNT'])
 PATH_FROM_MODELSIM_TO_MNT = "/local/home/tkovats/ssh_mnt/"
+PATH_TO_MNT_ENV_VAR = "LOCAL_MNT"
 MODELSIM_REQ_DIR = os.path.join(PATH_TO_MNT, "modelsim_req")
 os.makedirs(MODELSIM_REQ_DIR, exist_ok=True)
 PATH_TO_COV = os.path.join(os.environ['COVDUMP_DIR'])

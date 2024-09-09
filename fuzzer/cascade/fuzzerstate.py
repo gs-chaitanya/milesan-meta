@@ -2,11 +2,11 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, COLLECT_PERF_STATS, NO_REMOVE_TMPDIRS, NO_REMOVE_TMPFILES
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP,PATH_TO_MNT, PATH_TO_MNT_ENV_VAR, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, COLLECT_PERF_STATS, NO_REMOVE_TMPDIRS, NO_REMOVE_TMPFILES
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS, NONPICKABLE_REGISTERS
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_IN_PRIVS, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, TAINT_NONTAKEN_BRANCH_IMM
 from params.fuzzparams import reset_reg_settings
-from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_boot_addr, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48
+from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_cascade_path, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
 from cascade.util import INSTRUCTIONS_BY_ISA_CLASS
 from cascade.util import ISAInstrClass, ExceptionCauseVal, MmuState
@@ -106,6 +106,7 @@ class FuzzerState:
         self.rtl_elfpath = None
 
         self.tmp_dir = os.path.join(PATH_TO_TMP, self.design_name, self.instance_to_str()) 
+        # Same directory but relative from native env i.e. points to SSH mount from outside of the container
         os.makedirs(self.tmp_dir,exist_ok=True)
 
         self.pmonitor = PerformanceMonitor(os.path.join(self.tmp_dir,'perf_stats.json'))
@@ -416,7 +417,7 @@ class FuzzerState:
         tracefile_path = os.path.join(self.tmp_dir, f"{preamble}.trace{'.fst' if TRACE_FST else '.vcd'}")
         num_instrs = len(list(itertools.chain.from_iterable(self.instr_objs_seq)))
         simlen = str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
-        env = os.environ.copy()
+        env = {}
         env["SIMLEN"] = simlen
         env["SIMSRAMELF"] = rtl_elfpath
         env["ID"] = str(self.instance_to_str())
@@ -428,18 +429,19 @@ class FuzzerState:
         env["SIMSRAMTAINT"] = simsramtaint_path
         env["TRACEFILE"] = tracefile_path
         env["WRITEBACK_PATH"] = writeback_path
+        env["DESIGN_DIR"] = get_design_cascade_path(self.design_name)
         with open(env_path, "w") as f:
-            f.write(f"export SIMSRAMELF={env['SIMSRAMELF']}\n")
-            f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF']}.dump\n")
-            f.write(f"export SIMSRAMTAINT={simsramtaint_path}\n")
+            f.write(f"export SIMSRAMELF={env['SIMSRAMELF'].replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
+            f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF'].replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}.dump\n")
+            f.write(f"export SIMSRAMTAINT={simsramtaint_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
             f.write(f"export SEED={env['SEED']}\n")
             f.write(f"export ID={env['ID']}\n")
             f.write(f"export SIMLEN={simlen}\n")
-            f.write(f"export REGSTREAM_PATH={regstream_path}\n")
-            f.write(f"export REGDUMP_PATH={regdump_path}\n")
-            f.write(f"export SRAMDUMP_PATH={sramdump_path}\n")
-            f.write(f"export TRACEFILE={tracefile_path}\n")
-            f.write(f"export WRITEBACK_PATH={writeback_path}\n")
+            f.write(f"export REGSTREAM_PATH={regstream_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
+            f.write(f"export REGDUMP_PATH={regdump_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
+            f.write(f"export SRAMDUMP_PATH={sramdump_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
+            f.write(f"export TRACEFILE={tracefile_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
+            f.write(f"export WRITEBACK_PATH={writeback_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
             
         if PRINT_ENVIRONMENT:
             print("*** ENVIRONMENT ***")

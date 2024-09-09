@@ -15,7 +15,7 @@ if __name__ == '__main__':
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
     
     if len(sys.argv) < 1:
-        raise Exception("Usage: python3 fuzzall.py <path_to_config_json>")
+        raise Exception("Usage: python3 fuzz_and_reduce.py <path_to_config_json>")
 
 
     if len(sys.argv) > 1:

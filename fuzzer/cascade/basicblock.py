@@ -43,11 +43,6 @@ CURR_ALLOC_CURSOR_INC = 12 if INSERT_FENCE and INSERT_REGDUMPS else 8 if INSERT_
 def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     range_bits_each_direction = get_range_bits_per_instrclass(isa_class)
 
-    # if isa_class in  (ISAInstrClass.EXCEPTION, ISAInstrClass.DESCEND_PRV): # When we are changing privilege, we need a new page.
-    #     alignment_bits = PAGE_ALIGNMENT_SHIFT # TODO: allow non-page aligned addresses
-    # else:
-    #     alignment_bits = 4
-
     # We must select the next basic block address before the resolution
     fuzzerstate.next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction), priv = fuzzerstate.privilegestate.privstate)
     # If we could not find a new address where to place the next basic block, then return and consider this stage complete.
@@ -57,6 +52,8 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     if USE_MMU and DO_ASSERT:
         assert fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.next_bb_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR], f"Generated BB addr does not match required privilege: {fuzzerstate.privilegestate.privstate.name} not in {[p.name for p in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.next_bb_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]]}"
 
+    # print(f"Next BB at {hex(fuzzerstate.next_bb_addr)} : {hex(fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)}")
+    # assert fuzzerstate.memview.is_mem_range_free(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
     return True
 
 def is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor, required_space: int = BASIC_BLOCK_MIN_SPACE):

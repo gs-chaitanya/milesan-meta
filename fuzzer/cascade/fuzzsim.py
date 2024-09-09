@@ -34,7 +34,7 @@ if not USE_MODELSIM:
     SIMULATOR = SimulatorEnum.VERILATOR
 else:
     SIMULATOR = SimulatorEnum.MODELSIM
-PRINT_THREAD_STATUS = False
+PRINT_THREAD_STATUS = True
 # @param get_rfuzz_coverage_mask if True, then return a pair (is_stop_successful: bool, rfuzz_coverage_mask: int)
 # Return a pair (is_stop_successful: bool, reg_vals: int list of length <= MAX_NUM_PICKABLE_REGS-1 or None if is_stop_successful is False)
 def runsim_verilator(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PICKABLE_REGS-1, num_float_regs: int = MAX_NUM_PICKABLE_FLOATING_REGS, coveragepath = None, get_rfuzz_coverage_mask = False):
@@ -271,11 +271,14 @@ def runtest_modelsim_forcoverage(fuzzerstate, elfpath: str, coveragepath: str):
 
 def run_rtl_and_load_regstream(fuzzerstate):
     design_name = fuzzerstate.design_name
-    env = fuzzerstate.env
-    if 'cva6' in design_name or SIMULATOR == SimulatorEnum.MODELSIM:
+    if SIMULATOR == SimulatorEnum.MODELSIM:
         return wait_and_load_regstream(fuzzerstate)
+    if "cva6" in design_name:
+        print(f"WARNING: Fuzzing CVA6 with Verilator triggers taint propagation bug in Verilator.")
     cmd = ["make",f"rerun_{'drfuzz_mem' if not USE_VANILLA else 'vanilla'}_{'notrace' if not TRACE_EN else 'trace' if not TRACE_FST else 'trace_fst'}"]
     cascadedir = designcfgs.get_design_cascade_path(design_name)
+    env = os.environ
+    env.update(fuzzerstate.env)
     subprocess.run(cmd,cwd=cascadedir,env=env,capture_output=True,check=True)
 
     assert "REGDUMP_PATH" in env
@@ -307,66 +310,43 @@ def run_rtl_and_load_regstream(fuzzerstate):
 
 # Use this when fuzzing with modelsim as we can't start it from the container. Need second script to run natively in parallel and a shared mount.
 def wait_and_load_regstream(fuzzerstate):
-
-    tmp_mnt_dir = f"{PATH_TO_MNT}/{fuzzerstate.tmp_dir}"
-    tmp_mnt_regdump_path = f"{PATH_TO_MNT}/{fuzzerstate.env['REGDUMP_PATH']}"
-    os.makedirs(tmp_mnt_dir,exist_ok=True)
-    dir_util.copy_tree(fuzzerstate.tmp_dir, tmp_mnt_dir)
-    if PRINT_THREAD_STATUS:
-        print(f"Copied sources from {fuzzerstate.tmp_dir} to {tmp_mnt_dir}")
-    
-    simsramelf_modelsim = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['SIMSRAMELF'].split('/')[-1]}"
-    simsramtaint_modelsim = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['SIMSRAMTAINT'].split('/')[-1]}"
-    design_dir_modelsim =  f"{PATH_FROM_MODELSIM_TO_MNT}/{'/'.join(designcfgs.get_design_cascade_path(fuzzerstate.design_name).split('/')[2:])}"
-    regdump_path = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['REGDUMP_PATH'].split('/')[-1]}"
-    regstream_path = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['REGSTREAM_PATH'].split('/')[-1]}"
-    tracefile_path = f"{PATH_FROM_MODELSIM_TO_MNT}/{fuzzerstate.tmp_dir}/{fuzzerstate.env['TRACEFILE'].split('/')[-1]}"
-    req_dict = {
-        "SIMSRAMELF": simsramelf_modelsim,
-        "SIMSRAMTAINT" : simsramtaint_modelsim,
-        "DESIGN_DIR": design_dir_modelsim,
-        "DESIGN_NAME":fuzzerstate.design_name,
-        "REGDUMP_PATH": regdump_path,
-        "REGSTREAM_PATH":regstream_path,
-        "TRACEFILE" : tracefile_path,
-        "SIMLEN": fuzzerstate.env["SIMLEN"]
-    }
+    req_dict = {key:value.replace(PATH_TO_MNT, PATH_FROM_MODELSIM_TO_MNT) for key,value in fuzzerstate.env.items()}
     rtl_name = fuzzerstate.env['SIMSRAMELF'].split('/')[-1].split(".")[0]
     req_path = f"{MODELSIM_REQ_DIR}/{rtl_name}.modelsim_req.json"
     with open(req_path, "w") as f:
         json.dump(req_dict, f)
     if PRINT_THREAD_STATUS:
         print(f"Dumped request to {req_path}")
+
     assert "REGDUMP_PATH" in fuzzerstate.env
-    while(not os.path.exists(tmp_mnt_regdump_path)):
+    regdump_path = fuzzerstate.env["REGDUMP_PATH"]
+
+    while(not os.path.exists(regdump_path)):
         time.sleep(2)
         if PRINT_THREAD_STATUS:
-            print(f"Waiting for modelsim results at {tmp_mnt_regdump_path}...")
+            print(f"Waiting for modelsim results at {regdump_path}...")
     
     if PRINT_THREAD_STATUS:
         print(f"Modelsim results are ready. Loading...")
     while(1):
         try:
-            with open(tmp_mnt_regdump_path, "rb") as f:
+            with open(regdump_path, "rb") as f:
                 regdumps_rtl = json.load(f)
                 if PRINT_THREAD_STATUS:
-                    print(f"Modelsim results loaded succesfully from {tmp_mnt_regdump_path}.")
+                    print(f"Modelsim results loaded succesfully from {regdump_path}.")
                 break
         except json.JSONDecodeError:
             time.sleep(1)
     regstream_rtl_val_t0 = {}
     regstream_rtl_val = {}
     if not USE_VANILLA and INSERT_REGDUMPS:
+        regstream_path = fuzzerstate.env["REGSTREAM_PATH"]
         assert "REGSTREAM_PATH" in fuzzerstate.env
-        tmp_mnt_regstream_path = f"{PATH_TO_MNT}/{fuzzerstate.env['REGSTREAM_PATH']}"
-        assert os.path.exists(tmp_mnt_regstream_path), f"{tmp_mnt_regstream_path} does not exist"
-        with open(tmp_mnt_regstream_path, "rb") as f:
+        assert os.path.exists(regstream_path), f"{regstream_path} does not exist"
+        with open(regstream_path, "rb") as f:
             regstream_rtl = json.load(f)
         regstream_rtl_val_t0 = {int(r["id"],16): int(r["value_t0"],16) for r in regstream_rtl}
         regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
-
-    if not NO_REMOVE_TMPDIRS:
-        shutil.rmtree(tmp_mnt_dir)
 
     sramdump_rtl = {}
     return (regstream_rtl_val, regstream_rtl_val_t0), regdumps_rtl, sramdump_rtl
