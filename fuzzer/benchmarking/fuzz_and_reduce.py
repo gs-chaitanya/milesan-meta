@@ -34,6 +34,8 @@ if __name__ == '__main__':
             datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["NAME"])
             env["CASCADE_DATADIR"] = datadir
             os.makedirs(datadir, exist_ok=True)
+            with open(os.path.join(datadir,"config.json"), "w") as f:
+                json.dump(cfg,f)
             try:
                 cmd = [
                     "python",
@@ -41,7 +43,7 @@ if __name__ == '__main__':
                     design_name,
                     str(cfg["N_THREADS"]),
                     str(cfg["N_TESTS"]),
-                    "0",
+                    str(cfg["SEED_OFFSET"]) if "SEED_OFFSET" in cfg else str(0),
                     str(cfg["TIMEOUT"])
                 ]
 

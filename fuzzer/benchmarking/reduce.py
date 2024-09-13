@@ -5,6 +5,8 @@ import subprocess
 import os
 import json
 TIMEOUT_REDUCE=7200
+USE_MODELSIM = None
+
 def load_fuzzconfigs(path: str):
     with open(path, "r") as f:
         cfgs = json.load(f)
@@ -30,7 +32,9 @@ if __name__ == '__main__':
         for design_name in cfg["DUTS"]: 
             cfg_cpy = cfg.copy()
             cfg_cpy.pop("DUTS")
-            env.update(cfg_cpy)                
+            env.update(cfg_cpy) 
+            if USE_MODELSIM is not None:
+                env["USE_MODELSIM"] = str(int(USE_MODELSIM))
             datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["NAME"])
             env["CASCADE_DATADIR"] = datadir
             env["NO_REMOVE_TMPDIRS"] = "1"
