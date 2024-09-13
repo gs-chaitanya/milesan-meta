@@ -11,6 +11,11 @@ class MmuState(enum.IntEnum):
     MMU_PROD_J   = enum.auto()
     MMU_PROD_R   = enum.auto()
 
+# Either Verilator or Modelsim
+class SimulatorEnum(enum.Enum):
+    VERILATOR = 1
+    MODELSIM = 2
+
 # ISAInstrClass differs from CFInstrClass, because:
 # ISAInstrClass is sorted by ISA extension (for picking instruction)
 # CFInstrClass  is sorted by information flow (e.g., how many registers are taken as an input)

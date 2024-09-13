@@ -6,35 +6,27 @@
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA
 from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_FST, TRACE_EN, CHECK_MEM, PATH_TO_MNT, MODELSIM_REQ_DIR, PATH_FROM_MODELSIM_TO_MNT, INSERT_REGDUMPS, USE_MODELSIM
-from cascade.util import IntRegIndivState
+from cascade.util import IntRegIndivState, SimulatorEnum
 from common.sim.modelsim import get_next_worker_id
 from common.sim.commonsim import setup_sim_env
 from common import designcfgs
 from cascade.spikeresolution import SPIKE_STARTADDR
+from time import gmtime, strftime
 
 import itertools
 import os
 import subprocess
 import sys
-from enum import Enum
 import json
 from distutils import dir_util
 import time
 import shutil
 
-# Either Verilator or Modelsim
-class SimulatorEnum(Enum):
-    VERILATOR = 1
-    MODELSIM = 2
-
 # The maximum number of cycles that we allow per run is MAX_CYCLES_PER_INSTR * num_instrs + SETUP_CYCLES.
 MAX_CYCLES_PER_INSTR = 30
 SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
-if not USE_MODELSIM:
-    SIMULATOR = SimulatorEnum.VERILATOR
-else:
-    SIMULATOR = SimulatorEnum.MODELSIM
-PRINT_THREAD_STATUS = True
+
+PRINT_THREAD_STATUS = False
 # @param get_rfuzz_coverage_mask if True, then return a pair (is_stop_successful: bool, rfuzz_coverage_mask: int)
 # Return a pair (is_stop_successful: bool, reg_vals: int list of length <= MAX_NUM_PICKABLE_REGS-1 or None if is_stop_successful is False)
 def runsim_verilator(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PICKABLE_REGS-1, num_float_regs: int = MAX_NUM_PICKABLE_FLOATING_REGS, coveragepath = None, get_rfuzz_coverage_mask = False):
@@ -271,10 +263,8 @@ def runtest_modelsim_forcoverage(fuzzerstate, elfpath: str, coveragepath: str):
 
 def run_rtl_and_load_regstream(fuzzerstate):
     design_name = fuzzerstate.design_name
-    if SIMULATOR == SimulatorEnum.MODELSIM:
+    if fuzzerstate.simulator == SimulatorEnum.MODELSIM:
         return wait_and_load_regstream(fuzzerstate)
-    if "cva6" in design_name:
-        print(f"WARNING: Fuzzing CVA6 with Verilator triggers taint propagation bug in Verilator.")
     cmd = ["make",f"rerun_{'drfuzz_mem' if not USE_VANILLA else 'vanilla'}_{'notrace' if not TRACE_EN else 'trace' if not TRACE_FST else 'trace_fst'}"]
     cascadedir = designcfgs.get_design_cascade_path(design_name)
     env = os.environ
@@ -312,7 +302,8 @@ def run_rtl_and_load_regstream(fuzzerstate):
 def wait_and_load_regstream(fuzzerstate):
     req_dict = {key:value.replace(PATH_TO_MNT, PATH_FROM_MODELSIM_TO_MNT) for key,value in fuzzerstate.env.items()}
     rtl_name = fuzzerstate.env['SIMSRAMELF'].split('/')[-1].split(".")[0]
-    req_path = f"{MODELSIM_REQ_DIR}/{rtl_name}.modelsim_req.json"
+    timestring=strftime("%a_%d_%b_%Y_%H:%M:%S", gmtime())
+    req_path = f"{MODELSIM_REQ_DIR}/{rtl_name}.{timestring}.modelsim_req.json"
     with open(req_path, "w") as f:
         json.dump(req_dict, f)
     if PRINT_THREAD_STATUS:

@@ -376,19 +376,12 @@ def create_targeted_producer0_instrobj(fuzzerstate):
     fuzzerstate.next_producer_id += 1
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero(authorize_sideeffects=False, force = False) # Rd will be untainted after execution.
     fuzzerstate.intregpickstate.set_producer_id(rd, fuzzerstate.next_producer_id)
-    # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED0)
-    # return [PlaceholderProducerInstr0(rd, fuzzerstate.next_producer_id, fuzzerstate.is_design_64bit)]
-    # return [PlaceholderProducerInstr0_t0],[(fuzzerstate, rd, fuzzerstate.next_producer_id)]
     return [PlaceholderProducerInstr0_t0(fuzzerstate, rd, fuzzerstate.next_producer_id)]
 
 def create_targeted_producer1_instrobj(fuzzerstate):
     rd = fuzzerstate.intregpickstate.pick_untainted_int_reg_in_state(IntRegIndivState.PRODUCED0, force = True)  # rd should not be tainted
-    # assert fuzzerstate.intregpickstate.regs[rd].get_val_t0() == 0, f"Register {ABI_INAMES[rd]} in produced0 state is tainted!"
-    # fuzzerstate.intregpickstate.set_producer1_location(rd, len(fuzzerstate.instr_objs_seq), len(fuzzerstate.instr_objs_seq[0])) # Optimization currently unused
     fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PRODUCED1)
-    # return [PlaceholderProducerInstr1(rd, fuzzerstate.intregpickstate.get_producer_id(rd), fuzzerstate.is_design_64bit)]
-    # return [PlaceholderProducerInstr1_t0],[(fuzzerstate, rd, fuzzerstate.intregpickstate.get_producer_id(rd))]
     return [PlaceholderProducerInstr1_t0(fuzzerstate, rd, fuzzerstate.intregpickstate.get_producer_id(rd))]
 
 def create_targeted_consumer_instrobj(fuzzerstate):
@@ -409,11 +402,8 @@ def create_targeted_consumer_instrobj(fuzzerstate):
             PlaceholderConsumerInstr_t0(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))
         ]
     else:
-        # return [PlaceholderConsumerInstr(rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
-        # return [PlaceholderConsumerInstr_t0], [(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
         return [PlaceholderConsumerInstr_t0(fuzzerstate, rd, rdep, rprod, fuzzerstate.intregpickstate.get_producer_id(rprod))]
 
-# TODO: create exception when reading from tainted memory region from priv that does not have access
 def create_memfsm_instrobjs(fuzzerstate):
     if len(fuzzerstate.instr_objs_seq[-1]):
         last_instr = fuzzerstate.instr_objs_seq[-1][-1] # We need the layout from the previous instruction

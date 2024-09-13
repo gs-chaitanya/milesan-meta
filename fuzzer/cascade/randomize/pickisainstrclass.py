@@ -147,6 +147,8 @@ def _get_isainstrclass_filtered_weights(fuzzerstate, curr_alloc_cursor):
         or "picorv32" in fuzzerstate.design_name and not is_tolerate_picorv32_fence() \
             or (MAX_NUM_FENCES_PER_EXECUTION is not None and fuzzerstate.special_instrs_count > MAX_NUM_FENCES_PER_EXECUTION):
         ret_dict[ISAInstrClass.SPECIAL] = 0
+    if "cva6-test" in fuzzerstate.design_name:
+        ret_dict[ISAInstrClass.SPECIAL] = 0
     if not USE_MMU or is_mmu_op_not_possible(fuzzerstate, curr_alloc_cursor):
         ret_dict[ISAInstrClass.MMU] = 0
     if not USE_MMU or fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE \
