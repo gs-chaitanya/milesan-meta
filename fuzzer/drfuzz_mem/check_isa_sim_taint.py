@@ -3,7 +3,7 @@ import shutil
 import glob
 import json
 
-from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, DO_DOUBLECHECK_SIM, CHECK_MEM, COLLECT_PERF_STATS, COLLECT_EXCEPTION_STATS, COLLECT_TAINT_STATS
+from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, NO_REMOVE_TMPFILES, DO_DOUBLECHECK_SIM, CHECK_MEM, COLLECT_PERF_STATS, COLLECT_EXCEPTION_STATS, COLLECT_TAINT_STATS
 from params.fuzzparams import IGNORE_RTL_TIMEOUT, IGNORE_SPIKE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, DUMP_MCYCLES
 from cascade.toleratebugs import  is_tolerate_cva6_mhpmcounter,  is_tolerate_cva6_mhpmevent31
@@ -66,7 +66,7 @@ class MismatchError(ValueError):
         super().__init__(*args)
         self.fail_type = fail_type
 
-def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None, remove_tmpdirs: bool = not NO_REMOVE_TMPDIRS):   
+def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None):   
     start_time = time.time()
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
@@ -229,10 +229,11 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 print("*** MEMORY CONTENT  ***")
                 fuzzerstate.memview.print_and_compare(final_sramdump_rtl)
         print(f"Failed for seed {seed}")
-        if "There are less" in str(e) or "Computed program does not execute" in str(e) or remove_tmpdirs :
+        if "There are less" in str(e) or "Computed program does not execute" in str(e):
             fuzzerstate.remove_tmp_dir()
         else:
-
+            if not NO_REMOVE_TMPFILES:
+                fuzzerstate.remove_tmp_files()
             fuzzerstate.log(str(e))
         if isinstance(e, subprocess.CalledProcessError):
             if "spike" in str(e):

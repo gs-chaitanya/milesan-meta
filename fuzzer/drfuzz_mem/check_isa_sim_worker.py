@@ -10,7 +10,7 @@ import threading
 import os
 
 LOG_EXCEPTIONS = True
-PRINT_THREAD_STATUS = False
+PRINT_THREAD_STATUS = True
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 total_finished_tests = 0
@@ -38,6 +38,7 @@ def test_done_callback(ret):
 def __check_isa_sim_worker(design_name, seed):
     try:
         check_isa_sim_taint(design_name,seed).remove_tmp_dir()
+        print(f"No mismatch detected for {design_name} with seed {seed}")
         return None
     except Exception as e:
         print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")
@@ -62,19 +63,23 @@ def __check_isa_sim_worker(design_name, seed):
 
 
 
-def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offset: int, timeout: int = None):
+def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offset: int, timeout: int = None, seeds = None):
     global newly_finished_tests
     global callback_lock
     process_instance_id = 0
     if seed_offset is not None:
         process_instance_id += seed_offset
+    if seeds is not None:
+        assert seed_offset is None or seed_offset == 0
+        total_tests = len(seeds)
+
     num_workers = num_cores
     assert num_workers > 0
     start_time = time.time()
     if num_workers == 1:
         print(f"Starting sequential ISA sim validation on `{design_name}` with {total_tests} total tests." + ("" if timeout is None else f"Timeout is {timeout}s"))
         for _ in range(total_tests):
-            check_isa_sim_taint(design_name,process_instance_id)
+            check_isa_sim_taint(design_name,process_instance_id if seeds is None else seeds[process_instance_id])
             process_instance_id += 1
         return seed_to_fail_type_dict
 
@@ -84,10 +89,10 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offs
         print(f"Starting parallel ISA sim validation on {total_tests} total tests of `{design_name}` on {num_workers} threads." + ("" if timeout is None else f"Timeout is {timeout}s"))
     
     pool = mp.Pool(processes=num_workers)
-    for _ in range(num_workers):
+    for _ in range(min(num_workers, total_tests) if total_tests != -1 else num_workers):
         if PRINT_THREAD_STATUS:
-            print(f"Starting thread {process_instance_id}.")
-        pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id,),callback=test_done_callback)
+            print(f"Starting thread {process_instance_id}" + f" for seed {seeds[process_instance_id]}." if seeds is not None else ".")
+        pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id if seeds is None else seeds[process_instance_id],),callback=test_done_callback)
         process_instance_id += 1
 
     while True:
@@ -98,12 +103,16 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offs
 
         time.sleep(2)
         with callback_lock:
-            if newly_finished_tests > 0:
+            if newly_finished_tests > 0 and seeds is None or seeds is not None and process_instance_id < len(seeds):
                 for _ in range(newly_finished_tests):
                     if PRINT_THREAD_STATUS:
                         print(f"Starting thread {process_instance_id}.")
-                    pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id),callback=test_done_callback)
+                    pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id if seeds is None else seeds[process_instance_id]),callback=test_done_callback)
                     process_instance_id += 1
+                    if seeds is not None and process_instance_id >= len(seeds):
+                        print(f"Finished {total_finished_tests} threads covering all provided seeds. Exiting.")
+                        pool.terminate()
+                        return seed_to_fail_type_dict
                 newly_finished_tests = 0
             if total_finished_tests >= total_tests and total_tests != -1:
                 print(f"Finished {total_finished_tests} threads. Exiting.")
