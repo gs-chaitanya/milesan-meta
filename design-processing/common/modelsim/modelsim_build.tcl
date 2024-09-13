@@ -23,8 +23,8 @@ if { [info exists ::env(MODELSIM_SYNTHESIS_FLAG)] }  { set MODELSIM_SYNTHESIS_FL
 
 set LIB ${MODELSIM_WORKROOT}/${TOP_SOC}${VARIANT_ID}_${FUZZCOREID}/work_${INSTRUMENTATION}_${TRACE}
 
-# +define+RANDOMIZE_REG_INIT=1 enables initialization of registers with random value
-# +define+RANDOM=0 sets the random value to 0 s.t. all regs are initialized with zero.
+# +define+RANDOMIZE_REG_INIT=1 enables initialization of registers with random value for chipyard designs. 
+# +define+RANDOM=0 sets the random value to 0 s.t. all regs are initialized with zero for chipyard designs.
 vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -suppress 13276 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG +define+RANDOMIZE_REG_INIT=1 +define+RANDOM=0 +define+STOP_COND=0 -ccflags '-std=c++11' $MODELSIM_INCDIRSTR -sv $CASCADE_DIR/generated/out/$INSTRUMENTATION.sv
 
 vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG -ccflags '-std=c++11' -sv $SV_TOP

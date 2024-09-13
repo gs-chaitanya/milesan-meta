@@ -11,11 +11,12 @@ FIGSIZE_FLAT = (8,2)
 LABELSIZE = 10
 TICKSIZE = 10
 LEGENDSIZE = 10
-CASCADE_DATADIR = "/cascade-data/"
+CASCADE_DATADIR = "/cascade-data/rocket/925844_rocket_0_118/"
 EXEC_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/exec"
 #%%
 exec_traces = []
 for i,file in enumerate(glob.glob(CASCADE_DATADIR+ "**/taint_stats.json", recursive=True)):
+    print(file)
     with open(file, "r") as f:
         try:
             exec_traces += [json.load(f)]
@@ -38,16 +39,16 @@ ax.fill_between(range(0,len(priv)), 0, 1, where=np.asarray(priv) == 1,
 ax.fill_between(range(0,len(priv)), 0, 1, where=np.asarray(priv) == 3,
             color='grey', alpha=0.1, transform=ax.get_xaxis_transform(), label="Machine")
 
-ax.grid(axis="y")
-ax.set_ylim(0,100)
-ax.set_yticks([0,25,50,75,100])
-ax.set_yticklabels([0,25,50,75,100],fontsize=TICKSIZE)
-ax.set_xlim(4000,6000)
-ax.set_xticks([4000,4500,5000,5500,6000])
-ax.set_xticklabels(["4k","4.5k","5k","5.5k","6k"], fontsize=TICKSIZE)
-ax.set_ylabel("Tainted registers [%]",fontsize=LABELSIZE)
-ax.set_xlabel("Simulation cycle [1]",fontsize=LABELSIZE)
-ax.legend(fontsize=LEGENDSIZE,loc="upper left")
+# ax.grid(axis="y")
+# ax.set_ylim(0,100)
+# ax.set_yticks([0,25,50,75,100])
+# ax.set_yticklabels([0,25,50,75,100],fontsize=TICKSIZE)
+# ax.set_xlim(4000,6000)
+# ax.set_xticks([4000,4500,5000,5500,6000])
+# ax.set_xticklabels(["4k","4.5k","5k","5.5k","6k"], fontsize=TICKSIZE)
+# ax.set_ylabel("Tainted registers [%]",fontsize=LABELSIZE)
+# ax.set_xlabel("Simulation cycle [1]",fontsize=LABELSIZE)
+# ax.legend(fontsize=LEGENDSIZE,loc="upper left")
 # plt.savefig(os.path.join(EXEC_PLOTS_PATH, "taint_in_regs.svg"))
 
 # %%
