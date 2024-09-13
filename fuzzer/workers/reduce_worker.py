@@ -34,8 +34,7 @@ def test_done_callback(ret):
                 print(ret)
 def __reduce_program_worker(design_name, seed):
     try:
-        ret = reduce_program(*gen_new_test_instance(design_name,seed,True),
-                        True, check_pc_spike_again=True,quiet=True)
+        ret = reduce_program(*gen_new_test_instance(design_name,seed,True),check_pc_spike_again=True,quiet=True)
         if LOG_EN:
             logdir = os.path.join(PATH_TO_TMP, "logs")
             os.makedirs(logdir, exist_ok=True)
