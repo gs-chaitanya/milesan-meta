@@ -134,7 +134,7 @@ then
     export CASCADE_JOBS=250
 
     ulimit -n 10000 # many FD's
-    export CASCADE_DATADIR=/cascade-data
+    export CASCADE_DATADIR=/mnt/cascade-data
 fi
 
 # Where should our python venv be?
