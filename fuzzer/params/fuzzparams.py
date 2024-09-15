@@ -10,6 +10,17 @@ import os
 # MMU
 ##
 USE_MMU = True
+
+##
+# RVC
+##
+USE_COMPRESSED = True
+COMPRESS_INSTRUCTION = 1
+
+FENCE_CF_INSTR = False
+
+# assert not (USE_MMU and USE_COMPRESSED)
+
 if "USE_MMU" in os.environ:
     USE_MMU = int(os.environ["USE_MMU"]) == 1
     print(f"Setting USE_MMU = {USE_MMU} from env vars.")
@@ -105,6 +116,9 @@ def reset_reg_settings():
     if USE_MMU:
         MAX_NUM_PICKABLE_REGS = 22
         NUM_MIN_FREE_INTREGS = 3
+    elif USE_COMPRESSED:
+        MAX_NUM_PICKABLE_REGS = 10 # Use less regs so we get more compressed instructions.
+        NUM_MIN_FREE_INTREGS = 2
     else:
         MAX_NUM_PICKABLE_REGS = 24
         NUM_MIN_FREE_INTREGS = 2
@@ -237,12 +251,12 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MIN_BBS_LOWERBOUND = 20
+NUM_MIN_BBS_LOWERBOUND = 10
 if "NUM_MIN_BBS_LOWERBOUND" in os.environ:
     NUM_MIN_BBS_LOWERBOUND = int(os.environ["NUM_MIN_BBS_LOWERBOUND"])
     print(f"Setting NUM_MIN_BBS_LOWERBOUND = {NUM_MIN_BBS_LOWERBOUND} from env vars.")
 
-NUM_MAX_BBS_UPPERBOUND = 200
+NUM_MAX_BBS_UPPERBOUND = 30
 if "NUM_MAX_BBS_UPPERBOUND" in os.environ:
     NUM_MAX_BBS_UPPERBOUND = int(os.environ("NUM_MAX_BBS_UPPERBOUND"))
     print(f"Setting NUM_MAX_BBS_UPPERBOUND = {NUM_MAX_BBS_UPPERBOUND} from env vars.")
@@ -259,12 +273,12 @@ assert USE_TAINT_TANH or USE_TAINT_BIN or USE_TAINT_HW
 INSERT_SPECTRE_GADGETS = False
 
 # Tainting the immediates might taint the PC if instruction code is loaded and speculated on.
-TAINT_IMMRD_IMM = False
+TAINT_IMMRD_IMM = True
 if "TAINT_IMMRD_IMM" in os.environ:
     TAINT_IMMRD_IMM = int(os.environ["TAINT_IMMRD_IMM"]) == 1
     print(f"Setting TAINT_IMMRD_IMM = {TAINT_IMMRD_IMM} from env vars.")
 
-TAINT_REGIMM_IMM = False
+TAINT_REGIMM_IMM = True
 if "TAINT_REGIMM_IMM" in os.environ:
     TAINT_REGIMM_IMM = int(os.environ["TAINT_REGIMM_IMM"]) == 1
     print(f"Setting TAINT_REGIMM_IMM = {TAINT_REGIMM_IMM} from env vars.")

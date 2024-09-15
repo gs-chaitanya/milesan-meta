@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 from params.runparams import DO_ASSERT
+from params.fuzzparams import USE_COMPRESSED
 from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_fence, is_forbid_vexriscv_csrs, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_picorv32_writehpm, is_tolerate_picorv32_readnonimplcsr
 from cascade.util import ISAInstrClass, IntRegIndivState, MmuState, BASIC_BLOCK_MIN_SPACE
 from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, USE_MMU, ALLOW_JALR_IN_MACHINE_MODE, ALLOW_BRANCH_IN_MACHINE_MODE, DISABLE_COMPUTATION_ON_TAINT, LEAVE_M_MODE_PROTURBANCE_RATIO
@@ -18,7 +19,7 @@ from cascade.randomize.pickmmuop import is_mmu_op_not_possible
 
 # Must not all be 0. Must be filtered according to the capabilities of the different CPUs.
 ISAINSTRCLASS_INITIAL_BOOSTERS = {
-    ISAInstrClass.REGFSM:      0.1,
+    ISAInstrClass.REGFSM:      0.2,
     ISAInstrClass.FPUFSM:      0,
     ISAInstrClass.ALU:         0.3,
     ISAInstrClass.ALU64:       0.3,
@@ -45,7 +46,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.RANDOM_CSR:  0.05,
     ISAInstrClass.DESCEND_PRV: 0.3,
     ISAInstrClass.SPECIAL:     0.01,
-    ISAInstrClass.MMU:         0.5,
+    ISAInstrClass.MMU:         0,
     ISAInstrClass.MSTATUS:     0,
     ISAInstrClass.CLEARTAINT:  0.00,
     ISAInstrClass.MEMFSM:      0.01

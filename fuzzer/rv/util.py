@@ -737,27 +737,27 @@ PARAM_SIZES_BITS_64 = [
     [3, 3, 7], # c.fsw
     [3, 3, 8], # c.sd
     [5], # c.nop
-    [5, 5], # c.addi
+    [5, 6], # c.addi
     [12], # c.jal
     [5, 6], # c.addiw
-    [5, 5], # c.li
+    [5, 6], # c.li
     [10], # c.addi16sp
     [5, 18], # c.lui
-    [3, 5], # c.srli
+    [3, 6], # c.srli
     [3], # c.srli64
-    [3, 5], # c.srai
+    [3, 6], # c.srai
     [3], # c.srai64
-    [3, 5], # c.andi
+    [3, 6], # c.andi
     [3, 3], # c.sub
     [3, 3], # c.xor
     [3, 3], # c.or
     [3, 3], # c.and
     [3, 3], # c.subw
     [3, 3], # c.addw
-    [11], # c.j
+    [12], # c.j
     [3, 9], # c.beqz
     [3, 9], # c.bnez
-    [5, 5], # c.slli
+    [5, 6], # c.slli
     [5], # c.slli64
     [5, 9], # c.fldsp
     # [5, 5], # c.lqsp

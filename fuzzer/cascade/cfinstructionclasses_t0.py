@@ -94,6 +94,7 @@ class BaseInstruction_t0(BaseInstruction):
     
     def __init__(self, fuzzerstate, instr_str):
         super().__init__(fuzzerstate, instr_str)
+
         self.instr_func_t0 = INSTR_FUNCS_T0[self.instr_str]
 
     def check_regs_t0(self,reg_cmp):
@@ -674,7 +675,7 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         self.rd_t0 = 0
         self.imm_t0 = 0
         self.rs1_t0 = 0
-        self.n_bytes = 1 if instr_str in ["lb","lbu"] else 2 if instr_str in ["lh","lhu"] else 4 if instr_str in ["lw","lwu"] else 8 if instr_str == "ld" else -1
+        self.n_bytes = 1 if "lb" in instr_str else 2 if "lh" in instr_str else 4 if "lw" in instr_str else 8 if "ld" in instr_str else -1
         assert self.n_bytes != -1 # sanity check
         self.mask = 2**(self.n_bytes*8)-1
         
@@ -712,7 +713,7 @@ class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
         self.imm_t0 = 0
         self.rs1_t0 = 0
         self.rs2_t0 = 0
-        self.n_bytes = 1 if instr_str == "sb" else 2 if instr_str == "sh" else 4 if instr_str == "sw" else 8 if instr_str == "sd" else -1
+        self.n_bytes = 1 if "sb" in instr_str else 2 if "sh" in instr_str else 4 if "sw" in instr_str else 8 if "sd" in instr_str else -1
         assert self.n_bytes != -1
         self.mask = 2**(self.n_bytes*8)-1
     

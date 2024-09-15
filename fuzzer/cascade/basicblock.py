@@ -7,7 +7,7 @@
 from params.runparams import DO_ASSERT
 from common.spike import SPIKE_STARTADDR
 from rv.csrids import CSR_IDS
-from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES
+from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES, FENCE_CF_INSTR
 from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, INSERT_SPECTRE_GADGETS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE, ALLOW_JALR_IN_MACHINE_MODE, ALLOW_BRANCH_IN_MACHINE_MODE
 from params.runparams import INSERT_REGDUMPS, INSERT_FENCE, GET_DATA, DEBUG_PRINT
 from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memfsm_instrobjs
@@ -21,7 +21,7 @@ from cascade.randomize.pickprivilegedescentop import gen_priv_descent_instr
 from cascade.randomize.forbidden_random_value import is_forbidden_random_value
 from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
 from cascade.randomize.createspeculativeinstr import create_speculative_instrs
-from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator, SpeculativeInstructionEncapsulator
+from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator, SpeculativeInstructionEncapsulator, SpecialInstruction
 from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, SPECTRE_GADGET_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
 from cascade.finalblock import get_finalblock_max_size,finalblock
 from cascade.initialblock import gen_initial_basic_block
@@ -266,9 +266,14 @@ def gen_basicblock(fuzzerstate):
             del new_instrobjs
             return True
         else:
+            if FENCE_CF_INSTR and curr_isa_class in (ISAInstrClass.JALR, ISAInstrClass.BRANCH):
+                curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+                next_instr = create_instr('fence', fuzzerstate, curr_addr)
+                fuzzerstate.append_and_execute_instr(next_instr)
+            
+            curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
             instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
             next_instr = create_instr(instr_str, fuzzerstate, curr_addr)
-
         fuzzerstate.append_and_execute_instr(next_instr)
 
         if curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.JALR) or fuzzerstate.curr_branch_taken:
@@ -295,6 +300,7 @@ def gen_basicblock(fuzzerstate):
     # No need for any preparation if jal, because it has no true dependency
     if curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.BRANCH):
         # Gen the next bb addr
+        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
         if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
             # Abort the bb
             fuzzerstate.instr_objs_seq.pop()
@@ -303,11 +309,17 @@ def gen_basicblock(fuzzerstate):
             fuzzerstate.restore_states()
             return False
         if curr_isa_class == ISAInstrClass.JAL:
+            curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
             next_instr = create_instr('jal', fuzzerstate, curr_addr)
             fuzzerstate.append_and_execute_instr(next_instr)
         elif curr_isa_class == ISAInstrClass.BRANCH:
+            if FENCE_CF_INSTR:
+                curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+                next_instr = create_instr('fence', fuzzerstate, curr_addr)
+                fuzzerstate.append_and_execute_instr(next_instr)
             fuzzerstate.curr_branch_taken = True
             # The branch type does not batter because it will be re-determined once the operand values are known
+            curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
             next_instr = create_instr('bne', fuzzerstate, curr_addr)
             fuzzerstate.append_and_execute_instr(next_instr)
         else:
@@ -319,8 +331,13 @@ def gen_basicblock(fuzzerstate):
             assert curr_isa_class == ISAInstrClass.JALR
 
         fuzzerstate.intregpickstate.bring_some_reg_to_state(IntRegIndivState.CONSUMED, fuzzerstate)
-        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1]) # NO_COMPRESSED
 
+        if FENCE_CF_INSTR:
+            curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+            next_instr = create_instr('fence', fuzzerstate, curr_addr)
+            fuzzerstate.append_and_execute_instr(next_instr)
+
+        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1]) # NO_COMPRESSED
         # Gen the next bb addr
         if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
             # Abort the bb
