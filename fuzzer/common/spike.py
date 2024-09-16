@@ -194,6 +194,7 @@ def run_trace_regs_at_pc_locs(identifier_str: str, elfpath: str, rvflags: str, s
 # @return a list of PCs. If dump_final_reg_vals is True, then the output is a pair, whose second element is an array of final register values
 def run_trace_all_pcs(identifier_str: str, elfpath: str, rvflags: str, numinstrs: int, startpc: int, dump_final_reg_vals: bool, num_fp_regs: int, has_fpdouble_support: bool, fuzzerstate_for_debug: list) -> list:
     # First, create the file that contains the commands, if it does not already exist
+
     path_to_debug_file = __gen_spike_dbgcmd_file_for_trace_pcs(identifier_str, numinstrs, startpc, dump_final_reg_vals, num_fp_regs, fuzzerstate_for_debug.n_mising_r_cmds)
     
     # Second, run the Spike command

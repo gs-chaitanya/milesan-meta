@@ -354,15 +354,19 @@ class FuzzerState:
         curr_val = self.csrfile.regs[CSR_IDS.MINSTRET].get_val()
         self.csrfile.regs[CSR_IDS.MINSTRET].set_val(curr_val+1)
 
-    def append_and_execute_instr(self, instr, insert_regdump: bool = INSERT_REGDUMPS):
-        n_instr = 1            
+    def append_and_execute_instr(self, instr, insert_regdump: bool = INSERT_REGDUMPS):            
         instr.reset_addr()
         if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
             instr.print(is_spike_resolution=True)
         if DEBUG_RVC and instr.iscompressed:
             print(f"RVC: {instr.get_str()}")
         if instr.iscompressed:
-            self.n_mising_r_cmds += 1
+            n_bytes = 2
+        else:
+            n_bytes = 4
+        curr_paddr = self.get_curr_paddr(add_spike_offset=False)
+        if len(self.instr_objs_seq)>1:
+            self.memview.alloc_mem_range(curr_paddr, curr_paddr+(2 if instr.iscompressed else 4))
         self.instr_objs_seq[-1].append(instr)
         instr.execute(is_spike_resolution = True)
         if insert_regdump:
@@ -374,18 +378,23 @@ class FuzzerState:
                 if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
                     store_instr.print(is_spike_resolution=True)
                 store_instr.execute(is_spike_resolution=True)
+                curr_paddr = self.get_curr_paddr(add_spike_offset=False)
+                if len(self.instr_objs_seq)>1:
+                    self.memview.alloc_mem_range(curr_paddr, curr_paddr+4)
                 self.instr_objs_seq[-1].append(store_instr)
-                n_instr += 1
+                n_bytes += 4
                 if INSERT_FENCE:
                     fence_instr = SpecialInstruction_t0(self,"fence")
                     fence_instr.reset_addr()
                     if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
                         fence_instr.print(is_spike_resolution=True)
                     fence_instr.execute(is_spike_resolution=True)
+                    if len(self.instr_objs_seq)>1:
+                        self.memview.alloc_mem_range(curr_paddr, curr_paddr+4)
                     self.instr_objs_seq[-1].append(fence_instr)
-                    n_instr += 1
+                    n_bytes += 4
+        return n_bytes
 
-        return 4*n_instr
 
     def write_imm_t0_to_mem(self):
         for bb_instrs in self.instr_objs_seq:
@@ -654,3 +663,6 @@ class FuzzerState:
         with open(f"{self.tmp_dir}/log.txt", "a") as f:
             f.write(log_msg)
 
+
+    def get_curr_paddr(self, add_spike_offset: bool = True):
+        return self.curr_bb_start_addr + sum([int(not i.iscompressed)*2+2 for i in self.instr_objs_seq[-1]]) + SPIKE_STARTADDR*int(add_spike_offset)

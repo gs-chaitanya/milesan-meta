@@ -148,7 +148,8 @@ class BaseInstruction:
                 assert not USE_MMU or self.priv_level == PrivilegeStateEnum.MACHINE, f"We need to be in machine mode to use bare translation when the MMU is enabled."
             if USE_MMU and self.priv_level == PrivilegeStateEnum.MACHINE:
                 assert self.va_layout == -1,  f"Need to use bare translation when in MACHINE mode."
-        self.paddr = self.fuzzerstate.curr_bb_start_addr + 4*len(self.fuzzerstate.instr_objs_seq[-1]) + SPIKE_STARTADDR
+        # self.paddr = self.fuzzerstate.curr_bb_start_addr + 4*len(self.fuzzerstate.instr_objs_seq[-1]) + SPIKE_STARTADDR
+        self.paddr = self.fuzzerstate.get_curr_paddr()
         if USE_MMU:
             self.vaddr = phys2virt(self.paddr, self.priv_level, self.va_layout,self.fuzzerstate,absolute_addr=False)
         else:
@@ -1582,7 +1583,7 @@ class RawDataWord:
     # @param intentionally_signed: When unset, we expect a non-negative wordval
     def __init__(self, fuzzerstate, wordval: int, signed: bool = False):
         self.fuzzerstate = fuzzerstate
-        self.paddr = fuzzerstate.ctxsv_bb_base_addr + 4*len(fuzzerstate.ctxsv_bb) + SPIKE_STARTADDR
+        self.paddr = fuzzerstate.ctxsv_bb_base_addr + 4*len(fuzzerstate.ctxsv_bb) + SPIKE_STARTADDR # NOCOMPRESSED
         if DO_ASSERT:
             if signed:
                 assert wordval >= -(1 << 31)

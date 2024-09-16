@@ -10,7 +10,7 @@ import threading
 import os
 
 LOG_EXCEPTIONS = True
-PRINT_THREAD_STATUS = True
+PRINT_THREAD_STATUS = False
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 total_finished_tests = 0
@@ -38,7 +38,8 @@ def test_done_callback(ret):
 def __check_isa_sim_worker(design_name, seed):
     try:
         check_isa_sim_taint(design_name,seed).remove_tmp_dir()
-        print(f"No mismatch detected for {design_name} with seed {seed}")
+        if PRINT_THREAD_STATUS:
+            print(f"No mismatch detected for {design_name} with seed {seed}")
         return None
     except Exception as e:
         print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")

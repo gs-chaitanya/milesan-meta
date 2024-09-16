@@ -69,8 +69,10 @@ class MemoryView:
 
     # @param addr: the current address
     # @return: the number of addresses, including addr, that are free until the next allocated address (or until the end of the memory).
-    def get_available_contig_space(self, addr: int):
+    def get_available_contig_space(self, addr: int = None):
         # Find the pair to which `start` belongs, and then check that `end` is still in the same pair.
+        if addr is None:
+            addr = self.fuzzerstate.get_curr_paddr(add_spike_offset=False)
         for curr_pair in self.freepairs:
             if addr < curr_pair[1]:
                 if (addr >= curr_pair[0]):
@@ -83,6 +85,7 @@ class MemoryView:
     # @param start:    first address of the range.
     # @param end:      last address of the range, excluded.
     def alloc_mem_range(self, start: int, end: int):
+        # print(f"Allocating {hex(start)} - {hex(end)}")
         if DO_ASSERT:
             assert end > start, f"Expected start ({start}) > end ({end}) in alloc_mem_range."
         self.occupied_addrs += end-start
@@ -90,7 +93,7 @@ class MemoryView:
             if start < curr_pair[1]:
                 # Check that the range is initially free.
                 if DO_ASSERT:
-                    assert start >= curr_pair[0] and end <= curr_pair[1], "The memory range to allocate is not free."
+                    assert start >= curr_pair[0] and end <= curr_pair[1], f"The memory range {hex(start)} - {hex(end)} is not free."
                 # Remove the tuple and replace it with at most two smaller tuples. This will automatically coalesce.
                 if start == curr_pair[0] and end == curr_pair[1]:
                     self.freepairs = self.freepairs[:curr_pair_id] + self.freepairs[curr_pair_id+1:]
@@ -148,7 +151,7 @@ class MemoryView:
             assert min_space >= 0
             assert left_bound >= 0
             assert right_bound <= self.memsize
-            assert left_bound < right_bound
+            assert left_bound < right_bound, f"{hex(left_bound)} >= {hex(right_bound)}"
             # The bounds must be sufficiently spaced. In our use case, this is not at all a problem.
             assert ((left_bound+(1 << alignment_bits)-1) >> alignment_bits) < ((right_bound-min_space) >> alignment_bits), f"Alignment bits: {alignment_bits}"
 

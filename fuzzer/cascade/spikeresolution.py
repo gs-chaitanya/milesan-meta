@@ -168,7 +168,8 @@ def gen_regdump_reqs_reduced(fuzzerstate, max_bb_id: int = None, max_instr_id: i
                 continue
             if max_instr_id is not None and bb_instr_id >= max_instr_id and max_bb_id is not None and bb_id >= max_bb_id:
                 break
-            curr_addr = bb_start_addr + 4*bb_instr_id + SPIKE_STARTADDR # NO_COMPRESSED
+            # curr_addr = bb_start_addr + 4*bb_instr_id + SPIKE_STARTADDR # NO_COMPRESSED
+            curr_addr = bb_start_addr + sum([2+2*int(not instr.iscompressed) for instr in bb_instrs[:bb_instr_id]])
             assert curr_addr == bb_instr.paddr, f"Address mismatch: Expected {hex(curr_addr)}, got {bb_instr.paddr}"
             
             # All we need is the value of the dependent register at consumption time.
@@ -263,8 +264,9 @@ def gen_pc_trace(fuzzerstate):
     ret = []
     # NO_COMPRESSED
     for bb_start_addr, bb_instrs in zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq):
-        for instr_id in range(len(bb_instrs)):
-            ret.append(bb_start_addr + 4*instr_id + fuzzerstate.design_base_addr)
+        for bb_instr in bb_instrs:
+            # ret.append(bb_start_addr + 4*instr_id + fuzzerstate.design_base_addr)
+            ret.append(bb_instrs.vaddr if USE_MMU else bb_instr.paddr)
     return ret
 
 # @brief from the output of the regdump, distributes the values to the instructions
@@ -278,7 +280,7 @@ def _feed_regdump_to_instrs(fuzzerstate, regdumps: list):
     index_in_regdump = 0
     for bb_start_addr, bb_instrs in zip(fuzzerstate.bb_start_addr_seq, fuzzerstate.instr_objs_seq):
         for bb_instr_id, bb_instr in enumerate(bb_instrs):
-            curr_addr = bb_start_addr + 4*bb_instr_id # NO_COMPRESSED, for debug only
+            # curr_addr = bb_start_addr + 4*bb_instr_id # NO_COMPRESSED, for debug only
             # For consumers, we just place the register value for the producers
             if isinstance(bb_instr, PlaceholderConsumerInstr):
                 # if DO_ASSERT:
@@ -342,8 +344,8 @@ def _check_pc_trace_from_spike(fuzzerstate, spike_pc_seq):
     prev_pc = -1
     curr_addr_layout = -1
     curr_priv_state = PrivilegeStateEnum.MACHINE
-    if USE_COMPRESSED:
-        spike_pc_seq = [i for i in spike_pc_seq if not i%4]
+    # if USE_COMPRESSED:
+        # spike_pc_seq = [i for i in spike_pc_seq if not i%4]
     for bb_id, bb_instrlist in enumerate(fuzzerstate.instr_objs_seq):
         for bb_instr_id, bb_instr in enumerate(bb_instrlist):
             if isinstance(bb_instr, SpeculativeInstructionEncapsulator):
@@ -351,7 +353,8 @@ def _check_pc_trace_from_spike(fuzzerstate, spike_pc_seq):
             assert curr_id_in_spike_pc_seq < len(spike_pc_seq), f"Not all PCs checked: {len(spike_pc_seq)}/{len([i for j in fuzzerstate.instr_objs_seq for i in j])}"
             spike_pc = spike_pc_seq[curr_id_in_spike_pc_seq]
             curr_id_in_spike_pc_seq += 1
-            expected_pc = SPIKE_STARTADDR + fuzzerstate.bb_start_addr_seq[bb_id] + 4*bb_instr_id # NO_COMPRESSED
+            # expected_pc = SPIKE_STARTADDR + fuzzerstate.bb_start_addr_seq[bb_id] + 4*bb_instr_id # NO_COMPRESSED
+            expected_pc = SPIKE_STARTADDR + fuzzerstate.bb_start_addr_seq[bb_id] + sum([int(not i.iscompressed)*2+2 for i in bb_instrlist[:bb_instr_id]]) # NO_COMPRESSED
             if curr_addr_layout != -1: expected_pc = phys2virt(expected_pc, curr_priv_state, curr_addr_layout, fuzzerstate, False)
             assert expected_pc == (bb_instr.vaddr if USE_MMU else bb_instr.paddr)
             # print(f"{hex(spike_pc)}/{hex(expected_pc)}")

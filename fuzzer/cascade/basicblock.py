@@ -21,7 +21,7 @@ from cascade.randomize.pickprivilegedescentop import gen_priv_descent_instr
 from cascade.randomize.forbidden_random_value import is_forbidden_random_value
 from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
 from cascade.randomize.createspeculativeinstr import create_speculative_instrs
-from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator, SpeculativeInstructionEncapsulator, SpecialInstruction
+from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator, SpeculativeInstructionEncapsulator
 from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, SPECTRE_GADGET_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
 from cascade.finalblock import get_finalblock_max_size,finalblock
 from cascade.initialblock import gen_initial_basic_block
@@ -56,12 +56,12 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     # assert fuzzerstate.memview.is_mem_range_free(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
     return True
 
-def is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor, required_space: int = BASIC_BLOCK_MIN_SPACE):
+def is_there_more_space_for_bb(fuzzerstate, required_space: int = BASIC_BLOCK_MIN_SPACE):
     if USE_MMU:
-        ret = fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor) > required_space and fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[((curr_alloc_cursor+required_space)&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
+        ret = fuzzerstate.memview.get_available_contig_space() > required_space and fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[((fuzzerstate.get_curr_paddr(add_spike_offset=False)+required_space)&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
         # print(f"Request for {hex(curr_alloc_cursor)} - {hex(curr_alloc_cursor+required_space)}: {ret}")
         return ret
-    return fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor) > required_space
+    return fuzzerstate.memview.get_available_contig_space() > required_space
 # The first BASIC_BLOCK_MIN_SPACE must be pre-allocated. The rationale is that we want to pre-allocate at least for the first basic block, to prevent the store data from landing exactly there.
 # @return True iff the creation is successful
 def gen_basicblock(fuzzerstate):
@@ -70,23 +70,25 @@ def gen_basicblock(fuzzerstate):
         if USE_MMU:
             assert fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR], f"Trying to allocate BB in page that does not match it's privilege: {fuzzerstate.privilegestate.privstate.name} not in {[p.name for p in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[(fuzzerstate.curr_bb_start_addr&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]]}"
     # This points to the first address after the current basic block allocation. The block allocation takes 16 bytes in advance, to avoid storing and then not being able to continue expanding the basic block.
-    curr_alloc_cursor = fuzzerstate.curr_bb_start_addr + BASIC_BLOCK_MIN_SPACE
+    # curr_alloc_cursor = fuzzerstate.curr_bb_start_addr + BASIC_BLOCK_MIN_SPACE
     curr_isa_class = None # This is used in case there is only space for control flow
 
     # We stop the instruction generation either when there is no more space available, or when we encounter an end-of-state instruction
-    while is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor):
+    while is_there_more_space_for_bb(fuzzerstate):
         if fuzzerstate.num_instr_to_stay_in_prv > 0:
             fuzzerstate.num_instr_to_stay_in_prv -= 1
         if fuzzerstate.num_instr_to_stay_in_layout > 0:
             fuzzerstate.num_instr_to_stay_in_layout -= 1
 
         # Allocate the next 4 bytes
-        fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-        curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
-        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+        # fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+        # curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+
+        # curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+        curr_addr = fuzzerstate.get_curr_paddr(add_spike_offset = False)
 
         # Get the next instruction class
-        curr_isa_class = gen_next_isainstrclass(fuzzerstate, curr_alloc_cursor)
+        curr_isa_class = gen_next_isainstrclass(fuzzerstate, curr_addr)
 
         # If this is an MMU operation
         if curr_isa_class == ISAInstrClass.MMU:
@@ -99,8 +101,8 @@ def gen_basicblock(fuzzerstate):
                 fuzzerstate.append_and_execute_instr(new_instrobjs[0])
                 # We always need more than 1 instruction to switch address space
                 for next_instrobj_id in range(1, len(new_instrobjs)):
-                    fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                    curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                    # fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                    # curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                     fuzzerstate.append_and_execute_instr(new_instrobjs[next_instrobj_id])
                 if GET_DATA and fuzzerstate.effective_curr_layout != -1:
                     fuzzerstate.num_virt_pc += len(new_instrobjs)
@@ -108,7 +110,7 @@ def gen_basicblock(fuzzerstate):
                 continue
             # for rv32, if we only change layouts
             else:
-                curr_isa_class = gen_next_isainstrclass(fuzzerstate, curr_alloc_cursor, True)
+                curr_isa_class = gen_next_isainstrclass(fuzzerstate, curr_addr, True)
 
 
         # If this is an instruction that influences offset register states
@@ -117,8 +119,8 @@ def gen_basicblock(fuzzerstate):
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
             # For consumers, we may need to insert one more instruction
             for new_instrobj in new_instrobjs[1:]:
-                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                # fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                # curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 fuzzerstate.append_and_execute_instr(new_instrobj)
             del new_instrobjs
             continue
@@ -128,8 +130,8 @@ def gen_basicblock(fuzzerstate):
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
             # For consumers, we may need to insert one more instruction
             for new_instrobj in new_instrobjs[1:]:
-                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                # fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                # curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 fuzzerstate.append_and_execute_instr(new_instrobj)
             del new_instrobjs
             continue
@@ -167,8 +169,8 @@ def gen_basicblock(fuzzerstate):
 
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
             for new_instrobj_id in range(1, len(new_instrobjs)):
-                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                # fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                # curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
                 
             if DEBUG_PRINT: print(f"priv change at addr: {hex(curr_addr+SPIKE_STARTADDR)} to ", fuzzerstate.privilegestate.privstate)
@@ -179,12 +181,12 @@ def gen_basicblock(fuzzerstate):
         elif curr_isa_class == ISAInstrClass.PPFSM:
             # assert False, "not implemented"
             new_instrobjs = gen_ppfill_instrs(fuzzerstate)
-            if DO_ASSERT:
-                assert len(new_instrobjs) * CURR_ALLOC_CURSOR_INC < BASIC_BLOCK_MIN_SPACE # NO_COMPRESSED
+            # if DO_ASSERT:
+            #     assert len(new_instrobjs) * CURR_ALLOC_CURSOR_INC < BASIC_BLOCK_MIN_SPACE # NO_COMPRESSED
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
             for new_instrobj_id in range(1, len(new_instrobjs)):
-                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                # fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                # curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
             del new_instrobjs
             continue
@@ -204,8 +206,8 @@ def gen_basicblock(fuzzerstate):
             # print('  New priv:', fuzzerstate.privilegestate.privstate)
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
             for new_instrobj_id in range(1, len(new_instrobjs)):
-                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                # fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                # curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
             del new_instrobjs # For safety, we prevent accidental reuse of this variable
             return True
@@ -214,8 +216,8 @@ def gen_basicblock(fuzzerstate):
             new_instrobjs = create_memfsm_instrobjs(fuzzerstate)
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
             for new_instrobj_id in range(1, len(new_instrobjs)):
-                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                # fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                # curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
             del new_instrobjs
             continue
@@ -239,6 +241,7 @@ def gen_basicblock(fuzzerstate):
                 fuzzerstate.bb_start_addr_seq.pop()
                 # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
                 fuzzerstate.restore_states()
+                # deallocate memory region?
                 return False
 
         # Get an instruction string for this ISA class
@@ -255,23 +258,25 @@ def gen_basicblock(fuzzerstate):
             next_instr = gen_epcfill_instr(fuzzerstate)
         elif curr_isa_class == ISAInstrClass.RANDOM_CSR:
             next_instr = gen_random_csr_op(fuzzerstate)
-        elif INSERT_SPECTRE_GADGETS and (curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.JALR) or fuzzerstate.curr_branch_taken) and is_there_more_space_for_bb(fuzzerstate, curr_alloc_cursor, SPECTRE_GADGET_MIN_SPACE):
+        elif INSERT_SPECTRE_GADGETS and (curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.JALR) or fuzzerstate.curr_branch_taken) and is_there_more_space_for_bb(fuzzerstate, curr_addr, SPECTRE_GADGET_MIN_SPACE):
             instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
             new_instrobjs = create_speculative_instrs(instr_str, fuzzerstate)
             fuzzerstate.append_and_execute_instr(new_instrobjs[0])
             for new_instrobj_id in range(1, len(new_instrobjs)):
-                fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
+                # fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
+                # curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
                 fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
             del new_instrobjs
             return True
         else:
             if FENCE_CF_INSTR and curr_isa_class in (ISAInstrClass.JALR, ISAInstrClass.BRANCH):
-                curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+                # curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+                curr_addr = fuzzerstate.get_curr_paddr(add_spike_offset = False)
                 next_instr = create_instr('fence', fuzzerstate, curr_addr)
                 fuzzerstate.append_and_execute_instr(next_instr)
             
-            curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+            # curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+            curr_addr = fuzzerstate.get_curr_paddr(add_spike_offset = False)
             instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
             next_instr = create_instr(instr_str, fuzzerstate, curr_addr)
         fuzzerstate.append_and_execute_instr(next_instr)
@@ -286,21 +291,20 @@ def gen_basicblock(fuzzerstate):
 
     # If the regfsm is not IDLE, we cannot use JALR. Bringing it to maturity would increase the minimal ammount of instr, 
     # so we dont chhose JALR in this case
+    curr_addr = fuzzerstate.get_curr_paddr(add_spike_offset = False)
     if fuzzerstate.curr_mmu_state != MmuState.IDLE:
         curr_isa_class = random.choices([ISAInstrClass.JAL, ISAInstrClass.BRANCH], [1, 1], k=1)[0]
-        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
     elif fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
         curr_isa_class = random.choices([ISAInstrClass.JAL, ISAInstrClass.JALR, ISAInstrClass.BRANCH], [1, int(ALLOW_JALR_IN_MACHINE_MODE), int(ALLOW_BRANCH_IN_MACHINE_MODE)], k=1)[0]
-        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
     else:
         curr_isa_class = random.choices([ISAInstrClass.JAL, ISAInstrClass.JALR, ISAInstrClass.BRANCH], [1, 1, 1], k=1)[0]
-        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
 
 
     # No need for any preparation if jal, because it has no true dependency
     if curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.BRANCH):
         # Gen the next bb addr
-        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+        # curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+        curr_addr = fuzzerstate.get_curr_paddr(add_spike_offset = False)
         if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
             # Abort the bb
             fuzzerstate.instr_objs_seq.pop()
@@ -309,17 +313,20 @@ def gen_basicblock(fuzzerstate):
             fuzzerstate.restore_states()
             return False
         if curr_isa_class == ISAInstrClass.JAL:
-            curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+            # curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+            curr_addr = fuzzerstate.get_curr_paddr(add_spike_offset = False)
             next_instr = create_instr('jal', fuzzerstate, curr_addr)
             fuzzerstate.append_and_execute_instr(next_instr)
         elif curr_isa_class == ISAInstrClass.BRANCH:
             if FENCE_CF_INSTR:
-                curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+                # curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+                curr_addr = fuzzerstate.get_curr_paddr(add_spike_offset = False)
                 next_instr = create_instr('fence', fuzzerstate, curr_addr)
                 fuzzerstate.append_and_execute_instr(next_instr)
             fuzzerstate.curr_branch_taken = True
             # The branch type does not batter because it will be re-determined once the operand values are known
-            curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+            # curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+            curr_addr = fuzzerstate.get_curr_paddr(add_spike_offset = False)
             next_instr = create_instr('bne', fuzzerstate, curr_addr)
             fuzzerstate.append_and_execute_instr(next_instr)
         else:
@@ -333,11 +340,13 @@ def gen_basicblock(fuzzerstate):
         fuzzerstate.intregpickstate.bring_some_reg_to_state(IntRegIndivState.CONSUMED, fuzzerstate)
 
         if FENCE_CF_INSTR:
-            curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+            # curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
+            curr_addr = fuzzerstate.get_curr_paddr(add_spike_offset = False)
             next_instr = create_instr('fence', fuzzerstate, curr_addr)
             fuzzerstate.append_and_execute_instr(next_instr)
 
-        curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1]) # NO_COMPRESSED
+        # curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1]) # NO_COMPRESSED
+        curr_addr = fuzzerstate.get_curr_paddr(add_spike_offset = False)
         # Gen the next bb addr
         if not gen_next_bb_addr(fuzzerstate, curr_isa_class, curr_addr):
             # Abort the bb
@@ -420,8 +429,8 @@ def pop_last_bbs_to_connect_with_final_block(fuzzerstate):
             fuzzerstate.instr_objs_seq[-1].pop()
         
         # Check whether the last element can target the final bb
-        last_cf_instr_base_addr = fuzzerstate.bb_start_addr_seq[-1] + (len(fuzzerstate.instr_objs_seq[-1])-1) * 4 # NO_COMPRESSED
-
+        # last_cf_instr_base_addr = # NO_COMPRESSED
+        last_cf_instr_base_addr = fuzzerstate.instr_objs_seq[-1][-1].paddr - SPIKE_STARTADDR
         if isinstance(fuzzerstate.instr_objs_seq[-1][-1], JALInstruction):
             range_bits = get_range_bits_per_instrclass(ISAInstrClass.JAL)
         elif isinstance(fuzzerstate.instr_objs_seq[-1][-1], JALRInstruction):
@@ -447,6 +456,7 @@ def pop_last_bbs_to_connect_with_final_block(fuzzerstate):
         fuzzerstate.bb_start_addr_seq.pop()
         # fuzzerstate.saved_reg_states.pop()
         fuzzerstate.pop_states()
+
 
         if USE_MMU:
             if DEBUG_PRINT: print(f"Updating fuzzerstate after a pop, old layout: {fuzzerstate.effective_curr_layout}, old_priv: ",fuzzerstate.privilegestate.privstate)
@@ -653,8 +663,8 @@ def gen_producer_id_to_tgtaddr(fuzzerstate):
             ###
             # Else, check for "traditional" instructions, which have an instruction string.
             ###
-                    
-            if bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.JALR]:
+
+            if isinstance(bb_instr,JALRInstruction):
                 if bb_instr.producer_id > 0:
                     if index_in_bb_start_addr_seq == len(fuzzerstate.bb_start_addr_seq):
                         if DO_ASSERT:
@@ -669,14 +679,17 @@ def gen_producer_id_to_tgtaddr(fuzzerstate):
                     producer_id_to_tgtaddr[bb_instr.producer_id] = phys2virt(addr, bb_instr.priv_level, bb_instr.va_layout, fuzzerstate)
                     consumer_inst_va_layout[bb_instr.producer_id] = (bb_instr.va_layout, bb_instr.priv_level)
 
-            elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.JAL] or (bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.BRANCH] and bb_instr.plan_taken):
+            elif isinstance(bb_instr, JALInstruction) or (isinstance(bb_instr,BranchInstruction) and bb_instr.plan_taken):
                 # If this is the last before the final block, we need to steer toward the final block.
                 if index_in_bb_start_addr_seq == len(fuzzerstate.bb_start_addr_seq):
                     if DO_ASSERT:
                         assert fuzzerstate.final_bb_base_addr is not None and fuzzerstate.final_bb_base_addr >= 0
-                    curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + bb_instr_id * 4 # NO_COMPRESSED
+                    # curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + bb_instr_id * 4 # NO_COMPRESSED
+                    curr_addr =  fuzzerstate.bb_start_addr_seq[bb_id] + sum([int(not i.iscompressed)*2+2 for i in bb_instrlist[:bb_instr_id]])
+                    # bb_instr.print()
                     # Offset calculation, no need for virtual address handling
                     bb_instr.imm = fuzzerstate.final_bb_base_addr - curr_addr
+
                 index_in_bb_start_addr_seq += 1
 
             elif bb_instr.instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.SPECIAL]:
@@ -684,7 +697,7 @@ def gen_producer_id_to_tgtaddr(fuzzerstate):
 
 
     assert len(consumer_inst_va_layout) == len(producer_id_to_tgtaddr), f"lenghts {len(consumer_inst_va_layout)}, {len(producer_id_to_tgtaddr)}"
-
+    # assert index_in_bb_start_addr_seq == len(fuzzerstate.bb_start_addr_seq)+1, f"{index_in_bb_start_addr_seq} != {len(fuzzerstate.bb_start_addr_seq)+1}"
     return consumer_inst_va_layout, producer_id_to_tgtaddr, producer_id_to_noreloc_spike
 
 # @brief Generates a series of basic blocks.
@@ -716,7 +729,7 @@ def gen_basicblocks(fuzzerstate):
         if not gen_initial_basic_block(fuzzerstate, SPIKE_STARTADDR): continue
 
         # Reserve space for the second basic block (whose address is already fixed).
-        fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
+        # fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
         fuzzerstate.save_states()
 
         while True:
@@ -729,7 +742,7 @@ def gen_basicblocks(fuzzerstate):
             fuzzerstate.save_states()
             if fuzzerstate.nmax_bbs is not None and len(fuzzerstate.instr_objs_seq) >= fuzzerstate.nmax_bbs or fuzzerstate.memview.get_allocated_ratio() >= LIMIT_MEM_SATURATION_RATIO:
                 break
-            fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
+            # fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
 
             # print('Mem occupation:', fuzzerstate.memview.get_allocated_ratio(), end='\r')
         # print()

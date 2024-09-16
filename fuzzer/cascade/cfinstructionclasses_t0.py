@@ -239,7 +239,7 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
         assert self.fuzzerstate is not None, f"fuzzerstate not set, cannot execute {self.get_str()}" 
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
         res = self.instr_func(rs1_val,rs2_val, self.fuzzerstate.is_design_64bit)
@@ -324,7 +324,7 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
     def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
         if USE_MMU:
             res = self.instr_func(self.vaddr, self.imm, self.fuzzerstate.is_design_64bit)
         else:
@@ -379,7 +379,7 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0, RDInstruction_t
     def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         res = self.instr_func(rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
         if TAINT_EN:
@@ -495,7 +495,7 @@ class PlaceholderProducerInstr0_t0(PlaceholderProducerInstr0, RDInstruction_t0):
             if USE_MMU and self.fuzzerstate.is_design_64bit and self.produce_va_layout != -1:
                 rtl_off = (self.rtl_offset | 0x80000000) & 0xffffffff # TODO double check if the check of the 64th bit is valid
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
             imm = li_into_reg(to_unsigned(rtl_off, self.fuzzerstate.is_design_64bit), False)[0]
 
         res = self.instr_func(None,imm,self.fuzzerstate.is_design_64bit)
@@ -534,7 +534,7 @@ class PlaceholderProducerInstr1_t0(PlaceholderProducerInstr1, RDInstruction_t0):
             if USE_MMU and self.fuzzerstate.is_design_64bit and self.produce_va_layout != -1: 
                 rtl_off = (self.rtl_offset | 0x80000000) & 0xffffffff # TODO double check if the check of the 64th bit is valid
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
             uimm = li_into_reg(to_unsigned(rtl_off, self.fuzzerstate.is_design_64bit), False)[1]
         rd_val = self.fuzzerstate.intregpickstate.regs[self.rd].get_val()
         res = self.instr_func(rd_val, uimm, self.fuzzerstate.is_design_64bit)
@@ -566,7 +566,7 @@ class PlaceholderPreConsumerInstr_t0(PlaceholderPreConsumerInstr, BaseInstructio
     def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
         rdep_val = self.fuzzerstate.intregpickstate.regs[self.rdep].get_val()
         if USE_MMU and self.fuzzerstate.is_design_64bit and self.is_rprod and self.produce_va_layout != -1:
             mask = self.fuzzerstate.intregpickstate.regs[RPROD_MASK_REGISTER_ID].get_val()
@@ -639,7 +639,7 @@ class PlaceholderConsumerInstr_t0(PlaceholderConsumerInstr, RDInstruction_t0):
     def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
         rprod_val = self.fuzzerstate.intregpickstate.regs[self.rprod].get_val()
         if is_spike_resolution:
             if USE_MMU and self.produce_va_layout != -1:
@@ -682,7 +682,7 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
     def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         addr = INSTR_FUNCS["addi"](rs1_val,self.imm, self.fuzzerstate.is_design_64bit)
         try:
@@ -720,7 +720,7 @@ class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
     def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
         addr = INSTR_FUNCS["addi"](self.fuzzerstate.intregpickstate.regs[self.rs1].get_val(),self.imm, self.fuzzerstate.is_design_64bit)
         res = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
         if TAINT_EN:
@@ -807,7 +807,7 @@ class SpecialInstruction_t0(SpecialInstruction, BaseInstruction_t0):
     def execute(self, is_spike_resolution):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
         self.fuzzerstate.advance_minstret()
 
     def execute_t0(self, res, is_spike_resolution):
@@ -866,7 +866,7 @@ class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
         is_satp_smode, va_layout = self.is_satp_smode
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
             if USE_MMU and is_satp_smode:
                 self.fuzzerstate.curr_pc = phys2virt(self.paddr+4, PrivilegeStateEnum.SUPERVISOR, va_layout,self.fuzzerstate,absolute_addr=False)
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
@@ -903,7 +903,7 @@ class CSRImmInstruction_t0(CSRImmInstruction, RDInstruction_t0):
     def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-            self.fuzzerstate.curr_pc += 4
+            self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
         csr_val = self.fuzzerstate.csrfile.regs[self.csr_id].get_val()
         res = self.instr_func(self.uimm, csr_val, self.fuzzerstate.is_design_64bit)
         if TAINT_EN:

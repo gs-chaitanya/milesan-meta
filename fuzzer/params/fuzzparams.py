@@ -14,7 +14,7 @@ USE_MMU = True
 ##
 # RVC
 ##
-USE_COMPRESSED = True
+USE_COMPRESSED = False
 COMPRESS_INSTRUCTION = 1
 
 FENCE_CF_INSTR = False
@@ -251,12 +251,12 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MIN_BBS_LOWERBOUND = 10
+NUM_MIN_BBS_LOWERBOUND = 20
 if "NUM_MIN_BBS_LOWERBOUND" in os.environ:
     NUM_MIN_BBS_LOWERBOUND = int(os.environ["NUM_MIN_BBS_LOWERBOUND"])
     print(f"Setting NUM_MIN_BBS_LOWERBOUND = {NUM_MIN_BBS_LOWERBOUND} from env vars.")
 
-NUM_MAX_BBS_UPPERBOUND = 30
+NUM_MAX_BBS_UPPERBOUND = 300
 if "NUM_MAX_BBS_UPPERBOUND" in os.environ:
     NUM_MAX_BBS_UPPERBOUND = int(os.environ("NUM_MAX_BBS_UPPERBOUND"))
     print(f"Setting NUM_MAX_BBS_UPPERBOUND = {NUM_MAX_BBS_UPPERBOUND} from env vars.")
@@ -273,12 +273,12 @@ assert USE_TAINT_TANH or USE_TAINT_BIN or USE_TAINT_HW
 INSERT_SPECTRE_GADGETS = False
 
 # Tainting the immediates might taint the PC if instruction code is loaded and speculated on.
-TAINT_IMMRD_IMM = True
+TAINT_IMMRD_IMM = False
 if "TAINT_IMMRD_IMM" in os.environ:
     TAINT_IMMRD_IMM = int(os.environ["TAINT_IMMRD_IMM"]) == 1
     print(f"Setting TAINT_IMMRD_IMM = {TAINT_IMMRD_IMM} from env vars.")
 
-TAINT_REGIMM_IMM = True
+TAINT_REGIMM_IMM = False
 if "TAINT_REGIMM_IMM" in os.environ:
     TAINT_REGIMM_IMM = int(os.environ["TAINT_REGIMM_IMM"]) == 1
     print(f"Setting TAINT_REGIMM_IMM = {TAINT_REGIMM_IMM} from env vars.")

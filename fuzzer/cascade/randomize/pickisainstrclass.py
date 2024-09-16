@@ -128,7 +128,7 @@ def _get_isainstrclass_filtered_weights(fuzzerstate, curr_alloc_cursor):
         ret_dict[ISAInstrClass.EPCFSM] = 0
     # Do not descend privileges as long as medeleg is undefined because we have no way of certainly coming back up
     # However, this ISA class still encompasses setting mpp and spp bits, to we tolerate this ISA class at all times when executing as a non-user.
-    if not is_ready_to_descend_privileges(fuzzerstate) or fuzzerstate.memview.get_available_contig_space(curr_alloc_cursor)-(5*4) < BASIC_BLOCK_MIN_SPACE \
+    if not is_ready_to_descend_privileges(fuzzerstate) or fuzzerstate.memview.get_available_contig_space()-(5*4) < BASIC_BLOCK_MIN_SPACE \
         or fuzzerstate.curr_mmu_state == MmuState.MMU_PROD_J or fuzzerstate.curr_mmu_state == MmuState.MMU_PROD_1:
         ret_dict[ISAInstrClass.DESCEND_PRV] = 0
     # Decrease the proba if we know it will be a mpp/spp

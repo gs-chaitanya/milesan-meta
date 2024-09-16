@@ -31,12 +31,15 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
         for instr_id_in_bb, instr_obj in enumerate(bb_instrs):
             if USE_COMPRESSED and instr_obj.iscompressed:
                 #if instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution) == 0x0590006f: print(f"inst after j is {fuzzerstate.instr_objs_seq[bb_id+1]}") #which bytecode {hex(fuzzerstate.instr_objs_seq[bb_id+1][0].gen_bytecode_int(is_spike_resolution=is_spike_resolution))}")
-                instr_bytecode_int = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution)
-                curr_bytecode = (NOP_PADDING | instr_bytecode_int&0xFFFF).to_bytes(4, 'little')
+                # instr_bytecode_int = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution)
+                # curr_bytecode = (NOP_PADDING | instr_bytecode_int&0xFFFF).to_bytes(4, 'little')
+                curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(2, 'little')
             else:
                 curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(4, 'little')
             for curr_byte_id, curr_byte in enumerate(curr_bytecode):
-                curr_addr = bb_start_addr + 4*instr_id_in_bb + curr_byte_id # NO_COMPRESSED
+                # curr_addr_bk = bb_start_addr + 4*instr_id_in_bb + curr_byte_id # NO_COMPRESSED
+                curr_addr = bb_start_addr + sum([int(not i.iscompressed)*2+2 for i in bb_instrs[:instr_id_in_bb]]) + curr_byte_id
+                # assert curr_addr == curr_addr_bk, f"Failed at {instr_obj.get_str()}: {hex(curr_addr)} != {hex(curr_addr_bk)}"
                 if DO_ASSERT:
                     assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {hex(curr_addr)}"
                 addr_instrs[curr_addr] = curr_byte
