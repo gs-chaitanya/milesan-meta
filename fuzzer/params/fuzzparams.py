@@ -327,6 +327,7 @@ if "DISABLE_COMPUTATION_ON_TAINT" in os.environ:
 TAINT_IN_PRIVS = None
 if "TAINT_IN_PRIVS" in os.environ:
     TAINT_IN_PRIVS = os.environ["TAINT_IN_PRIVS"]
+    assert TAINT_IN_PRIVS != "M", f"Taint only in M-mode not supported right now."
     print(f"Setting TAINT_IN_PRIVS = {TAINT_IN_PRIVS} from env vars.")
 
 

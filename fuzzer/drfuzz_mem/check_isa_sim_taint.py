@@ -74,6 +74,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         n_instr_in_priv, forbidden_privs = fuzzerstate.compute_context_stats()
         if USE_MMU and ASSERT_EXEC_IN_TAINT_SINK_PRIV:
             assert sum([n_instr_in_priv[priv] for priv in forbidden_privs]) != 0, f"Computed program does not execute in taint sink privilege(s) {[p.name for p in forbidden_privs]}."
+            assert sum([n_instr_in_priv[priv] for priv in fuzzerstate.taint_in_priv]) != 0, f"Computed program does not execute in taint source privilege(s) {[p.name for p in fuzzerstate.taint_in_priv]}."
         fuzzerstate.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         fuzzerstate.memview.restore(0) # Restore contents before anything was executed.
         fuzzerstate.csrfile.reset() # Reset all CSRs to zero.
