@@ -9,12 +9,12 @@ import os
 ##
 # MMU
 ##
-USE_MMU = True
+USE_MMU = False
 
 ##
 # RVC
 ##
-USE_COMPRESSED = False
+USE_COMPRESSED = True
 COMPRESS_INSTRUCTION = 1
 
 FENCE_CF_INSTR = False
@@ -24,6 +24,10 @@ FENCE_CF_INSTR = False
 if "USE_MMU" in os.environ:
     USE_MMU = int(os.environ["USE_MMU"]) == 1
     print(f"Setting USE_MMU = {USE_MMU} from env vars.")
+
+if "USE_COMPRESSED" in os.environ:
+    USE_COMPRESSED = int(os.environ["USE_COMPRESSED"]) == 1
+    print(f"Setting USE_COMPRESSED = {USE_COMPRESSED} from env vars.")
 
 MAX_NUM_LAYOUTS = 5
 PROBA_ENTANGLE_LAYOUT = 0
