@@ -9,7 +9,7 @@ import os
 ##
 # MMU
 ##
-USE_MMU = False
+USE_MMU = True
 
 ##
 # RVC
@@ -120,9 +120,9 @@ def reset_reg_settings():
     if USE_MMU:
         MAX_NUM_PICKABLE_REGS = 22
         NUM_MIN_FREE_INTREGS = 3
-    elif USE_COMPRESSED:
-        MAX_NUM_PICKABLE_REGS = 10 # Use less regs so we get more compressed instructions.
-        NUM_MIN_FREE_INTREGS = 2
+    # elif USE_COMPRESSED:
+    #     MAX_NUM_PICKABLE_REGS = 10 # Use less regs so we get more compressed instructions.
+    #     NUM_MIN_FREE_INTREGS = 2
     else:
         MAX_NUM_PICKABLE_REGS = 24
         NUM_MIN_FREE_INTREGS = 2

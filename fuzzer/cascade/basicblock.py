@@ -43,9 +43,13 @@ CURR_ALLOC_CURSOR_INC = 12 if INSERT_FENCE and INSERT_REGDUMPS else 8 if INSERT_
 def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     range_bits_each_direction = get_range_bits_per_instrclass(isa_class)
 
-    # We must select the next basic block address before the resolution
-    fuzzerstate.next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction), priv = fuzzerstate.privilegestate.privstate)
-    print(f"Next BB at {hex(fuzzerstate.next_bb_addr)}")
+    # We must select the next basic block address before the resolution. 
+    # It is selected before allocating the next cf-instruction, so we must ensure it is not placed right at the current PC.
+    next_bb_addr = None
+    while next_bb_addr is None or next_bb_addr == fuzzerstate.get_curr_paddr():
+        next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction), priv = fuzzerstate.privilegestate.privstate)
+    fuzzerstate.next_bb_addr = next_bb_addr
+    # print(f"Next BB at {hex(fuzzerstate.next_bb_addr)}, checked free until {hex(fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)} curr paddr at {hex(fuzzerstate.get_curr_paddr())}")
     # If we could not find a new address where to place the next basic block, then return and consider this stage complete.
     if fuzzerstate.next_bb_addr is None:
         return False
@@ -60,7 +64,6 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
 def is_there_more_space_for_bb(fuzzerstate, required_space: int = BASIC_BLOCK_MIN_SPACE):
     if USE_MMU:
         ret = fuzzerstate.memview.get_available_contig_space() > required_space and fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[((fuzzerstate.get_curr_paddr(add_spike_offset=False)+required_space)&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
-        # print(f"Request for {hex(curr_alloc_cursor)} - {hex(curr_alloc_cursor+required_space)}: {ret}")
         return ret
     return fuzzerstate.memview.get_available_contig_space() > required_space
 # The first BASIC_BLOCK_MIN_SPACE must be pre-allocated. The rationale is that we want to pre-allocate at least for the first basic block, to prevent the store data from landing exactly there.
@@ -337,6 +340,17 @@ def gen_basicblock(fuzzerstate):
         # For JALR, bring some reg to maturity, and then insert the control flow instruction
         if DO_ASSERT:
             assert curr_isa_class == ISAInstrClass.JALR
+
+        # We allocated too many instructions in one go and now have to abort BB generation since there's not enough space left to jump to another BB.
+        # This can happen e.g. when clearing register taints and several instructions are added without checking how much contiguos space is left. 
+        if not fuzzerstate.memview.get_available_contig_space() > BASIC_BLOCK_MIN_SPACE:
+            # Abort the bb
+            fuzzerstate.instr_objs_seq.pop()
+            fuzzerstate.bb_start_addr_seq.pop()
+            # fuzzerstate.intregpickstate.restore_state(fuzzerstate.saved_reg_states[-1])
+            fuzzerstate.restore_states()
+            # deallocate memory region?
+            return False
 
         fuzzerstate.intregpickstate.bring_some_reg_to_state(IntRegIndivState.CONSUMED, fuzzerstate)
 
