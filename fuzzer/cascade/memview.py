@@ -73,6 +73,8 @@ class MemoryView:
         # Find the pair to which `start` belongs, and then check that `end` is still in the same pair.
         if addr is None:
             addr = self.fuzzerstate.get_curr_paddr(add_spike_offset=False)
+            if len(self.fuzzerstate.instr_objs_seq[-1]):
+                addr += 2+2*int(not self.fuzzerstate.instr_objs_seq[-1][-1].iscompressed)
         for curr_pair in self.freepairs:
             if addr < curr_pair[1]:
                 if (addr >= curr_pair[0]):
@@ -86,6 +88,9 @@ class MemoryView:
     # @param end:      last address of the range, excluded.
     def alloc_mem_range(self, start: int, end: int):
         # print(f"Allocating {hex(start)} - {hex(end)}")
+        # if 0xd8080 >= start and 0xd8080 < end:
+        #     print(f"HERE Allocating {hex(start)} - {hex(end)}")
+            # exit(0)
         if DO_ASSERT:
             assert end > start, f"Expected start ({start}) > end ({end}) in alloc_mem_range."
         self.occupied_addrs += end-start
