@@ -9,6 +9,6 @@
     "boom-large": "../../cascade-designs/cascade-chipyard-large-configs/cascade-boom",
     "boom-rvc": "../../cascade-designs/cascade-chipyard-rvc/cascade-boom",
     "cva6": "../../cascade-designs/cascade-cva6/cascade",
-    "cva6-test": "../../cascade-designs/cva6-test/cascade"
-
+    "cva6-test": "../../cascade-designs/cva6-test/cascade",
+    "openc910":"../../cascade-designs/hybridift-openc910/openc910/our"
 }
