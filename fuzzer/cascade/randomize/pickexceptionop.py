@@ -253,8 +253,8 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
             assert fuzzerstate.privilegestate.prev_privstate not in fuzzerstate.taint_in_priv # we only do page faults to tainted pages
-        instr_str = random.choice(IntLoadInstruction_t0.authorized_instr_strs)
-        alignment = 1 if instr_str in ["lb","lbu"] else 2 if instr_str in ["lh","lhu"] else 4 if instr_str in ["lw","lwu"] else 8 if instr_str == "ld" else None
+        instr_str = random.choice([i for i in IntLoadInstruction_t0.authorized_instr_strs if not i.startswith("c")])
+        alignment = 1 if "lb" in instr_str else 2 if "lh" in instr_str else 4 if "lw" in instr_str else 8 if "ld" in instr_str else None
         assert alignment is not None, f"Invalid instr_str: {instr_str}"
         imm = random.randrange(-PHYSICAL_PAGE_SIZE//2,PHYSICAL_PAGE_SIZE//2, alignment)
         rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)

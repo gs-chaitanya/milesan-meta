@@ -19,7 +19,7 @@ from cascade.randomize.pickmmuop import is_mmu_op_not_possible
 
 # Must not all be 0. Must be filtered according to the capabilities of the different CPUs.
 ISAINSTRCLASS_INITIAL_BOOSTERS = {
-    ISAInstrClass.REGFSM:      0.2,
+    ISAInstrClass.REGFSM:      0.1,
     ISAInstrClass.FPUFSM:      0,
     ISAInstrClass.ALU:         0.3,
     ISAInstrClass.ALU64:       0.3,
@@ -46,7 +46,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.RANDOM_CSR:  0.05,
     ISAInstrClass.DESCEND_PRV: 0.3,
     ISAInstrClass.SPECIAL:     0.01,
-    ISAInstrClass.MMU:         0,
+    ISAInstrClass.MMU:         0.5,
     ISAInstrClass.MSTATUS:     0,
     ISAInstrClass.CLEARTAINT:  0.00,
     ISAInstrClass.MEMFSM:      0.01

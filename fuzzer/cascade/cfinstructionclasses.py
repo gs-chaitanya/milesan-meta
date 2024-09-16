@@ -235,11 +235,11 @@ class ImmInstruction(CFInstruction):
             else:
                 curr_param_size = PARAM_SIZES_BITS_32[INSTRUCTION_IDS[self.instr_str]][-1]
             if PARAM_IS_SIGNED[INSTRUCTION_IDS[self.instr_str]][-1]:
-                assert self.imm >= -(1<<(curr_param_size-1)), f"{hex(self.imm)} not within paramsize: (signed, {curr_param_size})"
-                assert self.imm <  1<<(curr_param_size-1),  f"{hex(self.imm)} not within paramsize: (signed, {curr_param_size})"
+                assert self.imm >= -(1<<(curr_param_size-1)), f"{hex(self.imm)} not within paramsize: (signed, {curr_param_size}): {self.instr_str}"
+                assert self.imm <  1<<(curr_param_size-1),  f"{hex(self.imm)} not within paramsize: (signed, {curr_param_size}):  {self.instr_str}"
             else:
-                assert self.imm >= 0
-                assert self.imm <  1<<curr_param_size, f"{hex(self.imm)} not within paramsize: (unsigned, {curr_param_size})"
+                assert self.imm >= 0, f"{hex(self.imm)} < 0: {self.instr_str}"
+                assert self.imm <  1<<curr_param_size, f"{hex(self.imm)} not within paramsize: (unsigned, {curr_param_size}):  {self.instr_str}"
 
     def __init__(self, fuzzerstate, instr_str: str, imm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, iscompressed)
