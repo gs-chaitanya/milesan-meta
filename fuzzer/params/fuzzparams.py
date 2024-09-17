@@ -337,6 +337,7 @@ if "TAINT_IN_PRIVS" in os.environ:
 
 # Abort fuzzing run if the computed program does not execute in taint sink privilege.
 ASSERT_EXEC_IN_TAINT_SINK_PRIV = True
+ASSERT_EXEC_IN_TAINT_SRC_PRIV = False
 
 # Ignore exception types to e.g. only fuzz for leakage and ignore architectural bugs that trigger timeouts or value mismatches.
 IGNORE_RTL_TIMEOUT = False
