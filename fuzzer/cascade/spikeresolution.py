@@ -4,7 +4,7 @@
 
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, USE_COMPRESSED
-from common.designcfgs import get_design_march_flags
+from common.designcfgs import get_design_march_flags, get_design_march_flags_nocompressed
 from common.spike import run_trace_all_pcs, run_trace_regs_at_pc_locs, SPIKE_STARTADDR, FPREG_ABINAMES
 
 from cascade.cfinstructionclasses import *
@@ -396,13 +396,14 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False, return_int
     #     print(f"until {hex(regdump_reqs[i][0])}")
     #     run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags(design_name), SPIKE_STARTADDR, regdump_reqs[:i+1], False, final_addr, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
-    regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags(design_name), SPIKE_STARTADDR, regdump_reqs, True, final_addr, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
+    march_flags = get_design_march_flags_nocompressed(design_name) if not USE_COMPRESSED else get_design_march_flags(design_name)
+    regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, march_flags, SPIKE_STARTADDR, regdump_reqs, True, final_addr, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
     # retrieves the register value stream throughout execution to compare to in-situ sim
     rd_regdump_reqs = gen_regdump_reqs_all_rds(fuzzerstate)
     # for i in range(1,len(rd_regdump_reqs)):
         # print(f"testing {hex(rd_regdump_reqs[i-1][0])}")
-    rd_regvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags(design_name), SPIKE_STARTADDR, rd_regdump_reqs, False, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
+    rd_regvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath,march_flags, SPIKE_STARTADDR, rd_regdump_reqs, False, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
     if not NO_REMOVE_TMPFILES and not return_interm:
         os.remove(spike_resolution_elfpath)
@@ -417,7 +418,7 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False, return_int
     if check_pc_spike_again:
         # Generate the RTL ELF, but located for spike at SPIKE_STARTADDR
         rtl_spike_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'spikedoublecheck', fuzzerstate.instance_to_str(), SPIKE_STARTADDR)
-        rtl_spike_pc_seq, (finalintregvals_spikecheck, finalfpuregvals_spikecheck) = run_trace_all_pcs(fuzzerstate.instance_to_str(), rtl_spike_elfpath, get_design_march_flags(design_name), len(flat_instr_objs), SPIKE_STARTADDR, True,  fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud, fuzzerstate)
+        rtl_spike_pc_seq, (finalintregvals_spikecheck, finalfpuregvals_spikecheck) = run_trace_all_pcs(fuzzerstate.instance_to_str(), rtl_spike_elfpath, march_flags, len(flat_instr_objs), SPIKE_STARTADDR, True,  fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud, fuzzerstate)
         if not NO_REMOVE_TMPFILES:
             os.remove(rtl_spike_elfpath)
             del rtl_spike_elfpath

@@ -4,7 +4,7 @@
 
 # This module provides facilities for reducing test cases
 
-from common.designcfgs import get_design_march_flags, get_design_boot_addr, get_design_cascade_path
+from common.designcfgs import get_design_march_flags, get_design_march_flags_nocompressed, get_design_boot_addr, get_design_cascade_path
 from common.spike import SPIKE_STARTADDR
 
 from cascade.basicblock import gen_basicblocks
@@ -19,7 +19,7 @@ from cascade.gen_ctxt_final_block import *
 from cascade.privilegestate import PrivilegeStateEnum
 
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
-from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF, RELOCATOR_REGISTER_ID, IGNORE_TAINT_MISMATCH, ASSERT_EXEC_IN_TAINT_SINK_PRIV, INSERT_SPECTRE_GADGETS, USE_MMU
+from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF, RELOCATOR_REGISTER_ID, IGNORE_TAINT_MISMATCH, ASSERT_EXEC_IN_TAINT_SINK_PRIV, INSERT_SPECTRE_GADGETS, USE_MMU, USE_COMPRESSED
 
 from rv.asmutil import li_into_reg, to_unsigned
 
@@ -98,7 +98,7 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
 
     ctx_regdump_reqs, storenumbytes, insts = gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider, tgt_pc)
 
-    dumpedvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags(fuzzerstate.design_name), SPIKE_STARTADDR, ctx_regdump_reqs, False, final_addr, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
+    dumpedvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags(fuzzerstate.design_name) if USE_COMPRESSED else  get_design_march_flags_nocompressed(fuzzerstate.design_name), SPIKE_STARTADDR, ctx_regdump_reqs, False, final_addr, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
     if TAINT_EN and DO_ASSERT:
         dumpedvals_in_situ, dumpedvals_t0 = fuzzerstate.get_regdumps_from_reqs(ctx_regdump_reqs, True, None, False, True)
@@ -388,15 +388,16 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     # Generate the translated last address
         final_addr = phys2virt(final_addr, last_addr_priv, last_addr_layout, test_fuzzerstate, False)
 
+    march_flags = get_design_march_flags(test_fuzzerstate.design_name) if USE_COMPRESSED else get_design_march_flags_nocompressed(test_fuzzerstate.design_name)
     # This is actually only needed for generating the final reg and freg values iirc.
-    _, (finalintregvals_spikeresol, finalfloatregvals_spikeresol) = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags(test_fuzzerstate.design_name), SPIKE_STARTADDR, regdump_reqs, True, final_addr, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
+    _, (finalintregvals_spikeresol, finalfloatregvals_spikeresol) = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, march_flags, SPIKE_STARTADDR, regdump_reqs, True, final_addr, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
     
     
 
 
     # Retrieves the rd stream throughout execution to compare to in-situ simulation, only for safety.
     rd_regdump_reqs = gen_regdump_reqs_all_rds(test_fuzzerstate, index_first_bb_to_consider=index_first_bb_to_consider, first_instr_id_in_first_bb_to_consider=index_first_instr_to_consider)
-    rd_regvals = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, get_design_march_flags(test_fuzzerstate.design_name), SPIKE_STARTADDR, rd_regdump_reqs, False, final_addr, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
+    rd_regvals = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, march_flags, SPIKE_STARTADDR, rd_regdump_reqs, False, final_addr, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
 
     rtl_elfpath = spikereduce_elfpath
 

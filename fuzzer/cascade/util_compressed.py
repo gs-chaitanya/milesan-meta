@@ -194,7 +194,7 @@ def handle_ImRd(rd, imm, instr_str):
 
     match instr_str:
         case "lui":
-            if rd != "zero" and rd != "sp" and imm!=0 and imm%(1<<12)==0 and imm in range(-(1<<17), (1<<17)): # nzimm[17:12]
+            if rd != "zero" and rd != "sp" and imm!=0 and imm in range(-(1<<6), (1<<6)): # nzimm[17:12]
                 return ("c.lui", True)
             else:
                 return ("", False)

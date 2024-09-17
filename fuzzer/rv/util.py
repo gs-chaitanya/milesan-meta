@@ -1206,7 +1206,7 @@ PARAM_IS_SIGNED = [
     [False, False], # c.addi4spn
     [False, False, False], # c.fld
     # [False, False, False], # c.lq
-    [False, False, True], # c.lw
+    [False, False, False], # c.lw
     [False, False, False], # c.flw
     [False, False, False], # c.ld
     [False, False, False], # c.fsd

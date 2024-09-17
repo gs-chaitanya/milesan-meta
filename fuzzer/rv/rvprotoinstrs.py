@@ -434,7 +434,6 @@ def instruc_cbtype(opcode: int, rs1prime: int, funct3: int, imm: int):
     rs1prime_offset = imm4_0_offset + 5
     imm7_5_offset = rs1prime_offset + 3
     funct3_offset = imm7_5_offset + 3
-
     imm4_0 = imm & 0x1F
     imm7_5 = (imm >> 5) & 0x7
 

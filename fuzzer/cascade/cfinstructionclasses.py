@@ -381,9 +381,6 @@ class ImmRdInstruction(ImmInstruction):
 
         # rv32i
         if self.instr_str == "lui":
-            if self.paddr == 0x80036560:
-                print(f"Flipping immediate")
-                return rv32i_lui(self.rd, self.imm^(1<<9))
             return rv32i_lui(self.rd, self.imm)
         elif self.instr_str == "auipc":
             return rv32i_auipc(self.rd, self.imm)
@@ -542,9 +539,15 @@ class BranchInstruction(ImmInstruction):
     def gen_bytecode_int(self, is_spike_resolution: bool):
         if is_spike_resolution:
             if self.plan_taken:
-                return rv32i_jal(0, self.imm) # Just unconditionally jump to the next basic block
+                if self.iscompressed:
+                    return rv32ic_j(self.imm) # Just unconditionally jump to the next basic block, need compressed
+                else:
+                    return rv32i_jal(0, self.imm) # Just unconditionally jump to the next basic block
             else:
-                return rv32i_addi(0, 0, 0) # Nop
+                if self.iscompressed:
+                    return rv32ic_addi(0, 0) # c.nop
+                else:
+                    return rv32i_addi(0, 0, 0) # Nop
         else:
             # rv32i
             if self.instr_str == "beq":

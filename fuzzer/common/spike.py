@@ -194,7 +194,7 @@ def run_trace_regs_at_pc_locs(identifier_str: str, elfpath: str, rvflags: str, s
 # @return a list of PCs. If dump_final_reg_vals is True, then the output is a pair, whose second element is an array of final register values
 def run_trace_all_pcs(identifier_str: str, elfpath: str, rvflags: str, numinstrs: int, startpc: int, dump_final_reg_vals: bool, num_fp_regs: int, has_fpdouble_support: bool, fuzzerstate_for_debug: list) -> list:
     # First, create the file that contains the commands, if it does not already exist
-    print(f"n_missing_r_cmds: {fuzzerstate_for_debug.n_mising_r_cmds}")
+    # print(f"n_missing_r_cmds: {fuzzerstate_for_debug.n_mising_r_cmds}")
     path_to_debug_file = __gen_spike_dbgcmd_file_for_trace_pcs(identifier_str, numinstrs, startpc, dump_final_reg_vals, num_fp_regs, fuzzerstate_for_debug.n_mising_r_cmds)
     
     # Second, run the Spike command
@@ -219,7 +219,7 @@ def run_trace_all_pcs(identifier_str: str, elfpath: str, rvflags: str, numinstrs
     addr_str_splitted = spike_out.split(b"\n")
     addr_str_splitted = list(filter(lambda s: b'exception' not in s and b'tval 0x' not in s, addr_str_splitted))
     ret = []
-    for instr_id in range(numinstrs+fuzzerstate_for_debug.n_mising_r_cmds):
+    for instr_id in range(numinstrs): # +n_missin_r_cmds?
         # If there is no exception.
         # print(addr_str_splitted[instr_id+1])
         if addr_str_splitted[instr_id+1][10:12] == b"0x":

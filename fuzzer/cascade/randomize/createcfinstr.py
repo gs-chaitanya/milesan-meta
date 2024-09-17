@@ -214,9 +214,13 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
 
     if USE_COMPRESSED and instr_str in IS_COMPRESSABLE:
         instr_str_cmp, is_compressable = handle_Branch(rs1, rs2, imm, instr_str)
+        if plan_taken and is_compressable: # if it is taken, we need to generate the compressed jal for the spike resolution. So the corresp. jal must also be compressible.
+            instr_str_cmp_jal, is_compressable_jal = handle_JAL(0, imm, 'jal',fuzzerstate.is_design_64bit)
+            is_compressable &= is_compressable_jal
+
         if is_compressable and (random.random() < COMPRESS_INSTRUCTION):
             iscompressed = True
-            print(f"compressed {instr_str} into {instr_str_cmp}") #DEBUG
+            # print(f"compressed {instr_str} into {instr_str_cmp}") #DEBUG
             instr_str = instr_str_cmp
 
 
