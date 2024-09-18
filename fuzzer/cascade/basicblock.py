@@ -46,7 +46,8 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     # We must select the next basic block address before the resolution. 
     # It is selected before allocating the next cf-instruction, so we must ensure it is not placed right at the current PC.
     next_bb_addr = None
-    while next_bb_addr is None or next_bb_addr == fuzzerstate.get_curr_paddr(add_spike_offset=False):
+    curr_paddr = fuzzerstate.get_curr_paddr(add_spike_offset=False)
+    while next_bb_addr is None or next_bb_addr in range(curr_paddr,curr_paddr+4*int(INSERT_REGDUMPS)+4*int(INSERT_FENCE)):
         next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction), priv = fuzzerstate.privilegestate.privstate)
     fuzzerstate.next_bb_addr = next_bb_addr
     # print(f"Next BB at {hex(fuzzerstate.next_bb_addr)}, checked free until {hex(fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)} curr paddr at {hex(fuzzerstate.get_curr_paddr(add_spike_offset=False))}")
@@ -778,3 +779,8 @@ def gen_basicblocks(fuzzerstate):
     fuzzerstate.consumer_inst_va_layout, fuzzerstate.producer_id_to_tgtaddr, fuzzerstate.producer_id_to_noreloc_spike = gen_producer_id_to_tgtaddr(fuzzerstate)
 
     return fuzzerstate
+
+
+
+
+

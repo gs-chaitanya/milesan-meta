@@ -389,6 +389,7 @@ class FuzzerState:
                     if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
                         fence_instr.print(is_spike_resolution=True)
                     fence_instr.execute(is_spike_resolution=True)
+                    curr_paddr = self.get_curr_paddr(add_spike_offset=False)
                     if len(self.instr_objs_seq)>1:
                         self.memview.alloc_mem_range(curr_paddr, curr_paddr+4)
                     self.instr_objs_seq[-1].append(fence_instr)

@@ -29,6 +29,8 @@ if "USE_COMPRESSED" in os.environ:
     USE_COMPRESSED = int(os.environ["USE_COMPRESSED"]) == 1
     print(f"Setting USE_COMPRESSED = {USE_COMPRESSED} from env vars.")
 
+assert not (USE_COMPRESSED and USE_MMU), "This does not work yet."
+
 MAX_NUM_LAYOUTS = 5
 PROBA_ENTANGLE_LAYOUT = 0
 MAX_NUM_INSTR_IN_PRV = 100

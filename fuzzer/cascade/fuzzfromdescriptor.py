@@ -19,7 +19,6 @@ import random
 import time
 import subprocess
 
-FUZZ_USE_MODELSIM = False
 
 
 # Creates a new program descriptor.
