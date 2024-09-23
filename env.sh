@@ -170,7 +170,9 @@ export LD_LIBRARY_PATH=$PREFIX_CASCADE/lib64:$LD_LIBRARY_PATH
 export MPLCONFIGDIR=$PREFIX_CASCADE/matplotlib
 mkdir -p $MPLCONFIGDIR
 
+
 # Make configuration usable; prioritize our tools
+PATH=/mnt/verilator/bin:$PATH
 PATH=$PREFIX_CASCADE/miniconda/bin:$PATH
 PATH=$PREFIX_CASCADE/bin:$PATH
 PATH=$PREFIX_CASCADE/bin:$CARGO_HOME/bin:$PREFIX_CASCADE/python-venv/bin/:$PATH
