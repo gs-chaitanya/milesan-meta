@@ -411,6 +411,13 @@ def conj(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
 def conji(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     return sign_extend(a_t0,32,is_design_64bit) | sign_extend(imm_t0,12,is_design_64bit)
 
+# Used for div/mul, precise IFT rules not implemented yet.
+def allones(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
+    if a_t0 or b_t0:
+        return MAX_64b if is_design_64bit else MAX_32b
+    else:
+        return 0
+
 def or_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
     a_t0_and_b_t0 = a_t0 & b_t0 # Can change value since both sides tainted
     # print(f"a={hex(a)}, a_t0={hex(a_t0)}, b={hex(b)}, b_t0={hex(b_t0)}")
@@ -691,9 +698,63 @@ def lwu_t0(a, is_design_64bit: bool):
 def ld_t0(a, is_design_64bit: bool):
     return sign_extend(a,64,is_design_64bit)
 
-
 def mul(a, b, is_design_64bit: bool):
     return (a*b)&(MAX_64b if is_design_64bit else MAX_32b)
+
+def mulh(a, b, is_design_64bit: bool):
+    mult_res = twos_complement(a,is_design_64bit)*twos_complement(b,is_design_64bit)
+    ret =  (mult_res&(MAX_64b<<64)) >> 64 if is_design_64bit else (mult_res&(MAX_64b<<32)) >> 32
+    return ret
+
+def mulhu(a, b, is_design_64bit: bool):
+    mult_res = a*b
+    ret =  (mult_res&(MAX_64b<<64)) >> 64 if is_design_64bit else (mult_res&(MAX_64b<<32)) >> 32
+    return ret
+
+def mulhsu(a, b, is_design_64bit: bool):
+    mult_res = twos_complement(a,is_design_64bit)*b
+    ret =  (mult_res&(MAX_64b<<64)) >> 64 if is_design_64bit else (mult_res&(MAX_64b<<32)) >> 32
+    return ret
+
+def mulw(a, b, is_design_64bit: bool):
+    return sign_extend(((a&MAX_32b)*(b&MAX_32b))&MAX_32b,32,is_design_64bit)
+
+# C-like division to match spike
+def _div_c(a, b):
+    if (a >= 0) != (b >= 0) and a % b:
+        return a // b + 1
+    else:
+        return a // b
+
+def div(a, b, is_design_64bit: bool):
+    if b & (MAX_64b if is_design_64bit else MAX_32b) == 0:
+        return MAX_64b if is_design_64bit else MAX_32b
+    elif a == (1 << 63 if is_design_64bit else 1<<31) and b == (MAX_64b if is_design_64bit else MAX_32b):
+        return a
+    else:
+        return _div_c(twos_complement(a, is_design_64bit),twos_complement(b, is_design_64bit))&(MAX_64b if is_design_64bit else MAX_32b)
+
+def divu(a, b, is_design_64bit: bool):
+    if b & (MAX_64b if is_design_64bit else MAX_32b) == 0:
+        return MAX_64b if is_design_64bit else MAX_32b
+    else:
+        return abs(_div_c(a&(MAX_64b if is_design_64bit else MAX_32b),b&(MAX_64b if is_design_64bit else MAX_32b)))&(MAX_64b if is_design_64bit else MAX_32b)
+
+def divw(a, b, is_design_64bit: bool):
+    if b & MAX_32b == 0:
+        return MAX_64b if is_design_64bit else MAX_32b
+    elif a&MAX_32b == (1<<31) and b&MAX_32b == MAX_32b:
+        return sign_extend((1<<31), 32, is_design_64bit)
+    else:
+        return  sign_extend(_div_c(twos_complement(a&MAX_32b, False),twos_complement(b&MAX_32b, False))&MAX_32b, 32, is_design_64bit)
+
+def divuw(a, b, is_design_64bit: bool):
+    if b&MAX_32b == 0:
+        res32 = MAX_32b
+    else:
+        res32 = abs(_div_c(a&MAX_32b, b&MAX_32b))
+    return sign_extend(res32, 32, is_design_64bit)
+
 
 INSTR_FUNCS = {
     # register instructions
@@ -815,7 +876,16 @@ INSTR_FUNCS = {
     "sllw": sllw,
     "srlw": srlw,
     "sraw": sraw,
-    "mul": mul
+    "divw": divw,
+    "divuw": divuw,
+    "mul": mul,
+    "mulw":mulw,
+    "div": div,
+    "divu": divu,
+    "mulh": mulh,
+    "mulhsu":mulhsu,
+    "mulhu":mulhu
+
 }
 
 INSTR_FUNCS_T0 = {
@@ -938,8 +1008,17 @@ INSTR_FUNCS_T0 = {
     "sllw": sllw_t0_imprecise if SLL_IMPRECISE else conj if SLL_IMPRECISE else sllw_t0_precise,
     "srlw": srlw_t0_imprecise if SRL_IMPRECISE else conj if SRL_IMPRECISE else srlw_t0_precise,
     "sraw": sraw_t0 if not SRA_CONJ else conj,
+    "divw": allones,
+    "divuw": allones,
     # muldiv
-    "mul": conj
+    "mul": allones,
+    "mulw": allones,
+    "div": allones,
+    "divu": allones,
+    "mulh":allones,
+    "mulhsu":allones,
+    "mulhu":allones
+
 }
 
 

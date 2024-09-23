@@ -145,10 +145,10 @@ INSTRUCTIONS_BY_ISA_CLASS = {
     ],
     ISAInstrClass.MULDIV64: [
         "mulw",
-        "divw",
-        "divuw",
-        "remw",
-        "remuw"
+        # "divw",
+        # "divuw",
+        # "remw",
+        # "remuw"
     ],
     ISAInstrClass.AMO: [
         "lr.w",
