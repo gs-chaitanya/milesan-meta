@@ -18,7 +18,7 @@ from cascade.contextreplay import SavedContext, gen_context_setter
 from cascade.gen_ctxt_final_block import *
 from cascade.privilegestate import PrivilegeStateEnum
 
-from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
+from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS
 from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF, RELOCATOR_REGISTER_ID, IGNORE_TAINT_MISMATCH, ASSERT_EXEC_IN_TAINT_SINK_PRIV, INSERT_SPECTRE_GADGETS, USE_MMU, USE_COMPRESSED
 
 from rv.asmutil import li_into_reg, to_unsigned
@@ -1285,7 +1285,9 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         if not quiet:
             print('Success larger MODELSIM:', is_success_larger)
             print('larger msg MODELSIM:', rtl_msg_larger)
-            
+
+        assert not is_success_larger, f"Bug disappears in Modelsim!"
+
         test_fuzzerstate_smaller.simulator =  SimulatorEnum.MODELSIM
         test_fuzzerstate_smaller.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         test_fuzzerstate_smaller.memview.restore(0) # Restore contents before anything was executed.
@@ -1295,7 +1297,6 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             print('Success smaller MODELSIM:', is_success_smaller)
             print('smaller msg MODELSIM:', rtl_msg_smaller)
 
-        assert not is_success_larger, f"Bug disappears in Modelsim!"
         assert is_success_smaller, f"Smaller ELF breaks in Modelsim!"
 
 
@@ -1324,6 +1325,17 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     if not quiet:
         print(ret_msg)
     fuzzerstate.log(ret_msg)
+
+    if not NO_REMOVE_TMPFILES:
+        fuzzerstate.remove_tmp_files()
+        test_fuzzerstate_larger.remove_tmp_files()
+        test_fuzzerstate_smaller.remove_tmp_files()
+
+    if not NO_REMOVE_TMPDIRS:
+        fuzzerstate.remove_tmp_dir()
+        test_fuzzerstate_larger.remove_tmp_dir()
+        test_fuzzerstate_smaller.remove_tmp_dir()
+
     return ret_msg
 
 def _count_n_nops(fuzzerstate, min_bb, max_bb):
