@@ -10,7 +10,7 @@ PATH_TO_TMP_ENV_VAR = "CASCADE_DATADIR"
 PATH_TO_TMP = os.path.join(os.environ[PATH_TO_TMP_ENV_VAR])
 os.makedirs(PATH_TO_TMP, exist_ok=True)
 PATH_TO_MNT = os.path.join(os.environ['LOCAL_MNT'])
-PATH_FROM_MODELSIM_TO_MNT = "/local/home/tkovats/ssh_mnt/"
+PATH_FROM_MODELSIM_TO_MNT =  os.path.join(os.environ['PATH_FROM_MODELSIM_TO_MNT'])
 PATH_TO_MNT_ENV_VAR = "LOCAL_MNT"
 MODELSIM_REQ_DIR = os.path.join(PATH_TO_MNT, "modelsim_req")
 os.makedirs(MODELSIM_REQ_DIR, exist_ok=True)
@@ -129,6 +129,9 @@ COLLECT_TAINT_STATS = get_env_bool('COLLECT_TAINT_STATS', str(int(COLLECT_TAINT_
 USE_MODELSIM = get_env_bool('USE_MODELSIM', str(int(USE_MODELSIM_DEFAULT)))
 DEBUG_RVC = get_env_bool('DEBUG_RVC', str(int(DEBUG_RVC_DEFAULT)))
 
+if INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN:
+    print(f"WARNING: Disabling CHECK_PC_SPIKE_AGAIN because INSERT_REGDUMPS is enabled. Cannot have both at the same time for now.")
+    CHECK_PC_SPIKE_AGAIN = False
 # Ensure specific assertions
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
 assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not supported when spectre gadgets enabled."
