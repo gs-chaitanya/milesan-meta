@@ -37,8 +37,6 @@ if __name__ == '__main__':
                 env["USE_MODELSIM"] = str(int(USE_MODELSIM))
             datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["NAME"])
             env["CASCADE_DATADIR"] = datadir
-            env["NO_REMOVE_TMPDIRS"] = "1"
-            env["NO_REMOVE_TMPFILES"] = "1"
             os.makedirs(datadir, exist_ok=True)
             
             try:
