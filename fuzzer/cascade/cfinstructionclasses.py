@@ -397,7 +397,9 @@ class ImmRdInstruction(ImmInstruction):
 
 
 # Instructions with rs1, imm and rd
-RegImmInstructions = ("addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai", "addiw", "slliw", "srliw", "sraiw", "c.addi","c.li","c.addi16sp","c.addi4spn","c.slli","c.srli","c.srai","c.andi", "c.addiw")
+RegImmInstructions = ("addi", "slti", "sltiu", "xori", "ori", "andi", "slli", "srli", "srai") # base
+RegImmInstructions += ("addiw", "slliw", "srliw", "sraiw") # w-extension
+RegImmInstructions += ("c.addi","c.li","c.addi16sp","c.addi4spn","c.slli","c.srli","c.srai","c.andi", "c.addiw") # compressed
 RegImmShiftInstructions = ("slli", "srli", "srai", "slliw", "srliw", "sraiw", "c.slli","c.srli","c.srai")
 class RegImmInstruction(ImmInstruction):
     authorized_instr_strs = RegImmInstructions
