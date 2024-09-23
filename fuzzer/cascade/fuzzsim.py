@@ -298,19 +298,35 @@ def run_rtl_and_load_regstream(fuzzerstate):
     return (regstream_rtl_val, regstream_rtl_val_t0), regdumps_rtl, sramdump_rtl
 
 
+def clean_xX(r: str):
+    return r[:2] + r[2:].replace("x","0").replace("X","0")
 # Use this when fuzzing with modelsim as we can't start it from the container. Need second script to run natively in parallel and a shared mount.
 def wait_and_load_regstream(fuzzerstate):
     req_dict = {key:value.replace(PATH_TO_MNT, PATH_FROM_MODELSIM_TO_MNT) for key,value in fuzzerstate.env.items()}
     rtl_name = fuzzerstate.env['SIMSRAMELF'].split('/')[-1].split(".")[0]
     timestring=strftime("%a_%d_%b_%Y_%H:%M:%S", gmtime())
     req_path = f"{MODELSIM_REQ_DIR}/{rtl_name}.{timestring}.modelsim_req.json"
-    with open(req_path, "w") as f:
-        json.dump(req_dict, f)
-    if PRINT_THREAD_STATUS:
-        print(f"Dumped request to {req_path}")
+    
 
     assert "REGDUMP_PATH" in fuzzerstate.env
     regdump_path = fuzzerstate.env["REGDUMP_PATH"]
+
+    # If there's an old register dump from a previous run, delete it. 
+    # Otherwise we get aliasing with other simuations, especially Verilator.
+    if os.path.exists(regdump_path):
+        os.remove(regdump_path)
+
+    if INSERT_REGDUMPS:
+        assert "REGSTREAM_PATH" in fuzzerstate.env
+        regstream_path = fuzzerstate.env["REGSTREAM_PATH"]
+        if os.path.exists(regstream_path):
+            os.remove(regstream_path)
+
+    with open(req_path, "w") as f:
+        json.dump(req_dict, f)
+
+    if PRINT_THREAD_STATUS:
+        print(f"Dumped request to {req_path}")
 
     while(not os.path.exists(regdump_path)):
         time.sleep(2)
@@ -330,13 +346,12 @@ def wait_and_load_regstream(fuzzerstate):
             time.sleep(1)
     regstream_rtl_val_t0 = {}
     regstream_rtl_val = {}
-    if not USE_VANILLA and INSERT_REGDUMPS:
-        regstream_path = fuzzerstate.env["REGSTREAM_PATH"]
-        assert "REGSTREAM_PATH" in fuzzerstate.env
+    if INSERT_REGDUMPS:
+        assert not USE_VANILLA
         assert os.path.exists(regstream_path), f"{regstream_path} does not exist"
         with open(regstream_path, "rb") as f:
             regstream_rtl = json.load(f)
-        regstream_rtl_val_t0 = {int(r["id"],16): int(r["value_t0"],16) for r in regstream_rtl}
+        regstream_rtl_val_t0 = {int(r["id"],16): int(clean_xX(r["value_t0"]),16) for r in regstream_rtl}
         regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
 
     sramdump_rtl = {}
