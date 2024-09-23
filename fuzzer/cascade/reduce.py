@@ -1277,6 +1277,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     ## CHECK THAT BUG IS NOT FROM VERILATOR ##
     if DOUBLECHECK_MODELSIM and not fuzzerstate.simulator == SimulatorEnum.MODELSIM: 
+        test_fuzzerstate_larger.simulator =  SimulatorEnum.MODELSIM
         test_fuzzerstate_larger.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         test_fuzzerstate_larger.memview.restore(0) # Restore contents before anything was executed.
         test_fuzzerstate_larger.csrfile.reset() # Reset all CSRs to zero.
@@ -1285,6 +1286,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             print('Success larger MODELSIM:', is_success_larger)
             print('larger msg MODELSIM:', rtl_msg_larger)
             
+        test_fuzzerstate_smaller.simulator =  SimulatorEnum.MODELSIM
         test_fuzzerstate_smaller.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         test_fuzzerstate_smaller.memview.restore(0) # Restore contents before anything was executed.
         test_fuzzerstate_smaller.csrfile.reset() # Reset all CSRs to zero.
