@@ -453,6 +453,7 @@ class PageTablesGen:
                 if is_pt:
                     if DEBUG_PRINT:
                         print(f"{hex(ppn_leaf)} points to page table. Skipping mapping.")
+                    self.ppn_leaf_to_priv_dict[ppn_leaf] = {} # Empty set. No privilige can allocate code here.
                     curr_layout_pt_content.append(0)
                     curr_layout_pt_content_supervisor.append(0)
                     ppn_leaf += self.page_size_per_layout[layout_id]

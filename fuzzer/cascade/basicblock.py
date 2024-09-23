@@ -44,13 +44,19 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     range_bits_each_direction = get_range_bits_per_instrclass(isa_class)
 
     # We must select the next basic block address before the resolution. 
-    # It is selected before allocating the next cf-instruction, so we must ensure it is not placed right at the current PC.
+    # It is selected before allocating the next cf-instruction, so we must ensure it is not placed right at the current PC or the PCs occupied by inserted helper instructions.
     next_bb_addr = None
     curr_paddr = fuzzerstate.get_curr_paddr(add_spike_offset=False)
-    while next_bb_addr is None or next_bb_addr in range(curr_paddr,curr_paddr+4*int(INSERT_REGDUMPS)+4*int(INSERT_FENCE)):
+    while next_bb_addr is None or curr_paddr in range(next_bb_addr,next_bb_addr+BASIC_BLOCK_MIN_SPACE):
         next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction), priv = fuzzerstate.privilegestate.privstate)
+    
     fuzzerstate.next_bb_addr = next_bb_addr
     # print(f"Next BB at {hex(fuzzerstate.next_bb_addr)}, checked free until {hex(fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)} curr paddr at {hex(fuzzerstate.get_curr_paddr(add_spike_offset=False))}")
+
+    # if DO_ASSERT:
+    #     assert next_bb_addr not in range(curr_paddr,curr_paddr+4*(1+int(INSERT_REGDUMPS)+int(INSERT_FENCE))), f"{hex(next_bb_addr)} not allowed."
+    #     assert next_bb_addr+BASIC_BLOCK_MIN_SPACE not in range(curr_paddr,curr_paddr+4*(1+int(INSERT_REGDUMPS)+int(INSERT_FENCE))),  f"{hex(next_bb_addr)} not allowed."
+
     # If we could not find a new address where to place the next basic block, then return and consider this stage complete.
     if fuzzerstate.next_bb_addr is None:
         return False
