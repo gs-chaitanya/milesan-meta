@@ -27,7 +27,7 @@ if { [string equal $TRACE trace_fst] } {
     set DEBUGDBARG ""
 }
 
-vsim -64 -lib $LIB $MODELSIM_VSIM_COVERFLAG  $DEBUGDBARG $VOPTARGS tb_top
+vsim -64  -suppress 3009 -lib $LIB $MODELSIM_VSIM_COVERFLAG  $DEBUGDBARG $VOPTARGS tb_top
 
 if { [string equal $TRACE trace_fst] } { 
     log -r /*
