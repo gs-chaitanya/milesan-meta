@@ -170,7 +170,7 @@ def gen_regdump_reqs_reduced(fuzzerstate, max_bb_id: int = None, max_instr_id: i
                 break
             # curr_addr = bb_start_addr + 4*bb_instr_id + SPIKE_STARTADDR # NO_COMPRESSED
             curr_addr = bb_start_addr + sum([2+2*int(not instr.iscompressed) for instr in bb_instrs[:bb_instr_id]])
-            assert curr_addr == bb_instr.paddr, f"Address mismatch: Expected {hex(curr_addr)}, got {bb_instr.paddr}"
+            assert curr_addr+SPIKE_STARTADDR == bb_instr.paddr, f"Address mismatch: Expected {hex(curr_addr+SPIKE_STARTADDR)}, got {hex(bb_instr.paddr)}"
             
             # All we need is the value of the dependent register at consumption time.
             if isinstance(bb_instr, PlaceholderConsumerInstr):
