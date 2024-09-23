@@ -145,8 +145,8 @@ INSTRUCTIONS_BY_ISA_CLASS = {
     ],
     ISAInstrClass.MULDIV64: [
         "mulw",
-        # "divw",
-        # "divuw",
+        "divw",
+        "divuw",
         # "remw",
         # "remuw"
     ],
@@ -323,8 +323,9 @@ class IntRegIndivState(IntEnum):
     RELOCUSED          = auto() # Already used by cf-ambiguous instruction, value differs between in-situ and spike/final rtl simulation and must be excluded from df computation.
     PAGE_ADDR          = auto()
     PAGE_T0_ADDR       = auto()
-BASIC_BLOCK_MIN_SPACE = 24 + 12*USE_MMU# bytes.
+BASIC_BLOCK_MIN_SPACE = 24
 LI_DOUBLEWORD_SPACE = 7*4 # 7 instructions to prepare one virtual address.
 SPECTRE_GADGET_MIN_SPACE = 2*LI_DOUBLEWORD_SPACE + 4*4 # 4 speculative instructions.
+BASIC_BLOCK_MIN_SPACE += BASIC_BLOCK_MIN_SPACE * int(USE_MMU)
 BASIC_BLOCK_MIN_SPACE += BASIC_BLOCK_MIN_SPACE * int(INSERT_REGDUMPS)
 BASIC_BLOCK_MIN_SPACE += BASIC_BLOCK_MIN_SPACE * int(INSERT_FENCE)
