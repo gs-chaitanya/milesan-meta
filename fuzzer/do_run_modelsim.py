@@ -4,8 +4,10 @@ import time
 import subprocess
 import threading
 import multiprocessing as mp
-import atexit
 import json
+from signal import *
+import sys, time
+import shutil
 
 PRINT_THREAD_STATUS = True
 MAX_N_THREADS = 30
@@ -13,6 +15,14 @@ MUTE = False
 TRACE_EN = False
 callback_lock = threading.Lock()
 n_finished_threads = 0
+
+
+def clean(*args):
+    assert "MODELSIM_REQ_DIR" in os.environ, f"MODELSIM_REQ_DIR not set. Did you source cascade-meta/env.sh?"
+    req_dir = os.environ["MODELSIM_REQ_DIR"]
+    print(f"Deleting {req_dir} for cleanup before exit.")
+    shutil.rmtree(req_dir)
+    sys.exit(0)
 
 def test_done_callback(ret):
     global n_finished_threads
@@ -72,13 +82,15 @@ if __name__ == '__main__':
     if len(sys.argv) > 2:
         raise Exception("Usage: python3 do_run_modelsim.py [path_to_req]")
 
+    for sig in (SIGABRT, SIGILL, SIGINT, SIGSEGV, SIGTERM):
+        signal(sig, clean)
+
     if len(sys.argv) > 1:
         path_to_req = sys.argv[1]
         modelsim_worker(path_to_req)
     else:
         assert "MODELSIM_REQ_DIR" in os.environ, f"MODELSIM_REQ_DIR not set. Did you source cascade-meta/env.sh?"
         req_dir = os.environ["MODELSIM_REQ_DIR"]
-        assert os.path.exists(req_dir)
         initiated_reqs = []
         with mp.Pool(processes=MAX_N_THREADS) as pool:
             while(1):
