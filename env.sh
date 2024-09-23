@@ -18,16 +18,17 @@ echo "cascade metarepo root: $myroot"
 export CASCADE_META_ROOT=$myroot
 
 PWD=$(pwd)
-if [[ "${PWD}" == *"ssh_mnt"* ]];
+if [[ "${PWD}" == *"tkovats"* ]];
 then
-echo "Running natively, modelsim workroot is ${PWD}"
-export LOCAL_MNT=/local/home/tkovats/ssh_mnt
+echo "Running natively."
+export LOCAL_MNT=/scratch/tkovats/ssh_mnt
 export PATH=$PATH:/usr/local/questa-2022-03/questasim/bin
 source $LOCAL_MNT/cellift-meta/env.sh
 else
-echo "Running inside container, modelsim workroot is ${PWD}"
+echo "Running inside container."
 export LOCAL_MNT=/mnt
 export LM_LICENSE_FILE=8161@lic-mentor.ethz.ch
+export PATH_FROM_MODELSIM_TO_MNT=/scratch/tkovats/ssh_mnt
 source /cellift-meta/env.sh
 fi
 
