@@ -300,6 +300,7 @@ def run_rtl_and_load_regstream(fuzzerstate):
 
 def clean_xX(r: str):
     return r[:2] + r[2:].replace("x","0").replace("X","0")
+    
 # Use this when fuzzing with modelsim as we can't start it from the container. Need second script to run natively in parallel and a shared mount.
 def wait_and_load_regstream(fuzzerstate):
     req_dict = {key:value.replace(PATH_TO_MNT, PATH_FROM_MODELSIM_TO_MNT) for key,value in fuzzerstate.env.items()}

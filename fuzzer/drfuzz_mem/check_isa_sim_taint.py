@@ -238,11 +238,10 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 fuzzerstate.memview.print_and_compare(final_sramdump_rtl)
         print(f"Failed for seed {seed}")
         if "There are less" in str(e) or "Computed program does not execute" in str(e):
-            # fuzzerstate.remove_tmp_dir() # Delete at calling function level
-            pass
+            fuzzerstate.remove_tmp_dir() # Delete at calling function level
         else:
-            # if not NO_REMOVE_TMPFILES:
-                # fuzzerstate.remove_tmp_files()
+            if not NO_REMOVE_TMPFILES:
+                fuzzerstate.remove_tmp_files()
             fuzzerstate.log(str(e))
         if isinstance(e, subprocess.CalledProcessError):
             if "spike" in str(e):

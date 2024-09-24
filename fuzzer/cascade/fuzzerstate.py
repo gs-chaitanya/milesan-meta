@@ -476,16 +476,18 @@ class FuzzerState:
         return env
 
     def remove_tmp_dir(self):
-        shutil.rmtree(self.tmp_dir)
+        if os.path.isdir(self.tmp_dir):
+            shutil.rmtree(self.tmp_dir)
 
     def remove_tmp_files(self):
-        for file in glob.glob(f"{self.tmp_dir}/*.elf"):
-            os.remove(file)
-        for file in glob.glob(f"{self.tmp_dir}/*.txt"):
-            os.remove(file)
-        for file in glob.glob(f"{self.tmp_dir}/*.env"):
-            os.remove(file)
-            
+        if os.path.isdir(self.tmp_dir):
+            for file in glob.glob(f"{self.tmp_dir}/*.elf"):
+                os.remove(file)
+            for file in glob.glob(f"{self.tmp_dir}/*.txt"):
+                os.remove(file)
+            for file in glob.glob(f"{self.tmp_dir}/*.env"):
+                os.remove(file)
+                
 
     def load_init_regvals_from_memview(self):
         self.initial_reg_data_content.clear()
