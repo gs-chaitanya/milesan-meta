@@ -16,7 +16,7 @@ import sys
 
 LOG_EXCEPTIONS = True
 LOG_EN = True
-PRINT_THREAD_STATUS = False
+PRINT_THREAD_STATUS = True
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 total_finished_tests = 0
@@ -32,6 +32,8 @@ def test_done_callback(ret):
             total_finished_tests += 1
             if PRINT_THREAD_STATUS:
                 print(ret)
+                print(f"Finished {total_finished_tests} threads.")
+            
 def __reduce_program_worker(design_name, seed):
     try:
         ret = reduce_program(*gen_new_test_instance(design_name,seed,True),check_pc_spike_again=True,quiet=True)
@@ -43,13 +45,14 @@ def __reduce_program_worker(design_name, seed):
         return ret
 
     except Exception as e:
-        print(f"reduce_program failed for {design_name} with seed {seed}: {e}")
+        ret = f"reduce_program failed for {design_name} with seed {seed}: {e}"
+        print(ret)
         if LOG_EXCEPTIONS:
             logdir = os.path.join(PATH_TO_TMP, "logs")
             os.makedirs(logdir, exist_ok=True)
             with open(f"{logdir}/{design_name}.reduce.failed.log", "a") as f:
                 f.write(f"seed {seed}: {str(e)}\n")
-        return False
+        return ret
         
 # Helps with suppressing the verbose outputs
 def mute():

@@ -135,11 +135,11 @@ INSTRUCTIONS_BY_ISA_CLASS = {
     ],
     ISAInstrClass.MULDIV: [
         "mul",
-        # "mulh",
-        # "mulhsu",
-        # "mulhu",
-        # "div",
-        # "divu",
+        "mulh",
+        "mulhsu",
+        "mulhu",
+        "div",
+        "divu",
         # "rem",
         # "remu"
     ],

@@ -1281,6 +1281,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         test_fuzzerstate_larger.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         test_fuzzerstate_larger.memview.restore(0) # Restore contents before anything was executed.
         test_fuzzerstate_larger.csrfile.reset() # Reset all CSRs to zero.
+        assert os.path.exists(rtl_elfpath_larger), f"Larger ELF at {rtl_elfpath_larger} got deleted. This is not allowed during reduction."
         is_success_larger, rtl_msg_larger = runtest_simulator(test_fuzzerstate_larger, rtl_elfpath_larger, expected_regvals_pairs_larger, numinstrs_larger)
         if not quiet:
             print('Success larger MODELSIM:', is_success_larger)
@@ -1292,6 +1293,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         test_fuzzerstate_smaller.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         test_fuzzerstate_smaller.memview.restore(0) # Restore contents before anything was executed.
         test_fuzzerstate_smaller.csrfile.reset() # Reset all CSRs to zero.
+        assert os.path.exists(rtl_elfpath_smaller), f"Smaller ELF at {rtl_elfpath_smaller} got deleted. This is not allowed during reduction."
         is_success_smaller, rtl_msg_smaller = runtest_simulator(test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller)
         if not quiet:
             print('Success smaller MODELSIM:', is_success_smaller)

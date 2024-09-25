@@ -354,3 +354,6 @@ USE_VANILLA = False
 DUMP_MCYCLES = False
 assert not (DUMP_MCYCLES and USE_MMU), f"We can only dump MCYCLES when executing in M-mode in final BB."
 INIT_MIE = False
+
+DISABLE_MULDIV = False
+DISABLE_MULDIV64 = False
