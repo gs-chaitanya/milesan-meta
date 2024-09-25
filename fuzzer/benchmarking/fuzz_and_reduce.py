@@ -5,6 +5,9 @@ import subprocess
 import os
 import json
 TIMEOUT_REDUCE=7200
+REDUCE_RTL_TIMEOUT=True
+REDUCE_VALUE_MISMATCH=True
+REDUCE_TAINT_MISMATCH=True
 def load_fuzzconfigs(path: str):
     with open(path, "r") as f:
         cfgs = json.load(f)
@@ -47,27 +50,73 @@ if __name__ == '__main__':
                     str(cfg["TIMEOUT"])
                 ]
 
-                subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
+                # subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
 
             except Exception as e:
                 print(f"Failed running {' '.join(cmd)}: {e}")
-            
-            try:
-                log_file = os.path.join(datadir, "logs", f"{design_name}.taint_mismatch.log")
-                if not os.path.exists(log_file):
-                    print(f"Log-file not found: {log_file}")
-                    continue
 
-                cmd = [
-                    "python",
-                    "do_reducemany.py",
-                    design_name,
-                    str(cfg["N_THREADS"]),
-                    f"--log-file={log_file}"
-                ]
-                subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
-            except Exception as e:
-                print(f"Failed running {' '.join(cmd)}: {e}")
+            if REDUCE_TAINT_MISMATCH:
+                try:
+                    log_file = os.path.join(datadir, "logs", f"{design_name}.taint_mismatch.log")
+                    if not os.path.exists(log_file):
+                        print(f"Log-file not found: {log_file}")
+                        
+                    else:
+                        print(f"Reducing {log_file}")
+                        cmd = [
+                            "python",
+                            "do_reducemany.py",
+                            design_name,
+                            str(cfg["N_THREADS"]),
+                            f"--log-file={log_file}"
+                        ]
+                        subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
+
+                except Exception as e:
+                    print(f"Failed running {' '.join(cmd)}: {e}")
+
+
+            if REDUCE_RTL_TIMEOUT:
+                try:
+                    log_file = os.path.join(datadir, "logs", f"{design_name}.rtl_timeout.log")
+                    if not os.path.exists(log_file):
+                        print(f"Log-file not found: {log_file}")
+                        continue
+                    else:
+                        print(f"Reducing {log_file}")
+                        cmd = [
+                            "python",
+                            "do_reducemany.py",
+                            design_name,
+                            str(cfg["N_THREADS"]),
+                            f"--log-file={log_file}"
+                        ]
+                        subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
+
+                except Exception as e:
+                    print(f"Failed running {' '.join(cmd)}: {e}")
+
+
+            if REDUCE_VALUE_MISMATCH:
+                try:
+                    log_file = os.path.join(datadir, "logs", f"{design_name}.value_mismatch.log")
+                    if not os.path.exists(log_file):
+                        print(f"Log-file not found: {log_file}")
+                        continue
+                    else:
+                        print(f"Reducing {log_file}")
+                        cmd = [
+                            "python",
+                            "do_reducemany.py",
+                            design_name,
+                            str(cfg["N_THREADS"]),
+                            f"--log-file={log_file}"
+                        ]
+                        subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
+
+                except Exception as e:
+                    print(f"Failed running {' '.join(cmd)}: {e}")
+
 
 
 else:
