@@ -29,7 +29,7 @@ echo "Running inside container."
 export LOCAL_MNT=/mnt
 export LM_LICENSE_FILE=8161@lic-mentor.ethz.ch
 export PATH_FROM_MODELSIM_TO_MNT=/scratch/tkovats/ssh_mnt
-source /cellift-meta/env.sh
+source $LOCAL_MNT/cellift-meta/env.sh
 fi
 
 export MODELSIM_REQ_DIR=$LOCAL_MNT/modelsim_req
@@ -173,12 +173,12 @@ mkdir -p $MPLCONFIGDIR
 
 
 # Make configuration usable; prioritize our tools
+PATH=/mnt/cellift-yosys-pub:$PATH
 PATH=/mnt/verilator/bin:$PATH
 PATH=$PREFIX_CASCADE/miniconda/bin:$PATH
 PATH=$PREFIX_CASCADE/bin:$PATH
 PATH=$PREFIX_CASCADE/bin:$CARGO_HOME/bin:$PREFIX_CASCADE/python-venv/bin/:$PATH
 PATH=$RISCV/bin:$PATH
-
 # For cooperative Modelsim locking
 export MODELSIM_LOCKFILE=$CASCADE_META_ROOT/tmp/modelsim_lock
 
