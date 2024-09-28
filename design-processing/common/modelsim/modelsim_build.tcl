@@ -25,13 +25,13 @@ set LIB ${MODELSIM_WORKROOT}/${TOP_SOC}${VARIANT_ID}_${FUZZCOREID}/work_${INSTRU
 
 # +define+RANDOMIZE_REG_INIT=1 enables initialization of registers with random value for chipyard designs. 
 # +define+RANDOM=0 sets the random value to 0 s.t. all regs are initialized with zero for chipyard designs.
-vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -suppress 13276  -suppress 7063 -suppress 3009 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG +define+RANDOMIZE_REG_INIT=1 +define+RANDOM=0 +define+STOP_COND=0 -ccflags '-std=c++11' $MODELSIM_INCDIRSTR -sv $CASCADE_DIR/generated/out/$INSTRUMENTATION.sv
+vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -suppress 13276  -suppress 7063 -suppress 3009 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG +define+RANDOMIZE_REG_INIT=1 +define+RANDOM=0 +define+STOP_COND=0 -ccflags '-std=c++14' $MODELSIM_INCDIRSTR -sv $CASCADE_DIR/generated/out/$INSTRUMENTATION.sv
 
-vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -suppress 7063 -suppress 3009 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG -ccflags '-std=c++11' -sv $SV_TOP
-vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -suppress 7034 -suppress 7063 -suppress 3009 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG -ccflags '-std=c++11' -sv $SV_MEM
-vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -suppress 7063 -suppress 3009 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG -ccflags '-std=c++11' -sv $SV_TB
+vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -suppress 7063 -suppress 3009 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG -ccflags '-std=c++14' -sv $SV_TOP
+vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -suppress 7034 -suppress 7063 -suppress 3009 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG -ccflags '-std=c++14' -sv $SV_MEM
+vlog -64 -suppress 7061 -suppress 2583 -suppress 8386 -suppress 13314 -suppress 7063 -suppress 3009 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG -ccflags '-std=c++14' -sv $SV_TB
 
-vlog -64 -ccflags '-std=c++11' -work $LIB $MODELSIM_VLOG_COVERFLAG -dpiheader $CASCADE_META_COMMON/dv/elf.h $CASCADE_META_COMMON/dv/elfloader.cc  $CASCADE_META_COMMON/dv/taintloader.cc  $CASCADE_META_COMMON/dv/common_functions.cc
+vlog -64 -ccflags '-std=c++14' -work $LIB $MODELSIM_VLOG_COVERFLAG -dpiheader $CASCADE_META_COMMON/dv/elf.h $CASCADE_META_COMMON/dv/elfloader.cc  $CASCADE_META_COMMON/dv/taintloader.cc  $CASCADE_META_COMMON/dv/common_functions.cc
 
 vlog -64 -suppress 3009 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG $CASCADE_META_COMMON/dv/sv/rst_gen.sv $CASCADE_META_COMMON/dv/sv/clk_rst_gen.sv $SV_TOP
 
