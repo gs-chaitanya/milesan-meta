@@ -1287,19 +1287,18 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             print('Success larger MODELSIM:', is_success_larger)
             print('larger msg MODELSIM:', rtl_msg_larger)
 
-        assert not is_success_larger, f"Bug disappears in Modelsim!"
+        if not is_success_larger:
 
-        test_fuzzerstate_smaller.simulator =  SimulatorEnum.MODELSIM
-        test_fuzzerstate_smaller.intregpickstate.setup_registers() # Restore registers to before anything was executed.
-        test_fuzzerstate_smaller.memview.restore(0) # Restore contents before anything was executed.
-        test_fuzzerstate_smaller.csrfile.reset() # Reset all CSRs to zero.
-        assert os.path.exists(rtl_elfpath_smaller), f"Smaller ELF at {rtl_elfpath_smaller} got deleted. This is not allowed during reduction."
-        is_success_smaller, rtl_msg_smaller = runtest_simulator(test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller)
-        if not quiet:
-            print('Success smaller MODELSIM:', is_success_smaller)
-            print('smaller msg MODELSIM:', rtl_msg_smaller)
+            test_fuzzerstate_smaller.simulator =  SimulatorEnum.MODELSIM
+            test_fuzzerstate_smaller.intregpickstate.setup_registers() # Restore registers to before anything was executed.
+            test_fuzzerstate_smaller.memview.restore(0) # Restore contents before anything was executed.
+            test_fuzzerstate_smaller.csrfile.reset() # Reset all CSRs to zero.
+            assert os.path.exists(rtl_elfpath_smaller), f"Smaller ELF at {rtl_elfpath_smaller} got deleted. This is not allowed during reduction."
+            is_success_smaller, rtl_msg_smaller = runtest_simulator(test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller)
+            if not quiet:
+                print('Success smaller MODELSIM:', is_success_smaller)
+                print('smaller msg MODELSIM:', rtl_msg_smaller)
 
-        assert is_success_smaller, f"Smaller ELF breaks in Modelsim!"
 
 
     ## GENERATE RETURN MESSAGE FOR LOGS ##
@@ -1321,6 +1320,10 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             n_nops =  _count_n_nops(fuzzerstate,pillar_bb_id,failing_bb_id)
             ret_msg += f"\t Total number of non-nop instructions: {numinstrs-n_nops} ({numinstrs} instructions - {n_nops} nops)\n"
 
+    if is_success_larger:
+        ret_msg += f"\tBug disappears in modelsim!\n"
+    elif not is_success_smaller:
+        ret_msg += f"\tBug breaks program in modelsim!\n"
     if start_time is not None:
         ret_msg += f"\tTotal time for reduction : {time.time()-start_time}\n"
 

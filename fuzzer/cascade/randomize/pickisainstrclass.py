@@ -7,7 +7,6 @@ from params.fuzzparams import USE_COMPRESSED
 from cascade.toleratebugs import is_tolerate_kronos_fence, is_tolerate_picorv32_fence, is_forbid_vexriscv_csrs, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_picorv32_writehpm, is_tolerate_picorv32_readnonimplcsr
 from cascade.util import ISAInstrClass, IntRegIndivState, MmuState, BASIC_BLOCK_MIN_SPACE
 from params.fuzzparams import NUM_MIN_FREE_INTREGS, TAINT_IMM_PROTURBANCE_FACTOR, NUM_MIN_UNTAINTED_INTREGS, MAX_NUM_FENCES_PER_EXECUTION, NUM_MAX_CONSUMED_INTREGS, NUM_MAX_RELOCUSED_INTREGS, PROTURBANCE_CONSUMED_REGS_PPFSM, PROTURBANCE_CONSUMED_REGS_EPCFSM, PROTURBANCE_CONSUMED_REGS_JALR, PROTURBANCE_CONSUMED_REGS_MEDELEG, PROTURBANCE_CONSUMED_REGS_TVECFSM, PROTURBANCE_CONSUMED_REGS_EXCEPTION, PROTURBANCE_RELOCUSED_REGS_ALU, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, USE_MMU, ALLOW_JALR_IN_MACHINE_MODE, ALLOW_BRANCH_IN_MACHINE_MODE, DISABLE_COMPUTATION_ON_TAINT, LEAVE_M_MODE_PROTURBANCE_RATIO
-from params.fuzzparams import DISABLE_MULDIV, DISABLE_MULDIV64
 from cascade.privilegestate import PrivilegeStateEnum, is_ready_to_descend_privileges
 from cascade.util import IntRegIndivState
 import random
@@ -24,14 +23,14 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.FPUFSM:      0,
     ISAInstrClass.ALU:         0.3,
     ISAInstrClass.ALU64:       0.3,
-    ISAInstrClass.MULDIV:      0 if DISABLE_MULDIV else 0.1,
-    ISAInstrClass.MULDIV64:    0 if DISABLE_MULDIV64 else 0.1,
+    ISAInstrClass.MULDIV:      0.3,
+    ISAInstrClass.MULDIV64:    0.3,
     ISAInstrClass.AMO:         0,
     ISAInstrClass.AMO64:       0,
     ISAInstrClass.JAL :        0.1,
     ISAInstrClass.JALR:        0.1,
     ISAInstrClass.BRANCH:      0.1,
-    ISAInstrClass.MEM:         0.3,
+    ISAInstrClass.MEM:         0.3 if USE_MMU else 0.1,
     ISAInstrClass.MEM64:       0,
     ISAInstrClass.MEMFPU:      0,
     ISAInstrClass.FPU:         0,
@@ -39,15 +38,15 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.MEMFPUD:     0,
     ISAInstrClass.FPUD:        0,
     ISAInstrClass.FPUD64:      0,
-    ISAInstrClass.TVECFSM:     0.3,
-    ISAInstrClass.PPFSM:       0.3,
-    ISAInstrClass.EPCFSM:      0.3,
-    ISAInstrClass.MEDELEG:     0.3,
+    ISAInstrClass.TVECFSM:     0.3 if USE_MMU else 0.1,
+    ISAInstrClass.PPFSM:       0.3 if USE_MMU else 0.1,
+    ISAInstrClass.EPCFSM:      0.3 if USE_MMU else 0.1,
+    ISAInstrClass.MEDELEG:     0.3 if USE_MMU else 0.1,
     ISAInstrClass.EXCEPTION:   0.1,
     ISAInstrClass.RANDOM_CSR:  0.05,
-    ISAInstrClass.DESCEND_PRV: 0.3,
+    ISAInstrClass.DESCEND_PRV: 0.3 if USE_MMU else 0.1,
     ISAInstrClass.SPECIAL:     0.01,
-    ISAInstrClass.MMU:         0.5,
+    ISAInstrClass.MMU:         0.5 if USE_MMU else 0,
     ISAInstrClass.MSTATUS:     0,
     ISAInstrClass.CLEARTAINT:  0.00,
     ISAInstrClass.MEMFSM:      0.01

@@ -4,7 +4,7 @@
 
 from cascade.cfinstructionclasses import *
 from cascade.toleratebugs import is_tolerate_cva6_fdivs_flags, is_tolerate_vexriscv_imprecise_fcvt, is_tolerate_vexriscv_fmin, is_tolerate_vexriscv_double_to_float, is_tolerate_vexriscv_dependent_single_precision, is_tolerate_vexriscv_dependent_fle_feq_ret1, is_tolerate_vexriscv_dependent_flt_ret0, is_tolerate_vexriscv_sqrt, is_tolerate_vexriscv_muldiv_conversion, is_tolerate_cva6_division, is_tolerate_cva6_single_precision
-from cascade.util import ISAInstrClass, IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS
+from cascade.util import ISAInstrClass, IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS, SimulatorEnum
 from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS
 
 from copy import copy
@@ -134,7 +134,7 @@ def gen_next_instrstr_from_isaclass(isaclass: ISAInstrClass, fuzzerstate) -> str
     if isaclass in [ISAInstrClass.MEM] and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and fuzzerstate.intregpickstate.get_num_tainted_regs_in_state(IntRegIndivState.FREE) == 0:
         return random.choice(["lb","lbu","lh", "lhu", "lw"])
 
-    if fuzzerstate.design_name == "cva6":
+    if "cva6" in fuzzerstate.design_name:
         # Double precision
         keys_and_weights_dict["fsqrt.d"] = 0
         if not is_tolerate_cva6_division():

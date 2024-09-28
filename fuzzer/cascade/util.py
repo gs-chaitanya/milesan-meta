@@ -103,8 +103,8 @@ INSTRUCTIONS_BY_ISA_CLASS = {
         "lui",
         "auipc",
         "addi",
-        # "slti",
-        # "sltiu",
+        "slti",
+        "sltiu",
         "xori",
         "ori",
         "andi",
@@ -112,10 +112,10 @@ INSTRUCTIONS_BY_ISA_CLASS = {
         "srli",
         "srai",
         "add",
-        # "sub",
+        "sub",
         "sll",
-        # "slt",
-        # "sltu",
+        "slt",
+        "sltu",
         "xor",
         "srl",
         "sra",
@@ -123,15 +123,15 @@ INSTRUCTIONS_BY_ISA_CLASS = {
         "and"
     ],
     ISAInstrClass.ALU64: [
-        # "addiw",
+        "addiw",
         "slliw",
         "srliw",
-        # "sraiw",
+        "sraiw",
         "addw",
-        # "subw",
+        "subw",
         "sllw",
-        # "srlw",
-        # "sraw"
+        "srlw",
+        "sraw"
     ],
     ISAInstrClass.MULDIV: [
         "mul",
@@ -140,15 +140,15 @@ INSTRUCTIONS_BY_ISA_CLASS = {
         "mulhu",
         "div",
         "divu",
-        # "rem",
-        # "remu"
+        "rem",
+        "remu"
     ],
     ISAInstrClass.MULDIV64: [
         "mulw",
         "divw",
         "divuw",
-        # "remw",
-        # "remuw"
+        "remw",
+        "remuw"
     ],
     ISAInstrClass.AMO: [
         "lr.w",

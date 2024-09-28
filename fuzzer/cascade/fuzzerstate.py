@@ -243,6 +243,11 @@ class FuzzerState:
 
         self.curr_mmu_state = MmuState.IDLE
 
+        if not USE_MODELSIM:
+            self.simulator = SimulatorEnum.VERILATOR
+        else:
+            self.simulator = SimulatorEnum.MODELSIM
+
     def init_new_bb(self):
         self.instr_objs_seq.append([])
 
@@ -485,8 +490,11 @@ class FuzzerState:
                 os.remove(file)
             for file in glob.glob(f"{self.tmp_dir}/*.txt"):
                 os.remove(file)
-            for file in glob.glob(f"{self.tmp_dir}/*.env"):
+            for file in glob.glob(f"{self.tmp_dir}/*.sh"):
                 os.remove(file)
+            for file in glob.glob(f"{self.tmp_dir}/*.json"):
+                os.remove(file)
+
                 
 
     def load_init_regvals_from_memview(self):

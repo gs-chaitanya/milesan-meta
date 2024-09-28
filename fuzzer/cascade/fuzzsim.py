@@ -24,7 +24,7 @@ import shutil
 
 # The maximum number of cycles that we allow per run is MAX_CYCLES_PER_INSTR * num_instrs + SETUP_CYCLES.
 MAX_CYCLES_PER_INSTR = 30
-SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
+SETUP_CYCLES = 10000 # Without this, we had issues with BOOM and Openc910 with very short programs (typically <20 instructions) not being able to finish in time.
 
 PRINT_THREAD_STATUS = False
 # @param get_rfuzz_coverage_mask if True, then return a pair (is_stop_successful: bool, rfuzz_coverage_mask: int)
