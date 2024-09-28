@@ -3,7 +3,7 @@ from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
 from workers.reduce_worker import reduce_programs
 from cascade.util import CFInstructionClass
-from params.runparams import PATH_TO_TMP, TIMESTAMP_START
+from params.runparams import PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS
 import multiprocessing as mp
 import time
 import threading
@@ -43,6 +43,8 @@ def __check_isa_sim_worker(design_name, seed):
         return None
     except Exception as e:
         print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")
+        if not NO_REMOVE_TMPFILES and isinstance(e, FuzzerStateException):
+            e.fuzzerstate.remove_tmp_files()
         if LOG_EXCEPTIONS:
             if isinstance(e, FuzzerStateException):
                 logdir = os.path.join(PATH_TO_TMP, "logs")
@@ -59,6 +61,9 @@ def __check_isa_sim_worker(design_name, seed):
                     f.write(f"seed {seed}: {str(e)}\n")
 
                 return None
+        elif not NO_REMOVE_TMPDIRS and isinstance(e, FuzzerStateException):
+            e.fuzzerstate.remove_tmp_dir()
+
 
 
 
