@@ -5,8 +5,9 @@ import subprocess
 import os
 import json
 TIMEOUT_REDUCE=7200
-REDUCE_RTL_TIMEOUT=True
-REDUCE_VALUE_MISMATCH=True
+FUZZ=True
+REDUCE_RTL_TIMEOUT=False
+REDUCE_VALUE_MISMATCH=False
 REDUCE_TAINT_MISMATCH=True
 def load_fuzzconfigs(path: str):
     with open(path, "r") as f:
@@ -37,23 +38,24 @@ if __name__ == '__main__':
             datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["NAME"])
             env["CASCADE_DATADIR"] = datadir
             os.makedirs(datadir, exist_ok=True)
-            with open(os.path.join(datadir,"config.json"), "w") as f:
-                json.dump(cfg,f)
-            try:
-                cmd = [
-                    "python",
-                    "do_check_isa_sim.py",
-                    design_name,
-                    str(cfg["N_THREADS"]),
-                    str(cfg["N_TESTS"]),
-                    str(cfg["SEED_OFFSET"]) if "SEED_OFFSET" in cfg else str(0),
-                    str(cfg["TIMEOUT"])
-                ]
+            if FUZZ:
+                with open(os.path.join(datadir,"config.json"), "w") as f:
+                    json.dump(cfg,f)
+                try:
+                    cmd = [
+                        "python",
+                        "do_check_isa_sim.py",
+                        design_name,
+                        str(cfg["N_THREADS"]),
+                        str(cfg["N_TESTS"]),
+                        str(cfg["SEED_OFFSET"]) if "SEED_OFFSET" in cfg else str(0),
+                        str(cfg["TIMEOUT"])
+                    ]
 
-                # subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
+                    subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
 
-            except Exception as e:
-                print(f"Failed running {' '.join(cmd)}: {e}")
+                except Exception as e:
+                    print(f"Failed running {' '.join(cmd)}: {e}")
 
             if REDUCE_TAINT_MISMATCH:
                 try:
