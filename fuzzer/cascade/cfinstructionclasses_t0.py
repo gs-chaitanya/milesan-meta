@@ -1,7 +1,7 @@
 from params.fuzzparams import TAINT_EN
 from cascade.randomize.pickbytecodetaints import OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS
 from cascade.cfinstructionclasses import *
-from cascade.util import ExceptionCauseVal
+from cascade.util import ExceptionCauseVal, SimulatorEnum
 from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from cascade.registers import ABI_INAMES
 from rv.csrids import CSR_ABI_NAMES
@@ -204,7 +204,6 @@ class ImmInstruction_t0(CFInstruction_t0):
 ###
 # Concrete classes with taint: integers
 ###
-
 class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, rs2: int, iscompressed: bool = False, is_rd_nonpickable_ok: bool = False):
         super().__init__(fuzzerstate, instr_str, rd, rs1, rs2, iscompressed, is_rd_nonpickable_ok)
@@ -213,6 +212,7 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
         self.rd_t0 = 0
 
     def execute_t0(self, res, is_spike_resolution: bool):
+        from cascade.randomize.createcfinstr import is_tolerate_R12DInstruction
         assert TAINT_EN
         if self.paddr == -1:
             print(f"Skipping execution of {self.get_str()}")
@@ -223,6 +223,7 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
         rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
         rs1_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
         rs2_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
+        assert is_tolerate_R12DInstruction(self.instr_str, self.fuzzerstate) or rs1_val_t0 == 0 and rs2_val_t0 == 0
         # Compute the taint results of the operation.
         res_t0 = self.instr_func_t0(rs1_val, rs1_val_t0, rs2_val, rs2_val_t0, self.fuzzerstate.is_design_64bit)
         # Compute alternative results if other soruce registers had been choosen.

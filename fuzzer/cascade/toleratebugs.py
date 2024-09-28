@@ -64,6 +64,30 @@ def is_tolerate_boom_branchpred():
 if __TOLERATE_BOOM_BRANCHPRED:
     print('WARNING: Tolerating one bug: __TOLERATE_BOOM_BRANCHPRED')
 
+__TOLERATE_BOOM_VERILATOR_DIVUW_CT_VIOLATION = False
+def is_tolerate_boom_verilator_divuw_ct_violation():
+    return __TOLERATE_BOOM_VERILATOR_DIVUW_CT_VIOLATION
+if __TOLERATE_BOOM_VERILATOR_DIVUW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_BOOM_VERILATOR_DIVUW_CT_VIOLATION')
+
+__TOLERATE_BOOM_VERILATOR_DIVW_CT_VIOLATION = False
+def is_tolerate_boom_verilator_divw_ct_violation():
+    return __TOLERATE_BOOM_VERILATOR_DIVW_CT_VIOLATION
+if __TOLERATE_BOOM_VERILATOR_DIVW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_BOOM_VERILATOR_DIVW_CT_VIOLATION')
+
+__TOLERATE_BOOM_VERILATOR_DIV_CT_VIOLATION = False
+def is_tolerate_boom_verilator_div_ct_violation():
+    return __TOLERATE_BOOM_VERILATOR_DIV_CT_VIOLATION
+if __TOLERATE_BOOM_VERILATOR_DIV_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_BOOM_VERILATOR_DIVW_CT_VIOLATION')
+
+__TOLERATE_BOOM_VERILATOR_DIVU_CT_VIOLATION = False
+def is_tolerate_boom_verilator_divu_ct_violation():
+    return __TOLERATE_BOOM_VERILATOR_DIVU_CT_VIOLATION
+if __TOLERATE_BOOM_VERILATOR_DIVU_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_BOOM_VERILATOR_DIVU_CT_VIOLATION')
+
 ###
 # Rocket
 ###
@@ -81,6 +105,44 @@ def is_tolerate_rocket_ras0():
     return __TOLERATE_ROCKET_RAS0 or USE_MMU
 if __TOLERATE_ROCKET_RAS0:
     print('WARNING: Tolerating one bug: __TOLERATE_ROCKET_RAS')
+
+__TOLERATE_ROCKET_VERILATOR_DIVUW_CT_VIOLATION = False
+def is_tolerate_rocket_verilator_divuw_ct_violation():
+    return __TOLERATE_ROCKET_VERILATOR_DIVUW_CT_VIOLATION
+if __TOLERATE_ROCKET_VERILATOR_DIVUW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_ROCKET_VERILATOR_DIVUW_CT_VIOLATION')
+
+__TOLERATE_ROCKET_VERILATOR_DIVW_CT_VIOLATION = False
+def is_tolerate_rocket_verilator_divw_ct_violation():
+    return __TOLERATE_ROCKET_VERILATOR_DIVW_CT_VIOLATION
+if __TOLERATE_ROCKET_VERILATOR_DIVW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_ROCKET_VERILATOR_DIVW_CT_VIOLATION')
+
+__TOLERATE_ROCKET_VERILATOR_DIV_CT_VIOLATION = False
+def is_tolerate_rocket_verilator_div_ct_violation():
+    return __TOLERATE_ROCKET_VERILATOR_DIV_CT_VIOLATION
+if __TOLERATE_ROCKET_VERILATOR_DIV_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_ROCKET_VERILATOR_DIVW_CT_VIOLATION')
+
+__TOLERATE_ROCKET_VERILATOR_DIVU_CT_VIOLATION = False
+def is_tolerate_rocket_verilator_divu_ct_violation():
+    return __TOLERATE_ROCKET_VERILATOR_DIVU_CT_VIOLATION
+if __TOLERATE_ROCKET_VERILATOR_DIVU_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_ROCKET_VERILATOR_DIVU_CT_VIOLATION')
+
+__TOLERATE_ROCKET_VERILATOR_MULW_CT_VIOLATION = False
+def is_tolerate_rocket_verilator_mulw_ct_violation():
+    return __TOLERATE_ROCKET_VERILATOR_MULW_CT_VIOLATION
+if __TOLERATE_ROCKET_VERILATOR_MULW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_ROCKET_VERILATOR_MULW_CT_VIOLATION')
+
+__TOLERATE_ROCKET_VERILATOR_MUL_CT_VIOLATION = False
+def is_tolerate_rocket_verilator_mul_ct_violation():
+    return __TOLERATE_ROCKET_VERILATOR_MUL_CT_VIOLATION
+if __TOLERATE_ROCKET_VERILATOR_MUL_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_ROCKET_VERILATOR_MUL_CT_VIOLATION')
+
+
 
 #
 
@@ -123,6 +185,55 @@ def is_tolerate_cva6_mhpmevent31():
     return __TOLERATE_CVA6_MHPMEVENT31
 if __TOLERATE_CVA6_MHPMEVENT31:
     print('WARNING: Tolerating one bug: __TOLERATE_CVA6_MHPMEVENT31')
+
+__TOLERATE_CVA6_DIV_CT_VIOLATION = False
+def is_tolerate_cva6_div_ct_violation():
+    return __TOLERATE_CVA6_DIV_CT_VIOLATION
+if __TOLERATE_CVA6_DIV_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_CVA6_DIV_CT_VIOLATION')
+
+__TOLERATE_CVA6_DIVU_CT_VIOLATION = False
+def is_tolerate_cva6_divu_ct_violation():
+    return __TOLERATE_CVA6_DIVU_CT_VIOLATION
+if __TOLERATE_CVA6_DIVU_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_CVA6_DIVU_CT_VIOLATION')
+
+__TOLERATE_CVA6_DIVW_CT_VIOLATION = False
+def is_tolerate_cva6_divw_ct_violation():
+    return __TOLERATE_CVA6_DIVW_CT_VIOLATION
+if __TOLERATE_CVA6_DIVW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_CVA6_DIVW_CT_VIOLATION')
+
+__TOLERATE_CVA6_DIVUW_CT_VIOLATION = False
+def is_tolerate_cva6_divuw_ct_violation():
+    return __TOLERATE_CVA6_DIVUW_CT_VIOLATION
+if __TOLERATE_CVA6_DIVUW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_CVA6_DIVUW_CT_VIOLATION')
+
+__TOLERATE_CVA6_REM_CT_VIOLATION = False
+def is_tolerate_cva6_rem_ct_violation():
+    return __TOLERATE_CVA6_REM_CT_VIOLATION
+if __TOLERATE_CVA6_REM_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_CVA6_REM_CT_VIOLATION')
+
+__TOLERATE_CVA6_REMU_CT_VIOLATION = False
+def is_tolerate_cva6_remu_ct_violation():
+    return __TOLERATE_CVA6_REMU_CT_VIOLATION
+if __TOLERATE_CVA6_REMU_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_CVA6_REMU_CT_VIOLATION')
+
+__TOLERATE_CVA6_REMW_CT_VIOLATION = False
+def is_tolerate_cva6_remw_ct_violation():
+    return __TOLERATE_CVA6_REMW_CT_VIOLATION
+if __TOLERATE_CVA6_REMW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_CVA6_REMW_CT_VIOLATION')
+
+__TOLERATE_CVA6_REMUW_CT_VIOLATION = False
+def is_tolerate_cva6_remuw_ct_violation():
+    return __TOLERATE_CVA6_REMUW_CT_VIOLATION
+if __TOLERATE_CVA6_REMUW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_CVA6_REMUW_CT_VIOLATION')
+
 
 ###
 # Kronos

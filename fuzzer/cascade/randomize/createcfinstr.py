@@ -10,12 +10,17 @@ from params.runparams import DO_ASSERT, PRINT_FSM_TRANSITIONS
 from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED, NUM_MAX_PRODUCED0_REGS, NUM_MAX_PRODUCED1_REGS, TAINT_NONTAKEN_BRANCH_IMM, TAINT_IMMRD_IMM, P_LOAD_TAINT, DISABLE_COMPUTATION_ON_TAINT
 from params.fuzzparams import USE_COMPRESSED, COMPRESS_INSTRUCTION
 from params.runparams import GET_DATA
-from cascade.util import IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS, ISAInstrClass
+from cascade.util import IntRegIndivState, SimulatorEnum
 from cascade.util_compressed import *
 from cascade.cfinstructionclasses import *
 from cascade.cfinstructionclasses_t0 import *
 from cascade.toleratebugs import is_tolerate_branchpred
 from cascade.spikeresolution import get_current_layout
+from cascade.toleratebugs import is_tolerate_rocket_verilator_divuw_ct_violation, is_tolerate_rocket_verilator_divw_ct_violation,is_tolerate_rocket_verilator_divu_ct_violation, is_tolerate_rocket_verilator_mulw_ct_violation, is_tolerate_rocket_verilator_div_ct_violation, is_tolerate_rocket_verilator_mul_ct_violation
+from cascade.toleratebugs import is_tolerate_boom_verilator_divuw_ct_violation, is_tolerate_boom_verilator_divw_ct_violation,is_tolerate_boom_verilator_divu_ct_violation, is_tolerate_boom_verilator_div_ct_violation
+from cascade.toleratebugs import is_tolerate_cva6_div_ct_violation, is_tolerate_cva6_divu_ct_violation, is_tolerate_cva6_divuw_ct_violation, is_tolerate_cva6_divw_ct_violation
+from cascade.toleratebugs import is_tolerate_cva6_rem_ct_violation, is_tolerate_cva6_remu_ct_violation, is_tolerate_cva6_remuw_ct_violation, is_tolerate_cva6_remw_ct_violation
+
 from cascade.mmu_utils import li_doubleword, PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_BITS, PAGE_ALIGNMENT_MASK
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
 # This module creates an instruction from its instruction string, and some state which will condition which registers and immediates will be picked, and with which probability.
@@ -78,14 +83,42 @@ def gen_random_rounding_mode():
 ###
 
 # Integer instructions
+def is_tolerate_R12DInstruction(instr_str, fuzzerstate):
+    if "rocket" in fuzzerstate.design_name and fuzzerstate.simulator == SimulatorEnum.VERILATOR and \
+        (not is_tolerate_rocket_verilator_divuw_ct_violation() and instr_str == "divuw" \
+        or not is_tolerate_rocket_verilator_divw_ct_violation() and instr_str == "divw" \
+        or not is_tolerate_rocket_verilator_div_ct_violation() and instr_str == "div" \
+        or not is_tolerate_rocket_verilator_divu_ct_violation() and instr_str == "divu" \
+        or not is_tolerate_rocket_verilator_mulw_ct_violation() and instr_str == "mulw" \
+        or not is_tolerate_rocket_verilator_mul_ct_violation() and instr_str == "mul") \
+    or "boom" in fuzzerstate.design_name and fuzzerstate.simulator == SimulatorEnum.VERILATOR and \
+        (not is_tolerate_boom_verilator_divuw_ct_violation() and instr_str == "divuw" \
+        or not is_tolerate_boom_verilator_divw_ct_violation() and instr_str == "divw" \
+        or not is_tolerate_boom_verilator_div_ct_violation() and instr_str == "div" \
+        or not is_tolerate_boom_verilator_divu_ct_violation() and instr_str == "divu") \
+    or "cva6" in fuzzerstate.design_name and \
+        (not is_tolerate_cva6_divuw_ct_violation() and instr_str == "divuw" \
+        or not is_tolerate_cva6_divw_ct_violation() and instr_str == "divw" \
+        or not is_tolerate_cva6_div_ct_violation() and instr_str == "div" \
+        or not is_tolerate_cva6_divu_ct_violation() and instr_str == "divu" \
+        or not is_tolerate_cva6_remuw_ct_violation() and instr_str == "remuw" \
+        or not is_tolerate_cva6_remw_ct_violation() and instr_str == "remw" \
+        or not is_tolerate_cva6_rem_ct_violation() and instr_str == "rem" \
+        or not is_tolerate_cva6_remu_ct_violation() and instr_str == "remu"):
+            return False
+    return True
+
 
 def _create_R12DInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in R12DInstructions
-    if not DISABLE_COMPUTATION_ON_TAINT:
+    if not is_tolerate_R12DInstruction(instr_str, fuzzerstate):
+        rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputregs(2,force=True))
+    elif not DISABLE_COMPUTATION_ON_TAINT:
         rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_tainted_int_inputregs(2))
     else:
-        rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputregs(2))
+        rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputregs(2,force=True))
+
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
     if USE_COMPRESSED and instr_str in IS_COMPRESSABLE:
         instr_str_cmp, is_compressable = handle_R12D(rd, rs1, rs2, instr_str)
