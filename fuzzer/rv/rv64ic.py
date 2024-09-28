@@ -15,7 +15,7 @@ def rv64ic_addw(rd : int, rs2 : int):
     return rvprotoinstrs.instruc_catype(RV64IC_OPCODE_MISC_ALU[1], rs2prime, 0b01, rdprime, funct6)
 def rv64ic_subw(rd : int, rs2 : int):
     rdprime = rd - 8
-    rs2prime = rd - 8
+    rs2prime = rs2 - 8
     funct6 = (RV64IC_OPCODE_MISC_ALU[0] << 3) | 0b111
     return rvprotoinstrs.instruc_catype(RV64IC_OPCODE_MISC_ALU[1], rs2prime, 0b00, rdprime, funct6)
 def rv64ic_addiw(rd : int, imm : int):
