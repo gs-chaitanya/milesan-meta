@@ -159,6 +159,10 @@ def addw(a: int, b: int,  is_design_64bit: bool):
     res32 = add(a&MAX_32b,b&MAX_32b,is_design_64bit)&MAX_32b
     return sign_extend(res32, 32, is_design_64bit)
 
+def subw(a: int, b: int,  is_design_64bit: bool):
+    res32 = sub(a&MAX_32b,b&MAX_32b,is_design_64bit)&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
+
 def add_t0(a: int, a_t0: int, b: int, b_t0: int,  is_design_64bit: bool):
     # Compute the smallest possible result
     a_and_not_a_t0 = a&~a_t0
@@ -345,7 +349,7 @@ def srl(a: int, b: int,  is_design_64bit: bool):
     return a>>shamt
 
 def srlw(a: int, b: int,  is_design_64bit: bool):
-    res32 = srl(a&MAX_32b, b&MAX_32b, is_design_64bit)&MAX_32b
+    res32 = srl(a&MAX_32b, b&0x1f, is_design_64bit)&MAX_32b
     return sign_extend(res32, 32, is_design_64bit)
     
 def srl_t0_imprecise(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
@@ -390,7 +394,13 @@ def sra(a: int, b: int, is_design_64bit: bool):
     return (a >> shamt) | (mask*msb)
 
 def sraw(a: int, b: int, is_design_64bit: bool):
-    return sra(a&MAX_32b, b&MAX_32b, is_design_64bit)&MAX_32b
+    n_bits = 32
+    msb = ((a&MAX_32b)>>(n_bits-1))&1
+    shamt = b & 0x1F
+    mask = MAX_32b<<(n_bits-shamt)
+    mask &= MAX_32b
+    res32 =  (((a&MAX_32b) >> shamt) | (mask*msb))&MAX_32b
+    return sign_extend(res32, 32, is_design_64bit)
 
 def sra_t0(a: int, a_t0: int, b: int, b_t0: int, is_design_64bit: bool):
     # if b_t0&(0x3F if is_design_64bit else 0x1F):
@@ -540,8 +550,7 @@ def srai(a: int, imm: int, is_design_64bit: bool):
 
 def sraiw(a: int, imm: int, is_design_64bit: bool):
     assert (imm>>5)&1 == 0
-    res32 = srai(sign_extend(a,32,False), imm, is_design_64bit)&MAX_32b
-    return sign_extend(res32, 32, is_design_64bit)
+    return sraw(a&MAX_32b, imm&0x1F, is_design_64bit)
 
 def srai_t0(a: int, a_t0: int, imm: int, imm_t0: int, is_design_64bit: bool):
     return sra_t0(a, a_t0, imm, imm_t0, is_design_64bit)
@@ -734,11 +743,27 @@ def div(a, b, is_design_64bit: bool):
     else:
         return _div_c(twos_complement(a, is_design_64bit),twos_complement(b, is_design_64bit))&(MAX_64b if is_design_64bit else MAX_32b)
 
+def rem(a,b, is_design_64bit: bool):
+    if b & (MAX_64b if is_design_64bit else MAX_32b) == 0:
+        return a
+    elif a == (1 << 63 if is_design_64bit else 1<<31) and b == (MAX_64b if is_design_64bit else MAX_32b):
+        return 0
+    else:
+        div_res = div(a,b,is_design_64bit)
+        return a-div_res*b
+
 def divu(a, b, is_design_64bit: bool):
     if b & (MAX_64b if is_design_64bit else MAX_32b) == 0:
         return MAX_64b if is_design_64bit else MAX_32b
     else:
         return abs(_div_c(a&(MAX_64b if is_design_64bit else MAX_32b),b&(MAX_64b if is_design_64bit else MAX_32b)))&(MAX_64b if is_design_64bit else MAX_32b)
+
+def remu(a,b, is_design_64bit: bool):
+    if b & (MAX_64b if is_design_64bit else MAX_32b) == 0:
+        return a
+    else:
+        div_res = divu(a,b,is_design_64bit)
+        return a-div_res*b
 
 def divw(a, b, is_design_64bit: bool):
     if b & MAX_32b == 0:
@@ -748,12 +773,29 @@ def divw(a, b, is_design_64bit: bool):
     else:
         return  sign_extend(_div_c(twos_complement(a&MAX_32b, False),twos_complement(b&MAX_32b, False))&MAX_32b, 32, is_design_64bit)
 
+def remw(a, b, is_design_64bit: bool):
+    if b & MAX_32b == 0:
+        res = sign_extend(a&MAX_32b,32,is_design_64bit)
+    elif a&MAX_32b == (1<<31) and b&MAX_32b == MAX_32b:
+        res =  0
+    else:
+        div_res = divw(a,b,is_design_64bit)
+        res = sign_extend(((a&MAX_32b)-div_res*(b&MAX_32b))&MAX_32b,32,is_design_64bit)
+    return res
+
 def divuw(a, b, is_design_64bit: bool):
     if b&MAX_32b == 0:
         res32 = MAX_32b
     else:
         res32 = abs(_div_c(a&MAX_32b, b&MAX_32b))
     return sign_extend(res32, 32, is_design_64bit)
+
+def remuw(a, b, is_design_64bit: bool):
+    if b&MAX_32b == 0:
+        return sign_extend(a&MAX_32b,32,is_design_64bit)
+    else:
+        div_res = divuw(a,b,is_design_64bit)
+        return sign_extend(((a&MAX_32b)-div_res*(b&MAX_32b))&MAX_32b,32,is_design_64bit)
 
 
 INSTR_FUNCS = {
@@ -863,6 +905,7 @@ INSTR_FUNCS = {
     "c.lw": lw,
     "c.addiw": addiw,
     "c.addw": addw,
+    "c.subw": subw,
     "c.sd": None,
     "c.sdsp": None,
     "c.sw": None,
@@ -873,15 +916,21 @@ INSTR_FUNCS = {
     "srliw": srliw,
     "sraiw": sraiw,
     "addw": addw,
+    "subw": subw,
     "sllw": sllw,
     "srlw": srlw,
     "sraw": sraw,
+    # muldiv
     "divw": divw,
     "divuw": divuw,
+    "remw": remw,
+    "remuw":remuw,
     "mul": mul,
     "mulw":mulw,
     "div": div,
     "divu": divu,
+    "rem": rem,
+    "remu": remu,
     "mulh": mulh,
     "mulhsu":mulhsu,
     "mulhu":mulhu
@@ -891,10 +940,10 @@ INSTR_FUNCS = {
 INSTR_FUNCS_T0 = {
     # register instructions
     "add": add_t0 if not ADD_CONJ else conj,
-    "sub": sub_t0 if not SUB_CONJ else conj,
+    "sub": allones,
     "sll": sll_t0_imprecise if SLL_IMPRECISE else conj if SLL_IMPRECISE else sll_t0_precise,
-    "slt": slt_t0 if not SLT_CONJ else conj,
-    "sltu": sltu_t0 if not SLTU_CONJ else conj,
+    "slt": allones,
+    "sltu": allones,
     "xor": xor_t0 if not XOR_CONJ else conj,
     "srl": srl_t0_imprecise if SRL_IMPRECISE else conj if SRL_CONJ else srl_t0_precise,
     "sra": sra_t0 if not SRA_CONJ else conj,
@@ -903,8 +952,8 @@ INSTR_FUNCS_T0 = {
     # immediate instructions
     "addi": addi_t0 if not ADDI_CONJ else conji,
     "slli": slli_t0_imprecise if SLL_IMPRECISE else conji if SLL_CONJ else slli_t0_precise,
-    "slti": slti_t0 if not SLTI_CONJ else conji,
-    "sltiu": sltiu_t0 if not SLTI_CONJ else conji,
+    "slti": allones,
+    "sltiu": allones,
     "xori": xori_t0 if not XORI_CONJ else conji,
     "srli": srli_t0_imprecise if SRL_IMPRECISE else conji if SRL_IMPRECISE else srl_t0_precise,
     "srai": srai_t0 if not SRAI_CONJ else conji,
@@ -973,7 +1022,7 @@ INSTR_FUNCS_T0 = {
     "c.and": and_t0,
     "c.or": conj,
     "c.xor": xor_t0,
-    "c.sub": sub_t0,
+    "c.sub": allones,
     "c.lui": lui_t0,
     "c.slli": slli_t0_imprecise if SLL_IMPRECISE else conji if SLL_CONJ else slli_t0_precise,
     "c.srli": srli_t0_imprecise if SRL_IMPRECISE else conji if SRL_IMPRECISE else srl_t0_precise,
@@ -995,6 +1044,7 @@ INSTR_FUNCS_T0 = {
     "c.lw": lw_t0,
     "c.addiw": addiw_t0,
     "c.addw": addw_t0,
+    "c.subw": allones,
     "c.sd": None,
     "c.sdsp": None,
     "c.sw": None,
@@ -1003,18 +1053,23 @@ INSTR_FUNCS_T0 = {
     "addiw": addiw_t0,
     "slliw": slliw_t0_imprecise if SLL_IMPRECISE else conji if SLL_CONJ else slliw_t0_precise,
     "srliw": srliw_t0_imprecise if SRL_IMPRECISE else conji if SRL_IMPRECISE else srlw_t0_precise,
-    "sraiw": sraiw_t0,
+    "sraiw": allones,
     "addw": addw_t0,
+    "subw": allones,
     "sllw": sllw_t0_imprecise if SLL_IMPRECISE else conj if SLL_IMPRECISE else sllw_t0_precise,
-    "srlw": srlw_t0_imprecise if SRL_IMPRECISE else conj if SRL_IMPRECISE else srlw_t0_precise,
-    "sraw": sraw_t0 if not SRA_CONJ else conj,
+    "srlw": allones,
+    "sraw": allones,
+    # muldiv
     "divw": allones,
     "divuw": allones,
-    # muldiv
+    "remw": allones,
+    "remuw":allones,
     "mul": allones,
     "mulw": allones,
     "div": allones,
     "divu": allones,
+    "rem": allones,
+    "remu": allones,
     "mulh":allones,
     "mulhsu":allones,
     "mulhu":allones
