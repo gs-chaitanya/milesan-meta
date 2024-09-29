@@ -6,8 +6,8 @@ import os
 import json
 TIMEOUT_REDUCE=7200
 FUZZ=True
-REDUCE_RTL_TIMEOUT=False
-REDUCE_VALUE_MISMATCH=False
+REDUCE_RTL_TIMEOUT=True
+REDUCE_VALUE_MISMATCH=True
 REDUCE_TAINT_MISMATCH=True
 def load_fuzzconfigs(path: str):
     with open(path, "r") as f:

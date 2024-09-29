@@ -213,7 +213,7 @@ else:
     PROBA_AUTHORIZE_PRIVILEGES = 0.5
 # Environment setup
 MAX_CYCLES_PER_INSTR = 30
-SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
+SETUP_CYCLES = 10000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
 
 USE_SPIKE_INTERM_ELF = False # When both this and INSERT_REGDUMPS are enabled, the nops from the regdumps are part of the elf, which might be unintended.
 
@@ -268,7 +268,7 @@ if "NUM_MAX_BBS_UPPERBOUND" in os.environ:
     print(f"Setting NUM_MAX_BBS_UPPERBOUND = {NUM_MAX_BBS_UPPERBOUND} from env vars.")
 
 
-NUM_BBS = 1 # When set to a positive value, fixes the number of BBs.
+NUM_BBS = 0 # When set to a positive value, fixes the number of BBs.
 
 # The tanh saturates, so that we don't neglect registers that have only few bits tainted when there are regs that have much more bits tainted
 USE_TAINT_TANH = True
@@ -345,7 +345,7 @@ ASSERT_EXEC_IN_TAINT_SRC_PRIV = False
 IGNORE_RTL_TIMEOUT = False
 IGNORE_SPIKE_TIMEOUT = False
 IGNORE_VALUE_MISMATCH = False
-IGNORE_TAINT_MISMATCH = True
+IGNORE_TAINT_MISMATCH = False
 IGNORE_SPIKE_MISMATCH = False
 
 # Use the uninstrumented design for fuzzing/reducing. This helps checking if theres a translation bug in yosys.

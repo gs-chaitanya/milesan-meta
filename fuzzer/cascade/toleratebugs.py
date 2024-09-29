@@ -234,6 +234,58 @@ def is_tolerate_cva6_remuw_ct_violation():
 if __TOLERATE_CVA6_REMUW_CT_VIOLATION:
     print('WARNING: Tolerating one bug: __TOLERATE_CVA6_REMUW_CT_VIOLATION')
 
+###
+# Openc910
+###
+
+__TOLERATE_OPENC910_DIV_CT_VIOLATION = False
+def is_tolerate_openc910_div_ct_violation():
+    return __TOLERATE_OPENC910_DIV_CT_VIOLATION
+if __TOLERATE_OPENC910_DIV_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_OPENC910_DIV_CT_VIOLATION')
+
+__TOLERATE_OPENC910_DIVU_CT_VIOLATION = False
+def is_tolerate_openc910_divu_ct_violation():
+    return __TOLERATE_OPENC910_DIVU_CT_VIOLATION
+if __TOLERATE_OPENC910_DIVU_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_OPENC910_DIVU_CT_VIOLATION')
+
+__TOLERATE_OPENC910_DIVW_CT_VIOLATION = False
+def is_tolerate_openc910_divw_ct_violation():
+    return __TOLERATE_OPENC910_DIVW_CT_VIOLATION
+if __TOLERATE_OPENC910_DIVW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_OPENC910_DIVW_CT_VIOLATION')
+
+__TOLERATE_OPENC910_DIVUW_CT_VIOLATION = False
+def is_tolerate_openc910_divuw_ct_violation():
+    return __TOLERATE_OPENC910_DIVUW_CT_VIOLATION
+if __TOLERATE_OPENC910_DIVUW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_OPENC910_DIVUW_CT_VIOLATION')
+
+__TOLERATE_OPENC910_REM_CT_VIOLATION = False
+def is_tolerate_openc910_rem_ct_violation():
+    return __TOLERATE_OPENC910_REM_CT_VIOLATION
+if __TOLERATE_OPENC910_REM_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_OPENC910_REM_CT_VIOLATION')
+
+__TOLERATE_OPENC910_REMU_CT_VIOLATION = False
+def is_tolerate_openc910_remu_ct_violation():
+    return __TOLERATE_OPENC910_REMU_CT_VIOLATION
+if __TOLERATE_OPENC910_REMU_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_OPENC910_REMU_CT_VIOLATION')
+
+__TOLERATE_OPENC910_REMW_CT_VIOLATION = False
+def is_tolerate_openc910_remw_ct_violation():
+    return __TOLERATE_OPENC910_REMW_CT_VIOLATION
+if __TOLERATE_OPENC910_REMW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_OPENC910_REMW_CT_VIOLATION')
+
+__TOLERATE_OPENC910_REMUW_CT_VIOLATION = False
+def is_tolerate_openc910_remuw_ct_violation():
+    return __TOLERATE_OPENC910_REMUW_CT_VIOLATION
+if __TOLERATE_OPENC910_REMUW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: __TOLERATE_OPENC910_REMUW_CT_VIOLATION')
+
 
 ###
 # Kronos

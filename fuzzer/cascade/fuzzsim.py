@@ -4,7 +4,7 @@
 
 # This script is responsible for running the RTL simulations from the fuzzer.
 
-from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA
+from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA, MAX_CYCLES_PER_INSTR, SETUP_CYCLES
 from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_FST, TRACE_EN, CHECK_MEM, PATH_TO_MNT, MODELSIM_REQ_DIR, PATH_FROM_MODELSIM_TO_MNT, INSERT_REGDUMPS, USE_MODELSIM
 from cascade.util import IntRegIndivState, SimulatorEnum
 from common.sim.modelsim import get_next_worker_id
@@ -21,10 +21,6 @@ import json
 from distutils import dir_util
 import time
 import shutil
-
-# The maximum number of cycles that we allow per run is MAX_CYCLES_PER_INSTR * num_instrs + SETUP_CYCLES.
-MAX_CYCLES_PER_INSTR = 30
-SETUP_CYCLES = 10000 # Without this, we had issues with BOOM and Openc910 with very short programs (typically <20 instructions) not being able to finish in time.
 
 PRINT_THREAD_STATUS = False
 # @param get_rfuzz_coverage_mask if True, then return a pair (is_stop_successful: bool, rfuzz_coverage_mask: int)

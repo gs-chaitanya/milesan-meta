@@ -20,6 +20,8 @@ from cascade.toleratebugs import is_tolerate_rocket_verilator_divuw_ct_violation
 from cascade.toleratebugs import is_tolerate_boom_verilator_divuw_ct_violation, is_tolerate_boom_verilator_divw_ct_violation,is_tolerate_boom_verilator_divu_ct_violation, is_tolerate_boom_verilator_div_ct_violation
 from cascade.toleratebugs import is_tolerate_cva6_div_ct_violation, is_tolerate_cva6_divu_ct_violation, is_tolerate_cva6_divuw_ct_violation, is_tolerate_cva6_divw_ct_violation
 from cascade.toleratebugs import is_tolerate_cva6_rem_ct_violation, is_tolerate_cva6_remu_ct_violation, is_tolerate_cva6_remuw_ct_violation, is_tolerate_cva6_remw_ct_violation
+from cascade.toleratebugs import is_tolerate_openc910_div_ct_violation, is_tolerate_openc910_divu_ct_violation, is_tolerate_openc910_divuw_ct_violation, is_tolerate_openc910_divw_ct_violation
+from cascade.toleratebugs import is_tolerate_openc910_rem_ct_violation, is_tolerate_openc910_remu_ct_violation, is_tolerate_openc910_remuw_ct_violation, is_tolerate_openc910_remw_ct_violation
 
 from cascade.mmu_utils import li_doubleword, PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_BITS, PAGE_ALIGNMENT_MASK
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
@@ -104,8 +106,18 @@ def is_tolerate_R12DInstruction(instr_str, fuzzerstate):
         or not is_tolerate_cva6_remuw_ct_violation() and instr_str == "remuw" \
         or not is_tolerate_cva6_remw_ct_violation() and instr_str == "remw" \
         or not is_tolerate_cva6_rem_ct_violation() and instr_str == "rem" \
-        or not is_tolerate_cva6_remu_ct_violation() and instr_str == "remu"):
+        or not is_tolerate_cva6_remu_ct_violation() and instr_str == "remu") \
+    or "openc910" in fuzzerstate.design_name and \
+        (not is_tolerate_openc910_divuw_ct_violation() and instr_str == "divuw" \
+        or not is_tolerate_openc910_divw_ct_violation() and instr_str == "divw" \
+        or not is_tolerate_openc910_div_ct_violation() and instr_str == "div" \
+        or not is_tolerate_openc910_divu_ct_violation() and instr_str == "divu" \
+        or not is_tolerate_openc910_remuw_ct_violation() and instr_str == "remuw" \
+        or not is_tolerate_openc910_remw_ct_violation() and instr_str == "remw" \
+        or not is_tolerate_openc910_rem_ct_violation() and instr_str == "rem" \
+        or not is_tolerate_openc910_remu_ct_violation() and instr_str == "remu"):
             return False
+            
     return True
 
 
