@@ -1675,13 +1675,13 @@ class SimpleExceptionEncapsulator(ExceptionInstruction):
 
 # Wrapper for instructions that are only executed speculatively, so should not have any architectually visible effects.
 class SpeculativeInstructionEncapsulator(BaseInstruction):
-    authorized_instr_strs = JALInstruction.authorized_instr_strs+JALRInstruction.authorized_instr_strs+BranchInstruction.authorized_instr_strs
     def __init__(self, fuzzerstate, instr):
         super().__init__(fuzzerstate, "SpeculativeInstructionEncapsulator")
         self.instr = instr
-
+        self.iscompressed = instr.iscompressed
+        
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
-        return f"{self.instr.get_str(is_spike_resolution)} (SpeculativeInstructionEncapsulator)"
+        return f"{hex(self.paddr)}: {self.instr.get_str(is_spike_resolution)} (SpeculativeInstructionEncapsulator)"
 
     def reset_addr(self):
         self.instr.reset_addr()
