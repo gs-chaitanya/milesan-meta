@@ -6,7 +6,7 @@ from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRI
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS, NONPICKABLE_REGISTERS, FENCE_CF_INSTR
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_IN_PRIVS, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, TAINT_NONTAKEN_BRANCH_IMM
 from params.fuzzparams import reset_reg_settings
-from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_cascade_path, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48
+from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_cascade_path, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48, get_design_boot_addr
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
 from cascade.util import INSTRUCTIONS_BY_ISA_CLASS
 from cascade.util import ISAInstrClass, ExceptionCauseVal, MmuState, SimulatorEnum
@@ -53,7 +53,7 @@ class FuzzerState:
         self.design_has_supervisor_mode        : bool = design_has_supervisor_mode(design_name)
         self.design_has_user_mode              : bool = design_has_user_mode(design_name)
         self.design_has_pmp                    : bool = design_has_pmp(design_name)
-        
+        self.design_boot_addr                  : int  = get_design_boot_addr(design_name)
         self.random_block_contents4by4bytes = []
         self.random_data_block_ranges = []
         if TAINT_EN:
@@ -171,6 +171,8 @@ class FuzzerState:
         self.saved_csr_states = [] # List (queue) of register save objects, as saved by csrflile.py
         self.saved_mem_states = [] # List (queue) of mem save objects, as saved by mem
         self.saved_mmu_state  = []
+
+        self.spec_instr_objs_seq = [] # Speculative instructions. Not executed in spike, only transiently on RTL.
 
         # Strictly increasing when we create new producer0, to ensure uniqueness
         self.next_producer_id = 0
