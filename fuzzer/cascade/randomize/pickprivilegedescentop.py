@@ -33,9 +33,9 @@ def gen_priv_descent_instr(fuzzerstate):
     is_mret = fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE
 
     # If there should not be any taint propagation from the privelege we're in to the one we are returning to.
-    if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and fuzzerstate.privilegestate.curr_mstatus_mpp not in fuzzerstate.taint_in_priv:
+    if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and fuzzerstate.privilegestate.curr_mstatus_mpp not in fuzzerstate.taint_source_privs:
         instr_objs += clear_taints_with_random_instructions(fuzzerstate, untaint_all=True)
-    elif fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR and PrivilegeStateEnum.SUPERVISOR in fuzzerstate.taint_in_priv and fuzzerstate.privilegestate.curr_mstatus_spp not in fuzzerstate.taint_in_priv:
+    elif fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR and PrivilegeStateEnum.SUPERVISOR in fuzzerstate.taint_source_privs and fuzzerstate.privilegestate.curr_mstatus_spp not in fuzzerstate.taint_source_privs:
         instr_objs += clear_taints_with_random_instructions(fuzzerstate, untaint_all=True)
 
     # Invalidate the corresponding epc and update the current privilege level.

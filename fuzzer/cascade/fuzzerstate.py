@@ -4,7 +4,7 @@
 
 from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP,PATH_TO_MNT, PATH_TO_MNT_ENV_VAR, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, USE_MODELSIM, DEBUG_RVC
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS, NONPICKABLE_REGISTERS, FENCE_CF_INSTR
-from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_IN_PRIVS, TAINT_IMMRD_IMM, TAINT_REGIMM_IMM, TAINT_NONTAKEN_BRANCH_IMM
+from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_SOURCE_PRIVS, TAINT_SINK_PRIVS
 from params.fuzzparams import reset_reg_settings
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_cascade_path, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48, get_design_boot_addr
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
@@ -56,25 +56,43 @@ class FuzzerState:
         self.design_boot_addr                  : int  = get_design_boot_addr(design_name)
         self.random_block_contents4by4bytes = []
         self.random_data_block_ranges = []
+
         if TAINT_EN:
             self.random_data_block_has_taint = {} # Is true if the random data block at that page can have taint.
             if USE_MMU:
-                if TAINT_IN_PRIVS is None:
-                    self.taint_in_priv = {PrivilegeStateEnum.USER if random.random() < 0.5 else PrivilegeStateEnum.SUPERVISOR} # Subset of priveleges has access to tainted data.
+                if TAINT_SOURCE_PRIVS is None:
+                    self.taint_source_privs = {PrivilegeStateEnum.USER if random.random() < 0.5 else PrivilegeStateEnum.SUPERVISOR} # Subset of priveleges has access to tainted data.
                     if random.random() < P_TAINT_IN_MACHINE:
-                        self.taint_in_priv.add(PrivilegeStateEnum.MACHINE)
+                        self.taint_source_privs.add(PrivilegeStateEnum.MACHINE)
                 else:
-                    self.taint_in_priv = set()
-                    if "M" in TAINT_IN_PRIVS:
-                        self.taint_in_priv.add(PrivilegeStateEnum.MACHINE)
-                    if "S" in TAINT_IN_PRIVS:
-                        self.taint_in_priv.add(PrivilegeStateEnum.SUPERVISOR)
-                    if "U" in TAINT_IN_PRIVS:
-                        self.taint_in_priv.add(PrivilegeStateEnum.USER)
+                    self.taint_source_privs = set()
+                    if "M" in TAINT_SOURCE_PRIVS:
+                        self.taint_source_privs.add(PrivilegeStateEnum.MACHINE)
+                    if "S" in TAINT_SOURCE_PRIVS:
+                        self.taint_source_privs.add(PrivilegeStateEnum.SUPERVISOR)
+                    if "U" in TAINT_SOURCE_PRIVS:
+                        self.taint_source_privs.add(PrivilegeStateEnum.USER)
                     if DO_ASSERT:
-                        assert len(self.taint_in_priv), f"At least one privilige must have taint access when TAINT_EN is on."
-            else: 
-                self.taint_in_priv = {PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE}
+                        assert len(self.taint_source_privs), f"At least one privilige must have taint access when TAINT_EN is on."
+                if TAINT_SINK_PRIVS is None:
+                    self.taint_sink_privs = {PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.USER} - self.taint_source_privs
+                else:
+                    self.taint_sink_privs = set()
+                    if "M" in TAINT_SINK_PRIVS:
+                        self.taint_source_privs.add(PrivilegeStateEnum.MACHINE)
+                    if "S" in TAINT_SINK_PRIVS:
+                        self.taint_source_privs.add(PrivilegeStateEnum.SUPERVISOR)
+                    if "U" in TAINT_SINK_PRIVS:
+                        self.taint_source_privs.add(PrivilegeStateEnum.USER)
+                    if DO_ASSERT:
+                        assert len(self.taint_sink_privs), f"At least one privilige must have taint access when TAINT_EN is on."
+                # If the MMU is disabled, all privileges can acccess tainted data.
+                if DO_ASSERT:
+                    assert self.taint_sink_privs & self.taint_source_privs == set(), f"Privilege can't be both taint source and sink! {self.taint_source_privs}/{self.taint_sink_privs}"
+
+                print(f"Taint source privileges: {self.taint_source_privs}")
+                print(f"Taint sink privileges: {self.taint_sink_privs}")
+
         # For benchmarks
         if GET_DATA:
             self.num_hardcoded_instr_mmufsm = 0
@@ -619,8 +637,7 @@ class FuzzerState:
         if print_stats:
                 print({p.name:v for p,v in n_instr_in_priv.items()})
 
-        forbidden_privs = list(set(list(PrivilegeStateEnum))-set(self.taint_in_priv))
-        return n_instr_in_priv, forbidden_privs
+        return n_instr_in_priv
 
 
     def compute_taint_stats(self):
@@ -657,7 +674,7 @@ class FuzzerState:
                     "rd_value_t0_before_exec": None if not hasattr(next_instr, "rd") else self.intregpickstate.regs[next_instr.rd].get_val_t0(),
                     "isa_class" : None if isa_class is None else isa_class.name,
                     "instr_class": next_instr.__class__.__name__,
-                    "taint_in_privs": [i for i in self.taint_in_priv]
+                    "TAINT_SOURCE_PRIVS": [i for i in self.taint_source_privs]
                 }
                 next_instr.execute(is_spike_resolution=False)
                 stats["rd_value_after_exec"] =  None if not hasattr(next_instr, "rd") else self.intregpickstate.regs[next_instr.rd].get_val()

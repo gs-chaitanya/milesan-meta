@@ -131,7 +131,7 @@ def gen_next_instrstr_from_isaclass(isaclass: ISAInstrClass, fuzzerstate) -> str
         fuzzerstate.special_instrs_count += 1
 
     # If there's no tainted register and we are in a privilege that should process tainted data, load tainted data from memory.
-    if isaclass in [ISAInstrClass.MEM] and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and fuzzerstate.intregpickstate.get_num_tainted_regs_in_state(IntRegIndivState.FREE) == 0:
+    if isaclass in [ISAInstrClass.MEM] and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and fuzzerstate.intregpickstate.get_num_tainted_regs_in_state(IntRegIndivState.FREE) == 0:
         return random.choice(["lb","lbu","lh", "lhu", "lw"])
 
     if "cva6" in fuzzerstate.design_name:

@@ -464,9 +464,9 @@ class PageTablesGen:
                         print(f"{hex(ppn_leaf)} maps data page with taints")
                     # If this is a random data block with taint and we only allow taint in one privilege, we map it accordingly s.t. only that privelege has access.
                     # We then need to ensure that tainted data is also only written to pages that were tainted initially.
-                    curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_in_priv, is_executable=False)
-                    curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_in_priv, is_executable=False)
-                    self.ppn_leaf_to_priv_dict[ppn_leaf] = fuzzerstate.taint_in_priv
+                    curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_source_privs, is_executable=False)
+                    curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_source_privs, is_executable=False)
+                    self.ppn_leaf_to_priv_dict[ppn_leaf] = fuzzerstate.taint_source_privs
                 elif is_random_data_block:
                     if DEBUG_PRINT:
                         print(f"{hex(ppn_leaf)} maps data page without taints")

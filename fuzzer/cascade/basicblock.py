@@ -8,7 +8,7 @@ from params.runparams import DO_ASSERT
 from common.spike import SPIKE_STARTADDR
 from rv.csrids import CSR_IDS
 from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES, FENCE_CF_INSTR
-from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, INSERT_SPECTRE_GADGETS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE, ALLOW_JALR_IN_MACHINE_MODE, ALLOW_BRANCH_IN_MACHINE_MODE
+from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, INSERT_SPECTRE_GADGETS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS, ALLOW_JALR_IN_NEUTRAL_PRIVS, ALLOW_BRANCH_IN_NEUTRAL_PRIVS
 from params.runparams import INSERT_REGDUMPS, INSERT_FENCE, GET_DATA, DEBUG_PRINT
 from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memfsm_instrobjs
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
@@ -236,9 +236,9 @@ def gen_basicblock(fuzzerstate):
         # Discriminate non-taken branches
         fuzzerstate.curr_branch_taken = False
         if curr_isa_class == ISAInstrClass.BRANCH:
-            if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and not ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS or \
-                fuzzerstate.privilegestate.privstate not in fuzzerstate.taint_in_priv and not ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS \
-                    or fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE:
+            if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and not ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS or \
+                fuzzerstate.privilegestate.privstate not in fuzzerstate.taint_source_privs and not ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS \
+                    or fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS:
                 fuzzerstate.curr_branch_taken = True
             else:
                 fuzzerstate.curr_branch_taken = random.random() < BRANCH_TAKEN_PROBA
@@ -306,7 +306,7 @@ def gen_basicblock(fuzzerstate):
     if fuzzerstate.curr_mmu_state != MmuState.IDLE:
         curr_isa_class = random.choices([ISAInstrClass.JAL, ISAInstrClass.BRANCH], [1, 1], k=1)[0]
     elif fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
-        curr_isa_class = random.choices([ISAInstrClass.JAL, ISAInstrClass.JALR, ISAInstrClass.BRANCH], [1, int(ALLOW_JALR_IN_MACHINE_MODE), int(ALLOW_BRANCH_IN_MACHINE_MODE)], k=1)[0]
+        curr_isa_class = random.choices([ISAInstrClass.JAL, ISAInstrClass.JALR, ISAInstrClass.BRANCH], [1, int(ALLOW_JALR_IN_NEUTRAL_PRIVS), int(ALLOW_BRANCH_IN_NEUTRAL_PRIVS)], k=1)[0]
     else:
         curr_isa_class = random.choices([ISAInstrClass.JAL, ISAInstrClass.JALR, ISAInstrClass.BRANCH], [1, 1, 1], k=1)[0]
 

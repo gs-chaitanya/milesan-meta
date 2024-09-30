@@ -77,7 +77,7 @@ def _create_spectre_gadget_instrobjs(fuzzerstate, instr_str):
         assert priv_level != PrivilegeStateEnum.MACHINE, f"We can't be in machine mode and use vaddr translation."
         
         # Preparing the load addr to load from a tainted memory region, if we are not in a privilege that has access to tainted data.
-        if priv_level not in fuzzerstate.taint_in_priv:
+        if priv_level in fuzzerstate.taint_sink_privs:
             (rd1,rd2,tmp) = fuzzerstate.intregpickstate.pick_untainted_int_outputregs_nonzero(3,force = False)
             rs2 = fuzzerstate.intregpickstate.pick_tainted_int_inputreg(force = False, authorize_sideeffects= False, allow_zero = False) # we will load tainted data into rs2
             load_addr = phys2virt(load_addr, priv_level, va_layout, fuzzerstate,absolute_addr=True)
@@ -91,7 +91,7 @@ def _create_spectre_gadget_instrobjs(fuzzerstate, instr_str):
 
         instr_objs += [create_instr(instr_str, fuzzerstate, curr_addr + 4*len(instr_objs), False)] # Everything below is executed speculatively. TODO: ensure the prepared regs are not overwritten.
 
-        if priv_level not in fuzzerstate.taint_in_priv:
+        if priv_level in fuzzerstate.taint_sink_privs:
             instr_objs += [SpeculativeInstructionEncapsulator(fuzzerstate, IntLoadInstruction_t0(fuzzerstate, load_str, rs2, rd1, 0x0, None))]  # Speculatively load tainted data into rs2 if we are in a privelege mode that cannot access tainted data.
         
         instr_objs += [

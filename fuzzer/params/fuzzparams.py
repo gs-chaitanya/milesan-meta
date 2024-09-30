@@ -222,7 +222,7 @@ USE_SPIKE_INTERM_ELF = False # When both this and INSERT_REGDUMPS are enabled, t
 TAINT_EN = True
 
 P_TAINT_REG = 0 # Probability that an initial register value is tainted. If non-zero, might be loaded into icache as the register values are stored right after the instruction code. TODO: use loads from (non-)tainted page instead
-if USE_MMU: # not used if TAINT_IN_PRIVS fixed.
+if USE_MMU: # not used if TAINT_SOURCE_PRIVS fixed.
         P_TAINT_IN_MACHINE = 0.5
 else:
     P_TAINT_IN_MACHINE = 1
@@ -296,32 +296,43 @@ if "TAINT_NONTAKEN_BRANCHES" in os.environ:
     print(f"Setting TAINT_NONTAKEN_BRANCHES = {TAINT_NONTAKEN_BRANCH_IMM} from env vars.")
 
 # We can disable non-taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges. Useful if we look for leakage through e.g. shared BPU and we probe it in one of the NO_TAINT privs 
-ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = False
-if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS" in os.environ:
-    ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS"]) == 1
-    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_PRIVS} from env vars.")
+ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = False
+if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS" in os.environ:
+    ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS"]) == 1
+    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS} from env vars.")
 
 # We can disable non-taken branches in the privileges that have no access to taint to avoid tainting the pc in those privileges. Useful if we search for e.g. BNE in taint privs that leaks
-ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS = True
-if "ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS" in os.environ:
-    ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS"]) == 1
-    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_NOTAINT_PRIVS} from env vars.")
+ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS = True
+if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS" in os.environ:
+    ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS"]) == 1
+    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS} from env vars.")
 
 # We can disable non-taken branches in M mode s.t. we don't get any prediction based on unmapped data where M is a confused deputy.
-ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE = False
-if "ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE" in os.environ:
-    ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE"]) == 1
-    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE = {ALLOW_NONTAKEN_BRANCHES_IN_MACHINE_MODE} from env vars.")
+ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS = False
+if "ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS" in os.environ:
+    ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS"]) == 1
+    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS} from env vars.")
 
-ALLOW_JALR_IN_MACHINE_MODE = False
-if "ALLOW_JALR_IN_MACHINE_MODE" in os.environ:
-    ALLOW_JALR_IN_MACHINE_MODE = int(os.environ["ALLOW_JALR_IN_MACHINE_MODE"]) == 1
-    print(f"Setting ALLOW_JALR_IN_MACHINE_MODE = {ALLOW_JALR_IN_MACHINE_MODE} from env vars.")
+ALLOW_JALR_IN_NEUTRAL_PRIVS = False
+if "ALLOW_JALR_IN_NEUTRAL_PRIVS" in os.environ:
+    ALLOW_JALR_IN_NEUTRAL_PRIVS = int(os.environ["ALLOW_JALR_IN_NEUTRAL_PRIVS"]) == 1
+    print(f"Setting ALLOW_JALR_IN_NEUTRAL_PRIVS = {ALLOW_JALR_IN_NEUTRAL_PRIVS} from env vars.")
 
-ALLOW_BRANCH_IN_MACHINE_MODE = False
-if "ALLOW_BRANCH_IN_MACHINE_MODE" in os.environ:
-    ALLOW_BRANCH_IN_MACHINE_MODE = int(os.environ["ALLOW_BRANCH_IN_MACHINE_MODE"]) == 1
-    print(f"Setting ALLOW_BRANCH_IN_MACHINE_MODE = {ALLOW_BRANCH_IN_MACHINE_MODE} from env vars.")
+ALLOW_BRANCH_IN_NEUTRAL_PRIVS = False
+if "ALLOW_BRANCH_IN_NEUTRAL_PRIVS" in os.environ:
+    ALLOW_BRANCH_IN_NEUTRAL_PRIVS = int(os.environ["ALLOW_BRANCH_IN_NEUTRAL_PRIVS"]) == 1
+    print(f"Setting ALLOW_BRANCH_IN_NEUTRAL_PRIVS = {ALLOW_BRANCH_IN_NEUTRAL_PRIVS} from env vars.")
+
+ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = False
+if "ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS" in os.environ:
+    ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS"]) == 1
+    print(f"Setting ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = {ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS} from env vars.")
+
+ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SINK_PRIVS = False
+if "ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS" in os.environ:
+    ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS"]) == 1
+    print(f"Setting ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = {ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS} from env vars.")
+
 
 # When this is enabled, tainted data will be loaded but not computed on. This allows testing if leakage is coming from the dataflow.
 DISABLE_COMPUTATION_ON_TAINT = False
@@ -330,16 +341,22 @@ if "DISABLE_COMPUTATION_ON_TAINT" in os.environ:
     print(f"Setting DISABLE_COMPUTATION_ON_TAINT = {DISABLE_COMPUTATION_ON_TAINT} from env vars.")
 
 # We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
-TAINT_IN_PRIVS = None
-if "TAINT_IN_PRIVS" in os.environ:
-    TAINT_IN_PRIVS = os.environ["TAINT_IN_PRIVS"]
-    assert TAINT_IN_PRIVS != "M", f"Taint only in M-mode not supported right now."
-    print(f"Setting TAINT_IN_PRIVS = {TAINT_IN_PRIVS} from env vars.")
+TAINT_SOURCE_PRIVS = None
+if "TAINT_SOURCE_PRIVS" in os.environ:
+    TAINT_SOURCE_PRIVS = os.environ["TAINT_SOURCE_PRIVS"]
+    assert TAINT_SOURCE_PRIVS != "M", f"Taint only in M-mode not supported right now."
+    print(f"Setting TAINT_SOURCE_PRIVS = {TAINT_SOURCE_PRIVS} from env vars.")
+
+# We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
+TAINT_SINK_PRIVS = None
+if "TAINT_SINK_PRIVS" in os.environ:
+    TAINT_SINK_PRIVS = os.environ["TAINT_SINK_PRIVS"]
+    print(f"Setting TAINT_SINK_PRIVS = {TAINT_SINK_PRIVS} from env vars.")
 
 
 # Abort fuzzing run if the computed program does not execute in taint sink privilege.
 ASSERT_EXEC_IN_TAINT_SINK_PRIV = True
-ASSERT_EXEC_IN_TAINT_SRC_PRIV = False
+ASSERT_EXEC_IN_TAINT_SRC_PRIV = True
 
 # Ignore exception types to e.g. only fuzz for leakage and ignore architectural bugs that trigger timeouts or value mismatches.
 IGNORE_RTL_TIMEOUT = False

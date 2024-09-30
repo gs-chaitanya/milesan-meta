@@ -146,7 +146,7 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
 
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)    
 
-    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and "auipc" not in instr_str and not DISABLE_COMPUTATION_ON_TAINT:
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and "auipc" not in instr_str and not DISABLE_COMPUTATION_ON_TAINT:
         n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
         if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS: # There's too much taint, remove some.
             imm_t0 = 0 
@@ -183,7 +183,7 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     
     imm = gen_random_imm(instr_str, fuzzerstate.is_design_64bit)
 
-    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv and not DISABLE_COMPUTATION_ON_TAINT:
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and not DISABLE_COMPUTATION_ON_TAINT:
         n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
         if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS: # There's too much taint, remove some.
             imm_t0 = 0 
@@ -254,7 +254,7 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
     
     imm_t0 = 0
     if TAINT_NONTAKEN_BRANCH_IMM:
-        if TAINT_EN and not plan_taken and random.random() < 0.5 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+        if TAINT_EN and not plan_taken and random.random() < 0.5 and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs:
             imm_t0 = random.randint(0, 1<<curr_param_size)
 
     if USE_COMPRESSED and instr_str in IS_COMPRESSABLE:
@@ -315,13 +315,13 @@ def _create_SpecialInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
 def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in IntLoadInstructions
-        if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+        if TAINT_EN and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
         else:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR)
 
     if TAINT_EN:
-        if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+        if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs:
             if fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
                 taint = random.random() < P_LOAD_TAINT
             else:
@@ -347,13 +347,13 @@ def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
 def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in IntStoreInstructions
-        if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv:
+        if TAINT_EN and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
         else:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR)
 
     if TAINT_EN:
-        taint = fuzzerstate.privilegestate.privstate in fuzzerstate.taint_in_priv
+        taint = fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs
     rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_T0_ADDR if taint else IntRegIndivState.PAGE_ADDR)
     rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
     alignment = 1 if instr_str == "sb" else 2 if instr_str == "sh" else 4 if instr_str == "sw" else 8 if instr_str == "sd" else None
@@ -541,7 +541,7 @@ def create_memfsm_instrobjs(fuzzerstate):
 
     va_layout, priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
 
-    # if priv_level in  fuzzerstate.taint_in_priv:
+    # if priv_level in  fuzzerstate.taint_source_privs:
     if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
         tainted = True
     elif not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):

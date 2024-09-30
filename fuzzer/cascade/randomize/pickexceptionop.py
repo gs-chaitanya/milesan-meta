@@ -252,7 +252,7 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
-            assert fuzzerstate.privilegestate.prev_privstate not in fuzzerstate.taint_in_priv # we only do page faults to tainted pages
+            assert fuzzerstate.privilegestate.prev_privstate not in fuzzerstate.taint_source_privs # we only do page faults to tainted pages
         instr_str = random.choice([i for i in IntLoadInstruction_t0.authorized_instr_strs if not i.startswith("c")])
         alignment = 1 if "lb" in instr_str else 2 if "lh" in instr_str else 4 if "lw" in instr_str else 8 if "ld" in instr_str else None
         assert alignment is not None, f"Invalid instr_str: {instr_str}"
@@ -283,7 +283,7 @@ def gen_exception_instr(fuzzerstate):
             is_mtvec = not (fuzzerstate.privilegestate.medeleg_val & (1 << exception_op_type.value))
 
         # We untaint the registers if we either delegate the exception to a privilege that does not have taint access, or we do not delegate and M mode does not have taint access.
-        if not is_mtvec and PrivilegeStateEnum.SUPERVISOR not in fuzzerstate.taint_in_priv or is_mtvec and PrivilegeStateEnum.MACHINE not in fuzzerstate.taint_in_priv:
+        if not is_mtvec and PrivilegeStateEnum.SUPERVISOR not in fuzzerstate.taint_source_privs or is_mtvec and PrivilegeStateEnum.MACHINE not in fuzzerstate.taint_source_privs:
             instr_objs += clear_taints_with_random_instructions(fuzzerstate, untaint_all=True)
     instr_objs += [gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type)]
     fuzzerstate.intregpickstate.free_pageregs()
@@ -436,7 +436,7 @@ def gen_ppfill_instrs(fuzzerstate):
 
     # rd = fuzzerstate.intregpickstate.pick_int_outputreg()
 
-    n_instr_in_priv, forbidden_privs = fuzzerstate.compute_context_stats() # TODO: this is unnecessarily expensive
+    n_instr_in_priv = fuzzerstate.compute_context_stats() # TODO: this is unnecessarily expensive, do it on the fly
     # Choose the target. It should be a valid target.
     if is_mpp:
         if not fuzzerstate.design_has_supervisor_mode and not fuzzerstate.design_has_user_mode or fuzzerstate.real_curr_layout == -1:
@@ -449,12 +449,22 @@ def gen_ppfill_instrs(fuzzerstate):
             target_privlvl = PrivilegeStateEnum.USER
         else:
             target_privlvl = None
-            for priv in forbidden_privs: # If we did not execute in all leakage sink privileges yet, prefer those.
-                if n_instr_in_priv[priv] == 0:
-                    target_privlvl = priv
-            if target_privlvl is None:
-                # target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.MACHINE])
-                target_privlvl = random.choice([PrivilegeStateEnum.USER, PrivilegeStateEnum.SUPERVISOR])
+            ran_in_taint_sink = False
+            for priv in fuzzerstate.taint_sink_privs: # If we did not execute in any taink sink privileges yet, choose it.
+                if n_instr_in_priv[priv] != 0:
+                    ran_in_taint_sink = True
+            
+            ran_in_taint_source = False
+            for priv in fuzzerstate.taint_source_privs: # If we did not execute in all leakage source privileges yet, prefer those.
+                if n_instr_in_priv[priv] != 0:
+                    ran_in_taint_source = True
+
+            if ran_in_taint_sink and ran_in_taint_source or not ran_in_taint_sink and not ran_in_taint_source:
+                target_privlvl = random.choice(list(fuzzerstate.taint_sink_privs | fuzzerstate.taint_source_privs))
+            elif ran_in_taint_sink and not ran_in_taint_source:
+                target_privlvl = random.choice(list(fuzzerstate.taint_source_privs))
+            elif ran_in_taint_source and not ran_in_taint_sink:
+                target_privlvl = random.choice(list(fuzzerstate.taint_sink_privs))
 
     else:
         if fuzzerstate.design_has_user_mode:

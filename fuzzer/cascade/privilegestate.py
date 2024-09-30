@@ -1,5 +1,5 @@
 from params.runparams import DO_ASSERT
-from params.fuzzparams import USE_MMU
+from params.fuzzparams import USE_MMU, ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SINK_PRIVS, ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS
 from cascade.util import ExceptionCauseVal, IntRegIndivState
 from functools import reduce
 from enum import IntEnum
@@ -99,7 +99,10 @@ class PrivilegeState:
             supported_exceptions_dict[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT] = False
 
 
-        if self.privstate in fuzzerstate.taint_in_priv:
+        if self.privstate in fuzzerstate.taint_source_privs and not ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS:
+            supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
+
+        if self.privstate in fuzzerstate.taint_sink_privs and not ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SINK_PRIVS:
             supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False
 
         # Cannot write to SATP in user mode

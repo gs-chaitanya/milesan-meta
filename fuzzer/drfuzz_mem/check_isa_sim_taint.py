@@ -71,12 +71,12 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
         fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
-        n_instr_in_priv, forbidden_privs = fuzzerstate.compute_context_stats()
+        n_instr_in_priv = fuzzerstate.compute_context_stats()
         if USE_MMU:
             if ASSERT_EXEC_IN_TAINT_SINK_PRIV:
-                assert sum([n_instr_in_priv[priv] for priv in forbidden_privs]) != 0, f"Computed program does not execute in taint sink privilege(s) {[p.name for p in forbidden_privs]}."
+                assert sum([n_instr_in_priv[priv] for priv in fuzzerstate.taint_sink_privs]) != 0, f"Computed program does not execute in taint sink privilege(s) {[p.name for p in fuzzerstate.taint_sink_privs]}."
             if ASSERT_EXEC_IN_TAINT_SRC_PRIV:
-                assert sum([n_instr_in_priv[priv] for priv in fuzzerstate.taint_in_priv]) != 0, f"Computed program does not execute in taint source privilege(s) {[p.name for p in fuzzerstate.taint_in_priv]}."
+                assert sum([n_instr_in_priv[priv] for priv in fuzzerstate.taint_source_privs]) != 0, f"Computed program does not execute in taint source privilege(s) {[p.name for p in fuzzerstate.taint_source_privs]}."
         fuzzerstate.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         fuzzerstate.memview.restore(0) # Restore contents before anything was executed.
         fuzzerstate.csrfile.reset() # Reset all CSRs to zero.
@@ -211,7 +211,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             if TAINT_EN:
                 mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
                 if mismatch and not IGNORE_TAINT_MISMATCH:
-                    raise MismatchError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}.\n\t Taint allowed in {[p.name for p in fuzzerstate.taint_in_priv]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
+                    raise MismatchError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}.\n\t Taint sources are {[p.name for p in fuzzerstate.taint_source_privs]}, taint sinks are {[p.name for p in fuzzerstate.taint_sink_privs]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
 
 
         if DUMP_MCYCLES:
@@ -220,7 +220,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             mcycle_t0 = int(final_regvals_rtl[MAX_NUM_PICKABLE_REGS-1]["value_t0"],16)
             
             if TAINT_EN and mcycle_t0:
-                raise MismatchError(f"(RTL) MCYCLE CSR got tainted: {hex(mcycle)}, {hex(mcycle_t0)}.\n\t Taint allowed in {[p.name for p in fuzzerstate.taint_in_priv]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
+                raise MismatchError(f"(RTL) MCYCLE CSR got tainted: {hex(mcycle)}, {hex(mcycle_t0)}.\n\t Taint sources are {[p.name for p in fuzzerstate.taint_source_privs]}, taint sinks are {[p.name for p in fuzzerstate.taint_sink_privs]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
 
         if CHECK_MEM:
             if PRINT_MEMORY_VALIDATION:
