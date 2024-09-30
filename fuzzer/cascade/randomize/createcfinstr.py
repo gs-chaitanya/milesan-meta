@@ -573,7 +573,7 @@ def create_memfsm_instrobjs(fuzzerstate):
         return [
             ImmRdInstruction_t0(fuzzerstate, "lui", rd, uimm0),
             RegImmInstruction_t0(fuzzerstate, "addi",rd,rd,uimm1),
-            R12DInstruction_t0(fuzzerstate, "xor",rd,rd,RELOCATOR_REGISTER_ID),
+            R12DInstruction_t0(fuzzerstate, "xor",rd,rd,RELOCATOR_REGISTER_ID)
         ]
 
     else: # if we use the MMU, we need to get the virtual address and use one extra instruction to set up the 64 bit vaddress.

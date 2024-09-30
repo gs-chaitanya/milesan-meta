@@ -722,6 +722,7 @@ def gen_producer_id_to_tgtaddr(fuzzerstate):
     # assert index_in_bb_start_addr_seq == len(fuzzerstate.bb_start_addr_seq)+1, f"{index_in_bb_start_addr_seq} != {len(fuzzerstate.bb_start_addr_seq)+1}"
     return consumer_inst_va_layout, producer_id_to_tgtaddr, producer_id_to_noreloc_spike
 
+        
 # @brief Generates a series of basic blocks.
 # Does not transmit the next bb address to the control flow instructions.
 # @param fuzzerstate a freshly created fuzzerstate.
@@ -777,10 +778,10 @@ def gen_basicblocks(fuzzerstate):
     # Generate the content of the final basic block, now that we know the final privilege level.
     fuzzerstate.final_bb = finalblock(fuzzerstate, fuzzerstate.design_name)
 
-    # Forbid loads from addresses where instructions change between spike resolution and RTL sim.
-    blacklist_changing_instructions(fuzzerstate)
-    blacklist_final_block(fuzzerstate) # Must be done once the bb is created, else we could also blacklist upper bounds over the basic block size.
-    blacklist_context_setter(fuzzerstate)
+    # # Forbid loads from addresses where instructions change between spike resolution and RTL sim.
+    # blacklist_changing_instructions(fuzzerstate)
+    # blacklist_final_block(fuzzerstate) # Must be done once the bb is created, else we could also blacklist upper bounds over the basic block size.
+    # blacklist_context_setter(fuzzerstate)
 
     fuzzerstate.consumer_inst_va_layout, fuzzerstate.producer_id_to_tgtaddr, fuzzerstate.producer_id_to_noreloc_spike = gen_producer_id_to_tgtaddr(fuzzerstate)
 

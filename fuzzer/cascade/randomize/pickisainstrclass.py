@@ -276,6 +276,7 @@ def _filter_cf_instr(fuzzerstate, filtered_weights: list):
         if not ALLOW_JALR_IN_MACHINE_MODE:
             filtered_weights[ISAInstrClass.JALR] = 0
     return filtered_weights
+    
 ###
 # Exposed function
 ###
