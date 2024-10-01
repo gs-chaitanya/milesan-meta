@@ -46,7 +46,7 @@ ISAINSTRCLASS_INITIAL_BOOSTERS = {
     ISAInstrClass.RANDOM_CSR:  0.05,
     ISAInstrClass.DESCEND_PRV: 0.3 if USE_MMU else 0.1,
     ISAInstrClass.SPECIAL:     0.01,
-    ISAInstrClass.MMU:         0.5 if USE_MMU else 0,
+    ISAInstrClass.MMU:         0.3 if USE_MMU else 0,
     ISAInstrClass.MSTATUS:     0,
     ISAInstrClass.CLEARTAINT:  0.00,
     ISAInstrClass.MEMFSM:      0.01
@@ -222,9 +222,6 @@ def _filter_sensitive_instr_weights(fuzzerstate, filtered_weights: list):
         filtered_weights[ISAInstrClass.TVECFSM] = 0
         filtered_weights[ISAInstrClass.EPCFSM]  = 0
         filtered_weights[ISAInstrClass.JALR]    = 0
-        # We have a seperate in-situ FSM for the MEM instructions now.
-        # filtered_weights[ISAInstrClass.MEM]     = 0
-        # filtered_weights[ISAInstrClass.MEM64]   = 0
         filtered_weights[ISAInstrClass.MEMFPU]  = 0
         filtered_weights[ISAInstrClass.MEMFPUD] = 0
         filtered_weights[ISAInstrClass.MSTATUS] = 0
@@ -282,10 +279,23 @@ def _filter_cf_instr(fuzzerstate, filtered_weights: list):
 ###
 
 def _filter_privdescent(fuzzerstate, filtered_weights):
-    if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:
-        filtered_weights[ISAInstrClass.DESCEND_PRV] *= LEAVE_M_MODE_PROTURBANCE_RATIO
-        filtered_weights[ISAInstrClass.EPCFSM] *= LEAVE_M_MODE_PROTURBANCE_RATIO
-        filtered_weights[ISAInstrClass.REGFSM] *= LEAVE_M_MODE_PROTURBANCE_RATIO
+    if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE:        
+        # The MEPC needs to be set up so we know where to go to when descending privilege.
+        if not fuzzerstate.privilegestate.is_mepc_populated:
+            filtered_weights[ISAInstrClass.EPCFSM] *= LEAVE_M_MODE_PROTURBANCE_RATIO
+        # The va_layout must not be -1 to leave M-mode.
+        if fuzzerstate.real_curr_layout == -1:
+            filtered_weights[ISAInstrClass.MMU] *= LEAVE_M_MODE_PROTURBANCE_RATIO
+
+        # The MTVEC needs to be set so we can return from the lower privilege, otherwise we can't descend in the first place.
+        if not fuzzerstate.privilegestate.is_mtvec_populated:
+            filtered_weights[ISAInstrClass.TVECFSM] *= LEAVE_M_MODE_PROTURBANCE_RATIO
+        
+        # Descend the privilege when ready.
+        if is_ready_to_descend_privileges(fuzzerstate):
+            filtered_weights[ISAInstrClass.DESCEND_PRV] *= LEAVE_M_MODE_PROTURBANCE_RATIO
+
+        # print(f"is ready: {is_ready_to_descend_privileges(fuzzerstate)}, mepc_pop: {fuzzerstate.privilegestate.is_mepc_populated}, mtev_pop {fuzzerstate.privilegestate.is_mtvec_populated}")
     return filtered_weights
 
 # Do NOT @cache this function, as it is a random function.

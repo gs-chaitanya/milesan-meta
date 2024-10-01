@@ -436,7 +436,6 @@ def gen_ppfill_instrs(fuzzerstate):
 
     # rd = fuzzerstate.intregpickstate.pick_int_outputreg()
 
-    n_instr_in_priv = fuzzerstate.compute_context_stats() # TODO: this is unnecessarily expensive, do it on the fly
     # Choose the target. It should be a valid target.
     if is_mpp:
         if not fuzzerstate.design_has_supervisor_mode and not fuzzerstate.design_has_user_mode or fuzzerstate.real_curr_layout == -1:
@@ -451,12 +450,12 @@ def gen_ppfill_instrs(fuzzerstate):
             target_privlvl = None
             ran_in_taint_sink = False
             for priv in fuzzerstate.taint_sink_privs: # If we did not execute in any taink sink privileges yet, choose it.
-                if n_instr_in_priv[priv] != 0:
+                if fuzzerstate.n_instr_in_priv[priv] != 0:
                     ran_in_taint_sink = True
             
             ran_in_taint_source = False
             for priv in fuzzerstate.taint_source_privs: # If we did not execute in all leakage source privileges yet, prefer those.
-                if n_instr_in_priv[priv] != 0:
+                if fuzzerstate.n_instr_in_priv[priv] != 0:
                     ran_in_taint_source = True
 
             if ran_in_taint_sink and ran_in_taint_source or not ran_in_taint_sink and not ran_in_taint_source:

@@ -71,12 +71,10 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     if generate_fuzzerstate:
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
         fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
-        n_instr_in_priv = fuzzerstate.compute_context_stats()
         if USE_MMU:
-            if ASSERT_EXEC_IN_TAINT_SINK_PRIV:
-                assert sum([n_instr_in_priv[priv] for priv in fuzzerstate.taint_sink_privs]) != 0, f"Computed program does not execute in taint sink privilege(s) {[p.name for p in fuzzerstate.taint_sink_privs]}."
-            if ASSERT_EXEC_IN_TAINT_SRC_PRIV:
-                assert sum([n_instr_in_priv[priv] for priv in fuzzerstate.taint_source_privs]) != 0, f"Computed program does not execute in taint source privilege(s) {[p.name for p in fuzzerstate.taint_source_privs]}."
+            exec_taint_source_priv = sum([fuzzerstate.n_instr_in_priv[priv] for priv in fuzzerstate.taint_source_privs]) > 0
+            exec_taint_sink_priv = sum([fuzzerstate.n_instr_in_priv[priv] for priv in fuzzerstate.taint_sink_privs]) > 0
+            assert (not ASSERT_EXEC_IN_TAINT_SINK_PRIV or exec_taint_sink_priv) and (not ASSERT_EXEC_IN_TAINT_SRC_PRIV or exec_taint_source_priv), f"Computed program does not execute in all required privilege(s):\n\tSource privs ({[p.name for p in fuzzerstate.taint_source_privs]}): {exec_taint_source_priv}.\n\tSink privs  ({[p.name for p in fuzzerstate.taint_sink_privs]}): {exec_taint_sink_priv}.\n\t{fuzzerstate.n_instr_in_priv}"
         fuzzerstate.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         fuzzerstate.memview.restore(0) # Restore contents before anything was executed.
         fuzzerstate.csrfile.reset() # Reset all CSRs to zero.

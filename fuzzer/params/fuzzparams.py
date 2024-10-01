@@ -29,7 +29,7 @@ if "USE_COMPRESSED" in os.environ:
     USE_COMPRESSED = int(os.environ["USE_COMPRESSED"]) == 1
     print(f"Setting USE_COMPRESSED = {USE_COMPRESSED} from env vars.")
 
-assert not (USE_COMPRESSED and USE_MMU), "This does not work yet."
+# assert not (USE_COMPRESSED and USE_MMU), "This does not work yet."
 
 MAX_NUM_LAYOUTS = 5
 PROBA_ENTANGLE_LAYOUT = 0
@@ -257,12 +257,12 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MIN_BBS_LOWERBOUND = 20
+NUM_MIN_BBS_LOWERBOUND = 100 if USE_MMU else 10
 if "NUM_MIN_BBS_LOWERBOUND" in os.environ:
     NUM_MIN_BBS_LOWERBOUND = int(os.environ["NUM_MIN_BBS_LOWERBOUND"])
     print(f"Setting NUM_MIN_BBS_LOWERBOUND = {NUM_MIN_BBS_LOWERBOUND} from env vars.")
 
-NUM_MAX_BBS_UPPERBOUND = 300
+NUM_MAX_BBS_UPPERBOUND = 300 if USE_MMU else 100
 if "NUM_MAX_BBS_UPPERBOUND" in os.environ:
     NUM_MAX_BBS_UPPERBOUND = int(os.environ("NUM_MAX_BBS_UPPERBOUND"))
     print(f"Setting NUM_MAX_BBS_UPPERBOUND = {NUM_MAX_BBS_UPPERBOUND} from env vars.")
@@ -296,7 +296,7 @@ if "TAINT_NONTAKEN_BRANCHES" in os.environ:
     print(f"Setting TAINT_NONTAKEN_BRANCHES = {TAINT_NONTAKEN_BRANCH_IMM} from env vars.")
 
 # We can disable non-taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges. Useful if we look for leakage through e.g. shared BPU and we probe it in one of the NO_TAINT privs 
-ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = False
+ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = True
 if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS" in os.environ:
     ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS"]) == 1
     print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS} from env vars.")
@@ -323,12 +323,15 @@ if "ALLOW_BRANCH_IN_NEUTRAL_PRIVS" in os.environ:
     ALLOW_BRANCH_IN_NEUTRAL_PRIVS = int(os.environ["ALLOW_BRANCH_IN_NEUTRAL_PRIVS"]) == 1
     print(f"Setting ALLOW_BRANCH_IN_NEUTRAL_PRIVS = {ALLOW_BRANCH_IN_NEUTRAL_PRIVS} from env vars.")
 
+# WIP:
 ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = False
 if "ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS" in os.environ:
     ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS"]) == 1
     print(f"Setting ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = {ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS} from env vars.")
 
-ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SINK_PRIVS = False
+assert not ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS, "Not implemented yet. WIP."
+
+ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SINK_PRIVS = True
 if "ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS" in os.environ:
     ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS"]) == 1
     print(f"Setting ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = {ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS} from env vars.")
@@ -353,7 +356,8 @@ if "TAINT_SINK_PRIVS" in os.environ:
     TAINT_SINK_PRIVS = os.environ["TAINT_SINK_PRIVS"]
     print(f"Setting TAINT_SINK_PRIVS = {TAINT_SINK_PRIVS} from env vars.")
 
-
+P_TWO_TAINT_SOURCE_PRIVS = 0.3
+P_TWO_TAINT_SINK_PRIVS = 0.3
 # Abort fuzzing run if the computed program does not execute in taint sink privilege.
 ASSERT_EXEC_IN_TAINT_SINK_PRIV = True
 ASSERT_EXEC_IN_TAINT_SRC_PRIV = True
@@ -369,7 +373,7 @@ IGNORE_SPIKE_MISMATCH = False
 USE_VANILLA = False
 
 DUMP_MCYCLES = False
-assert not (DUMP_MCYCLES and USE_MMU), f"We can only dump MCYCLES when executing in M-mode in final BB."
+assert not (DUMP_MCYCLES and USE_MMU), f"We can only dump MCYCLES when executing in M-mode in final BB. This is not ensured when using the MMU."
 INIT_MIE = False
 
 FILL_MEM_WITH_DEAD_CODE = False

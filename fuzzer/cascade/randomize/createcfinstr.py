@@ -17,7 +17,9 @@ from cascade.cfinstructionclasses_t0 import *
 from cascade.toleratebugs import is_tolerate_branchpred
 from cascade.spikeresolution import get_current_layout
 from cascade.toleratebugs import is_tolerate_rocket_verilator_divuw_ct_violation, is_tolerate_rocket_verilator_divw_ct_violation,is_tolerate_rocket_verilator_divu_ct_violation, is_tolerate_rocket_verilator_mulw_ct_violation, is_tolerate_rocket_verilator_div_ct_violation, is_tolerate_rocket_verilator_mul_ct_violation
+from cascade.toleratebugs import is_tolerate_rocket_verilator_rem_ct_violation, is_tolerate_rocket_verilator_remu_ct_violation, is_tolerate_rocket_verilator_remuw_ct_violation, is_tolerate_rocket_verilator_remw_ct_violation
 from cascade.toleratebugs import is_tolerate_boom_verilator_divuw_ct_violation, is_tolerate_boom_verilator_divw_ct_violation,is_tolerate_boom_verilator_divu_ct_violation, is_tolerate_boom_verilator_div_ct_violation
+from cascade.toleratebugs import is_tolerate_boom_verilator_rem_ct_violation, is_tolerate_boom_verilator_remu_ct_violation, is_tolerate_boom_verilator_remuw_ct_violation, is_tolerate_boom_verilator_remw_ct_violation
 from cascade.toleratebugs import is_tolerate_cva6_div_ct_violation, is_tolerate_cva6_divu_ct_violation, is_tolerate_cva6_divuw_ct_violation, is_tolerate_cva6_divw_ct_violation
 from cascade.toleratebugs import is_tolerate_cva6_rem_ct_violation, is_tolerate_cva6_remu_ct_violation, is_tolerate_cva6_remuw_ct_violation, is_tolerate_cva6_remw_ct_violation
 from cascade.toleratebugs import is_tolerate_openc910_div_ct_violation, is_tolerate_openc910_divu_ct_violation, is_tolerate_openc910_divuw_ct_violation, is_tolerate_openc910_divw_ct_violation
@@ -92,12 +94,20 @@ def is_tolerate_R12DInstruction(instr_str, fuzzerstate):
         or not is_tolerate_rocket_verilator_div_ct_violation() and instr_str == "div" \
         or not is_tolerate_rocket_verilator_divu_ct_violation() and instr_str == "divu" \
         or not is_tolerate_rocket_verilator_mulw_ct_violation() and instr_str == "mulw" \
-        or not is_tolerate_rocket_verilator_mul_ct_violation() and instr_str == "mul") \
+        or not is_tolerate_rocket_verilator_mul_ct_violation() and instr_str == "mul" \
+        or not is_tolerate_rocket_verilator_remuw_ct_violation() and instr_str == "remuw" \
+        or not is_tolerate_rocket_verilator_remw_ct_violation() and instr_str == "remw" \
+        or not is_tolerate_rocket_verilator_rem_ct_violation() and instr_str == "rem" \
+        or not is_tolerate_rocket_verilator_remu_ct_violation() and instr_str == "remu") \
     or "boom" in fuzzerstate.design_name and fuzzerstate.simulator == SimulatorEnum.VERILATOR and \
         (not is_tolerate_boom_verilator_divuw_ct_violation() and instr_str == "divuw" \
         or not is_tolerate_boom_verilator_divw_ct_violation() and instr_str == "divw" \
         or not is_tolerate_boom_verilator_div_ct_violation() and instr_str == "div" \
-        or not is_tolerate_boom_verilator_divu_ct_violation() and instr_str == "divu") \
+        or not is_tolerate_boom_verilator_divu_ct_violation() and instr_str == "divu" \
+        or not is_tolerate_boom_verilator_remuw_ct_violation() and instr_str == "remuw" \
+        or not is_tolerate_boom_verilator_remw_ct_violation() and instr_str == "remw" \
+        or not is_tolerate_boom_verilator_rem_ct_violation() and instr_str == "rem" \
+        or not is_tolerate_boom_verilator_remu_ct_violation() and instr_str == "remu") \
     or "cva6" in fuzzerstate.design_name and \
         (not is_tolerate_cva6_divuw_ct_violation() and instr_str == "divuw" \
         or not is_tolerate_cva6_divw_ct_violation() and instr_str == "divw" \
