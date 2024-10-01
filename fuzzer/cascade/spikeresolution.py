@@ -350,7 +350,7 @@ def _check_pc_trace_from_spike(fuzzerstate, spike_pc_seq):
         for bb_instr_id, bb_instr in enumerate(bb_instrlist):
             if isinstance(bb_instr, SpeculativeInstructionEncapsulator):
                 continue
-            assert curr_id_in_spike_pc_seq < len(spike_pc_seq), f"Not all PCs checked: {len(spike_pc_seq)}/{len([i for j in fuzzerstate.instr_objs_seq for i in j])}"
+            assert curr_id_in_spike_pc_seq < len(spike_pc_seq), f"Not all spike PCs checked:  {curr_id_in_spike_pc_seq-1}/{len(spike_pc_seq)}, {len([i for j in fuzzerstate.instr_objs_seq for i in j])} instructions."
             spike_pc = spike_pc_seq[curr_id_in_spike_pc_seq]
             curr_id_in_spike_pc_seq += 1
             # expected_pc = SPIKE_STARTADDR + fuzzerstate.bb_start_addr_seq[bb_id] + 4*bb_instr_id # NO_COMPRESSED
@@ -359,6 +359,11 @@ def _check_pc_trace_from_spike(fuzzerstate, spike_pc_seq):
             assert expected_pc == (bb_instr.vaddr if USE_MMU else bb_instr.paddr)
             # print(f"{hex(spike_pc)}/{hex(expected_pc)}")
             # bb_instr.print()
+            # When writing to SATP, we have a subsquent sfence and spike needs an extra "r" in that case, so we need to increase the counter by one.
+            if USE_COMPRESSED and spike_pc == expected_pc-2 and bb_instr.instr_str == "sfence.vma":
+                spike_pc = spike_pc_seq[curr_id_in_spike_pc_seq]
+                curr_id_in_spike_pc_seq += 1
+
             if spike_pc != expected_pc:
                 raise ValueError(f"PC mismatch: spike said `{hex(spike_pc)}`, but we expected `{hex(expected_pc)}`. instr: {bb_instr.get_str()} BB id: `{hex(bb_id)}`, instr id: `{hex(bb_instr_id)}`. Prev pc: `{hex(prev_pc)}`. Spike instr id: {curr_id_in_spike_pc_seq}. Fuzzerstate identification: {fuzzerstate.instance_to_str()}")
             prev_pc = expected_pc
@@ -390,7 +395,7 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False, return_int
         va_layout, priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
         if va_layout != -1:
             final_addr = phys2virt(fuzzerstate.final_bb_base_addr, priv_level, va_layout, fuzzerstate, True)
-            # print(f"Final addr: {hex(final_addr)} in layout {va_layout} and priv {priv_level.name}")
+            # print(f"Final addr: {hex(final_addr)} at {hex(fuzzerstate.final_bb_base_addr)} in layout {va_layout} and priv {priv_level.name}. Last instr: {last_instr.get_str()}")
     # # len(flat_instr_objs)+1: the +1 is to reach the final basic block and thereby overwrite the potential destination register of a jal/jalr
     # for i in range(len(regdump_reqs)):
     #     print(f"until {hex(regdump_reqs[i][0])}")
