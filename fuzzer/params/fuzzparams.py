@@ -356,8 +356,8 @@ if "TAINT_SINK_PRIVS" in os.environ:
     TAINT_SINK_PRIVS = os.environ["TAINT_SINK_PRIVS"]
     print(f"Setting TAINT_SINK_PRIVS = {TAINT_SINK_PRIVS} from env vars.")
 
-P_TWO_TAINT_SOURCE_PRIVS = 0.3
-P_TWO_TAINT_SINK_PRIVS = 0.3
+P_TWO_TAINT_SOURCE_PRIVS = 0
+P_TWO_TAINT_SINK_PRIVS = 0
 # Abort fuzzing run if the computed program does not execute in taint sink privilege.
 ASSERT_EXEC_IN_TAINT_SINK_PRIV = True
 ASSERT_EXEC_IN_TAINT_SRC_PRIV = True
