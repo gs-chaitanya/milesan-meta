@@ -237,7 +237,7 @@ def handle_RegImm(rd, rs1, imm, instr_str, is_rv64):
             return ("", False)
         
         case "addiw":
-            if rd != "zero" and imm != 0 and imm in range(-(1<<5), (1<<5)): # nzimm[5:0]
+            if rd != "zero" and rd == rs1 and imm in range(-(1<<5), (1<<5)): # imm[5:0]
                 return ("c.addiw", True)
             else:
                 return ("", False)
