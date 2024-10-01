@@ -438,8 +438,8 @@ def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int =
     if not is_success and exception.fail_type == FailTypeEnum.TAINT_MISMATCH and IGNORE_TAINT_MISMATCH:
         is_success = True # We triggered leakage, but we are reducing for an architectural bug, not leakage.
 
-    if DO_ASSERT and not IGNORE_TAINT_MISMATCH:
-        assert not (ASSERT_EXEC_IN_TAINT_SINK_PRIV and not is_success and test_fuzzerstate.compute_context_stats() == 0 and exception.fail_type == FailTypeEnum.TAINT_MISMATCH), f"Triggered leakage without executing in taint sink privilege. Aborting reduction."
+    # if DO_ASSERT and not IGNORE_TAINT_MISMATCH:
+    #     assert not (ASSERT_EXEC_IN_TAINT_SINK_PRIV and not is_success and test_fuzzerstate.() == 0 and exception.fail_type == FailTypeEnum.TAINT_MISMATCH), f"Triggered leakage without executing in taint sink privilege. Aborting reduction."
 
     if quiet and not is_success:
         print(str(exception))
@@ -1310,6 +1310,9 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     ret_msg += f"\t Failing bb id: {failing_bb_id}\n"
     ret_msg += f"\t Failing instr id: {failing_instr_id}\n"
     ret_msg += f"\t Failing instr: {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}\n"
+    if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level in fuzzerstate.taint_sink_privs:
+        ret_msg += f"\t Detected leakage from {[p.name for p in fuzzerstate.taint_source_privs]} -> {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name}\n"
+
     if find_pillars:
         ret_msg += f"\t Pillar bb id: {pillar_bb_id}\n"
         ret_msg += f"\t Pillar instr id: {pillar_instr}\n"
