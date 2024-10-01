@@ -469,7 +469,7 @@ def gen_stvec_satp(fuzzerstate, curr_addr):
         instr_objs.append(R12DInstruction_t0(fuzzerstate,"and", stvec_val_reg, stvec_val_reg, RDEP_MASK_REGISTER_ID))
     instr_objs.append(TvecWriterInstruction_t0(fuzzerstate,False, stvec_val_reg, stvec_val_reg, -1))
     fuzzerstate.intregpickstate.set_regstate(stvec_val_reg, IntRegIndivState.RELOCUSED, force=True)
-    fuzzerstate.n_mising_r_cmds += 1
+    fuzzerstate.n_missing_r_cmds += 1
     if GET_DATA:
         fuzzerstate.num_hardcoded_instr_mmufsm += len(instr_objs)
 
@@ -534,6 +534,8 @@ def gen_satp_write(fuzzerstate, curr_addr):
         if DEBUG_PRINT:
             print("using fence, either, same asid")
         instr_objs.append(SpecialInstruction_t0(fuzzerstate, "sfence.vma", 0, 0, 0))
+        fuzzerstate.n_missing_r_cmds += 1
+        # print(f"Missing r cmds: {fuzzerstate.n_missing_r_cmds}")
         if (fuzzerstate.privilegestate.medeleg_val >> ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT)&1:
             fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
         else:

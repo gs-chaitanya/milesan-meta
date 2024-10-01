@@ -11,7 +11,7 @@ def id_load_page_fault(is_mtvec: bool, fuzzerstate, old_privilege):
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.FREE)
-    #fuzzerstate.n_mising_r_cmds += 1 #TODO do we need one here ?
+    #fuzzerstate.n_missing_r_cmds += 1 #TODO do we need one here ?
     # addr zero might be mapped by big page, but it should not have a pte
     ret.append(SimpleExceptionEncapsulator(is_mtvec, None, IntLoadInstruction("lw", rd, rs1, 0, producer_id, fuzzerstate.is_design_64bit, fuzzerstate.privilegestate.privstate, fuzzerstate.effective_curr_layout), fuzzerstate.privilegestate.privstate, fuzzerstate.effective_curr_layout, old_privilege))
     return ret
@@ -20,7 +20,7 @@ def id_load_page_fault(is_mtvec: bool, fuzzerstate, old_privilege):
 def id_instr_access_fault(is_mtvec: bool, fuzzerstate, old_privilege):
     ret = []
     if DEBUG_PRINT: print("going to bare from sup exception")
-    fuzzerstate.n_mising_r_cmds += 1
+    fuzzerstate.n_missing_r_cmds += 1
     fuzzerstate.effective_curr_layout = -1
     fuzzerstate.real_curr_layout = -1
     fuzzerstate.curr_mmu_state = MmuState.IDLE
