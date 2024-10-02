@@ -75,7 +75,7 @@ class FuzzerState:
                 if TAINT_SINK_PRIVS is None:
                     possible_taint_sink_privs = {PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.USER} - self.taint_source_privs
                     # If we could have more than one taint sink privilege, we either chose multiple or only a single one
-                    self.taint_sink_privs = set(random.choices(list(possible_taint_sink_privs),k=1+int(len(possible_taint_sink_privs)>1)*int(random.random()<P_TWO_TAINT_SOURCE_PRIVS)))
+                    self.taint_sink_privs = set(random.choices(list(possible_taint_sink_privs),k=1+int(len(possible_taint_sink_privs)>1)*int(random.random()<P_TWO_TAINT_SINK_PRIVS)))
                 else:
                     self.taint_sink_privs = set()
                     if "M" in TAINT_SINK_PRIVS:

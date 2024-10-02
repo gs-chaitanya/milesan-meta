@@ -323,7 +323,7 @@ if "ALLOW_BRANCH_IN_NEUTRAL_PRIVS" in os.environ:
     ALLOW_BRANCH_IN_NEUTRAL_PRIVS = int(os.environ["ALLOW_BRANCH_IN_NEUTRAL_PRIVS"]) == 1
     print(f"Setting ALLOW_BRANCH_IN_NEUTRAL_PRIVS = {ALLOW_BRANCH_IN_NEUTRAL_PRIVS} from env vars.")
 
-# WIP:
+# WIP: Taint source privileges have access to all pages, therefore they can't trigger page faults for now.
 ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = False
 if "ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS" in os.environ:
     ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS"]) == 1
@@ -375,5 +375,7 @@ USE_VANILLA = False
 DUMP_MCYCLES = False
 assert not (DUMP_MCYCLES and USE_MMU), f"We can only dump MCYCLES when executing in M-mode in final BB. This is not ensured when using the MMU."
 INIT_MIE = False
-
 FILL_MEM_WITH_DEAD_CODE = False
+if USE_MMU:
+    FILL_MEM_WITH_DEAD_CODE = True
+    print("USE_MMU is enabled. Enabling FILL_MEM_WITH_DEAD_CODE.")
