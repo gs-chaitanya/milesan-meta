@@ -554,10 +554,8 @@ class IntRegPickState:
         row = ["*"*30,"*"*30,"*"*30]
         print("{: >30} {: >30} {: >30}".format(*row))
 
-        for reg_id in range(self.num_pickable_regs-1):
-            value = int(regdumps_rtl[reg_id]["value"],16)
-            value_t0 = int(regdumps_rtl[reg_id]["value_t0"],16)
-            self.regs[reg_id+1].print_and_compare(value,value_t0)
+        for reg_id in range(1,self.num_pickable_regs):
+            self.regs[reg_id].print_and_compare(regdumps_rtl[0][reg_id],regdumps_rtl[1][reg_id])
 
     # def add_writeback_trace(self, instr, reg, val_t0, is_spike_resolution):
     #     if PRINT_WRITEBACK_T0: 

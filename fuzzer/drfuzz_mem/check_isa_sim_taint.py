@@ -184,19 +184,22 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         if PRINT_REGISTER_VALIDATION:
             print("*** REGISTER VALIDATION ***:")
             fuzzerstate.intregpickstate.print_and_compare(final_regvals_rtl)
-        for id in range(fuzzerstate.num_pickable_regs-1):
-            value = int(final_regvals_rtl[id]["value"],16)
-            value_t0 = int(final_regvals_rtl[id]["value_t0"],16)
+
+
+        final_regvals, final_regvals_t0 = final_regvals_rtl
+        for id in range(1,fuzzerstate.num_pickable_regs):
+            value = final_regvals[id]
+            value_t0 = final_regvals_t0[id]
 
             # value validation between in-situ simulation and spike
-            mismatch = fuzzerstate.intregpickstate.regs[id+1].check(expected_intregvals[id])
+            mismatch = fuzzerstate.intregpickstate.regs[id].check(expected_intregvals[id-1])
             if mismatch and not IGNORE_SPIKE_MISMATCH:
-                raise ValueError(f"(SPIKE) Value mismatch between in-situ and spike for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}. \n\t This should not happen!")
+                raise ValueError(f"(SPIKE) Value mismatch between in-situ and spike for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id, None, fuzzerstate, None, False).get_str()}. \n\t This should not happen!")
 
             # value validation between in-situ (and spike) simulation and RTL
-            mismatch = fuzzerstate.intregpickstate.regs[id+1].check(value)
+            mismatch = fuzzerstate.intregpickstate.regs[id].check(value)
             if mismatch:
-                last_instr = filter_reg_traceback(id+1, None, fuzzerstate, None, False)
+                last_instr = filter_reg_traceback(id, None, fuzzerstate, None, False)
                 if isinstance(last_instr, EPCWriterInstruction) and last_instr.csr_instr.csr_id == CSR_IDS.SEPC:
                     pass # If the responsible instruction was an SEPC write, we ignore the mismatch as exception priority order is ambiguous when a msialigned memory instruction casues the exception, which also triggers a page fault.
                 elif isinstance(last_instr, CSRInstruction) and last_instr.csr_id in (CSR_IDS.SCAUSE, CSR_IDS.MCAUSE):
@@ -207,15 +210,15 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     raise MismatchError(f"(RTL) Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}", fail_type=FailTypeEnum.VALUE_MISMATCH)
 
             if TAINT_EN:
-                mismatch = fuzzerstate.intregpickstate.regs[id+1].check_t0(value_t0)
+                mismatch = fuzzerstate.intregpickstate.regs[id].check_t0(value_t0)
                 if mismatch and not IGNORE_TAINT_MISMATCH:
-                    raise MismatchError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id+1, None, fuzzerstate, None, False).get_str()}.\n\t Taint sources are {[p.name for p in fuzzerstate.taint_source_privs]}, taint sinks are {[p.name for p in fuzzerstate.taint_sink_privs]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
+                    raise MismatchError(f"(RTL) Taint mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(id, None, fuzzerstate, None, False).get_str()}.\n\t Taint sources are {[p.name for p in fuzzerstate.taint_source_privs]}, taint sinks are {[p.name for p in fuzzerstate.taint_sink_privs]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)
 
 
         if DUMP_MCYCLES:
             assert len(final_regvals_rtl) == MAX_NUM_PICKABLE_REGS, f"Did not dump MCYCLES CSR." # We dump the MCYCLES CSR after all integer registers
-            mcycle = int(final_regvals_rtl[MAX_NUM_PICKABLE_REGS-1]["value"],16)
-            mcycle_t0 = int(final_regvals_rtl[MAX_NUM_PICKABLE_REGS-1]["value_t0"],16)
+            mcycle = final_regvals[MAX_NUM_PICKABLE_REGS-1]
+            mcycle_t0 = final_regvals_t0[MAX_NUM_PICKABLE_REGS-1]
             
             if TAINT_EN and mcycle_t0:
                 raise MismatchError(f"(RTL) MCYCLE CSR got tainted: {hex(mcycle)}, {hex(mcycle_t0)}.\n\t Taint sources are {[p.name for p in fuzzerstate.taint_source_privs]}, taint sinks are {[p.name for p in fuzzerstate.taint_sink_privs]}.", fail_type=FailTypeEnum.TAINT_MISMATCH)

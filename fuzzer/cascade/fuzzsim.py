@@ -276,6 +276,9 @@ def run_rtl_and_load_regstream(fuzzerstate):
         with open(env["REGSTREAM_PATH"], "rb") as f:
             regstream_rtl = json.load(f)
     
+    regdump_rtl_val_t0 = {int(r["id"][1:]): int(clean_xX(r["value_t0"]),16) for r in regdumps_rtl}
+    regdump_rtl_val = {int(r["id"][1:]): int(r["value"],16) for r in regdumps_rtl}
+
     regstream_rtl_val_t0 = {int(r["id"],16): int(r["value_t0"],16) for r in regstream_rtl}
     regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
 
@@ -291,7 +294,7 @@ def run_rtl_and_load_regstream(fuzzerstate):
                 sramdump_rtl[addr] = {}
                 sramdump_rtl[addr]["val"] = int(d["value"],16)
                 sramdump_rtl[addr]["val_t0"] = int(d["value_t0"],16)
-    return (regstream_rtl_val, regstream_rtl_val_t0), regdumps_rtl, sramdump_rtl
+    return (regstream_rtl_val, regstream_rtl_val_t0), (regdump_rtl_val, regdump_rtl_val_t0), sramdump_rtl
 
 
 def clean_xX(r: str):
@@ -341,6 +344,11 @@ def wait_and_load_regstream(fuzzerstate):
                 break
         except json.JSONDecodeError:
             time.sleep(1)
+
+
+    regdump_rtl_val_t0 = {int(r["id"],16): int(clean_xX(r["value_t0"]),16) for r in regdumps_rtl}
+    regdump_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regdumps_rtl}
+
     regstream_rtl_val_t0 = {}
     regstream_rtl_val = {}
     if INSERT_REGDUMPS:
@@ -351,5 +359,5 @@ def wait_and_load_regstream(fuzzerstate):
         regstream_rtl_val_t0 = {int(r["id"],16): int(clean_xX(r["value_t0"]),16) for r in regstream_rtl}
         regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
 
-    sramdump_rtl = {}
-    return (regstream_rtl_val, regstream_rtl_val_t0), regdumps_rtl, sramdump_rtl
+    sramdump_rtl = {} # For compatibility with kronos. Not used for other cores.
+    return (regstream_rtl_val, regstream_rtl_val_t0), (regdump_rtl_val, regdump_rtl_val_t0), sramdump_rtl
