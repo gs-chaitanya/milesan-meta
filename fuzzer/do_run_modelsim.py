@@ -10,8 +10,9 @@ import sys, time
 import shutil
 
 PRINT_THREAD_STATUS = True
-MAX_N_THREADS = 30
-MUTE = False
+MAX_N_THREADS = 48
+MUTE = True
+MODELSIM_TIMEOUT = 5*60
 TRACE_EN = False
 callback_lock = threading.Lock()
 n_finished_threads = 0
@@ -35,7 +36,7 @@ def test_done_callback(ret):
 
 def modelsim_worker(new_req_path):
     if PRINT_THREAD_STATUS:
-        print(f"Found new design req at {new_req_path}")
+        print(f"Found new req at {new_req_path}")
 
     with open(new_req_path, "r") as f:
         req_env = json.load(f)
@@ -72,9 +73,10 @@ def modelsim_worker(new_req_path):
         "make",
         "rerun_drfuzz_mem_notrace_modelsim" if not TRACE_EN else "rerun_drfuzz_mem_trace_modelsim"
     ]
-    subprocess.run(cmd, cwd=design_dir, env=env, capture_output=MUTE)
+    start_time = time.time()
+    subprocess.run(cmd, cwd=design_dir, env=env, capture_output=MUTE,timeout=MODELSIM_TIMEOUT)
     if PRINT_THREAD_STATUS:
-        print(f"Finished processing design req at {new_req_path}")
+        print(f"Finished request at {new_req_path} after {time.time() - start_time}s.")
     return new_req_path
 
 
@@ -106,7 +108,7 @@ if __name__ == '__main__':
                         print("Waiting for requests...")
                     continue
                 if PRINT_THREAD_STATUS:
-                    print(f"Waiting for requests at {req_dir}...\n started: {len(initiated_reqs)} threads, {len(all_reqs)} pending requests in directory")
+                    print(f"Waiting for requests at {req_dir}...\n started: {len(initiated_reqs)} threads, finished {n_finished_threads} threads, {len(all_reqs)} pending requests in directory")
 
                 new_reqs = [req for req in all_reqs if req not in initiated_reqs]
 
