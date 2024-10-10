@@ -17,9 +17,9 @@ from cascade.spikeresolution import gen_elf_from_bbs, gen_regdump_reqs_reduced, 
 from cascade.contextreplay import SavedContext, gen_context_setter
 from cascade.gen_ctxt_final_block import *
 from cascade.privilegestate import PrivilegeStateEnum
-
+from cascade.genelf import gen_elf_from_bbs
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS
-from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF, RELOCATOR_REGISTER_ID, IGNORE_TAINT_MISMATCH, ASSERT_EXEC_IN_TAINT_SINK_PRIV, INSERT_SPECTRE_GADGETS, USE_MMU, USE_COMPRESSED
+from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF, RELOCATOR_REGISTER_ID, IGNORE_TAINT_MISMATCH, ASSERT_EXEC_IN_TAINT_SINK_PRIV, INSERT_SPECTRE_GADGETS, USE_MMU, USE_COMPRESSED, FILL_MEM_WITH_DEAD_CODE
 
 from rv.asmutil import li_into_reg, to_unsigned
 
@@ -38,6 +38,7 @@ REDUCTION_SIMULATOR = SimulatorEnum.VERILATOR
 NOPIZE_SANDWICH_INSTRUCTIONS = False
 FLATTEN_SANDWICH_INSTRUCTIONS = False
 REDUCE_TAINT = False
+REDUCE_DEAD_CODE = False
 FIND_PILLARS = False
 DOUBLECHECK_MODELSIM = True
 # @brief since stopsig and regdump addr are vitrual, the final block also needs some context, mainly, the translation scheme of stores in the current priviledge
@@ -310,7 +311,6 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     ###
     # Remove the last instructions in the last basic block
     ###
-
     # Pop intermediate cf-instructions if required 
     if max_instr_id_except_cf < max_instr_id_except_speculative:
         last_instr = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1]
@@ -371,10 +371,12 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
         # storenumbytes is a list which, for each store operation, returns the number of bytes stored
         test_fuzzerstate, ctxt_exit_layout, ctxt_exit_prv  = _save_ctx_and_jump_to_pillar_specific_instr(test_fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider)
         spikereduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "spikereduce_reducedstart", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", SPIKE_STARTADDR)
+        rtlreduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "rtlreduce_reducestart", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", test_fuzzerstate.design_base_addr)
     else:
         ctxt_exit_layout, ctxt_exit_prv = -1, PrivilegeStateEnum.MACHINE
         spikereduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "spikereduce", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", SPIKE_STARTADDR)
-        
+        rtlreduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "rtlreduce", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", test_fuzzerstate.design_base_addr)
+
 
     ###
     # Generate the ELF for RTL
@@ -386,6 +388,8 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
 
     if USE_MMU:
     # Generate the translated last address
+        last_instr = test_fuzzerstate.instr_objs_seq[-1][-1]
+        last_addr_layout, last_addr_priv = get_priv_and_layout_after_instruction(last_instr)
         final_addr = phys2virt(final_addr, last_addr_priv, last_addr_layout, test_fuzzerstate, False)
 
     march_flags = get_design_march_flags(test_fuzzerstate.design_name) if USE_COMPRESSED else get_design_march_flags_nocompressed(test_fuzzerstate.design_name)
@@ -399,7 +403,6 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     rd_regdump_reqs = gen_regdump_reqs_all_rds(test_fuzzerstate, index_first_bb_to_consider=index_first_bb_to_consider, first_instr_id_in_first_bb_to_consider=index_first_instr_to_consider)
     rd_regvals = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, march_flags, SPIKE_STARTADDR, rd_regdump_reqs, False, final_addr, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
 
-    rtl_elfpath = spikereduce_elfpath
 
     # To reduce the timeout duration, we compute the (approx) expected number of instructions
     numinstrs = len(test_fuzzerstate.final_bb)
@@ -415,7 +418,7 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     # Verify that the modifed program still has a valid taint propagation. 
     test_fuzzerstate.verify_program()
 
-    return test_fuzzerstate, rtl_elfpath, (finalintregvals_spikeresol[1:], finalfloatregvals_spikeresol, rd_regdump_reqs, rd_regvals), numinstrs
+    return test_fuzzerstate, rtlreduce_elfpath, (finalintregvals_spikeresol[1:], finalfloatregvals_spikeresol, rd_regdump_reqs, rd_regvals), numinstrs
 
 # This module resolves a mismatch between design and simulation by finding the first basic block that causes a mismatch.
 # @param failing_instr_id the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore. It is None if the failing instruction is actually the last one in the previous bb. Only used in the second step.
@@ -438,6 +441,7 @@ def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int =
     if not is_success and exception.fail_type == FailTypeEnum.TAINT_MISMATCH and IGNORE_TAINT_MISMATCH:
         is_success = True # We triggered leakage, but we are reducing for an architectural bug, not leakage.
 
+    assert is_success or exception.fail_type == FailTypeEnum.TAINT_MISMATCH 
     # if DO_ASSERT and not IGNORE_TAINT_MISMATCH:
     #     assert not (ASSERT_EXEC_IN_TAINT_SINK_PRIV and not is_success and test_fuzzerstate.() == 0 and exception.fail_type == FailTypeEnum.TAINT_MISMATCH), f"Triggered leakage without executing in taint sink privilege. Aborting reduction."
 
@@ -658,11 +662,11 @@ def _find_failing_bb(fuzzerstate, hint_left_bound_bb: int = None, hint_right_bou
         candidate_bound = (right_bound + left_bound) // 2
         if is_mismatch(fuzzerstate, candidate_bound, quiet=quiet):
             if not quiet:
-                print(candidate_bound, 'bb mismatch')
+                print(f'{candidate_bound}/{len(fuzzerstate.instr_objs_seq)} bb mismatch')
             right_bound = candidate_bound
         else:
             if not quiet:
-                print(candidate_bound, 'bb match')
+                print(f'{candidate_bound}/{len(fuzzerstate.instr_objs_seq)} bb match')
             left_bound = candidate_bound
 
     if DO_ASSERT:
@@ -1013,6 +1017,39 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
     return fuzzerstate
 
 
+def _reduce_dead_code(fuzzerstate):
+    assert FILL_MEM_WITH_DEAD_CODE
+    assert len(fuzzerstate.spec_instr_objs_seq) > 0
+    test_fuzzerstate = deepcopy(fuzzerstate)
+    test_fuzzerstate.spec_instr_objs_seq = []
+    if not is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1):
+        print("Triggered mismatch without speculative instructions.")
+        return test_fuzzerstate
+    right_bound = len(fuzzerstate.spec_instr_objs_seq)//2
+    left_bound = 0
+    while left_bound < right_bound: # What if its not a single instruction?
+        print(f"Reduction interval: [{left_bound},{right_bound})")
+        test_fuzzerstate = deepcopy(fuzzerstate)
+        for _ in range(right_bound, len(test_fuzzerstate.spec_instr_objs_seq)): # start with right side so the left bound does not change
+            del test_fuzzerstate.spec_instr_objs_seq[-1]
+        for _ in range(0, left_bound):
+            del test_fuzzerstate.spec_instr_objs_seq[0]
+        delta = right_bound - left_bound
+        is_success = is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1)
+        if not is_success: # gadget is between [left_bound, right_bound). Move left bound up
+            right_bound = left_bound + delta//2
+        else: # gadget is in [right_bound, right_bound+(left_bound-right_bound)/2)
+            left_bound = right_bound
+            right_bound =  left_bound + (delta+1)//2
+        print(f"[{left_bound},{right_bound})") # invariant: gadget in [left_bound,right_bound)
+
+    assert left_bound == right_bound
+    test_fuzzerstate = deepcopy(fuzzerstate)
+    test_fuzzerstate.spec_instr_objs_seq = [fuzzerstate.spec_instr_objs_seq[left_bound]]
+    is_success = is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1)
+    assert not is_success, f"Bound {left_bound} with instruction {fuzzerstate.spec_instr_objs_seq[right_bound].get_str()} wrong."
+    return test_fuzzerstate
+    
 # This is the main function in this file.
 # First finds the problematic basic block.
 # Second, finds the problematic instruction.
@@ -1037,11 +1074,10 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges)
 
     gen_basicblocks(fuzzerstate)
-    numinstrs = sum([len(bb) for bb in fuzzerstate.instr_objs_seq])
 
 
     # spike resolution
-    expected_regvals = spike_resolution(fuzzerstate, check_pc_spike_again)
+    fuzzerstate.expected_regvals = spike_resolution(fuzzerstate, check_pc_spike_again)
 
     if len(fuzzerstate.instr_objs_seq) == 1:
         print('Only one basic block. Trivial case.')
@@ -1051,6 +1087,9 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         fuzzerstate.log(ret_msg)
         return ret_msg
 
+
+    if DO_ASSERT:
+        assert is_mismatch(fuzzerstate, len(fuzzerstate.instr_objs_seq)-1, quiet=quiet), f"No mismatch detected in full program!"
 
     # Try to replace all FPU enable/disable instructions with nops, to make the FPU dumping possible.
     for block_id, instr_id in fuzzerstate.fpuendis_coords:
@@ -1064,6 +1103,8 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     if REDUCE_TAINT:
         leaked_addresses = reduce_taint(fuzzerstate)
 
+    # assert is_mismatch(fuzzerstate,len(fuzzerstate.instr_objs_seq)-1)
+    # numinstrs = sum([len(i) for i in fuzzerstate.instr_objs_seq])
 
     ###
     # Find the first bb that causes trouble.
@@ -1275,6 +1316,9 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     assert is_success_smaller and not is_success_larger, f"Reduction failed."
 
+    if REDUCE_DEAD_CODE:
+        test_fuzzerstate_larger = _reduce_dead_code(test_fuzzerstate_larger)
+
     ## CHECK THAT BUG IS NOT FROM VERILATOR ##
     if DOUBLECHECK_MODELSIM and not fuzzerstate.simulator == SimulatorEnum.MODELSIM: 
         test_fuzzerstate_larger.simulator =  SimulatorEnum.MODELSIM
@@ -1336,13 +1380,8 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     if not NO_REMOVE_TMPFILES:
         fuzzerstate.remove_tmp_files()
-        test_fuzzerstate_larger.remove_tmp_files()
-        test_fuzzerstate_smaller.remove_tmp_files()
-
-    if not NO_REMOVE_TMPDIRS:
-        fuzzerstate.remove_tmp_dir()
-        test_fuzzerstate_larger.remove_tmp_dir()
-        test_fuzzerstate_smaller.remove_tmp_dir()
+        if not NO_REMOVE_TMPDIRS:
+            fuzzerstate.remove_tmp_dir()
 
     return ret_msg
 
