@@ -327,7 +327,7 @@ def wait_and_load_regstream(fuzzerstate):
 
     if PRINT_THREAD_STATUS:
         print(f"Dumped request to {req_path}")
-
+    start = time.time()
     while(not os.path.exists(regdump_path)):
         time.sleep(2)
         if PRINT_THREAD_STATUS:
@@ -345,9 +345,11 @@ def wait_and_load_regstream(fuzzerstate):
         except json.JSONDecodeError:
             time.sleep(1)
 
-
-    regdump_rtl_val_t0 = {int(r["id"],16): int(clean_xX(r["value_t0"]),16) for r in regdumps_rtl}
-    regdump_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regdumps_rtl}
+    if len(regdumps_rtl) == 1 and "timeout" in regdumps_rtl[0]:
+        assert False, f"Modelsim instance timed out after {time.time-start}s. ({regdumps_rtl[0]['timeout']}s modelsim runtime)."
+    
+    regdump_rtl_val_t0 = {int(r["id"][1:]): int(clean_xX(r["value_t0"]),16) for r in regdumps_rtl}
+    regdump_rtl_val = {int(r["id"][1:]): int(r["value"],16) for r in regdumps_rtl}
 
     regstream_rtl_val_t0 = {}
     regstream_rtl_val = {}
