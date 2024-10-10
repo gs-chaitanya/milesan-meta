@@ -195,3 +195,7 @@ export CASCADE_PATH_TO_DIFUZZRTL_ELFS=/cascade-difuzzrtl/docker/shareddir/savedo
 
 
 export COVDUMP_DIR=$LOCAL_MNT/cov_dump
+
+# Generous timeouts. Shorter timeouts may be enfored from python runparams when using the modelsim server.
+export MODELSIM_TIMEOUT=12000
+export MODELSIM_TIMEOUT_TRACE_EN=12000
