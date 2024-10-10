@@ -8,21 +8,29 @@ import json
 from signal import *
 import sys, time
 import shutil
+import psutil
 
 PRINT_THREAD_STATUS = True
 MAX_N_THREADS = 48
-MUTE = True
-MODELSIM_TIMEOUT = 5*60
+MUTE = False
 TRACE_EN = False
+DELETE_REQS = True
+KILL_THREADS = True
+WAIT_UNTIL_FINISHED = False
 callback_lock = threading.Lock()
 n_finished_threads = 0
 
 
 def clean(*args):
     assert "MODELSIM_REQ_DIR" in os.environ, f"MODELSIM_REQ_DIR not set. Did you source cascade-meta/env.sh?"
-    req_dir = os.environ["MODELSIM_REQ_DIR"]
-    print(f"Deleting {req_dir} for cleanup before exit.")
-    shutil.rmtree(req_dir)
+    if DELETE_REQS:
+        with callback_lock: # Use the lock so we don't run this for every thread.
+            req_dir = os.environ["MODELSIM_REQ_DIR"]
+            if os.path.isdir(req_dir):
+                print(f"Deleting {req_dir} for cleanup before exit.")
+                shutil.rmtree(req_dir)
+                subprocess.run(["pkill","-f","-9","vsimk"],capture_output=True)
+                subprocess.run(["pkill","-f","-9","vish"], capture_output=True)
     sys.exit(0)
 
 def test_done_callback(ret):
@@ -32,8 +40,7 @@ def test_done_callback(ret):
         if ret is not None:
             if PRINT_THREAD_STATUS:
                 print(f"Finished {n_finished_threads} threads.")
-
-
+                
 def modelsim_worker(new_req_path):
     if PRINT_THREAD_STATUS:
         print(f"Found new req at {new_req_path}")
@@ -41,7 +48,8 @@ def modelsim_worker(new_req_path):
     with open(new_req_path, "r") as f:
         req_env = json.load(f)
 
-    os.remove(new_req_path)
+    if DELETE_REQS:
+        os.remove(new_req_path)
 
     assert "SIMSRAMELF" in req_env,  "SIMSRAMELF not found in req!"
     assert "SIMSRAMTAINT" in req_env,  "SIMSRAMTAINT not found in req!"
@@ -49,24 +57,26 @@ def modelsim_worker(new_req_path):
     assert "REGDUMP_PATH" in req_env, "REGDUMP_PATH not found in req!"
     assert "REGSTREAM_PATH" in req_env, "REGSTREAM_PATH not found in req!"
     assert not TRACE_EN or "TRACEFILE" in req_env, "TRACEFILE not found in req!"
-    assert "SIMLEN" in req_env, "SIMLEN not foun din req!"
+    assert "SIMLEN" in req_env, "SIMLEN not found in req!"
+    assert "MODELSIM_TIMEOUT" in req_env, "MODELSIM_TIMEOUT not found in req!"
 
     simsramelf = req_env["SIMSRAMELF"]
     simsramtaint = req_env["SIMSRAMTAINT"]
-
     design_dir = req_env["DESIGN_DIR"]
+    msim_timeout = int(req_env["MODELSIM_TIMEOUT"])
 
     while(not os.path.exists(simsramelf)):
-        time.sleep(2)
-        print(f"Waiting for {simsramelf}")
+        time.sleep(1)
+        if PRINT_THREAD_STATUS:
+            print(f"Waiting for {simsramelf}")
 
     while(not os.path.exists(simsramtaint)):
         time.sleep(1)
-        print(f"Waiting for {simsramtaint}")
+        if PRINT_THREAD_STATUS:
+            print(f"Waiting for {simsramtaint}")
     
     assert os.path.exists(design_dir), f"Design directory does not exists! {design_dir}"
 
-    print(f"Running {simsramelf} with {simsramtaint} in {design_dir}")
     env = os.environ.copy()
     env.update(req_env)
     cmd = [
@@ -74,9 +84,41 @@ def modelsim_worker(new_req_path):
         "rerun_drfuzz_mem_notrace_modelsim" if not TRACE_EN else "rerun_drfuzz_mem_trace_modelsim"
     ]
     start_time = time.time()
-    subprocess.run(cmd, cwd=design_dir, env=env, capture_output=MUTE,timeout=MODELSIM_TIMEOUT)
-    if PRINT_THREAD_STATUS:
-        print(f"Finished request at {new_req_path} after {time.time() - start_time}s.")
+
+    p = subprocess.Popen(cmd, cwd=design_dir, env=env, stdout=subprocess.DEVNULL if MUTE else None)
+    finished = False
+    if not WAIT_UNTIL_FINISHED:
+        while(p.poll() is None):
+            try:
+                with open(req_env["REGDUMP_PATH"], "rb") as f:
+                    json.load(f)
+                    finished = True
+                    print(f"Found register dumps after {time.time() - start_time}s. Early stop.")
+                    break
+            except Exception:
+                time.sleep(1)
+                if time.time() - start_time >= msim_timeout:
+                    break
+        # killing the processes might create problems with the lockfile when it is not properly released...
+        if KILL_THREADS:
+            for child in psutil.Process(p.pid).children(recursive=True):
+                child.kill()
+            p.kill()
+    else:
+        p.wait()
+        finished = True
+    total_time = time.time() - start_time
+    if not finished:
+        assert total_time >= msim_timeout, f"Modelsim finished prematurely after {total_time}s: {str(p.stderr)}"
+        if PRINT_THREAD_STATUS: 
+            print(f"Timed out process with pid {p.pid} for request at {new_req_path} after {total_time}s > {msim_timeout}s.")
+        with open(req_env["REGDUMP_PATH"], "w") as f:
+            json.dump([{"timeout": total_time}],f) # Write an empty json to signal to the container that this instance timed out.
+    
+    else: 
+        if PRINT_THREAD_STATUS:
+            print(f"Finished request at {new_req_path} after {time.time() - start_time}s.")
+
     return new_req_path
 
 
@@ -86,7 +128,7 @@ if __name__ == '__main__':
 
     for sig in (SIGABRT, SIGILL, SIGINT, SIGSEGV, SIGTERM):
         signal(sig, clean)
-
+    printed_status = False
     if len(sys.argv) > 1:
         path_to_req = sys.argv[1]
         modelsim_worker(path_to_req)
@@ -103,19 +145,16 @@ if __name__ == '__main__':
                         if file.endswith(".modelsim_req.json"):
                             req_path = os.path.join(rootdir,file)
                             all_reqs += [req_path]
-                if not len(all_reqs):
-                    if PRINT_THREAD_STATUS:
-                        print("Waiting for requests...")
-                    continue
-                if PRINT_THREAD_STATUS:
-                    print(f"Waiting for requests at {req_dir}...\n started: {len(initiated_reqs)} threads, finished {n_finished_threads} threads, {len(all_reqs)} pending requests in directory")
-
+                if PRINT_THREAD_STATUS and not printed_status:
+                    print(f"Waiting for requests at {req_dir}...\n\tstarted {len(initiated_reqs)}, finished {n_finished_threads}, pending {len(all_reqs)} requests.")
+                    printed_status = True
                 new_reqs = [req for req in all_reqs if req not in initiated_reqs]
 
                 for i, new_req in enumerate(new_reqs):
                     initiated_reqs += [new_req]
                     if PRINT_THREAD_STATUS:
                         print(f"Starting thread for {new_req}.")
+                        printed_status = False
                     pool.apply_async(modelsim_worker, args=(new_req,),callback=test_done_callback)
 
             
