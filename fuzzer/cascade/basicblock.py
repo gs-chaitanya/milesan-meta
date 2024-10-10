@@ -9,6 +9,7 @@ from common.spike import SPIKE_STARTADDR
 from rv.csrids import CSR_IDS
 from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES, FENCE_CF_INSTR
 from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, INSERT_SPECTRE_GADGETS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS, ALLOW_JALR_IN_NEUTRAL_PRIVS, ALLOW_BRANCH_IN_NEUTRAL_PRIVS
+from params.fuzzparams import FILL_MEM_WITH_DEAD_CODE
 from params.runparams import INSERT_REGDUMPS, INSERT_FENCE, GET_DATA, DEBUG_PRINT
 from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memfsm_instrobjs
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
@@ -782,7 +783,8 @@ def gen_basicblocks(fuzzerstate):
     # blacklist_changing_instructions(fuzzerstate)
     # blacklist_final_block(fuzzerstate) # Must be done once the bb is created, else we could also blacklist upper bounds over the basic block size.
     # blacklist_context_setter(fuzzerstate)
-
+    if FILL_MEM_WITH_DEAD_CODE:
+        fuzzerstate.fill_mem_with_dead_code()
     fuzzerstate.consumer_inst_va_layout, fuzzerstate.producer_id_to_tgtaddr, fuzzerstate.producer_id_to_noreloc_spike = gen_producer_id_to_tgtaddr(fuzzerstate)
 
     return fuzzerstate

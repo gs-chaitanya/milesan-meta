@@ -2,7 +2,7 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP,PATH_TO_MNT, PATH_TO_MNT_ENV_VAR, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, USE_MODELSIM, DEBUG_RVC
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP,PATH_TO_MNT, PATH_TO_MNT_ENV_VAR, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, USE_MODELSIM, DEBUG_RVC, MODELSIM_TIMEOUT
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS, NONPICKABLE_REGISTERS, FENCE_CF_INSTR
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_SOURCE_PRIVS, TAINT_SINK_PRIVS, P_TWO_TAINT_SOURCE_PRIVS, P_TWO_TAINT_SINK_PRIVS
 from params.fuzzparams import reset_reg_settings
@@ -30,6 +30,7 @@ import os
 import itertools
 import shutil
 import glob
+from cascade.randomize.createspecinstr import create_speculative_instr
 
 class FuzzerState:
     # @param randseed for identification purposes only.
@@ -490,6 +491,7 @@ class FuzzerState:
         simlen = str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
         env = {}
         env["SIMLEN"] = simlen
+        env["MODELSIM_TIMEOUT"] = str(MODELSIM_TIMEOUT)
         env["SIMSRAMELF"] = rtl_elfpath
         env["ID"] = str(self.instance_to_str())
         env["DESIGN"] = self.design_name
@@ -500,7 +502,7 @@ class FuzzerState:
         env["SIMSRAMTAINT"] = simsramtaint_path
         env["TRACEFILE"] = tracefile_path
         env["WRITEBACK_PATH"] = writeback_path
-        env["DESIGN_DIR"] = get_design_cascade_path(self.design_name)
+        env["DESIGN_DIR"] = os.path.abspath(get_design_cascade_path(self.design_name))
         with open(env_path, "w") as f:
             f.write(f"export SIMSRAMELF={env['SIMSRAMELF'].replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
             f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF'].replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}.dump\n")
@@ -712,3 +714,22 @@ class FuzzerState:
 
     def get_curr_paddr(self, add_spike_offset: bool = True):
         return self.curr_bb_start_addr + sum([int(not i.iscompressed)*2+2 for i in self.instr_objs_seq[-1]]) + SPIKE_STARTADDR*int(add_spike_offset)
+
+    def fill_mem_with_dead_code(self):
+        addr = 0
+        while addr < self.memsize:
+            if addr in self.bb_start_addr_seq:
+                bb_idx = self.bb_start_addr_seq.index(addr)
+                addr += sum([2+2*int(not i.iscompressed) for i in self.instr_objs_seq[bb_idx]])
+            if self.memview.is_mem_range_free(addr,addr+4):
+                next_instr = create_speculative_instr(self, addr)
+                next_instr.paddr = addr
+                self.spec_instr_objs_seq += [next_instr]
+                # next_instr.print()
+                if next_instr.iscompressed:
+                    addr += 2
+                else:
+                    addr += 4
+            else:
+                # print(f"Addr {hex(addr)} occupied.")
+                addr += 4

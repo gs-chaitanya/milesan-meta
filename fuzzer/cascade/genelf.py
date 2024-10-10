@@ -12,7 +12,6 @@ from cascade.finalblock import finalblock_spike_resolution
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 from cascade.cfinstructionclasses import SpeculativeInstructionEncapsulator
 from collections import defaultdict
-from cascade.randomize.createspecinstr import create_speculative_instr
 from copy import copy
 import os
 import random
@@ -116,46 +115,20 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
                             assert curr_addr <= fuzzerstate.memsize, f"address to large: {hex(curr_addr)}, max is {hex(fuzzerstate.memsize)}"
                         addr_instrs[curr_addr] = curr_byte
 
-    if FILL_MEM_WITH_DEAD_CODE:
-        if not is_spike_resolution and prefixname in ["rtl","spikereduce"]:
-            # We generate the speculative instructions only here and fill up the remaining memory with them.
-            # If we are reducing, we use the existing ones.
-            if len(fuzzerstate.spec_instr_objs_seq) == 0:
-                addr = 0
-                while addr < fuzzerstate.memsize:
-                    if addr in fuzzerstate.bb_start_addr_seq:
-                        bb_idx = fuzzerstate.bb_start_addr_seq.index(addr)
-                        addr += sum([2+2*int(not i.iscompressed) for i in fuzzerstate.instr_objs_seq[bb_idx]])
-                    if fuzzerstate.memview.is_mem_range_free(addr,addr+4):
-                        next_instr = create_speculative_instr(fuzzerstate, addr)
-                        next_instr.paddr = addr
-                        fuzzerstate.spec_instr_objs_seq += [next_instr]
-                        # next_instr.print()
-                        if next_instr.iscompressed:
-                            addr += 2
-                        else:
-                            addr += 4
-                    else:
-                        # print(f"Addr {hex(addr)} occupied.")
-                        addr += 4
-            
-            for instr_obj in fuzzerstate.spec_instr_objs_seq:
+    if not is_spike_resolution:
+        for instr_obj in fuzzerstate.spec_instr_objs_seq:
+            if instr_obj.iscompressed:
+                assert USE_COMPRESSED
+                curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(2, 'little')
+            else:
+                curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(4, 'little')
+            for curr_byte_id, curr_byte in enumerate(curr_bytecode):
                 if instr_obj.iscompressed:
-                    assert USE_COMPRESSED
-                    #if instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution) == 0x0590006f: print(f"inst after j is {fuzzerstate.instr_objs_seq[bb_id+1]}") #which bytecode {hex(fuzzerstate.instr_objs_seq[bb_id+1][0].gen_bytecode_int(is_spike_resolution=is_spike_resolution))}")
-                    # instr_bytecode_int = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution)
-                    # curr_bytecode = (NOP_PADDING | instr_bytecode_int&0xFFFF).to_bytes(4, 'little')
-                    curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(2, 'little')
-                else:
-                    curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(4, 'little')
-                for curr_byte_id, curr_byte in enumerate(curr_bytecode):
-                    # curr_addr_bk = bb_start_addr + 4*instr_id_in_bb + curr_byte_id # NO_COMPRESSED
-                    if instr_obj.iscompressed:
-                        assert curr_byte_id < 2
-                    curr_addr = instr_obj.paddr + curr_byte_id
-                    if DO_ASSERT:
-                        assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {hex(curr_addr)}"
-                    addr_instrs[curr_addr] = curr_byte
+                    assert curr_byte_id < 2
+                curr_addr = instr_obj.paddr + curr_byte_id
+                if DO_ASSERT:
+                    assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {hex(curr_addr)}"
+                addr_instrs[curr_addr] = curr_byte
         
 
     # Generate a bytes object
