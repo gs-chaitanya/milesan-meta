@@ -4,7 +4,7 @@ sys.path.append("../")
 import subprocess
 import os
 import json
-TIMEOUT_REDUCE=7200
+TIMEOUT_REDUCE=7200*2
 FUZZ=True
 REDUCE_RTL_TIMEOUT=True
 REDUCE_VALUE_MISMATCH=True

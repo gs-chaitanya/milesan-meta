@@ -79,6 +79,7 @@ COLLECT_TAINT_STATS_DEFAULT = False
 COLLECT_EXCEPTION_STATS_DEFAULT = False
 USE_MODELSIM_DEFAULT = False
 DEBUG_RVC_DEFAULT = False
+
 # Actual values set from environment variables or defaults
 DO_ASSERT = get_env_bool('DO_ASSERT', str(int(DO_ASSERT_DEFAULT)))
 DO_EXPENSIVE_ASSERT = get_env_bool('DO_EXPENSIVE_ASSERT', str(int(DO_EXPENSIVE_ASSERT_DEFAULT)))
@@ -128,6 +129,8 @@ COLLECT_EXCEPTION_STATS = get_env_bool('COLLECT_EXCEPTION_STATS', str(int(COLLEC
 COLLECT_TAINT_STATS = get_env_bool('COLLECT_TAINT_STATS', str(int(COLLECT_TAINT_STATS_DEFAULT)))
 USE_MODELSIM = get_env_bool('USE_MODELSIM', str(int(USE_MODELSIM_DEFAULT)))
 DEBUG_RVC = get_env_bool('DEBUG_RVC', str(int(DEBUG_RVC_DEFAULT)))
+
+MODELSIM_TIMEOUT = 60*60*24*7
 
 if INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN:
     print(f"WARNING: Disabling CHECK_PC_SPIKE_AGAIN because INSERT_REGDUMPS is enabled. Cannot have both at the same time for now.")

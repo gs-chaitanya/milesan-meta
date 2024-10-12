@@ -11,12 +11,13 @@ import shutil
 import psutil
 
 PRINT_THREAD_STATUS = True
-MAX_N_THREADS = 48
-MUTE = False
+LOG_THREAD_STATUS = True
+MAX_N_THREADS = 30
+MUTE = True
 TRACE_EN = False
 DELETE_REQS = True
 KILL_THREADS = True
-WAIT_UNTIL_FINISHED = False
+WAIT_UNTIL_FINISHED = True
 callback_lock = threading.Lock()
 n_finished_threads = 0
 
@@ -40,6 +41,9 @@ def test_done_callback(ret):
         if ret is not None:
             if PRINT_THREAD_STATUS:
                 print(f"Finished {n_finished_threads} threads.")
+            if LOG_THREAD_STATUS:
+                with open("run_modelsim.log","a") as f:
+                    f.write(f"({'Success' if ret[1] else 'Failed'}): Finished thread for {ret[0]} after {ret[1]}s")
                 
 def modelsim_worker(new_req_path):
     if PRINT_THREAD_STATUS:
@@ -117,9 +121,9 @@ def modelsim_worker(new_req_path):
     
     else: 
         if PRINT_THREAD_STATUS:
-            print(f"Finished request at {new_req_path} after {time.time() - start_time}s.")
+            print(f"Finished request at {new_req_path} after {total_time}s.")
 
-    return new_req_path
+    return (new_req_path,total_time,finished)
 
 
 if __name__ == '__main__':

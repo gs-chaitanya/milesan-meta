@@ -264,10 +264,10 @@ if "NUM_MIN_BBS_LOWERBOUND" in os.environ:
 
 NUM_MAX_BBS_UPPERBOUND = 300 if USE_MMU else 100
 if "NUM_MAX_BBS_UPPERBOUND" in os.environ:
-    NUM_MAX_BBS_UPPERBOUND = int(os.environ("NUM_MAX_BBS_UPPERBOUND"))
+    NUM_MAX_BBS_UPPERBOUND = int(os.environ["NUM_MAX_BBS_UPPERBOUND"])
     print(f"Setting NUM_MAX_BBS_UPPERBOUND = {NUM_MAX_BBS_UPPERBOUND} from env vars.")
 
-
+assert NUM_MAX_BBS_UPPERBOUND > NUM_MIN_BBS_LOWERBOUND
 NUM_BBS = 0 # When set to a positive value, fixes the number of BBs.
 
 # The tanh saturates, so that we don't neglect registers that have only few bits tainted when there are regs that have much more bits tainted

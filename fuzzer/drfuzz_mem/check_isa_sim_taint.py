@@ -83,6 +83,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         expected_regvals = fuzzerstate.expected_regvals
         rtl_elfpath = fuzzerstate.rtl_elfpath
         interm_elfpath = fuzzerstate.interm_elfpath
+        assert expected_regvals is not None
+        assert rtl_elfpath is not None
 
     # Retrieve register stream and final intregvals from spike.
     pc_reg_pairs = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}
