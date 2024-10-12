@@ -60,7 +60,7 @@ extern "C" char get_next_taint_word(long long taint_id, long int *word_address, 
 
   // Supply the word address
   *word_address = itr->first;
-  printf("Next taint word addr: %lx\n", *word_address);
+  // printf("Next taint word addr: %lx\n", *word_address);
 
   // Fill the svbuffer with the word contents
   unsigned char* buf = (unsigned char*)svGetArrayPtr(svbuffer);

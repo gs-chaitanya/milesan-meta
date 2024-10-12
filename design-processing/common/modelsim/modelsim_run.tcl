@@ -27,8 +27,8 @@ if { [string equal $TRACE trace_fst] } {
     set DEBUGDBARG ""
 }
 
-# -suppress 3009 -suppress 3085 -suppress 3015
-vsim -64  -suppress 3009 -suppress 3085 -suppress 3015 -lib $LIB $MODELSIM_VSIM_COVERFLAG  $DEBUGDBARG $VOPTARGS tb_top
+
+vsim -64 -suppress 3009 -suppress 3085 -suppress 3015 -suppress 2718 -suppress 2685 -suppress 2244 -lib $LIB $MODELSIM_VSIM_COVERFLAG  $DEBUGDBARG $VOPTARGS tb_top_opt
 
 if { [string equal $TRACE trace_fst] } { 
     log -r /*

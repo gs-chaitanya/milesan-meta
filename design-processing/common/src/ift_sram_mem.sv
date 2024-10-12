@@ -135,7 +135,7 @@ module ift_sram_mem #(
               mem[(AddrMask >> $clog2(WidthBytes))&word_addr] = '0;
 `endif
           end
-          $display("Adding taint word SRAM addr %x (filtered: %x): %x", word_addr, (AddrMask >> $clog2(WidthBytes))&word_addr, mem_taints[(AddrMask >> $clog2(WidthBytes))&word_addr]);
+          // $display("Adding taint word SRAM addr %x (filtered: %x): %x", word_addr, (AddrMask >> $clog2(WidthBytes))&word_addr, mem_taints[(AddrMask >> $clog2(WidthBytes))&word_addr]);
         end
       end
     end
