@@ -12,7 +12,7 @@ import psutil
 
 PRINT_THREAD_STATUS = True
 LOG_THREAD_STATUS = True
-MAX_N_THREADS = 30
+MAX_N_THREADS = 60 # This is a cap for the request throughput.
 MUTE = True
 TRACE_EN = False
 DELETE_REQS = True

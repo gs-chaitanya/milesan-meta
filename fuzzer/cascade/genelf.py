@@ -116,8 +116,6 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
                         addr_instrs[curr_addr] = curr_byte
 
     if not is_spike_resolution:
-        if FILL_MEM_WITH_DEAD_CODE:
-            fuzzerstate.fill_mem_with_dead_code()
         for instr_obj in fuzzerstate.spec_instr_objs_seq:
             if instr_obj.iscompressed:
                 assert USE_COMPRESSED # Do we care if the instructions need to match the spec?

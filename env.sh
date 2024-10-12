@@ -70,8 +70,8 @@ export MODELSIM_MAX_INSTANCES=100
 export MODELSIM_WORKROOT=$LOCAL_MNT/modelsim_workroot
 
 
-export MODELSIM_VLOG_COVERFLAG=+cover
-export MODELSIM_VSIM_COVERFLAG=-coverage
+# export MODELSIM_VLOG_COVERFLAG=+cover
+# export MODELSIM_VSIM_COVERFLAG=-coverage
 export MODELSIM_VSIM_COVERPATH=cover.ucdb
 
 HOSTNAME=$(hostname)
