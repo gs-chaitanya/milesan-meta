@@ -38,14 +38,14 @@ import numpy as np
 
 def compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val):
     if addr is None: # if no address is given, use address of last instruction in last basic block.
-        addr = fuzzerstate.instr_objs_seq[-1][-1].paddr
+        addr = fuzzerstate.instr_objs_seq[-1][-1].vaddr if USE_MMU else fuzzerstate.instr_objs_seq[-1][-1].paddr
 
     last_instr = None
     for bb_instrs in fuzzerstate.instr_objs_seq:
         for instr_obj in bb_instrs:
             if PRINT_REG_TRACEBACK:
                 instr_obj.print()
-            if instr_obj.paddr == addr: # reached this instruction
+            if (instr_obj.vaddr if USE_MMU else instr_obj.paddr) == addr: # reached this instruction
                 assert last_instr is not None, f"Traceback computation for instruction at {hex(addr)} failed: No previous instruction modifying register {ABI_INAMES[reg_id]} with mismatch {hex(fuzzerstate.intregpickstate.regs[reg_id].get_val())} =! {hex(correct_val)} found."
                 return last_instr # reached address of calling instruction
             elif hasattr(instr_obj, "rd") and instr_obj.rd == reg_id:
