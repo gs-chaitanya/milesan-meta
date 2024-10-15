@@ -257,7 +257,8 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-NUM_MIN_BBS_LOWERBOUND = 100 if USE_MMU else 10
+# NUM_MIN_BBS_LOWERBOUND = 100 if USE_MMU else 10
+NUM_MIN_BBS_LOWERBOUND = 10 # Used this for BOOM
 if "NUM_MIN_BBS_LOWERBOUND" in os.environ:
     NUM_MIN_BBS_LOWERBOUND = int(os.environ["NUM_MIN_BBS_LOWERBOUND"])
     print(f"Setting NUM_MIN_BBS_LOWERBOUND = {NUM_MIN_BBS_LOWERBOUND} from env vars.")
@@ -300,6 +301,18 @@ ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = True
 if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS" in os.environ:
     ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS"]) == 1
     print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS} from env vars.")
+
+# We can disable taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges. Useful if we look for leakage through e.g. shared BPU and we probe it in one of the NO_TAINT privs 
+ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = True
+if "ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS" in os.environ:
+    ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS"]) == 1
+    print(f"Setting ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = {ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS} from env vars.")
+
+# To disable jalr in taint source privilegen for triaging. Might still need some to connect the BBs.
+ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS = True
+if "ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS" in os.environ:
+    ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS"]) == 1
+    print(f"Setting ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS = {ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS} from env vars.")
 
 # We can disable non-taken branches in the privileges that have no access to taint to avoid tainting the pc in those privileges. Useful if we search for e.g. BNE in taint privs that leaks
 ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS = True
@@ -347,7 +360,7 @@ if "DISABLE_COMPUTATION_ON_TAINT" in os.environ:
 TAINT_SOURCE_PRIVS = None
 if "TAINT_SOURCE_PRIVS" in os.environ:
     TAINT_SOURCE_PRIVS = os.environ["TAINT_SOURCE_PRIVS"]
-    assert TAINT_SOURCE_PRIVS != "M", f"Taint only in M-mode not supported right now."
+    # assert TAINT_SOURCE_PRIVS != "M", f"Taint only in M-mode not supported right now."
     print(f"Setting TAINT_SOURCE_PRIVS = {TAINT_SOURCE_PRIVS} from env vars.")
 
 # We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
