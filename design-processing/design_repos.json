@@ -3,6 +3,8 @@
     "kronos": "../../cascade-designs/cascade-kronos/cascade",
     "picorv32": "../../cascade-designs/cascade-picorv32/cascade",
     "rocket": "../../cascade-designs/cascade-chipyard/cascade-rocket",
+    "rocket-medium": "../../cascade-designs/cascade-chipyard-medium-configs/cascade-rocket",
+    "rocket-large": "../../cascade-designs/cascade-chipyard-large-configs/cascade-rocket",
     "rocket-rvc": "../../cascade-designs/cascade-chipyard-rvc/cascade-rocket",
     "boom": "../../cascade-designs/cascade-chipyard/cascade-boom",
     "boom-medium": "../../cascade-designs/cascade-chipyard-medium-configs/cascade-boom",
