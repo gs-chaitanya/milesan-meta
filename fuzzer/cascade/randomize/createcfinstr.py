@@ -604,7 +604,14 @@ def create_memfsm_instrobjs(fuzzerstate):
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PAGE_T0_ADDR if tainted else IntRegIndivState.PAGE_ADDR, force=True)
         addr = phys2virt(addr, priv_level, va_layout,fuzzerstate,absolute_addr=True)
         # print(f"Vaddr: {hex(addr)}, tainted: {tainted}")
-        instr_objs = li_doubleword(addr, rd, tmp, fuzzerstate)
+        if fuzzerstate.is_design_64bit:
+            instr_objs = li_doubleword(addr, rd, tmp, fuzzerstate)
+        else:
+            lui_imm, addi_imm = li_into_reg(addr, False)
+            instr_objs = []
+            instr_objs.append(ImmRdInstruction_t0(fuzzerstate,"lui", rd, lui_imm))
+            instr_objs.append(RegImmInstruction_t0(fuzzerstate,"addi", rd, rd, addi_imm))
+
         return instr_objs
 
 # The reservation in the MemoryView is already done ahead and should not be reiterated here.
