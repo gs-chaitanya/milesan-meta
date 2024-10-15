@@ -54,7 +54,6 @@ class FuzzerState:
         self.design_has_supervisor_mode        : bool = design_has_supervisor_mode(design_name)
         self.design_has_user_mode              : bool = design_has_user_mode(design_name)
         self.design_has_pmp                    : bool = design_has_pmp(design_name)
-        self.design_boot_addr                  : int  = get_design_boot_addr(design_name)
         self.random_block_contents4by4bytes = []
         self.random_data_block_ranges = []
 
@@ -186,6 +185,7 @@ class FuzzerState:
         self.memview_blacklist = MemoryView(self) # For load blacklis
 
         self.num_store_locations = random.randint(1, MAX_NUM_STORE_LOCATIONS)
+        # self.num_store_locations = 0
         self.ctxsv_size_upperbound: int = get_context_setter_max_size(self) # Can be called once is_design_64bit, design_has_fpu and design_has_fpud are set, and the number of store locations is known.
 
         self.memstorestate = MemStoreState()
@@ -556,8 +556,8 @@ class FuzzerState:
         regdumps_t0 = []
         reached_end = False
         # Retrieve the register values from the requests
-        self.curr_pc = SPIKE_STARTADDR
-        for bb_instrs in self.instr_objs_seq:
+        self.curr_pc = SPIKE_STARTADDR if is_spike_resolution else self.design_base_addr
+        for bb_id, bb_instrs in enumerate(self.instr_objs_seq):
             for next_instr in bb_instrs:
                 if PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS:
                     next_instr.print(is_spike_resolution)
@@ -571,7 +571,7 @@ class FuzzerState:
                         if DO_ASSERT:
                             if not USE_SPIKE_INTERM_ELF:
                                 assert reg_id in CSR_ABI_NAMES + ["priv"] or reg_id < self.num_pickable_regs or reg_id in NONPICKABLE_REGISTERS, f"Invalid register id {reg_id}"
-                        if reg_id in CSR_ABI_NAMES + ["priv"]: # We dont dump CSR values here for now
+                        if reg_id in CSR_ABI_NAMES + ["priv"]: # We dont dump CSR values or privileges here since we don't allow them to be tainted for now.
                             regdumps += [None]
                             regdumps_t0 += [0]
                         elif reg_id in FPREG_ABINAMES:
@@ -586,6 +586,11 @@ class FuzzerState:
                 if final_address is not None and (next_instr.vaddr if USE_MMU else next_instr.paddr) == final_address:
                     reached_end = True
                     break
+            # if this bb is followed by a context saver block, execute it
+            if bb_id == self.last_bb_id_before_ctx_saver:
+                for next_instr in self.ctxsv_bb:
+                    next_instr.execute(is_spike_resolution=is_spike_resolution)
+
             if reached_end:
                 break
 
