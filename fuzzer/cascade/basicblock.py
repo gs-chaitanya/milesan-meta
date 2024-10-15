@@ -238,8 +238,8 @@ def gen_basicblock(fuzzerstate):
         fuzzerstate.curr_branch_taken = False
         if curr_isa_class == ISAInstrClass.BRANCH:
             if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and not ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS or \
-                fuzzerstate.privilegestate.privstate not in fuzzerstate.taint_source_privs and not ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS \
-                    or fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.MACHINE and not ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS:
+                fuzzerstate.privilegestate.privstate in fuzzerstate.taint_sink_privs and not ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS or \
+                fuzzerstate.privilegestate.privstate not in fuzzerstate.taint_source_privs|fuzzerstate.taint_sink_privs and not ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS:
                 fuzzerstate.curr_branch_taken = True
             else:
                 fuzzerstate.curr_branch_taken = random.random() < BRANCH_TAKEN_PROBA
@@ -437,6 +437,7 @@ def alloc_context_saver_bb(fuzzerstate):
     fuzzerstate.ctxsv_bb_base_addr = fuzzerstate.memview.gen_random_free_addr(PAGE_ALIGNMENT_SHIFT, n_pages*PHYSICAL_PAGE_SIZE, 0, fuzzerstate.memsize)
     if DO_ASSERT:
         assert fuzzerstate.ctxsv_bb_base_addr is not None, f"Maybe you should create the final basic block earlier in the creation of the test case."
+    # Cannot have any other code or data in CTX saver pages
     fuzzerstate.memview.alloc_mem_range(fuzzerstate.ctxsv_bb_base_addr, fuzzerstate.ctxsv_bb_base_addr+n_pages*PHYSICAL_PAGE_SIZE)
 
 def free_context_saver_bb(fuzzerstate, ctxsv_bb_id):
