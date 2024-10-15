@@ -22,7 +22,7 @@ if __name__ == '__main__':
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     if len(sys.argv) < 3:
-        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <seed> [hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, hint_left_bound_instr, hint_right_bound_instr, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr] ")
+        raise Exception("Usage: python3 do_check_isa_sims.py <design_name> <seed> [hint_left_bound_bb, hint_right_bound_bb, hint_left_bound_instr, hint_right_bound_instr, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr] ")
 
     design_name = sys.argv[1]
     seed = int(sys.argv[2])
@@ -41,13 +41,13 @@ if __name__ == '__main__':
     if len(sys.argv) > 4:
         hint_right_bound_bb = int(sys.argv[4])
     if len(sys.argv) > 5:
-        hint_left_bound_pillar_bb = int(sys.argv[5])
+        hint_left_bound_instr = int(sys.argv[5])
     if len(sys.argv) > 6:
-        hint_right_bound_pillar_bb = int(sys.argv[6])
+        hint_right_bound_instr = int(sys.argv[6])
     if len(sys.argv) > 7:
-        hint_left_bound_instr = int(sys.argv[7])
+        hint_left_bound_pillar_bb= int(sys.argv[7])
     if len(sys.argv) > 8:
-        hint_right_bound_instr = int(sys.argv[8])
+        hint_right_bound_pillar_bb= int(sys.argv[8])
     if len(sys.argv) > 9:
         hint_left_bound_pillar_instr = int(sys.argv[9])
     if len(sys.argv) > 10:
