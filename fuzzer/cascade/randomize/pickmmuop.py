@@ -520,7 +520,7 @@ def gen_satp_write(fuzzerstate, curr_addr):
     else:
         satp_val_reg = fuzzerstate.intregpickstate.pick_int_inputreg_nonzero()
         lui_imm, addi_imm = li_into_reg(satp_val, False)
-        instr_objs.append(ImmRdInstruction_t0(fuzzerstate,"lui", satp_val_reg, lui_imm, fuzzerstate))
+        instr_objs.append(ImmRdInstruction_t0(fuzzerstate,"lui", satp_val_reg, lui_imm))
         instr_objs.append(RegImmInstruction_t0(fuzzerstate,"addi", satp_val_reg, satp_val_reg, addi_imm))
 
     # Write to SATP
