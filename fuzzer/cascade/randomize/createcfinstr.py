@@ -357,11 +357,13 @@ def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
 def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in IntStoreInstructions
+        assert  fuzzerstate.num_store_locations <  fuzzerstate.max_num_store_locations
         if TAINT_EN and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
         else:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR)
 
+    fuzzerstate.num_store_locations += 1
     if TAINT_EN:
         taint = fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs
     rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_T0_ADDR if taint else IntRegIndivState.PAGE_ADDR)

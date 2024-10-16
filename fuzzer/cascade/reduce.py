@@ -755,12 +755,14 @@ def _find_failing_instr_in_bb(fuzzerstate, failing_bb_id: int, hint_left_bound_i
     # Take the hints
     if hint_left_bound_instr is not None:
         if DO_ASSERT:
+            # assert True # TODO uncomment below
             assert not is_mismatch(fuzzerstate, failing_bb_id, hint_left_bound_instr, quiet=quiet), f"Wrong left bound hint `{hint_left_bound_instr}`."
         left_bound = hint_left_bound_instr
     else:
         left_bound = 0
     if hint_right_bound_instr is not None:
         if DO_ASSERT:
+            # assert True # TODO uncomment below
             assert is_mismatch(fuzzerstate, failing_bb_id, hint_right_bound_instr, quiet=quiet), f"Wrong right bound hint `{hint_right_bound_instr}`."
         right_bound = hint_right_bound_instr
     else: # TODO: set to -2?
@@ -872,11 +874,16 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
         return fuzzerstate
 
     if pillar_bb_id == failing_bb_id:
-        raise NotImplementedError('TODO check the case where pillar_bb_id == failing_bb_id')
+        # raise NotImplementedError('TODO check the case where pillar_bb_id == failing_bb_id')
         for instr_id in range(pillar_instr, failing_instr_id+1):
             # Save the instruction before trying to turn it into a nop
             saved_instr = fuzzerstate.instr_objs_seq[failing_bb_id][instr_id]
-            fuzzerstate.instr_objs_seq[failing_bb_id][instr_id] = RegImmInstruction("addi", 0, 0, 0, is_design_64bit=fuzzerstate.is_design_64bit)
+            nop_instr =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
+            nop_instr.paddr = saved_instr.paddr
+            nop_instr.vaddr = saved_instr.vaddr
+            nop_instr.va_layout = saved_instr.va_layout
+            nop_instr.priv_level = saved_instr.priv_level
+            fuzzerstate.instr_objs_seq[failing_bb_id][instr_id] = nop_instr
             # For debug printing
             curr_addr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id # NO_COMPRESSED
             try:
@@ -1131,6 +1138,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     # failing_bb_id is the index of the first basic block that causes trouble, in the sense that when it is removed (and all the following ones), the test case does not fail anymore.
     failing_bb_id = _find_failing_bb(fuzzerstate, hint_left_bound_bb, hint_right_bound_bb, quiet=quiet)
+
     # If fail even just with the initial block
     if failing_bb_id == 0:
         if is_mismatch(fuzzerstate, 1, len(fuzzerstate.instr_objs_seq[0])-1, quiet=quiet):
@@ -1405,10 +1413,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     return ret_msg
 
+# @returns: #nops \in BBs[min_bb, max_bb]
 def _count_n_nops(fuzzerstate, min_bb, max_bb):
     nop_instr_bytecode =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0).gen_bytecode_int(USE_SPIKE_INTERM_ELF)
     n_nops = 0
-    for bb in fuzzerstate.instr_objs_seq[min_bb:max_bb]:
+    for bb in fuzzerstate.instr_objs_seq[min_bb:max_bb+1]:
         for instr in bb:
             if instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF) == nop_instr_bytecode:
                 n_nops += 1

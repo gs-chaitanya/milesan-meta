@@ -86,7 +86,8 @@ MEMADDR_PICK_POLICY_WEIGTHS = {
 }
 
 # Store locations
-MAX_NUM_STORE_LOCATIONS = 30 # Max number of locations where doublewords can be stored.
+# MAX_NUM_STORE_LOCATIONS = 30 # Max number of locations where doublewords can be stored.
+MAX_NUM_STORE_LOCATIONS = 512 # Max number of store instructions we allow.
 MAX_NUM_FENCES_PER_EXECUTION = 10
 
 ###

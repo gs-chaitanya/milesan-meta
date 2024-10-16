@@ -6,7 +6,7 @@
 
 from dataclasses import dataclass
 from params.runparams import DO_ASSERT
-from params.fuzzparams import MAX_NUM_PICKABLE_REGS, USE_MMU, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, RPROD_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, TAINT_EN
+from params.fuzzparams import MAX_NUM_PICKABLE_REGS, USE_MMU, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, RPROD_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, TAINT_EN, MAX_NUM_STORE_LOCATIONS
 from cascade.toleratebugs import is_tolerate_ras0
 from rv.csrids import CSR_IDS
 from common.spike import SPIKE_STARTADDR
@@ -16,7 +16,7 @@ from cascade.cfinstructionclasses_t0 import ImmRdInstruction_t0, RegImmInstructi
 from cascade.randomize.pickstoreaddr import ALIGNMENT_BITS_MAX
 from common.designcfgs import get_design_cl_size
 from cascade.mmu_utils import phys2virt
-from rv.asmutil import li_into_reg
+from rv.asmutil import li_into_reg, to_unsigned
 
 # @brief This function computes an upper bound on the size of the context setter basic block.
 # Do not functools.cache because it is cheap to compute, even though it is not expected to change during a fuzzing run.
@@ -41,7 +41,8 @@ def get_context_setter_max_size(fuzzerstate):
     # Privilege restoration overhead
     num_instr_privilege_restoration = 6
     # Memory restoration overhead: 4: 3 Instruction_t0s + 4 bytes (~1 instr) to store the address where the byte will be stored. The number of bytes in a store location is defined as 1 << (ALIGNMENT_BITS_MAX)
-    num_instrs_mem = 4 * fuzzerstate.num_store_locations * (1 << (ALIGNMENT_BITS_MAX))
+    num_instrs_mem = 4 * fuzzerstate.max_num_store_locations * (1 << (ALIGNMENT_BITS_MAX))
+    # num_instrs_mem = 4 * MAX_NUM_STORE_LOCATIONS * (1 << (ALIGNMENT_BITS_MAX)) # 4 instructions per store, max 8 bytes per store. Improve this with tigher bound?
     # Floating registers overhead: 4: 3 Instruction_t0s + 4-8 bytes (~1-2 instrs) to store the data + 4 bytes to potentially align.
     if fuzzerstate.design_has_fpu:
         if fuzzerstate.design_has_fpud:
@@ -50,7 +51,7 @@ def get_context_setter_max_size(fuzzerstate):
             num_instrs_freg = 1+fuzzerstate.num_pickable_floating_regs*5
     else:
         num_instrs_freg = 0
-    # 4: 3 Instruction_t0s + 4-8 bytes (~1-2 instrs) to store the data + 4 bytes to potentially align.
+    # 4: 3 Instructions + 4-8 bytes (~1-2 instrs) to store the data + 4 bytes to potentially align.
     if fuzzerstate.is_design_64bit:
         num_instrs_reg = fuzzerstate.num_pickable_regs*4
     else:
@@ -100,8 +101,12 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
     assert fuzzerstate.ctxsv_bb_base_addr == fuzzerstate.ctxsv_bb_base_addr
 
     # Use the register MAX_NUM_PICKABLE_REGS to hold the absolute address of the start of this bb.
-    fuzzerstate.ctxsv_bb.append(ImmRdInstruction_t0(fuzzerstate,'auipc', MAX_NUM_PICKABLE_REGS, 0, is_rd_nonpickable_ok=True))
-    curr_addr += 4 # NO_COMPRESSED
+    # fuzzerstate.ctxsv_bb.append(ImmRdInstruction_t0(fuzzerstate,'auipc', MAX_NUM_PICKABLE_REGS, 0, is_rd_nonpickable_ok=True))
+    # We put an lui+addi sequence here to move address of the first byte after the instructions here.
+    fuzzerstate.ctxsv_bb.append(None)
+    fuzzerstate.ctxsv_bb.append(None)
+    fuzzerstate.ctxsv_bb.append(R12DInstruction_t0(fuzzerstate,"or",MAX_NUM_PICKABLE_REGS,MAX_NUM_PICKABLE_REGS,RELOCATOR_REGISTER_ID, is_rd_nonpickable_ok=True))
+    curr_addr += 12 # NO_COMPRESSED
 
     ###
     # First, set the CSRs to the expected values
@@ -109,10 +114,13 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
 
     # fcsr
     if fuzzerstate.design_has_fpu:
+        raise NotImplementedError
         # Pre-relocate the address where we pre-store the fcsr value
         # Set the address of the fcsr val
         addr_csr_loads[CSR_IDS.FCSR] = curr_addr
-        fuzzerstate.ctxsv_bb.append(None)
+        # fuzzerstate.ctxsv_bb.append(None)
+        # Increase the address by 1
+        fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, 0, 1, 0, is_rd_nonpickable_ok=True))
         curr_addr += 4 # NO_COMPRESSED
         # Load the fcsr value
         fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1))
@@ -125,26 +133,31 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
     if saved_context.privilege == PrivilegeStateEnum.MACHINE and (fuzzerstate.design_has_supervisor_mode or fuzzerstate.design_has_user_mode):
         # satp is a bit special because bits above 31 are typically used as well. We must hence discriminate between 32 and 64 bit designs.
         if USE_MMU:
-            addr_csr_loads[CSR_IDS.MEPC] = curr_addr
+            addr_csr_loads[CSR_IDS.MEPC] = curr_addr+4
             if fuzzerstate.is_design_64bit:
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
                 fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, 1, 0, -1))
+                # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate, "csrrw", 0, 1, CSR_IDS.MEPC))
                 curr_addr += 12 # NO_COMPRESSED
             else:
+                raise NotImplementedError
                 # Register 1 contains the lsbs and register 2 the msbs.
                 # This is a draft implementation that has not been tested yet.
-                fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, 1, 0, -1))
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, 2, 0, -1))
+                # fuzzerstate.ctxsv_bb.append(None)
+                # fuzzerstate.ctxsv_bb.append(None)
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+                fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 1, 0, is_rd_nonpickable_ok=True))
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, MAX_NUM_PICKABLE_REGS, 0, -1))
+                fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 1, 0, is_rd_nonpickable_ok=True))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MEPC))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 2, CSR_IDS.MEPC))
                 curr_addr += 24 # NO_COMPRESSED
         else:
-            addr_csr_loads[CSR_IDS.MEPC] = curr_addr
+            addr_csr_loads[CSR_IDS.MEPC] = curr_addr+4
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+            # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
             fuzzerstate.ctxsv_bb.append(None)
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1))
             fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MEPC))
             curr_addr += 12 # NO_COMPRESSED
 
@@ -153,61 +166,74 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
     if fuzzerstate.design_has_supervisor_mode:
         # satp is a bit special because bits above 31 are typically used as well. We must hence discriminate between 32 and 64 bit designs.
         if USE_MMU:
-            addr_csr_loads[CSR_IDS.SEPC] = curr_addr
+            addr_csr_loads[CSR_IDS.SEPC] =  curr_addr+4
             if fuzzerstate.is_design_64bit:
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+                # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
                 fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, 1, 0, -1))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.SEPC))
                 curr_addr += 12 # NO_COMPRESSED
             else:
+                raise NotImplementedError
                 # Register 1 contains the lsbs and register 2 the msbs.
                 # This is a draft implementation that has not been tested yet.
-                fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, 1, 0, -1))
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, 2, 0, -1))
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+                fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 1, 0, is_rd_nonpickable_ok=True))
+                fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 1, 0, is_rd_nonpickable_ok=True))
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, MAX_NUM_PICKABLE_REGS, 0, -1))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.SEPC))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 2, CSR_IDS.SEPC))
                 curr_addr += 24 # NO_COMPRESSED
         else:
-            addr_csr_loads[CSR_IDS.SEPC] = curr_addr
+            addr_csr_loads[CSR_IDS.SEPC] =  curr_addr+4
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
             fuzzerstate.ctxsv_bb.append(None)
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1))
+            # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
             fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.SEPC))
             curr_addr += 12 # NO_COMPRESSED
 
     # mcause
-    addr_csr_loads[CSR_IDS.MCAUSE] = curr_addr
+    addr_csr_loads[CSR_IDS.MCAUSE] =  curr_addr+4
+    fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
     fuzzerstate.ctxsv_bb.append(None)
-    fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1))
+    # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
     fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MCAUSE))
     curr_addr += 12 # NO_COMPRESSED
 
     # scause
     if fuzzerstate.design_has_supervisor_mode:
-        addr_csr_loads[CSR_IDS.SCAUSE] = curr_addr
+        addr_csr_loads[CSR_IDS.SCAUSE] =  curr_addr+4
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
         fuzzerstate.ctxsv_bb.append(None)
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1))
+        # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.SCAUSE))
         curr_addr += 12 # NO_COMPRESSED
 
     # mscratch
-    addr_csr_loads[CSR_IDS.MSCRATCH] = curr_addr
-    fuzzerstate.ctxsv_bb.append(None)
+    addr_csr_loads[CSR_IDS.MSCRATCH] = curr_addr+4
     if fuzzerstate.is_design_64bit:
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, 1, 0, -1))
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+        # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
+
     else:
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1))
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+        # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
+    
+    fuzzerstate.ctxsv_bb.append(None)
+    curr_addr += 8 # NO_COMPRESSED
+
     fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MSCRATCH))
-    curr_addr += 12 # NO_COMPRESSED
+    curr_addr += 4 # NO_COMPRESSED
 
     if fuzzerstate.design_has_supervisor_mode:
-        addr_csr_loads[CSR_IDS.SSCRATCH] = curr_addr
-        fuzzerstate.ctxsv_bb.append(None)
+        addr_csr_loads[CSR_IDS.SSCRATCH] =  curr_addr+4
         if fuzzerstate.is_design_64bit:
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, 1, 0, -1))
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+            # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
         else:
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1))
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+            # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
+        fuzzerstate.ctxsv_bb.append(None)
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.SSCRATCH))
         curr_addr += 12 # NO_COMPRESSED
 
@@ -216,26 +242,31 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
     if 'picorv32' not in fuzzerstate.design_name:
         # satp is a bit special because bits above 31 are typically used as well. We must hence discriminate between 32 and 64 bit designs.
         if USE_MMU:
-            addr_csr_loads[CSR_IDS.MTVEC] = curr_addr
+            addr_csr_loads[CSR_IDS.MTVEC] =  curr_addr+4
             if fuzzerstate.is_design_64bit:
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
                 fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, 1, 0, -1))
+                # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MTVEC))
                 curr_addr += 12 # NO_COMPRESSED
             else:
+                raise NotImplementedError
                 # Register 1 contains the lsbs and register 2 the msbs.
                 # This is a draft implementation that has not been tested yet.
-                fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, 1, 0, -1))
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, 2, 0, -1))
+                # fuzzerstate.ctxsv_bb.append(None)
+                # fuzzerstate.ctxsv_bb.append(None)
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+                fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, MAX_NUM_PICKABLE_REGS, 0, -1))
+                fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MTVEC))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 2, CSR_IDS.MTVEC))
                 curr_addr += 24 # NO_COMPRESSED
         else:
-            addr_csr_loads[CSR_IDS.MTVEC] = curr_addr
+            addr_csr_loads[CSR_IDS.MTVEC] =  curr_addr+4
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
             fuzzerstate.ctxsv_bb.append(None)
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1))
+            # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
             fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MTVEC))
             curr_addr += 12 # NO_COMPRESSED
 
@@ -243,87 +274,105 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
     if fuzzerstate.design_has_supervisor_mode:
         # satp is a bit special because bits above 31 are typically used as well. We must hence discriminate between 32 and 64 bit designs.
         if USE_MMU:
-            addr_csr_loads[CSR_IDS.STVEC] = curr_addr
+            addr_csr_loads[CSR_IDS.STVEC] =  curr_addr+4
             if fuzzerstate.is_design_64bit:
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
                 fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, 1, 0, -1))
+                # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.STVEC))
                 curr_addr += 12 # NO_COMPRESSED
             else:
+                raise NotImplementedError
                 # Register 1 contains the lsbs and register 2 the msbs.
                 # This is a draft implementation that has not been tested yet.
-                fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(None)
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, 1, 0, -1))
-                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, 2, 0, -1))
+                # fuzzerstate.ctxsv_bb.append(None)
+                # fuzzerstate.ctxsv_bb.append(None)
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+                fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
+                fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, MAX_NUM_PICKABLE_REGS, 0, -1))
+                fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.STVEC))
                 fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 2, CSR_IDS.STVEC))
                 curr_addr += 24 # NO_COMPRESSED
         else:
-            addr_csr_loads[CSR_IDS.STVEC] = curr_addr
+            addr_csr_loads[CSR_IDS.STVEC] =  curr_addr+4
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
             fuzzerstate.ctxsv_bb.append(None)
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1))
+            fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
             fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.STVEC))
-            curr_addr += 12 # NO_COMPRESSED
+            curr_addr += 16 # NO_COMPRESSED
 
     # medeleg
     if fuzzerstate.design_has_supervisor_mode:
-        addr_csr_loads[CSR_IDS.MEDELEG] = curr_addr
+        addr_csr_loads[CSR_IDS.MEDELEG] = curr_addr+4
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
         fuzzerstate.ctxsv_bb.append(None)
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1))
+        # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MEDELEG))
         curr_addr += 12 # NO_COMPRESSED
 
     # mstatus is a bit special because bits above 31 are typically used as well. We must hence discriminate between 32 and 64 bit designs.
-    addr_csr_loads[CSR_IDS.MSTATUS] = curr_addr
+    addr_csr_loads[CSR_IDS.MSTATUS] =  curr_addr+4
     if fuzzerstate.is_design_64bit:
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
         fuzzerstate.ctxsv_bb.append(None)
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, 1, 0, -1))
+        # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MSTATUS))
         curr_addr += 12 # NO_COMPRESSED
     else:
+        raise NotImplementedError
         # Register 1 contains the lsbs and register 2 the msbs.
         # This is a draft implementation that has not been tested yet.
-        fuzzerstate.ctxsv_bb.append(None)
-        fuzzerstate.ctxsv_bb.append(None)
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, 1, 0, -1))
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, 2, 0, -1))
+        # fuzzerstate.ctxsv_bb.append(None)
+        # fuzzerstate.ctxsv_bb.append(None)
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+        fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, MAX_NUM_PICKABLE_REGS, 0, -1))
+        fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MSTATUS))
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 2, CSR_IDS.MSTATUSH))
         curr_addr += 24 # NO_COMPRESSED
 
     # satp is a bit special because bits above 31 are typically used as well. We must hence discriminate between 32 and 64 bit designs.
     if USE_MMU:
-        addr_csr_loads[CSR_IDS.SATP] = curr_addr
+        addr_csr_loads[CSR_IDS.SATP] =  curr_addr+4
         if fuzzerstate.is_design_64bit:
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
             fuzzerstate.ctxsv_bb.append(None)
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, 1, 0, -1))
+            # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
             fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.SATP))
             curr_addr += 12 # NO_COMPRESSED
         else:
+            raise NotImplementedError
             # Register 1 contains the lsbs and register 2 the msbs.
             # This is a draft implementation that has not been tested yet.
-            fuzzerstate.ctxsv_bb.append(None)
-            fuzzerstate.ctxsv_bb.append(None)
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, 1, 0, -1))
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, 2, 0, -1))
+            # fuzzerstate.ctxsv_bb.append(None)
+            # fuzzerstate.ctxsv_bb.append(None)
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+            fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, MAX_NUM_PICKABLE_REGS, 0, -1))
+            fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
             fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.SATP))
             fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 2, CSR_IDS.SATP))
             curr_addr += 24 # NO_COMPRESSED
 
     # minstret is a bit special because bits above 31 are typically used as well. We must hence discriminate between 32 and 64 bit designs.
-    addr_csr_loads[CSR_IDS.MINSTRET] = curr_addr
+    addr_csr_loads[CSR_IDS.MINSTRET] =  curr_addr+4
     if fuzzerstate.is_design_64bit:
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
         fuzzerstate.ctxsv_bb.append(None)
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", 1, 1, 0, -1))
+        # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MINSTRET))
         curr_addr += 12 # NO_COMPRESSED
     else:
         # Register 1 contains the lsbs and register 2 the msbs.
+        raise NotImplementedError
         fuzzerstate.ctxsv_bb.append(None)
         fuzzerstate.ctxsv_bb.append(None)
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, 1, 0, -1))
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, 2, 0, -1))
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
+        fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, MAX_NUM_PICKABLE_REGS, 0, -1))
+        fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.MINSTRET))
         fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 2, CSR_IDS.MINSTRETH))
         curr_addr += 24 # NO_COMPRESSED
@@ -335,50 +384,30 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
     ##
     if USE_MMU:
         # RPROD_MASK_REGISTER_ID is a bit special because bits above 31 are typically used as well. We must hence discriminate between 32 and 64 bit designs.
-        rprod_load = curr_addr
+        rprod_load = curr_addr+4
         if fuzzerstate.is_design_64bit:
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", RPROD_MASK_REGISTER_ID, MAX_NUM_PICKABLE_REGS, 0, -1, is_rd_nonpickable_ok=True))
             fuzzerstate.ctxsv_bb.append(None)
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"ld", RPROD_MASK_REGISTER_ID, 1, 0, -1, is_rd_nonpickable_ok=True))
+            # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
             fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0, is_rd_nonpickable_ok=True)) # might need a nop for allignment, might not, TODO
             curr_addr += 12 # NO_COMPRESSED
         else:
             # Register 1 contains the lsbs and register 2 the msbs.
             # This is a draft implementation that has not been tested yet.
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", RPROD_MASK_REGISTER_ID, MAX_NUM_PICKABLE_REGS, 0, -1, is_rd_nonpickable_ok=True))
             fuzzerstate.ctxsv_bb.append(None)
+            # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
+            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, MAX_NUM_PICKABLE_REGS, 0, -1))
             fuzzerstate.ctxsv_bb.append(None)
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", RPROD_MASK_REGISTER_ID, 1, 0, -1, is_rd_nonpickable_ok=True))
-            fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", 2, 2, 0, -1))
+            # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
             fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"slli", 2, 2, 32))
             fuzzerstate.ctxsv_bb.append(R12DInstruction_t0(fuzzerstate,"or", RPROD_MASK_REGISTER_ID, RPROD_MASK_REGISTER_ID, 2, is_rd_nonpickable_ok=True))
             curr_addr += 24 # NO_COMPRESSED
 
 
-    # ###
-    # # Second, set the memory bytes to the expected values
-    # ###
-
-    # addrs_memaddrs = [] # FUTURE: An alternative implementation would be to just load the address once and then play with lb offset. This would do much better packing, even though it may limit the number of bytes that can be loaded (but to a probably large enough number).
-    # for mem_byte_id, (mem_byte_addr, mem_byte_val) in enumerate(saved_context.mem_bytes_dict.items()):
-    #     if DO_ASSERT:
-    #         assert mem_byte_val >= 0
-    #         assert mem_byte_val < 256
-    #         assert mem_byte_addr >= 0
-    #         assert mem_byte_addr < fuzzerstate.memsize, f"{hex(mem_byte_addr)} exceeds memory {hex(fuzzerstate.memsize)}"
-    #     # Arbitrarily use register 1 to load the byte addr
-    #     addrs_memaddrs.append(curr_addr)
-    #     fuzzerstate.ctxsv_bb.append(None)
-    #     curr_addr += 4 # NO_COMPRESSED
-    #     # We load the byte addr into register 1
-    #     fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1, is_rd_nonpickable_ok=True))
-    #     curr_addr += 4 # NO_COMPRESSED
-    #     # We set the byte value using an immediate
-    #     fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", 2, 0, mem_byte_val, is_rd_nonpickable_ok=True))
-    #     curr_addr += 4 # NO_COMPRESSED
-    #     # Store the value into memory
-    #     fuzzerstate.ctxsv_bb.append(IntStoreInstruction_t0(fuzzerstate,"sb", 1, 2, 0, -1)) # sb dest, val, offset
-    #     curr_addr += 4 # NO_COMPRESSED
-
-    addrs_memaddrs = [] # FUTURE: An alternative implementation would be to just load the address once and then play with lb offset. This would do much better packing, even though it may limit the number of bytes that can be loaded (but to a probably large enough number).
+    # Instead of writing from the ctx saver, we could also modify the ELF. However, we have better chances of 
+    # replicating the microarch. state if we perform the writes to memory like the program we are reducing.
+    addrs_memaddrs = []
     for mem_byte_id, (mem_byte_addr, mem_byte_val) in enumerate(saved_context.mem_bytes_dict.items()):
         if DO_ASSERT:
             assert mem_byte_val >= 0
@@ -386,12 +415,15 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
             assert mem_byte_addr >= 0
             assert mem_byte_addr < fuzzerstate.memsize
         # Arbitrarily use register 1 to load the byte addr
-        addrs_memaddrs.append(curr_addr)
-        fuzzerstate.ctxsv_bb.append(None) # will be replaced later on when addresses are written.
-        curr_addr += 4 # NO_COMPRESSED
+        addrs_memaddrs.append(curr_addr+4)
+        # fuzzerstate.ctxsv_bb.append(None) # will be replaced later on when addresses are written.
         # We load the byte addr into register 1
-        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, 1, 0, -1, is_rd_nonpickable_ok=True))
-        curr_addr += 4 # NO_COMPRESSED
+        fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1, is_rd_nonpickable_ok=True))
+        fuzzerstate.ctxsv_bb.append(None)
+        # curr_addr += 4 # NO_COMPRESSED
+        # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, 0, is_rd_nonpickable_ok=True))
+        curr_addr += 8 # NO_COMPRESSED
+
         # We set the byte value using an immediate
 
         if TAINT_EN:
@@ -428,6 +460,10 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
         else:
             fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lw", reg_id, MAX_NUM_PICKABLE_REGS, 4*reg_id, -1, is_rd_nonpickable_ok=True))
             curr_addr += 4 # NO_COMPRESSED
+
+    # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, (4+4*int(fuzzerstate.is_design_64bit))*len(saved_context.reg_vals), 0, is_rd_nonpickable_ok=True))
+    # fuzzerstate.ctxsv_bb.append(None)
+    # curr_addr += 4 # NO_COMPRESSED
 
 
     # Fifth, set the sum and mprv bits in mstatus if needed
@@ -470,6 +506,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
         mret = PrivilegeDescentInstruction_t0(fuzzerstate,True)
         mret.priv_level_after_op = tgt_addr_priv
         mret.va_layout_after_op = tgt_addr_layout
+        print(f"MEPC TARGET: phys: {hex(mepc_target)}, virt: {hex(mepc_target_virt)}")
         fuzzerstate.ctxsv_bb.append(mret) # mret
         # Add 2 nops for the mret, just in case the CPU is not doing great with mret sometimes :)
         fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0, is_rd_nonpickable_ok=True))
@@ -489,8 +526,9 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
     curr_addr += 4 # NO_COMPRESSED
     instr_end_addr = curr_addr
 
+
     ###
-    # The actual values will be set here
+    # Some padding before the actual values
     ###
 
     # Leave an extra CL space between the instructions and possibly tainted data to avoid prefetching tainted data. We also do this when the bug is disabled
@@ -504,9 +542,23 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,0xdeadbeef))
         curr_addr += 4
 
+    if DO_ASSERT:
+        assert curr_addr == fuzzerstate.ctxsv_bb_base_addr + len(fuzzerstate.ctxsv_bb)*4, f"curr_addr is `{hex(curr_addr)}`, fuzzerstate.ctxsv_bb_base_addr + len(fuzzerstate.ctxsv_bb)*4 is `{hex(fuzzerstate.ctxsv_bb_base_addr + len(fuzzerstate.ctxsv_bb)*4)}`" # NO_COMPRESSED
+
+    ###
+    # The actual values will be set here
+    ###
+
+    assert fuzzerstate.ctxsv_bb[0] == None
+    assert fuzzerstate.ctxsv_bb[1] == None
+    lui_imm, addi_imm = li_into_reg(to_unsigned(curr_addr, fuzzerstate.is_design_64bit))
+    fuzzerstate.ctxsv_bb[0] = ImmRdInstruction_t0(fuzzerstate, "lui", MAX_NUM_PICKABLE_REGS,lui_imm,is_rd_nonpickable_ok=True)
+    fuzzerstate.ctxsv_bb[1] = RegImmInstruction_t0(fuzzerstate, "addi",MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, addi_imm, is_rd_nonpickable_ok=True)
+    data_start_addr = curr_addr
     # Set the CSR values here. Use the register 1 to load the value, arbitrarily.
     if fuzzerstate.design_has_fpu:
-        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.FCSR])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
+        raise NotImplementedError
+        # fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.FCSR])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.fcsr))
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,0xdeadbeef))
         curr_addr += 8 # NO_COMPRESSED
@@ -517,17 +569,18 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
             if DO_ASSERT:
                 assert saved_context.mepc >> 64 == 0, "mepc is unexpectedly too large."
             # Little endian. For a number written big endian `abcd`, the bytes should be written in memory as `dcba`. So we write the lsbs first.
-            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MEPC])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
             if not fuzzerstate.is_design_64bit:
+                raise NotImplementedError
                 # Prepare register 2 to be written to the msb of mepc
                 fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MEPC])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.mepc & 0xffffffff))
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.mepc >> 32))
+            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MEPC])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
             curr_addr += 8 # NO_COMPRESSED
         else:
-            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MEPC])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.mepc))
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,0xdeadbeef))
+            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MEPC])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
             curr_addr += 8 # NO_COMPRESSED
 
     if fuzzerstate.design_has_supervisor_mode:
@@ -536,41 +589,43 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
             if DO_ASSERT:
                 assert saved_context.sepc >> 64 == 0, "sepc is unexpectedly too large."
             # Little endian. For a number written big endian `abcd`, the bytes should be written in memory as `dcba`. So we write the lsbs first.
-            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SEPC])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
             if not fuzzerstate.is_design_64bit:
+                raise NotImplementedError
                 # Prepare register 2 to be written to the msb of sepc
-                fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SEPC])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
+                # fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SEPC])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.sepc & 0xffffffff))
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.sepc >> 32))
+            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SEPC])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
             curr_addr += 8 # NO_COMPRESSED
         else:
-            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SEPC])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.sepc))
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,0xdeadbeef))
+            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SEPC])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
             curr_addr += 8 # NO_COMPRESSED
 
     # mcause
-    fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MCAUSE])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
     fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.mcause))
     fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,0xdeadbeef))
+    fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MCAUSE])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
     curr_addr += 8 # NO_COMPRESSED
 
+    #scause
     if fuzzerstate.design_has_supervisor_mode:
-        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SCAUSE])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.scause))
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,0xdeadbeef))
+        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SCAUSE])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
         curr_addr += 8 # NO_COMPRESSED
 
     # mscratch
-    fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MSCRATCH])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
     fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.mscratch & 0xffffffff))
     fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.mscratch >> 32))
+    fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MSCRATCH])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
     curr_addr += 8 # NO_COMPRESSED
 
     if fuzzerstate.design_has_supervisor_mode:
-        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SSCRATCH])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.sscratch & 0xffffffff))
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.sscratch >> 32))
+        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SSCRATCH])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
         curr_addr += 8 # NO_COMPRESSED
 
     if 'picorv32' not in fuzzerstate.design_name:
@@ -579,17 +634,18 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
             if DO_ASSERT:
                 assert saved_context.mtvec >> 64 == 0, "mtvec is unexpectedly too large."
             # Little endian. For a number written big endian `abcd`, the bytes should be written in memory as `dcba`. So we write the lsbs first.
-            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MTVEC])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
             if not fuzzerstate.is_design_64bit:
+                raise NotImplementedError
                 # Prepare register 2 to be written to the msb of mtvec
-                fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MTVEC])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
+                # fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MTVEC])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.mtvec & 0xffffffff))
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate, saved_context.mtvec >> 32))
+            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MTVEC])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
             curr_addr += 8 # NO_COMPRESSED
         else:
-            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MTVEC])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.mtvec))
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,0xdeadbeef))
+            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MTVEC])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
             curr_addr += 8 # NO_COMPRESSED
 
     if fuzzerstate.design_has_supervisor_mode:
@@ -598,35 +654,37 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
             if DO_ASSERT:
                 assert saved_context.stvec >> 64 == 0, "stvec is unexpectedly too large."
             # Little endian. For a number written big endian `abcd`, the bytes should be written in memory as `dcba`. So we write the lsbs first.
-            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.STVEC])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
             if not fuzzerstate.is_design_64bit:
+                raise NotImplementedError
                 # Prepare register 2 to be written to the msb of stvec
-                fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.STVEC])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
+                # fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.STVEC])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.stvec & 0xffffffff))
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.stvec >> 32))
+            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.STVEC])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
             curr_addr += 8 # NO_COMPRESSED
         else:
-            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.STVEC])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.stvec))
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,0xdeadbeef))
+            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.STVEC])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
             curr_addr += 8 # NO_COMPRESSED
 
     if fuzzerstate.design_has_supervisor_mode:
-        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MEDELEG])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.medeleg))
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,0xdeadbeef))
+        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MEDELEG])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
         curr_addr += 8 # NO_COMPRESSED
 
     # mstatus is a bit special because bits above 31 are typically used as well. We must hence discriminate between 32 and 64 bit designs.
     if DO_ASSERT:
         assert saved_context.mstatus >> 64 == 0, "mstatus is unexpectedly too large."
     # Little endian. For a number written big endian `abcd`, the bytes should be written in memory as `dcba`. So we write the lsbs first.
-    fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MSTATUS])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
     if not fuzzerstate.is_design_64bit:
         # Prepare register 2 to be written to the msb of mstatus
-        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MSTATUS])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
+        raise NotImplementedError
+        # fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MSTATUS])+1] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, curr_addr-data_start_addr, is_rd_nonpickable_ok=True)
     fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.mstatus & 0xffffffff))
     fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.mstatus >> 32))
+    fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MSTATUS])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
     curr_addr += 8 # NO_COMPRESSED
 
 
@@ -635,22 +693,23 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
         if DO_ASSERT:
             assert saved_context.satp >> 64 == 0, "satp is unexpectedly too large."
         # Little endian. For a number written big endian `abcd`, the bytes should be written in memory as `dcba`. So we write the lsbs first.
-        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SATP])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
         if not fuzzerstate.is_design_64bit:
+            raise NotImplementedError
             # Prepare register 2 to be written to the msb of satp
-            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SATP])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
+            # fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SATP])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.satp & 0xffffffff))
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,saved_context.satp >> 32))
+        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.SATP])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
         curr_addr += 8 # NO_COMPRESSED
 
     # mstatus is a bit special because bits above 31 are typically used as well. We must hence discriminate between 32 and 64 bit designs.
     if DO_ASSERT:
         assert saved_context.minstret >> 64 == 0, "minstret is unexpectedly too large."
     # Little endian. For a number written big endian `abcd`, the bytes should be written in memory as `dcba`. So we write the lsbs first.
-    fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MINSTRET])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
     if not fuzzerstate.is_design_64bit:
+        raise NotImplementedError
         # Prepare register 2 to be written to the msb of minstret
-        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MINSTRET])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
+        # fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MINSTRET])+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
 
     fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,(saved_context.minstret - ((instr_end_addr - (minstret_base_addr - 4 - 4*int(fuzzerstate.is_design_64bit))) // 4)) & 0xffffffff, signed=True))
 
@@ -662,8 +721,9 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,(((saved_context.minstret + (saved_context.minstreth << 32)) - ((instr_end_addr - minstret_base_addr - 4) // 4)) >> 32), signed=True))
         else:
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,(((saved_context.minstret + (saved_context.minstreth << 32)) - ((instr_end_addr - minstret_base_addr - 4) // 4)) >> 32), signed=True))
+    
+    fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MINSTRET])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
     curr_addr += 8 # NO_COMPRESSED
-
 
     ###
     # We're now done with CSRs, we still have to handle the RPROD
@@ -673,20 +733,21 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
         if DO_ASSERT:
             assert saved_context.saved_rprod_mask >> 64 == 0, "saved_rprod_mask is unexpectedly too large."
         # Little endian. For a number written big endian `abcd`, the bytes should be written in memory as `dcba`. So we write the lsbs first.
-        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(rprod_load)] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
         if not fuzzerstate.is_design_64bit:
+            raise NotImplementedError
             # Prepare register 2 to be written to the msb of saved_rprod_mask
-            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(rprod_load)+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
+            # fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(rprod_load)+1] = RegImmInstruction_t0(fuzzerstate,"addi", 2, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr+4, is_rd_nonpickable_ok=True)
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate, saved_context.saved_rprod_mask & 0xffffffff))
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate, saved_context.saved_rprod_mask >> 32))
+        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(rprod_load)] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
         curr_addr += 8 # NO_COMPRESSED
-        print(f"Saving {hex(saved_context.saved_rprod_mask)} in rprod")
+        # print(f"Saving {hex(saved_context.saved_rprod_mask)} in rprod")
 
     # Memory bytes
     for mem_byte_id, (mem_byte_addr, mem_byte_val) in enumerate(saved_context.mem_bytes_dict.items()):
         # Set the address of the mem byte
-        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addrs_memaddrs[mem_byte_id])] = RegImmInstruction_t0(fuzzerstate,"addi", 1, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
         fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,mem_byte_addr + SPIKE_STARTADDR))
+        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addrs_memaddrs[mem_byte_id])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, is_rd_nonpickable_ok=True)
         curr_addr += 4 # NO_COMPRESSED
 
     # Set the fpu register values here. Use the register 1 to load the address, arbitrarily.
@@ -718,10 +779,12 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
     if fuzzerstate.is_design_64bit:
         # Align if needed
         if curr_addr % 8 != 0:
-            fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,0))
+            fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,0xdeadbeef))
             curr_addr += 4
+            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_reg_load_addi)] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 4, is_rd_nonpickable_ok=True)
+        else:
+            fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_reg_load_addi)] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 0, is_rd_nonpickable_ok=True)
 
-        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_reg_load_addi)] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
         for reg_id, reg_val in enumerate(saved_context.reg_vals):
             reg_val_t0 = 0
             if TAINT_EN:
@@ -732,7 +795,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,reg_val // (1 << 32), reg_val_t0 // (1 << 32))) # upper 32bit
             curr_addr += 8
     else:
-        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_reg_load_addi)] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, curr_addr-fuzzerstate.ctxsv_bb_base_addr, is_rd_nonpickable_ok=True)
+        fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_reg_load_addi)] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 0, is_rd_nonpickable_ok=True)
         for reg_id, reg_val in enumerate(saved_context.reg_vals):
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,reg_val,reg_val_t0))
             curr_addr += 4 # NO_COMPRESSED
@@ -748,7 +811,9 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
     priv_level =  PrivilegeStateEnum.MACHINE
     va_layout = -1
     for id,instr in enumerate(fuzzerstate.ctxsv_bb):
+        assert instr is not None, f"Instruction at index {id} is None!"
         instr.paddr = fuzzerstate.ctxsv_bb_base_addr + 4*id + SPIKE_STARTADDR
+        # instr.print()
         instr.priv_level = priv_level
         instr.iscontext = True
         if USE_MMU:
@@ -766,5 +831,5 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
         # instr.print()
     # We store this state so we can reset the memview to it before (re-)simulating.
     # fuzzerstate.memview.store_state()
-    fuzzerstate.memview.set_as_initial_state()
+    fuzzerstate.memview.set_as_initial_state() # Is this correct since we execute the ctx saver block in the in-situ sim?
         

@@ -80,7 +80,7 @@ if __name__ == '__main__':
         print(f"Ignoring taint mismatches.")
         
     reduce_program(*gen_new_test_instance(design_name,seed,True),
-                    check_pc_spike_again=False,
+                    check_pc_spike_again=True,
                     hint_left_bound_bb=hint_left_bound_bb, 
                     hint_right_bound_bb=hint_right_bound_bb,
                     hint_left_bound_pillar_bb=hint_left_bound_pillar_bb,

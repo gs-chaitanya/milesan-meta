@@ -759,7 +759,7 @@ class IntStoreInstruction(ImmInstruction):
         self.rs1 =  rs1
         self.rs2  = rs2
         self.producer_id = producer_id
-
+        
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rs2]}, {self.imm}({ABI_INAMES[self.rs1]})"
 

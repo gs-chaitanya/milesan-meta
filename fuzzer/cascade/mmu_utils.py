@@ -444,6 +444,7 @@ class PageTablesGen:
             
             mapped_initial_block = False
             mapped_final_block = False
+            mapped_ctx_block = False
             # priv = PrivilegeStateEnum.MACHINE
             for _ in range(self.n_entries_per_level[layout_id][-1]):
                 assert (ppn_leaf^self.stopsig_addr)&PAGE_ALIGNMENT_MASK != 0, f"Page table allocated in same frame as stopsig addr. This should not happen."

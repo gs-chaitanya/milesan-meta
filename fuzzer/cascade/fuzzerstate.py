@@ -184,8 +184,8 @@ class FuzzerState:
         self.memview = MemoryView(self)
         self.memview_blacklist = MemoryView(self) # For load blacklis
 
-        self.num_store_locations = random.randint(1, MAX_NUM_STORE_LOCATIONS)
-        # self.num_store_locations = 0
+        self.max_num_store_locations = random.randint(1, MAX_NUM_STORE_LOCATIONS)
+        self.num_store_locations = 0
         self.ctxsv_size_upperbound: int = get_context_setter_max_size(self) # Can be called once is_design_64bit, design_has_fpu and design_has_fpud are set, and the number of store locations is known.
 
         self.memstorestate = MemStoreState()

@@ -5,7 +5,7 @@
 from cascade.cfinstructionclasses import *
 from cascade.toleratebugs import is_tolerate_cva6_fdivs_flags, is_tolerate_vexriscv_imprecise_fcvt, is_tolerate_vexriscv_fmin, is_tolerate_vexriscv_double_to_float, is_tolerate_vexriscv_dependent_single_precision, is_tolerate_vexriscv_dependent_fle_feq_ret1, is_tolerate_vexriscv_dependent_flt_ret0, is_tolerate_vexriscv_sqrt, is_tolerate_vexriscv_muldiv_conversion, is_tolerate_cva6_division, is_tolerate_cva6_single_precision
 from cascade.util import ISAInstrClass, IntRegIndivState, INSTRUCTIONS_BY_ISA_CLASS, SimulatorEnum
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS
+from params.fuzzparams import MAX_NUM_STORE_LOCATIONS
 
 from copy import copy
 from collections import defaultdict
@@ -131,8 +131,12 @@ def gen_next_instrstr_from_isaclass(isaclass: ISAInstrClass, fuzzerstate) -> str
         fuzzerstate.special_instrs_count += 1
 
     # If there's no tainted register and we are in a privilege that should process tainted data, load tainted data from memory.
-    if isaclass in [ISAInstrClass.MEM] and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and fuzzerstate.intregpickstate.get_num_tainted_regs_in_state(IntRegIndivState.FREE) == 0:
-        return random.choice(["lb","lbu","lh", "lhu", "lw"])
+    if isaclass in [ISAInstrClass.MEM]:
+        if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and fuzzerstate.intregpickstate.get_num_tainted_regs_in_state(IntRegIndivState.FREE) == 0:
+            return random.choice(["lb","lbu","lh", "lhu", "lw"])
+        elif fuzzerstate.num_store_locations == fuzzerstate.max_num_store_locations:
+            for instr_str in IntStoreInstruction.authorized_instr_strs:
+                keys_and_weights_dict[instr_str] = 0
 
     if "cva6" in fuzzerstate.design_name:
         # Double precision
