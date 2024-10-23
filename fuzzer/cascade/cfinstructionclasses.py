@@ -116,6 +116,7 @@ class BaseInstruction:
     priv_level = None
     iscontext = False
     iscompressed = False
+    isdead = False # During reduction, me might want to remove instructions from arch. execution but keep them in memory as dead code for transient execution.
     if USE_MMU:
         va_layout = -1
     else:
