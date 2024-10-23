@@ -37,8 +37,8 @@ from pathlib import Path
 REDUCTION_SIMULATOR = SimulatorEnum.VERILATOR
 NOPIZE_SANDWICH_INSTRUCTIONS = True
 FLATTEN_SANDWICH_INSTRUCTIONS = False
-REDUCE_TAINT = False
-REDUCE_DEAD_CODE = False
+REDUCE_TAINT = True
+REDUCE_DEAD_CODE = True
 FIND_PILLARS = True
 DOUBLECHECK_MODELSIM = True
 # @brief since stopsig and regdump addr are vitrual, the final block also needs some context, mainly, the translation scheme of stores in the current priviledge
@@ -93,9 +93,9 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
 
     final_instr = fuzzerstate.instr_objs_seq[-1][-1]
     final_addr = final_instr.vaddr if USE_MMU else final_instr.paddr
-    print(f"THE TARGET PC IS {hex((tgt_pc))}, last instruction at ({hex(final_instr.paddr)})")
-    print(f"TARGET LAYOUT IS {tgt_addr_layout}")
-    print(f"TARGET PRIV IS {tgt_addr_priv}")
+    # print(f"THE TARGET PC IS {hex((tgt_pc))}, last instruction at ({hex(final_instr.paddr)})")
+    # print(f"TARGET LAYOUT IS {tgt_addr_layout}")
+    # print(f"TARGET PRIV IS {tgt_addr_priv}")
 
     ctx_regdump_reqs, storenumbytes, insts = gen_ctx_regdump_reqs(fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider, tgt_pc)
 
@@ -140,7 +140,7 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
             val_t0 = (dumpedvals_t0[curr_id_in_dumpedvals+1] >> (8*byte_id)) & 0xFF
             saved_stores[addr] = val
             saved_stores_t0[addr] = val_t0 # We only care for the taints of the stores, not CSRs as those are untainted by construction.
-            print(f"instr: {insts[curr_id_in_dumpedvals].get_str()}: {hex(val)} ({hex(val_t0)}) -> {hex(addr)}")
+            # print(f"instr: {insts[curr_id_in_dumpedvals].get_str()}: {hex(val)} ({hex(val_t0)}) -> {hex(addr)}")
         curr_id_in_storenumbytes += 1
         curr_id_in_dumpedvals += 2
     csr_count_fordebug = 0
@@ -274,8 +274,9 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
 def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except_cf: int = None, index_first_bb_to_consider: int = 1, index_first_instr_to_consider: int = 0):
     # print(f"gen_reduced_elf with max_bb_id_to_consider: {max_bb_id_to_consider}, max_instr_id_except_cf: {max_instr_id_except_cf}, index_first_bb_to_consider: {index_first_bb_to_consider}, index_first_instr_to_consider: {index_first_instr_to_consider}")
     if DO_ASSERT:
+        assert not USE_COMPRESSED, f"Addr offset at end of function does not work with compressed yet."
         assert max_bb_id_to_consider >= 0
-        assert max_bb_id_to_consider < len(fuzzerstate.instr_objs_seq), f"Expected max_bb_id_to_consider `{max_bb_id_to_consider}` <= len(fuzzerstate.instr_objs_seq) `{len(fuzzerstate.instr_objs_seq)}`"
+        assert max_bb_id_to_consider < len(fuzzerstate.instr_objs_seq), f"Expected max_bb_id_to_consider `{max_bb_id_to_consider}` < len(fuzzerstate.instr_objs_seq) `{len(fuzzerstate.instr_objs_seq)}`"
         assert index_first_bb_to_consider >= 0
         assert index_first_bb_to_consider <= max_bb_id_to_consider or max_bb_id_to_consider == 0, f"index_first_bb_to_consider: `{index_first_bb_to_consider}`, max_bb_id_to_consider: `{max_bb_id_to_consider}`"
 
@@ -403,7 +404,6 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     
     
 
-
     # Retrieves the rd stream throughout execution to compare to in-situ simulation, only for safety.
     rd_regdump_reqs = gen_regdump_reqs_all_rds(test_fuzzerstate, index_first_bb_to_consider=index_first_bb_to_consider, first_instr_id_in_first_bb_to_consider=index_first_instr_to_consider)
     rd_regvals = run_trace_regs_at_pc_locs(test_fuzzerstate.instance_to_str(), spikereduce_elfpath, march_flags, SPIKE_STARTADDR, rd_regdump_reqs, False, final_addr, test_fuzzerstate.num_pickable_floating_regs if test_fuzzerstate.design_has_fpu else 0, test_fuzzerstate.design_has_fpud)
@@ -422,7 +422,7 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
 
     # Verify that the modifed program still has a valid taint propagation. 
     test_fuzzerstate.verify_program()
-
+    test_fuzzerstate.reset_states()
     return test_fuzzerstate, rtlreduce_elfpath, (finalintregvals_spikeresol[1:], finalfloatregvals_spikeresol, rd_regdump_reqs, rd_regvals), numinstrs
 
 # This module resolves a mismatch between design and simulation by finding the first basic block that causes a mismatch.
@@ -440,15 +440,13 @@ def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int =
         print(f"Generated RTL elf: {rtl_elfpath}")
 
     del fuzzerstate
-
     is_success, exception = runtest_simulator(test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs, REDUCTION_SIMULATOR)
 
     if not is_success and exception.fail_type == FailTypeEnum.TAINT_MISMATCH and IGNORE_TAINT_MISMATCH:
         is_success = True # We triggered leakage, but we are reducing for an architectural bug, not leakage.
-
-    assert is_success or exception.fail_type == FailTypeEnum.TAINT_MISMATCH 
-    # if DO_ASSERT and not IGNORE_TAINT_MISMATCH:
-    #     assert not (ASSERT_EXEC_IN_TAINT_SINK_PRIV and not is_success and test_fuzzerstate.() == 0 and exception.fail_type == FailTypeEnum.TAINT_MISMATCH), f"Triggered leakage without executing in taint sink privilege. Aborting reduction."
+    
+    if DO_ASSERT:
+        assert is_success or exception.fail_type == FailTypeEnum.TAINT_MISMATCH, f"Failed but not because of taint-mismatch: {str(exception)}"
 
     if quiet and not is_success:
         print(str(exception))
@@ -467,103 +465,84 @@ def is_mismatch_t0(test_fuzzerstate,quiet = False):
         print(str(exception))
     return not is_success
 
-
-def _find_right_taint_bound(test_fuzzerstate):
-    tainted_addresses = [i for i,j in test_fuzzerstate.memview.data_t0.items() if j != 0]
+def _reduce_taint(fuzzerstate,quiet:bool=False):
+    assert REDUCE_TAINT
+    tainted_addresses = [i for i,j in fuzzerstate.memview.data_t0.items() if j != 0]
+    right_bound = len(tainted_addresses)//2
     left_bound = 0
-    right_bound = len(tainted_addresses)
-    while right_bound - left_bound > 1:
-        tmp_fuzzerstate = deepcopy(test_fuzzerstate)
-        if DO_ASSERT:
-            assert right_bound > left_bound
-        candidate_bound = left_bound + (right_bound - left_bound) // 2
-        for tainted_addr in tainted_addresses[candidate_bound:]:
-            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
-        print(f"Testing {candidate_bound}.")
-        if is_mismatch_t0(tmp_fuzzerstate, len(tmp_fuzzerstate.instr_objs_seq)-1):
-            print(f"Leakage detected.")
-            right_bound = candidate_bound
-        else:
-            print(f"Leakage disappeared. Restoring taint.")
-            left_bound = candidate_bound
+    while left_bound < right_bound: # Assumes we leak a single word.
+        print(f"Reduction interval: [{left_bound},{right_bound})], {len(tainted_addresses)}")
+        print(f"Reduction interval: [{left_bound},{right_bound}): [{hex(tainted_addresses[left_bound])},{hex(tainted_addresses[right_bound-1])}]")
+        test_fuzzerstate = deepcopy(fuzzerstate)
+        for i in range(0, left_bound):
+            test_fuzzerstate.memview.data_t0[tainted_addresses[i]] = 0
+        for i in range(right_bound, len(tainted_addresses)):
+            test_fuzzerstate.memview.data_t0[tainted_addresses[i]] = 0
 
-    if DO_ASSERT:
-        assert left_bound + 1 == right_bound
-        tmp_fuzzerstate = deepcopy(test_fuzzerstate)
-        for tainted_addr in tainted_addresses[right_bound:]:
-            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
-        assert is_mismatch_t0(tmp_fuzzerstate, len(tmp_fuzzerstate.instr_objs_seq)-1), f"Failed detecting leakage with right bound {right_bound}"
-    return right_bound
+        test_fuzzerstate.memview.set_as_initial_state() # Important since we reset to it later.
+        delta = right_bound - left_bound
+        mismatch = is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1,quiet=quiet)
+        if mismatch: # gadget is between [left_bound, right_bound). Move left bound up
+            right_bound = left_bound + delta//2
+            print(f"Mismatch between [{left_bound},{right_bound})")
+        else: # gadget is in [right_bound, right_bound+(left_bound-right_bound)/2)
+            print(f"No mismatch between [{left_bound},{right_bound})")
+            left_bound = right_bound
+            right_bound =  left_bound + (delta+1)//2
+            if right_bound>len(tainted_addresses)-1:
+                right_bound = len(tainted_addresses)-1
+        # print(f"-> [{left_bound}, {right_bound}): [{hex(tainted_addresses[left_bound])},{hex(tainted_addresses[right_bound])}]") # invariant: leaked data in [left_bound,right_bound)
+        # print(f"{len( [i for i,j in test_fuzzerstate.memview.data_t0.items() if j != 0])} addresses tainted.")
+    assert left_bound == right_bound
+    test_fuzzerstate = deepcopy(fuzzerstate)
+    for addr_idx in range(0, len(tainted_addresses)): # start with right side so the left bound does not change
+        if addr_idx != left_bound:
+            test_fuzzerstate.memview.data_t0[tainted_addresses[addr_idx]] = 0
+    
+    test_fuzzerstate.memview.set_as_initial_state() # Important since we reset to it later.
+    assert is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1), f"Leaked address {hex(tainted_addresses[left_bound])} at bound {left_bound} incorrect."
+    return test_fuzzerstate, tainted_addresses[left_bound]
 
-
-def _find_left_taint_bound(test_fuzzerstate):
-    tainted_addresses = [i for i,j in test_fuzzerstate.memview.data_t0.items() if j != 0]
+# TODO: reduce also code that is removed with ctx setter and jump to final BB.
+def _reduce_dead_code(fuzzerstate):
+    assert FILL_MEM_WITH_DEAD_CODE
+    assert len(fuzzerstate.spec_instr_objs_seq) > 0
+    print("Reducing dead code...")
+    test_fuzzerstate = deepcopy(fuzzerstate)
+    test_fuzzerstate.spec_instr_objs_seq = []
+    if is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1):
+        print("Triggered mismatch without dead code.")
+        return test_fuzzerstate
+    right_bound = len(fuzzerstate.spec_instr_objs_seq)//2
     left_bound = 0
-    right_bound = len(tainted_addresses)
-    while right_bound - left_bound > 1:
-        tmp_fuzzerstate = deepcopy(test_fuzzerstate)
-        if DO_ASSERT:
-            assert right_bound > left_bound
-        candidate_bound = left_bound + (right_bound - left_bound) // 2
-        for tainted_addr in tainted_addresses[:candidate_bound]:
-            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
-        print(f"Testing {candidate_bound}.")
-        if is_mismatch_t0(tmp_fuzzerstate, len(tmp_fuzzerstate.instr_objs_seq)-1):
-            print(f"Leakage detected.")
-            left_bound = candidate_bound
-        else:
-            print(f"Leakage disappeared. Restoring taint.")
-            right_bound = candidate_bound
+    while left_bound < right_bound: # What if its not a single instruction?
+        print(f"Reduction interval: [{left_bound},{right_bound})")
+        test_fuzzerstate = deepcopy(fuzzerstate)
+        for _ in range(right_bound, len(test_fuzzerstate.spec_instr_objs_seq)): # start with right side so the left bound does not change
+            del test_fuzzerstate.spec_instr_objs_seq[-1]
+        for _ in range(0, left_bound):
+            del test_fuzzerstate.spec_instr_objs_seq[0]
+        delta = right_bound - left_bound
+        mismatch = is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1)
+        if mismatch: # gadget is between [left_bound, right_bound). Move left bound up
+            right_bound = left_bound + delta//2
+        else: # gadget is in [right_bound, right_bound+(left_bound-right_bound)/2)
+            left_bound = right_bound
+            right_bound =  left_bound + (delta+1)//2
+            if right_bound>len(fuzzerstate.spec_instr_objs_seq)-1:
+                right_bound = len(fuzzerstate.spec_instr_objs_seq)-1
+        print(f"[{left_bound},{right_bound})") # invariant: gadget in [left_bound,right_bound)
 
-    if DO_ASSERT:
-        assert left_bound + 1 == right_bound
-        tmp_fuzzerstate = deepcopy(test_fuzzerstate)
-        for tainted_addr in tainted_addresses[:right_bound-1]:
-            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
-        assert is_mismatch_t0(tmp_fuzzerstate, len(tmp_fuzzerstate.instr_objs_seq)-1), f"Failed detecting leakage with left bound {left_bound}"
-
-    return right_bound-1
-
-
-# Does not remove taints off immediates!
-def reduce_taint(fuzzerstate):
-    # Only need to generate one elf and then just reduce simsramtaint
-    test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs = gen_reduced_elf(fuzzerstate, len(fuzzerstate.instr_objs_seq)-1)
-    test_fuzzerstate.expected_regvals = expected_regvals_pairs
-    test_fuzzerstate.rtl_elfpath = rtl_elfpath
-
-    tainted_addresses = [i for i,j in test_fuzzerstate.memview.data_t0.items() if j != 0]
-    print("Starting with taint reduction...")
-    # left_bound = _find_left_taint_bound(test_fuzzerstate)
-    # print(f"Left bound is {left_bound}")
-    # right_bound = _find_right_taint_bound(test_fuzzerstate)
-    # print(f"Right bound is {right_bound}")
-    right_bound = 3678 
-    left_bound = 3678
-    if DO_ASSERT:
-        tmp_fuzzerstate = deepcopy(test_fuzzerstate)
-        for tainted_addr in tainted_addresses[:left_bound]:
-            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
-        for tainted_addr in tainted_addresses[right_bound+1:]:
-            tmp_fuzzerstate.memview.data_t0[tainted_addr] = 0
-        assert any(tmp_fuzzerstate.memview.data_t0.values())
-        assert is_mismatch_t0(tmp_fuzzerstate, len(tmp_fuzzerstate.instr_objs_seq)-1), f"Failed detecting leakage with bounds {left_bound} and {right_bound}"
-
-        leaked_addresses = [i for i,j in tmp_fuzzerstate.memview.data_t0.items() if j != 0]
-        privs = [fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[i&PAGE_ALIGNMENT_MASK] for i in leaked_addresses]
-    print(f"Found leaked data at {[hex(i) for i in leaked_addresses]}, belonging to {privs}")
-    return leaked_addresses
-# def _pick_matching_regs(fuzzerstate, instr_str, addr):
-#     fuzzerstate.simulate_execution(False,addr) # execute until here to get register values
-#     if instr_str == "beq":
-
-# def _create_random_non_taken_brancu(fuzzerstate, addr):
-#     instr_str = random.choice(BranchInstruction_t0.authorized_instr_strs)
-#     BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, plan_taken, iscompressed)
-
+    assert left_bound == right_bound
+    test_fuzzerstate = deepcopy(fuzzerstate)
+    test_fuzzerstate.spec_instr_objs_seq = [fuzzerstate.spec_instr_objs_seq[left_bound]]
+    is_success = is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1)
+    assert not is_success, f"Bound {left_bound} with instruction {fuzzerstate.spec_instr_objs_seq[right_bound].get_str()} wrong."
+    return test_fuzzerstate
+    
 
 # Flattens the control flow except for the initial block, the context setter and the final block.
-def _try_flatten_cf(fuzzerstate, failing_bb, failing_instr, pillar_bb, pillar_instr, quiet: bool = False):
+def _try_flatten_cf(fuzzerstate, failing_bb, failing_instr, pillar_bb, pillar_instr_id, quiet: bool = False):
     flat_fuzzerstate = deepcopy(fuzzerstate)
     orig_fuzzerstate = fuzzerstate # Renaming to prevent accidental use of fuzzerstate
     del fuzzerstate
@@ -591,7 +570,7 @@ def _try_flatten_cf(fuzzerstate, failing_bb, failing_instr, pillar_bb, pillar_in
         # If the last instruction is a JAL/R, we set rd to address of the JAL/R with a lui+add sequence
         # Maybe add non-taken branches to have similar effect on BPU?
         if isinstance(last_instr, (JALInstruction_t0,JALRInstruction_t0)):
-            lui_imm,addi_imm = li_into_reg(last_instr.paddr-SPIKE_STARTADDR, False) # need to remove the spike offset because of sign-extension
+            lui_imm,addi_imm = li_into_reg(to_unsigned(last_instr.paddr-SPIKE_STARTADDR,fuzzerstate.is_design_64bit), False) # need to remove the spike offset because of sign-extension
             lui_instr = ImmRdInstruction_t0(flat_fuzzerstate,'lui',last_instr.rd,lui_imm)
             lui_instr.paddr = addr_flat_instrs + 4*len(new_flat_instrs) + SPIKE_STARTADDR
             new_flat_instrs += [lui_instr]
@@ -605,7 +584,7 @@ def _try_flatten_cf(fuzzerstate, failing_bb, failing_instr, pillar_bb, pillar_in
                 if failing_instr == len(bb)-1 and not quiet:
                     print(f"WARNING: Replacing failing instruction {last_instr.get_str()} with {lui_instr.get_str()}, {addi_instr.get_str()}")
             if bb_id == pillar_bb:
-                if pillar_instr == len(bb)-1 and not quiet:
+                if pillar_instr_id == len(bb)-1 and not quiet:
                     print(f"WARNING: Replacing pillar instruction {last_instr.get_str()} with {lui_instr.get_str()}, {addi_instr.get_str()}")
             if not quiet:
                 print(f"Replacing jump instruction {last_instr.get_str()} with {lui_instr.get_str()}, {addi_instr.get_str()}")
@@ -865,17 +844,21 @@ def _find_pillar_instr(fuzzerstate, failing_bb_id: int, failing_instr_id: int, p
 # @param failing_bb_id is the index of the first bb that, when removed as well as the subsequent ones, makes the bug disappear.
 # @param failing_instr_id is the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore. It is None if the failing instruction is actually the last one in the previous bb.
 # Transforms unused instructions between the first pillar and the faulty instruction into nops.
-def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, failing_instr_id: int, pillar_bb_id: int, pillar_instr: int, fault_from_prev_bb: bool, quiet: bool = False):
+def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, failing_instr_id: int, pillar_bb_id: int, pillar_instr_id: int, fault_from_prev_bb: bool, quiet: bool = False):
     assert not USE_COMPRESSED
     if DO_ASSERT:
-        assert pillar_bb_id <= failing_bb_id+1
-    
-    if pillar_bb_id == failing_bb_id and failing_instr_id == pillar_instr:
+        assert pillar_bb_id <= failing_bb_id+1, f"{pillar_bb_id} <= {failing_bb_id+1} does not hold."
+        assert pillar_bb_id >= 1 and pillar_bb_id < len(fuzzerstate.instr_objs_seq), f"1 < {pillar_bb_id} < {len(fuzzerstate.instr_objs_seq)} does not hold."
+        assert failing_bb_id >= 1 and failing_bb_id < len(fuzzerstate.instr_objs_seq), f"1 < {failing_bb_id} < {len(fuzzerstate.instr_objs_seq)} does not hold."
+        assert is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id,quiet=quiet)
+        assert not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id-1, pillar_bb_id, pillar_instr_id, quiet=quiet)
+
+    if pillar_bb_id == failing_bb_id and failing_instr_id == pillar_instr_id:
         return fuzzerstate
 
     if pillar_bb_id == failing_bb_id:
         # raise NotImplementedError('TODO check the case where pillar_bb_id == failing_bb_id')
-        for instr_id in range(pillar_instr, failing_instr_id+1):
+        for instr_id in range(pillar_instr_id, failing_instr_id+1):
             # Save the instruction before trying to turn it into a nop
             saved_instr = fuzzerstate.instr_objs_seq[failing_bb_id][instr_id]
             nop_instr =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
@@ -887,7 +870,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
             # For debug printing
             curr_addr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id # NO_COMPRESSED
             try:
-                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr):
+                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id):
                     print(f"(D) Addr {hex(curr_addr)}: Substituted with a nop.")
                 else:
                     # If this nop substitution killed the mismatch, then we must keep this instruction as normal.
@@ -900,7 +883,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 
 
     else:
-        for instr_id in range(pillar_instr, len(fuzzerstate.instr_objs_seq[pillar_bb_id])-1):
+        for instr_id in range(pillar_instr_id, len(fuzzerstate.instr_objs_seq[pillar_bb_id])-1):
             saved_instr = copy(fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id]) # No deepcopy! Reference to fuzzerstate needs to be maintainted.
             # If this is already a nop, then pass
             nop_instr =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
@@ -919,7 +902,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
             curr_addr = fuzzerstate.bb_start_addr_seq[pillar_bb_id] + 4*instr_id # NO_COMPRESSED
             assert curr_addr + SPIKE_STARTADDR == nop_instr.paddr, f"{saved_instr.get_str()} replaced with {nop_instr.get_str()} not placed at right addr {hex(curr_addr + SPIKE_STARTADDR)}"
             try:
-                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, quiet=quiet):
+                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, quiet=quiet):
                     if not quiet:
                         print(f"(A) {saved_instr.get_str()}: Substituted with a nop.")
                     del saved_instr
@@ -957,7 +940,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
             if not quiet:
                 print(f"(B) Trying to replace instructions in BB at {hex(fuzzerstate.bb_start_addr_seq[bb_id])} with nops.")
             try:
-                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, quiet=quiet):
+                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, quiet=quiet):
                     if not quiet:
                         print(f"(B) BB {hex(fuzzerstate.bb_start_addr_seq[bb_id])}: Coarse grain nop substitution success.")
                     continue
@@ -992,7 +975,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
                 curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + 4*instr_id # NO_COMPRESSED
                 assert curr_addr + SPIKE_STARTADDR == nop_instr.paddr, f"{saved_instr.get_str()} replaced with {nop_instr.get_str()} not placed at right addr {hex(curr_addr + SPIKE_STARTADDR)}"
                 try:
-                    if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, quiet=quiet):
+                    if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, quiet=quiet):
                         if not quiet:
                             print(f"(B) {saved_instr.get_str()}: Substituted with a nop.")
                     else:
@@ -1022,14 +1005,14 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
             # For debug printing
             curr_addr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id # NO_COMPRESSED
             try:
-                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, quiet=quiet):
+                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, quiet=quiet):
                     if not quiet:
                         print(f"(C) {saved_instr.get_str()}: Substituted with a nop.")
                 else:
                     # If this nop substitution killed the mismatch, then we must keep this instruction as normal.
                     fuzzerstate.instr_objs_seq[failing_bb_id][instr_id] = saved_instr
                     if not quiet:
-                        print(f"(C) {saved_instr.get_str()}: Not substituted instruction with a nop.")
+                        print(f"(C) {saved_instr.get_str()}: Not substituted instruction with a nop: Did not trigger bug.")
             except Exception as e:
                 # Possibly, the substitution killed the spike or in-situ simulation, for example by changing a non-taken branch into a taken branch or tainting a source register for a cf-ambiguous instruction.
                 fuzzerstate.instr_objs_seq[failing_bb_id][instr_id] = saved_instr
@@ -1037,45 +1020,12 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
                     print(f"(C) {saved_instr.get_str()}: Not substituted instruction with a nop ({str(e)}).")
 
     if DO_ASSERT:
-        assert is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr,quiet=quiet)
-        assert not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id-1, pillar_bb_id, pillar_instr, quiet=quiet)
+        assert is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id,quiet=quiet)
+        assert not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id-1, pillar_bb_id, pillar_instr_id, quiet=quiet)
 
     return fuzzerstate
 
 
-def _reduce_dead_code(fuzzerstate):
-    assert FILL_MEM_WITH_DEAD_CODE
-    assert len(fuzzerstate.spec_instr_objs_seq) > 0
-    test_fuzzerstate = deepcopy(fuzzerstate)
-    test_fuzzerstate.spec_instr_objs_seq = []
-    if not is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1):
-        print("Triggered mismatch without speculative instructions.")
-        return test_fuzzerstate
-    right_bound = len(fuzzerstate.spec_instr_objs_seq)//2
-    left_bound = 0
-    while left_bound < right_bound: # What if its not a single instruction?
-        print(f"Reduction interval: [{left_bound},{right_bound})")
-        test_fuzzerstate = deepcopy(fuzzerstate)
-        for _ in range(right_bound, len(test_fuzzerstate.spec_instr_objs_seq)): # start with right side so the left bound does not change
-            del test_fuzzerstate.spec_instr_objs_seq[-1]
-        for _ in range(0, left_bound):
-            del test_fuzzerstate.spec_instr_objs_seq[0]
-        delta = right_bound - left_bound
-        is_success = is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1)
-        if not is_success: # gadget is between [left_bound, right_bound). Move left bound up
-            right_bound = left_bound + delta//2
-        else: # gadget is in [right_bound, right_bound+(left_bound-right_bound)/2)
-            left_bound = right_bound
-            right_bound =  left_bound + (delta+1)//2
-        print(f"[{left_bound},{right_bound})") # invariant: gadget in [left_bound,right_bound)
-
-    assert left_bound == right_bound
-    test_fuzzerstate = deepcopy(fuzzerstate)
-    test_fuzzerstate.spec_instr_objs_seq = [fuzzerstate.spec_instr_objs_seq[left_bound]]
-    is_success = is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1)
-    assert not is_success, f"Bound {left_bound} with instruction {fuzzerstate.spec_instr_objs_seq[right_bound].get_str()} wrong."
-    return test_fuzzerstate
-    
 # This is the main function in this file.
 # First finds the problematic basic block.
 # Second, finds the problematic instruction.
@@ -1094,15 +1044,21 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     if DO_ASSERT:
         assert nmax_bbs is None or nmax_bbs > 0
 
-    start_time = time.time()
+    time_nopize_instr=0
+    time_pillar_bb_search=0
+    time_pillar_instr_search=0
+    time_failing_bb_search=0
+    time_failing_instr_search=0
+    time_reduce_taint=0
+    time_reduce_dead_code=0
 
+    start_time = time.time()
     random.seed(randseed)
     fuzzerstate = FuzzerState(get_design_boot_addr(design_name), design_name, memsize, randseed, nmax_bbs, authorize_privileges)
 
     gen_basicblocks(fuzzerstate)
 
 
-    # spike resolution
     fuzzerstate.expected_regvals = spike_resolution(fuzzerstate, check_pc_spike_again)
 
     if len(fuzzerstate.instr_objs_seq) == 1:
@@ -1126,17 +1082,12 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         fuzzerstate.instr_objs_seq[block_id][instr_id] = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
 
 
-    if REDUCE_TAINT:
-        leaked_addresses = reduce_taint(fuzzerstate)
-
-    # assert is_mismatch(fuzzerstate,len(fuzzerstate.instr_objs_seq)-1)
-    # numinstrs = sum([len(i) for i in fuzzerstate.instr_objs_seq])
-
     ###
     # Find the first bb that causes trouble.
     ###
 
     # failing_bb_id is the index of the first basic block that causes trouble, in the sense that when it is removed (and all the following ones), the test case does not fail anymore.
+    start_failing_bb_search = time.time()
     failing_bb_id = _find_failing_bb(fuzzerstate, hint_left_bound_bb, hint_right_bound_bb, quiet=quiet)
 
     # If fail even just with the initial block
@@ -1166,6 +1117,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         fuzzerstate.log(ret_msg)
         return ret_msg
 
+    time_failing_bb_search = time.time()-start_failing_bb_search
 
     ###
     # Find the specific problematic instruction in the bb.
@@ -1173,7 +1125,9 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     # failing_instr_id is the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore.
     # It is None if the failing instruction is actually the last one in the previous bb.
+    start_failing_instr_search = time.time()
     failing_instr_id = _find_failing_instr_in_bb(fuzzerstate, failing_bb_id, hint_left_bound_instr, hint_right_bound_instr, quiet=quiet)
+
     # Regularize the case where the faulty instruction was a cf instruction at the end of a bb.
     # If the fault comes from the prev bb, by definition we keep failing_bb_id untouched, and we set failing_instr_id to -1.
     fault_from_prev_bb = False
@@ -1189,68 +1143,54 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             failing_bb_id = failing_bb_id-1
             failing_instr_id = len(fuzzerstate.instr_objs_seq[failing_bb_id])-1
 
+    time_failing_instr_search = time.time()-start_failing_instr_search
     
-    # ret_msg = f"{fuzzerstate.instance_to_str()}:\n"
-    # ret_msg += f"Failing bb id                    : {failing_bb_id}\n"
-    # ret_msg += f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}\n"
-    # ret_msg += f"Failing instr in bb excluding cf : {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])-1}\n"
-    # ret_msg += f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str(color_taint=False)}\n"
-
-    # if not IGNORE_TAINT_MISMATCH and fuzzerstate.instr_objs_seq[failing_bb_id][0].priv_level not in fuzzerstate.taint_source_privs:
-    #     ret_msg += f"\tLeakage from {[p.name for p in fuzzerstate.taint_source_privs]} to {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name} found!\n"
-    
-    # if not quiet:
-    #     print(ret_msg)
-    
-    # if not find_pillars:
-    #     return ret_msg
     ###
-    # Cut the first bbs until the problem disappears.
-    ###
+    # Find the Pillar BB
+    ##
 
+    
     # pillar_bb_id: the index of the last bb such as the test case still succeeds when the bb `pillar_bb_id` is removed (and all the preceding instructions and bbs).
     # We have as an invariant: pillar_bb_id <= failing_bb_id
     if find_pillars:
-        pillar_bb_id = 0
-        prev_pillar_bb_id = 0
-        fuzzerstate.last_bb_id_before_next_ctxsv_bb = prev_pillar_bb_id
-        pillar_bb_id = _find_pillar_bb(fuzzerstate, failing_bb_id, failing_instr_id, fault_from_prev_bb, hint_left_bound_pillar_bb if pillar_bb_id == 0 else pillar_bb_id, hint_right_bound_pillar_bb, quiet=quiet)
+        start_pillar_bb = time.time()
+        pillar_bb_id = _find_pillar_bb(fuzzerstate, failing_bb_id, failing_instr_id, fault_from_prev_bb, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, quiet=quiet)
+        time_pillar_bb_search = time.time()-start_pillar_bb
         ###
         # Cut the first instructions of the pillar bb.
         ###
-        if USE_MMU: # instruction level not implemented for virtual memory
-            pillar_instr = 0
+        start_pillar_instr_search = time.time()
+        if USE_MMU: # instruction level not implemented for virtual memory. Its enough to nopize them anyway.
+            pillar_instr_id = 0
         else:
-            pillar_instr = _find_pillar_instr(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, fault_from_prev_bb, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr, quiet=quiet)
+            pillar_instr_id = _find_pillar_instr(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, fault_from_prev_bb, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr, quiet=quiet)
+        time_pillar_instr_search = time.time()-start_pillar_instr_search
 
-        fuzzerstate, _, _, _ = gen_reduced_elf(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr)
+        # fuzzerstate, _, _, _ = gen_reduced_elf(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id)
         #  # We remove the BBs [1,pillar_bb_id) so the index of the last interesting BB needs to be adjusted and the pillar BB id becomes 1.
-        failing_bb_id -= (pillar_bb_id-1)
-        pillar_bb_id = 1
-        if pillar_bb_id == failing_bb_id:
-            # We remove the instructions [0,pillar_instr) in the BB so the index of the failing instruction shifts by pillar_instr-1.
-            failing_instr_id -= pillar_instr
-        pillar_instr = 0 # All instructions before the pillar instruction are removed, thus the index changes to 0.
+        # if pillar_bb_id == 0:
+        #     find_pillars = False # Failed at finding pillar BB so don't try to nopize initial BB.
+        # else:
+        #     print(f"failing_bb_id: {failing_bb_id} -> {failing_bb_id - (pillar_bb_id-1)}, pillar_bb_id: {pillar_bb_id}")
+        #     failing_bb_id -= (pillar_bb_id-1)
+        #     pillar_bb_id = 1
+        #     if pillar_bb_id == failing_bb_id:
+        #         # We remove the instructions [0,pillar_instr_id) in the BB so the index of the failing instruction shifts by pillar_instr_id-1.
+        #         failing_instr_id -= pillar_instr_id
+            # pillar_instr_id = 0 # All instructions before the pillar instruction are removed, thus the index changes to 0.
 
 
     ###
     # Transform some instructions into nops.
     ###
 
-    if find_pillars and NOPIZE_SANDWICH_INSTRUCTIONS:
+    if find_pillars and NOPIZE_SANDWICH_INSTRUCTIONS and pillar_bb_id > 0:
         # The advantage of doing this before the reduction of the ELF size is that we may successfully remove some load instructions targeting the instructions we will remove. The downside is that it is slower than cleaning up after the reduction.
-        fuzzerstate = _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, fault_from_prev_bb, quiet=quiet)
-        fuzzerstate.verify_program(print_execution=False,print_trace=False)
-
-        if not quiet:
-            print(f"Failing bb id                    : {failing_bb_id}")
-            print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}")
-            print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}")
-            print(f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}")
-            if find_pillars:
-                print(f"Pillar bb id                     : {pillar_bb_id}")
-                print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id] + SPIKE_STARTADDR)}")
-                print(f"Pillar instr                     : {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].get_str()}")
+        start_nopize_instr = time.time()
+        fuzzerstate = _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, fault_from_prev_bb, quiet=quiet)
+        time_nopize_instr = time.time()-start_nopize_instr
+        n_nops, n_non_nop_instrs  =  _count_instructions(fuzzerstate,failing_bb_id,failing_instr_id, pillar_bb_id, pillar_instr_id)
+        # fuzzerstate.verify_program(print_execution=False,print_trace=False)
 
     # Not mature code yet.
     if find_pillars and FLATTEN_SANDWICH_INSTRUCTIONS and not pillar_bb_id == failing_bb_id:
@@ -1258,7 +1198,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         if not quiet:
             print('Flattening the control flow.')
         try:
-            fuzzerstate, is_success_flattening = _try_flatten_cf(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, quiet=quiet)
+            fuzzerstate, is_success_flattening = _try_flatten_cf(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, quiet=quiet)
         except Exception as e:
             print(f"Exception while flattening the control flow: {e}")
             is_success_flattening = False
@@ -1273,19 +1213,19 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             fault_from_prev_bb = False
 
             failing_instr_id = _find_failing_instr_in_bb(fuzzerstate, failing_bb_id, quiet=quiet)
-            pillar_instr = _find_pillar_instr(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, fault_from_prev_bb, quiet=quiet)
+            pillar_instr_id = _find_pillar_instr(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, fault_from_prev_bb, quiet=quiet)
             # Remove the instructions after and before
             fuzzerstate.instr_objs_seq[failing_bb_id] = fuzzerstate.instr_objs_seq[failing_bb_id][:failing_instr_id+2]
-            jal_instr = JALInstruction_t0(fuzzerstate, "jal", 0, fuzzerstate.bb_start_addr_seq[1] + 4*(pillar_instr) - (fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*fuzzerstate.ctxsv_bb_jal_instr_id))
+            jal_instr = JALInstruction_t0(fuzzerstate, "jal", 0, fuzzerstate.bb_start_addr_seq[1] + 4*(pillar_instr_id) - (fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*fuzzerstate.ctxsv_bb_jal_instr_id))
             jal_instr.paddr = fuzzerstate.ctxsv_bb_base_addr + 4*fuzzerstate.ctxsv_bb_jal_instr_id + SPIKE_STARTADDR
             fuzzerstate.ctxsv_bb[fuzzerstate.ctxsv_bb_jal_instr_id] = jal_instr
-            for instr_id in range(pillar_instr):
+            for instr_id in range(pillar_instr_id):
                 nop_instr = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0) # RawDataWord(0)
                 nop_instr.paddr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id + SPIKE_STARTADDR
                 fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id] = nop_instr
 
             # We can do this one more time
-            fuzzerstate = _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr, fault_from_prev_bb, quiet=quiet)
+            fuzzerstate = _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, fault_from_prev_bb, quiet=quiet)
             if not quiet:
                 print(f"Failing bb id                    : {failing_bb_id}")
                 print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}")
@@ -1294,7 +1234,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
                 if find_pillars:
                     print(f"Pillar bb id                     : {pillar_bb_id}")
                     print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id] + SPIKE_STARTADDR)}")
-                    print(f"Pillar instr                     : {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].get_str()}")
+                    print(f"Pillar instr                     : {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr_id].get_str()}")
 
             fuzzerstate.verify_program(print_execution=False,print_trace=False)
 
@@ -1313,7 +1253,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     ## SMALLER ELF ##
     if failing_instr_id == -1 and fault_from_prev_bb:
-        ret = gen_reduced_elf(fuzzerstate, failing_bb_id-1)
+        ret = gen_reduced_elf(fuzzerstate, failing_bb_id)
         if ret is False:
             test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller = itertools.repeat(None,4)
             print('Warning: smaller is trivial. Error may come from initial block.')
@@ -1342,65 +1282,81 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         print('Success smaller:', is_success_smaller)
         print('smaller msg:', rtl_msg_smaller)
 
-    assert is_success_smaller and not is_success_larger, f"Reduction failed."
+    assert is_success_smaller and not is_success_larger, f"Reduction failed: is_success_smaller: {is_success_smaller}, is_success_larger: {is_success_larger}"
 
-    if REDUCE_DEAD_CODE:
-        test_fuzzerstate_larger = _reduce_dead_code(test_fuzzerstate_larger)
 
     ## CHECK THAT BUG IS NOT FROM VERILATOR ##
-    if DOUBLECHECK_MODELSIM and not fuzzerstate.simulator == SimulatorEnum.MODELSIM: 
+    if DOUBLECHECK_MODELSIM and fuzzerstate.simulator == SimulatorEnum.VERILATOR: 
+        if DO_ASSERT:
+            assert test_fuzzerstate_larger.simulator == SimulatorEnum.VERILATOR
+            assert test_fuzzerstate_smaller.simulator == SimulatorEnum.VERILATOR
+            assert os.path.exists(rtl_elfpath_larger), f"Larger ELF at {rtl_elfpath_larger} got deleted. This is not allowed during reduction."
+            assert os.path.exists(rtl_elfpath_smaller), f"Smaller ELF at {rtl_elfpath_smaller} got deleted. This is not allowed during reduction."
+
         test_fuzzerstate_larger.simulator =  SimulatorEnum.MODELSIM
-        test_fuzzerstate_larger.intregpickstate.setup_registers() # Restore registers to before anything was executed.
-        test_fuzzerstate_larger.memview.restore(0) # Restore contents before anything was executed.
-        test_fuzzerstate_larger.csrfile.reset() # Reset all CSRs to zero.
-        assert os.path.exists(rtl_elfpath_larger), f"Larger ELF at {rtl_elfpath_larger} got deleted. This is not allowed during reduction."
+        test_fuzzerstate_larger.reset_states()
         is_success_larger, rtl_msg_larger = runtest_simulator(test_fuzzerstate_larger, rtl_elfpath_larger, expected_regvals_pairs_larger, numinstrs_larger)
         if not quiet:
             print('Success larger MODELSIM:', is_success_larger)
             print('larger msg MODELSIM:', rtl_msg_larger)
 
         if not is_success_larger:
-
             test_fuzzerstate_smaller.simulator =  SimulatorEnum.MODELSIM
-            test_fuzzerstate_smaller.intregpickstate.setup_registers() # Restore registers to before anything was executed.
-            test_fuzzerstate_smaller.memview.restore(0) # Restore contents before anything was executed.
-            test_fuzzerstate_smaller.csrfile.reset() # Reset all CSRs to zero.
-            assert os.path.exists(rtl_elfpath_smaller), f"Smaller ELF at {rtl_elfpath_smaller} got deleted. This is not allowed during reduction."
+            test_fuzzerstate_smaller.reset_states()
             is_success_smaller, rtl_msg_smaller = runtest_simulator(test_fuzzerstate_smaller, rtl_elfpath_smaller, expected_regvals_pairs_smaller, numinstrs_smaller)
             if not quiet:
                 print('Success smaller MODELSIM:', is_success_smaller)
                 print('smaller msg MODELSIM:', rtl_msg_smaller)
 
+        test_fuzzerstate_larger.simulator =  SimulatorEnum.VERILATOR
+        test_fuzzerstate_smaller.simulator =  SimulatorEnum.VERILATOR
 
+    if REDUCE_DEAD_CODE:
+        start_reduce_dead_code = time.time()
+        test_fuzzerstate_larger = _reduce_dead_code(test_fuzzerstate_larger)
+        time_reduce_dead_code = time.time()-start_reduce_dead_code
+
+    if REDUCE_TAINT:
+        start_reduce_taint = time.time()
+        test_fuzzerstate_larger, leaked_address = _reduce_taint(test_fuzzerstate_larger)
+        time_reduce_taint = time.time() - start_reduce_taint
 
     ## GENERATE RETURN MESSAGE FOR LOGS ##
     ret_msg = f"{fuzzerstate.instance_to_str()}:\n"
-    # ret_msg += f"\t Larger elf at {rtl_elfpath_larger}, success {is_success_larger}\n"
-    # ret_msg += f"\t Smaller elf at {rtl_elfpath_smaller}, success {is_success_smaller}\n"
     if find_pillars:
         ret_msg += f"\t Pillar bb id: {pillar_bb_id}\n"
-        ret_msg += f"\t Pillar instr id: {pillar_instr}\n"
-        ret_msg += f"\t Pillar instr: {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr].get_str()}\n"
-        numinstrs = sum(map(len, fuzzerstate.instr_objs_seq[1:])) # We remove the instuctions before the pillar and after the leaking one
-        ret_msg += f"\t Total number of instructions until failing instruction: {numinstrs}\n"
+        ret_msg += f"\t Pillar instr id: {pillar_instr_id}\n"
+        ret_msg += f"\t Pillar instr: {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr_id].get_str()}\n"
     ret_msg += f"\t Failing bb id: {failing_bb_id}\n"
     ret_msg += f"\t Failing instr id: {failing_instr_id}\n"
     ret_msg += f"\t Failing instr: {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}\n"
     if find_pillars:
-        ret_msg += f"\t Total number of bbs: {failing_bb_id-pillar_bb_id}\n"
-        if NOPIZE_SANDWICH_INSTRUCTIONS:
-            n_nops =  _count_n_nops(fuzzerstate,pillar_bb_id,failing_bb_id)
-            ret_msg += f"\t Total number of non-nop instructions: {numinstrs-n_nops} ({numinstrs} instructions - {n_nops} nops)\n"
-    ret_msg += f"Reduced ELF: {rtl_elfpath_larger}\n"
+        ret_msg += f"\t Total number of bbs: {failing_bb_id-pillar_bb_id+1}\n"
+        ret_msg += f"\t Total number of non-nop instructions before leaking instruction: {n_non_nop_instrs} ({n_nops} nops)\n"
+    if REDUCE_TAINT:
+        ret_msg += f"\t Leaked address: {hex(leaked_address)}\n"
+    ret_msg += f"\t Reduced ELF: {rtl_elfpath_larger}\n"
     if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level in fuzzerstate.taint_sink_privs:
         ret_msg += f"\t Detected leakage from {[p.name for p in fuzzerstate.taint_source_privs]} -> {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name}\n"
 
     if is_success_larger:
-        ret_msg += f"\tBug disappears in modelsim!\n"
+        ret_msg += f"\t Bug disappears in modelsim!\n"
     elif not is_success_smaller:
-        ret_msg += f"\tBug breaks program in modelsim!\n"
-    if start_time is not None:
-        ret_msg += f"\tTotal time for reduction : {time.time()-start_time}\n"
+        ret_msg += f"\t Bug breaks program in modelsim!\n"
+
+    ret_msg += f"\t Total time: {time.time()-start_time}s\n"
+    ret_msg += f"\t Time to find failing BB: {time_failing_bb_search}s\n"    
+    ret_msg += f"\t Time to find failing instr: {time_failing_instr_search}s\n"    
+    if FIND_PILLARS: 
+        ret_msg += f"\t Time to find pillar BB: {time_pillar_bb_search}s\n"   
+        ret_msg += f"\t Time to find pillar instr: {time_pillar_instr_search}s\n" 
+    if NOPIZE_SANDWICH_INSTRUCTIONS:   
+        ret_msg += f"\t Time to nopize instr: {time_nopize_instr}s\n"    
+    if REDUCE_TAINT:
+        ret_msg += f"\t Time to reduce taint: {time_reduce_taint}s\n"
+    if REDUCE_DEAD_CODE:
+        ret_msg += f"\t Time to reduce dead code: {time_reduce_dead_code}s\n"
+  
 
     if not quiet:
         print(ret_msg)
@@ -1413,13 +1369,31 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     return ret_msg
 
-# @returns: #nops \in BBs[min_bb, max_bb]
-def _count_n_nops(fuzzerstate, min_bb, max_bb):
+# @returns: #nops \in BBs[min_bb[min_instr:], max_bb[:max_instr]]
+def _count_instructions(fuzzerstate, max_bb, max_instr, min_bb, min_instr):
     nop_instr_bytecode =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0).gen_bytecode_int(USE_SPIKE_INTERM_ELF)
     n_nops = 0
-    for bb in fuzzerstate.instr_objs_seq[min_bb:max_bb+1]:
-        for instr in bb:
+    n_non_nop_insts = 0
+    for bb_idx, bb in enumerate(fuzzerstate.instr_objs_seq):
+        if bb_idx < min_bb:
+            continue
+        elif bb_idx > max_bb:
+            break
+        elif bb_idx == 0:
+            continue
+        if bb_idx == min_bb:
+            start_idx = min_instr
+        else:
+            start_idx = 0
+        if bb_idx == max_bb:
+            end_idx = max_instr
+            assert max_instr <= len(bb)
+        else:
+            end_idx = len(bb)
+        for instr in bb[start_idx:end_idx]:
             if instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF) == nop_instr_bytecode:
                 n_nops += 1
+            else: 
+                n_non_nop_insts +=1
 
-    return n_nops
+    return n_nops, n_non_nop_insts

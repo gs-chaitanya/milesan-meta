@@ -298,9 +298,9 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
             addr_csr_loads[CSR_IDS.STVEC] =  curr_addr+4
             fuzzerstate.ctxsv_bb.append(IntLoadInstruction_t0(fuzzerstate,"lwu" if fuzzerstate.is_design_64bit else "lw", 1, MAX_NUM_PICKABLE_REGS, 0, -1))
             fuzzerstate.ctxsv_bb.append(None)
-            fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
+            # fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, 0, is_rd_nonpickable_ok=True))
             fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, 1, CSR_IDS.STVEC))
-            curr_addr += 16 # NO_COMPRESSED
+            curr_addr += 12 # NO_COMPRESSED
 
     # medeleg
     if fuzzerstate.design_has_supervisor_mode:
@@ -506,7 +506,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
         mret = PrivilegeDescentInstruction_t0(fuzzerstate,True)
         mret.priv_level_after_op = tgt_addr_priv
         mret.va_layout_after_op = tgt_addr_layout
-        print(f"MEPC TARGET: phys: {hex(mepc_target)}, virt: {hex(mepc_target_virt)}")
+        # print(f"MEPC TARGET: phys: {hex(mepc_target)}, virt: {hex(mepc_target_virt)}")
         fuzzerstate.ctxsv_bb.append(mret) # mret
         # Add 2 nops for the mret, just in case the CPU is not doing great with mret sometimes :)
         fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0, is_rd_nonpickable_ok=True))
@@ -551,10 +551,10 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
 
     assert fuzzerstate.ctxsv_bb[0] == None
     assert fuzzerstate.ctxsv_bb[1] == None
+    data_start_addr = curr_addr
     lui_imm, addi_imm = li_into_reg(to_unsigned(curr_addr, fuzzerstate.is_design_64bit))
     fuzzerstate.ctxsv_bb[0] = ImmRdInstruction_t0(fuzzerstate, "lui", MAX_NUM_PICKABLE_REGS,lui_imm,is_rd_nonpickable_ok=True)
     fuzzerstate.ctxsv_bb[1] = RegImmInstruction_t0(fuzzerstate, "addi",MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, addi_imm, is_rd_nonpickable_ok=True)
-    data_start_addr = curr_addr
     # Set the CSR values here. Use the register 1 to load the value, arbitrarily.
     if fuzzerstate.design_has_fpu:
         raise NotImplementedError
@@ -722,8 +722,8 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
         else:
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,(((saved_context.minstret + (saved_context.minstreth << 32)) - ((instr_end_addr - minstret_base_addr - 4) // 4)) >> 32), signed=True))
     
-    fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MINSTRET])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
     curr_addr += 8 # NO_COMPRESSED
+    fuzzerstate.ctxsv_bb[addr_to_id_in_ctxsv(addr_csr_loads[CSR_IDS.MINSTRET])] = RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, 8, is_rd_nonpickable_ok=True)
 
     ###
     # We're now done with CSRs, we still have to handle the RPROD
@@ -790,7 +790,7 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
             if TAINT_EN:
                 assert reg_id < len(saved_context.reg_vals_t0)
                 reg_val_t0 = saved_context.reg_vals_t0[reg_id]
-            # print('For reg id %d, reg val is %s. Addr: %s' % (reg_id, hex(reg_val), hex(curr_addr)))
+            print('For reg id %d, reg val is %s. Addr: %s' % (reg_id, hex(reg_val), hex(curr_addr)))
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,reg_val % (1 << 32), reg_val_t0 % (1 << 32))) # lower 32bit
             fuzzerstate.ctxsv_bb.append(RawDataWord_t0(fuzzerstate,reg_val // (1 << 32), reg_val_t0 // (1 << 32))) # upper 32bit
             curr_addr += 8
