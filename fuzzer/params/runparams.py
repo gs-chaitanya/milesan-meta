@@ -80,6 +80,7 @@ COLLECT_EXCEPTION_STATS_DEFAULT = False
 USE_MODELSIM_DEFAULT = False
 DEBUG_RVC_DEFAULT = False
 
+
 # Actual values set from environment variables or defaults
 DO_ASSERT = get_env_bool('DO_ASSERT', str(int(DO_ASSERT_DEFAULT)))
 DO_EXPENSIVE_ASSERT = get_env_bool('DO_EXPENSIVE_ASSERT', str(int(DO_EXPENSIVE_ASSERT_DEFAULT)))
@@ -135,6 +136,12 @@ MODELSIM_TIMEOUT = 60*60*24*7
 if INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN:
     print(f"WARNING: Disabling CHECK_PC_SPIKE_AGAIN because INSERT_REGDUMPS is enabled. Cannot have both at the same time for now.")
     CHECK_PC_SPIKE_AGAIN = False
+if COLLECT_TAINT_STATS or COLLECT_PERF_STATS or COLLECT_EXCEPTION_STATS:
+    print(f"WARNING: Enabling NO_REMOVE_TMPDIRS for *_STATS collection.")
+    NO_REMOVE_TMPDIRS = True
+    print(f"WARNING: Enabling NO_REMOVE_TMPFILES for *_STATS collection.")
+    NO_REMOVE_TMPFILES = True
+
 # Ensure specific assertions
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
 assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not supported when spectre gadgets enabled."
