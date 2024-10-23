@@ -16,20 +16,23 @@ if { [info exists ::env(TRACEFILE)] }    { set TRACEFILE $::env(TRACEFILE) }    
 if { [info exists ::env(VCD_WILDCARD)] } { set VCD_WILDCARD $::env(VCD_WILDCARD) } else { set VCD_WILDCARD /* }
 if { [info exists ::env(MODELSIM_NOQUIT)] } { set MODELSIM_NOQUIT $::env(MODELSIM_NOQUIT) } else { set MODELSIM_NOQUIT "0" }
 
-if { [string equal $TRACE trace_fst] } { 
-    set VOPTARGS "-voptargs=+acc"
-    set DEBUGDBARG "-debugdb"
-} elseif {[string equal $TRACE trace]} {
-    set VOPTARGS "-voptargs=+acc" 
-    set DEBUGDBARG "-debugdb"
+# if { [string equal $TRACE trace_fst] } { 
+#     set VOPTARGS "-voptargs=+acc"
+#     set DEBUGDBARG "-debugdb"
+# } elseif {[string equal $TRACE trace]} {
+#     set VOPTARGS "-voptargs=+acc" 
+#     set DEBUGDBARG "-debugdb"
+# } else {
+#     set VOPTARGS ""
+#     set DEBUGDBARG ""
+# }
+
+
+if { $TRACE != "trace_fst" && $TRACE != "trace" } {
+    vsim -64 -suppress 3009 -suppress 3085 -suppress 3015 -suppress 2718 -suppress 2685 -suppress 2244 -lib $LIB $MODELSIM_VSIM_COVERFLAG tb_top_opt
 } else {
-    set VOPTARGS ""
-    set DEBUGDBARG ""
+    vsim -64 -suppress 3009 -suppress 3085 -suppress 3015 -suppress 2718 -suppress 2685 -suppress 2244 -lib $LIB $MODELSIM_VSIM_COVERFLAG tb_top_trace
 }
-
-
-vsim -64 -suppress 3009 -suppress 3085 -suppress 3015 -suppress 2718 -suppress 2685 -suppress 2244 -lib $LIB $MODELSIM_VSIM_COVERFLAG  $DEBUGDBARG $VOPTARGS tb_top_opt
-
 if { [string equal $TRACE trace_fst] } { 
     log -r /*
 } elseif { [string equal $TRACE trace] } {
