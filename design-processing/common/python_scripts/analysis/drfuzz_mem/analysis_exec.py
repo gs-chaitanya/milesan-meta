@@ -11,7 +11,7 @@ FIGSIZE_FLAT = (8,2)
 LABELSIZE = 10
 TICKSIZE = 10
 LEGENDSIZE = 10
-CASCADE_DATADIR = "/cascade-data/rocket/925844_rocket_0_118/"
+CASCADE_DATADIR = "/mnt/cascade-data/TAINT_STATS/"
 EXEC_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/exec"
 #%%
 exec_traces = []
@@ -25,7 +25,7 @@ for i,file in enumerate(glob.glob(CASCADE_DATADIR+ "**/taint_stats.json", recurs
 
 
 # %%
-idx = 1
+idx = 0
 fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
 priv = [i["priv"] for i in exec_traces[idx]]
 taint = [i["n_tainted_regs_ratio"]*100 for i in exec_traces[idx]]
@@ -57,7 +57,7 @@ for exec_trace in exec_traces:
     average_in_trace = 0
     n_instrs = 0
     for instr in exec_trace:
-        if instr["priv"] in instr["taint_in_privs"]:
+        if instr["priv"] in instr["taint_source_privs"]:
             average_in_trace += instr["n_tainted_regs_ratio"]*100
             n_instrs += 1
 
@@ -77,7 +77,7 @@ ax.set_yticks([0.1,0.2])
 ax.set_xticks([0,20,40,60,80,100])
 ax.set_yticklabels([10,20], fontsize=TICKSIZE)
 ax.set_xticklabels([0,20,40,60,80,100],fontsize=TICKSIZE)
-ax.set_xlabel("Ratio of tainted registers when executing in a taint-privilege [%]", fontsize=LABELSIZE)
+ax.set_xlabel("Ratio of tainted registers when executing in a taint-source privilege [%]", fontsize=LABELSIZE)
 ax.legend(fontsize=LEGENDSIZE,loc="upper left")
 # plt.savefig(os.path.join(EXEC_PLOTS_PATH, "taint_in_regs_stat.svg"))
 # %%
@@ -107,7 +107,7 @@ ax.grid(axis="y")
 ax.set_yticks([0.1,0.2])
 ax.set_yticklabels([10,20], fontsize=TICKSIZE)
 ax.set_xticklabels([0,20,40,60,80,100],fontsize=TICKSIZE)
-ax.set_xlabel("Ratio of instructions returning tainted results when executing in a taint-privilege [%]", fontsize=LABELSIZE)
+ax.set_xlabel("Ratio of instructions returning tainted results when executing in a taint-source privilege [%]", fontsize=LABELSIZE)
 ax.legend(fontsize=LEGENDSIZE)
 # plt.savefig(os.path.join(EXEC_PLOTS_PATH, "taint_in_comps_stat.svg"))
 # %%
@@ -117,7 +117,7 @@ for exec_trace in exec_traces:
     average_in_trace = 0
     n_instrs = 0
     for instr in exec_trace:
-        if instr["priv"] in instr["taint_in_privs"]:
+        if instr["priv"] in instr["taint_source_privs"]:
             average_in_trace += 1
         n_instrs += 1
 
@@ -129,13 +129,13 @@ for exec_trace in exec_traces:
     ratios_all_privs = pd.concat([ratios_all_privs, pd.DataFrame([
         {
         "ratio": ratio,
-        "taint_priv":instr["priv"]
+        "taint_source_privs":instr["taint_source_privs"]
         }
     ])])
 
 priv_names = ["U","S"]
 for priv in set([0,1]):
-    ratios = ratios_all_privs[ratios_all_privs["taint_priv"] == priv]
+    ratios = ratios_all_privs[[priv in r for r in ratios_all_privs["taint_source_privs"]]]
     mean = np.mean(ratios["ratio"])
     median = np.median(ratios["ratio"])
     fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
@@ -150,7 +150,7 @@ for priv in set([0,1]):
     ax.set_xticklabels([0,20,40,60,80,100],fontsize=TICKSIZE)
     ax.set_xlabel(f"Ratio of instructions executed in taint-source {priv_names[priv]}-mode [%]",fontsize=LABELSIZE)
     ax.legend()
-    plt.savefig(os.path.join(EXEC_PLOTS_PATH, f"comp_in_taint_source_priv_{[priv_names[priv]]}.svg"))
+    # plt.savefig(os.path.join(EXEC_PLOTS_PATH, f"comp_in_taint_source_priv_{[priv_names[priv]]}.svg"))
 
 #%%
 
@@ -160,7 +160,7 @@ for exec_trace in exec_traces:
     average_in_trace = 0
     n_instrs = 0
     for instr in exec_trace:
-        if instr["priv"] != 3 and instr["priv"] not in instr["taint_in_privs"]:
+        if instr["priv"] != 3 and instr["priv"] not in instr["taint_source_privs"]:
             average_in_trace += 1
         n_instrs += 1
 
@@ -170,13 +170,13 @@ for exec_trace in exec_traces:
     ratios_all_privs = pd.concat([ratios_all_privs, pd.DataFrame([
         {
         "ratio": ratio,
-        "taint_priv":instr["priv"]
+        "taint_source_privs":instr["priv"]
         }
     ])])
 
 priv_names = ["U","S"]
 for priv in set([0,1]):
-    ratios = ratios_all_privs[ratios_all_privs["taint_priv"] == priv]
+    ratios = ratios_all_privs[ratios_all_privs["taint_source_privs"] == priv]
     mean = np.mean(ratios["ratio"])
     median = np.median(ratios["ratio"])
     fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
@@ -191,7 +191,7 @@ for priv in set([0,1]):
     ax.set_xticklabels([0,20,40,60,80,100],fontsize=TICKSIZE)
     ax.set_xlabel(f"Ratio of instructions executed in taint-sink {priv_names[priv]}-mode [%]",fontsize=LABELSIZE)
     ax.legend()
-    plt.savefig(os.path.join(EXEC_PLOTS_PATH, f"comp_in_taint_sink_priv_{[priv_names[priv]]}.svg"))
+    # plt.savefig(os.path.join(EXEC_PLOTS_PATH, f"comp_in_taint_sink_priv_{[priv_names[priv]]}.svg"))
 
 # %%
 ratios_all_privs = pd.DataFrame()
@@ -209,13 +209,13 @@ for exec_trace in exec_traces:
     ratios_all_privs = pd.concat([ratios_all_privs, pd.DataFrame([
         {
         "ratio": ratio,
-        "taint_priv":instr["priv"]
+        "taint_source_privs":instr["priv"]
         }
     ])])
 
 priv_names = ["U","S","H","M"]
 for priv in set([3]):
-    ratios = ratios_all_privs[ratios_all_privs["taint_priv"] == priv]
+    ratios = ratios_all_privs[ratios_all_privs["taint_source_privs"] == priv]
     mean = np.mean(ratios["ratio"])
     median = np.median(ratios["ratio"])
     fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
@@ -232,7 +232,62 @@ for priv in set([3]):
     ax.legend()
     # plt.savefig(os.path.join(EXEC_PLOTS_PATH, f"comp_in_taint_sink_priv_{[priv_names[priv]]}.svg"))
 # %%
+priv_stats = pd.DataFrame()
+for exec_trace in exec_traces:
+
+    average_u_in_trace = 0
+    average_s_in_trace = 0
+    average_m_in_trace = 0
+    n_instrs = 0
+    for instr in exec_trace:
+        if instr["priv"] == 0:
+            average_u_in_trace += 1
+        elif instr["priv"] == 1:
+            average_s_in_trace += 1
+        elif instr["priv"] == 3:
+            average_m_in_trace += 1
+        n_instrs += 1
+
+    average_u = average_u_in_trace/n_instrs*100
+    average_s = average_s_in_trace/n_instrs*100
+    average_m = average_m_in_trace/n_instrs*100
+    d = {
+        "average_u": average_u,
+        "average_s": average_s,
+        "average_m":average_m,
+        "taint_source_privs":exec_trace[0]["taint_source_privs"][0]
+    }
+    priv_stats = pd.concat([priv_stats,pd.DataFrame([d])])
+
+# %%
+palette = ['r', 'g', 'b', 'c', 'y', 'm', 'k']
+patterns = [ "/" , "*", "o", ".", "+","0"]
+w = 0.5
+fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
+
+
+for i,priv in enumerate(set(priv_stats["taint_source_privs"])):
+    average_u = np.mean(priv_stats[priv_stats["taint_source_privs"] == priv]["average_u"])
+    average_s = np.mean(priv_stats[priv_stats["taint_source_privs"]  == priv]["average_s"])
+    average_m = np.mean(priv_stats[priv_stats["taint_source_privs"]  == priv]["average_m"])
+    ax.bar(i, average_u,color="b", hatch=patterns[0], width=w, bottom=0, label="U-mode" if i == 0 else None)
+    ax.bar(i, average_s,color="r", bottom=average_u,hatch=patterns[1], width=w, label = "S-mode" if i == 0 else None)
+    ax.bar(i, average_m,color="white", bottom=average_u+average_s, width=w, label="M-mode" if i == 0 else None)
+    ax.text(i-w/4, average_u+average_s+0.5, '{0:.1f}%'.format(average_u+average_s))
+
+ax.set_xticks([0,1,2],labels=["U-mode","S-mode","M-mode"],fontsize=TICKSIZE)
+ax.set_yticks([0,15,30],labels=[0,15,30],fontsize=TICKSIZE)
+ax.set_ylim(0,50)
+ax.set_xlabel("Taint-source privilege", fontsize=LABELSIZE)
+ax.set_ylabel("Execution in privilege [%]", fontsize=LABELSIZE)
+ax.grid(axis="y")
+ax.legend(fontsize=LEGENDSIZE)
+# plt.savefig(os.path.join(EXEC_PLOTS_PATH, "priv_stat.svg"))
 #%%
+###
+## TAINT OVERAPPROX STATS
+###
+
 traces = pd.DataFrame()
 for i,file in enumerate(glob.glob(CASCADE_DATADIR+ "**/writeback.txt", recursive=True)):
     with open(file, "r") as f:
@@ -288,58 +343,3 @@ ax_b.spines["top"].set_visible(False)
 ax_b.set_xlabel("Percentage of over-approximated bits during in-situ simulation [%]", fontsize=LABELSIZE)
 ax_t.legend(fontsize=LEGENDSIZE)
 plt.savefig(os.path.join(EXEC_PLOTS_PATH, "taint_overapprox.svg"))
-
-# %%
-priv_stats = pd.DataFrame()
-for exec_trace in exec_traces:
-
-    average_u_in_trace = 0
-    average_s_in_trace = 0
-    average_m_in_trace = 0
-    n_instrs = 0
-    for instr in exec_trace:
-        if instr["priv"] == 0:
-            average_u_in_trace += 1
-        elif instr["priv"] == 1:
-            average_s_in_trace += 1
-        elif instr["priv"] == 3:
-            average_m_in_trace += 1
-        n_instrs += 1
-
-    average_u = average_u_in_trace/n_instrs*100
-    average_s = average_s_in_trace/n_instrs*100
-    average_m = average_m_in_trace/n_instrs*100
-    d = {
-        "average_u": average_u,
-        "average_s": average_s,
-        "average_m":average_m,
-        "taint_in_priv":exec_trace[0]["taint_in_privs"][0]
-    }
-    priv_stats = pd.concat([priv_stats,pd.DataFrame([d])])
-
-# %%
-palette = ['r', 'g', 'b', 'c', 'y', 'm', 'k']
-patterns = [ "/" , "*", "o", ".", "+","0"]
-w = 0.5
-fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
-
-
-for i,priv in enumerate(set(priv_stats["taint_in_priv"])):
-    average_u = np.mean(priv_stats[priv_stats["taint_in_priv"] == priv]["average_u"])
-    average_s = np.mean(priv_stats[priv_stats["taint_in_priv"]  == priv]["average_s"])
-    average_m = np.mean(priv_stats[priv_stats["taint_in_priv"]  == priv]["average_m"])
-    ax.bar(i, average_u,color="b", hatch=patterns[0], width=w, bottom=0, label="U-mode" if i == 0 else None)
-    ax.bar(i, average_s,color="r", bottom=average_u,hatch=patterns[1], width=w, label = "S-mode" if i == 0 else None)
-    ax.bar(i, average_m,color="white", bottom=average_u+average_s, width=w, label="M-mode" if i == 0 else None)
-    ax.text(i-w/4, average_u+average_s+0.5, '{0:.1f}%'.format(average_u+average_s))
-
-ax.set_xticks([0,1,2],labels=["U-mode","S-mode","M-mode"],fontsize=TICKSIZE)
-ax.set_yticks([0,15,30],labels=[0,15,30],fontsize=TICKSIZE)
-ax.set_ylim(0,50)
-ax.set_xlabel("Taint-source privilege", fontsize=LABELSIZE)
-ax.set_ylabel("Execution in privilege [%]", fontsize=LABELSIZE)
-ax.grid(axis="y")
-ax.legend(fontsize=LEGENDSIZE)
-plt.savefig(os.path.join(EXEC_PLOTS_PATH, "priv_stat.svg"))
-
-# %%

@@ -12,7 +12,7 @@ LABELSIZE = 10
 TICKSIZE = 10
 LEGENDSIZE = 10
 
-TAINT_MISMATCH_PATH = "/cascade-data/"
+TAINT_MISMATCH_PATH = "/mnt/cascade-data/"
 PERFORMANCE_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/performance"
 #%%
 perf_df = pd.DataFrame()
@@ -54,7 +54,7 @@ for dut in set(perf_df["dut"]):
         pd.DataFrame([
             {
             "dut": dut,
-            "t_gen_bbs":t_gen_bbs /t_sum,
+            "t_gen_bbs": t_gen_bbs /t_sum,
             "t_spike_resol":t_spike_resol/t_sum,
             "t_gen_elf":t_gen_elf/t_sum,
             "t_rtl": t_rtl/t_sum,
@@ -66,8 +66,8 @@ for dut in set(perf_df["dut"]):
 # %%
 palette = ['r', 'g', 'b', 'c', 'y', 'm', 'k']
 patterns = [ "/" , "*", "o", ".", "+","0"]
-duts = ["kronos","rocket","boom","cva6"]
-pretty_names = ["Kronos","Rocket","Boom","CVA6"]
+duts = ["kronos","rocket","boom","cva6","openc910"]
+pretty_names = ["Kronos","Rocket","Boom","CVA6","Openc910"]
 pretty_names_t = ["Program Generation","ELF Compilation", "Spike"]
 w = 0.6
 fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
@@ -78,7 +78,7 @@ for i,dut in enumerate(duts):
         bottom += perf_means[perf_means["dut"] == dut][t].values[0]*100
     ax.text(i-w/4, bottom+0.5, '{0:.1f}%'.format(bottom))
 
-ax.set_xticks(np.arange(4),labels=pretty_names,fontsize=TICKSIZE)
+ax.set_xticks(np.arange(5),labels=pretty_names,fontsize=TICKSIZE)
 ax.set_yticks([0,25,50,75,100],labels=[0,25,50,75,100],fontsize=TICKSIZE)
 
 ax.set_xlabel("DUT", fontsize=LABELSIZE)
@@ -86,7 +86,7 @@ ax.set_ylabel("Time per step [%]", fontsize=LABELSIZE)
 
 ax.grid(axis="y")
 ax.legend()
-plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot.svg"))
+# plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot.svg"))
 # %%
 fig, axs = plt.subplots(2,2,figsize=(10,5))
 for i,(ax,t) in enumerate(zip(axs.flatten(), PERF_T)):
@@ -104,8 +104,8 @@ plt.tight_layout()
 
 
 #%%
-duts = ["kronos","rocket","boom","cva6"]
-pretty_names = ["Kronos","Rocket","Boom","CVA6"]
+duts = ["kronos","rocket","boom","cva6","openc910"]
+pretty_names = ["Kronos","Rocket","Boom","CVA6","Openc910"]
 pretty_names_t = ["Program Generation","ELF Compilation", "Spike Validation"]
 w = 0.6
 fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
