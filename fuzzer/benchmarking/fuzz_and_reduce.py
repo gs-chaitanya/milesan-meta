@@ -4,11 +4,14 @@ sys.path.append("../")
 import subprocess
 import os
 import json
+from time import gmtime, strftime
+import argparse 
+
 TIMEOUT_REDUCE=7200*2
-FUZZ=True
-REDUCE_RTL_TIMEOUT=True
-REDUCE_VALUE_MISMATCH=True
-REDUCE_TAINT_MISMATCH=True
+FUZZ = True
+REDUCE_TAINT_MISMATCH = False
+REDUCE_RTL_TIMEOUT = False
+REDUCE_VALUE_MISMATCH = False
 def load_fuzzconfigs(path: str):
     with open(path, "r") as f:
         cfgs = json.load(f)
@@ -19,13 +22,16 @@ if __name__ == '__main__':
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
     
     if len(sys.argv) < 1:
-        raise Exception("Usage: python3 fuzz_and_reduce.py <path_to_config_json>")
+        raise Exception("Usage: python3 fuzz_and_reduce.py <path_to_config_json> [--reduce=taint,value,timeout] [--reduce-only]")
 
+    parser = argparse.ArgumentParser(prog="fuzz_and_reduce,py",description="Fuzz and reduce with some config.")
+    parser.add_argument("cfg_path")
+    parser.add_argument("-r","--reduce",choices = ["taint","value","timeout"],help="Enable reduction for specific mismatch. Ignored when --fuzz-only is used.",default="taint")
+    parser.add_argument("-ro","--reduce-only",dest="reduce_only",action="store_true", help="Skip fuzzing and only reduce. Requires existing log file from previous fuzzing round.")
+    parser.add_argument("-fo","--fuzz-only",dest="fuzz_only",action="store_true", help="Skip reduction and only fuzz.")
 
-    if len(sys.argv) > 1:
-        cfgs_path = sys.argv[1]
-    
-    cfgs = load_fuzzconfigs(cfgs_path)
+    args = parser.parse_args()
+    cfgs = load_fuzzconfigs(args.cfg_path)
     env = os.environ.copy()
     assert not "TRACE_EN" in env or env["TRACE_EN"] == "0", f"This is a bad idea."
     cmd = []
@@ -38,7 +44,7 @@ if __name__ == '__main__':
             datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["NAME"])
             env["CASCADE_DATADIR"] = datadir
             os.makedirs(datadir, exist_ok=True)
-            if FUZZ:
+            if not args.reduce_only:
                 with open(os.path.join(datadir,"config.json"), "w") as f:
                     json.dump(cfg,f)
                 try:
@@ -56,8 +62,11 @@ if __name__ == '__main__':
 
                 except Exception as e:
                     print(f"Failed running {' '.join(cmd)}: {e}")
-
-            if REDUCE_TAINT_MISMATCH:
+            
+            if args.fuzz_only:
+                continue
+            
+            if "taint" in args.reduce:
                 try:
                     log_file = os.path.join(datadir, "logs", f"{design_name}.taint_mismatch.log")
                     if not os.path.exists(log_file):
@@ -78,7 +87,7 @@ if __name__ == '__main__':
                     print(f"Failed running {' '.join(cmd)}: {e}")
 
 
-            if REDUCE_RTL_TIMEOUT:
+            if "timeout" in args.reduce:
                 try:
                     log_file = os.path.join(datadir, "logs", f"{design_name}.rtl_timeout.log")
                     if not os.path.exists(log_file):
@@ -99,7 +108,7 @@ if __name__ == '__main__':
                     print(f"Failed running {' '.join(cmd)}: {e}")
 
 
-            if REDUCE_VALUE_MISMATCH:
+            if "value" in args.reduce:
                 try:
                     log_file = os.path.join(datadir, "logs", f"{design_name}.value_mismatch.log")
                     if not os.path.exists(log_file):
