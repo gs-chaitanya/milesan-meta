@@ -530,13 +530,9 @@ class FuzzerState:
 
     def remove_tmp_files(self):
         if os.path.isdir(self.tmp_dir):
-            for file in glob.glob(f"{self.tmp_dir}/*.elf"):
+            for file in glob.glob(f"{self.tmp_dir}/spike*.elf"):
                 os.remove(file)
-            for file in glob.glob(f"{self.tmp_dir}/*.txt"):
-                os.remove(file)
-            for file in glob.glob(f"{self.tmp_dir}/*.sh"):
-                os.remove(file)
-            for file in glob.glob(f"{self.tmp_dir}/*.json"):
+            for file in glob.glob(f"{self.tmp_dir}/spike*.txt"):
                 os.remove(file)
 
                 
@@ -697,7 +693,8 @@ class FuzzerState:
                     "rd_value_t0_before_exec": None if not hasattr(next_instr, "rd") else self.intregpickstate.regs[next_instr.rd].get_val_t0(),
                     "isa_class" : None if isa_class is None else isa_class.name,
                     "instr_class": next_instr.__class__.__name__,
-                    "TAINT_SOURCE_PRIVS": [i for i in self.taint_source_privs]
+                    "taint_source_privs": [i for i in self.taint_source_privs],
+                    "taint_sink_privs": [i for i in self.taint_sink_privs]
                 }
                 next_instr.execute(is_spike_resolution=False)
                 stats["rd_value_after_exec"] =  None if not hasattr(next_instr, "rd") else self.intregpickstate.regs[next_instr.rd].get_val()
