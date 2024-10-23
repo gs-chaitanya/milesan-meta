@@ -149,7 +149,7 @@ def runsim_modelsim(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PI
 # @param expected_regvals a pair of iterables of expected int regvals, and float regvals.
 # @param override_num_instrs if not None, then use this value instead of the number of instructions in fuzzerstate.instr_objs_seq. Used when pruning to shorten a bit the timeout.
 # @return (is_success: bool, msg: str)
-def runtest_simulator(fuzzerstate, elfpath: str, expected_regvals: tuple, override_num_instrs: int = None, simulator=SimulatorEnum.VERILATOR):
+def runtest_simulator(fuzzerstate, elfpath: str, expected_regvals: tuple, override_num_instrs: int = None):
     from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint, FuzzerStateException
     try:
         check_isa_sim_taint(fuzzerstate.design_name, fuzzerstate.randseed, False, fuzzerstate)

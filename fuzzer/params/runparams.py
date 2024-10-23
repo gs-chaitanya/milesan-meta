@@ -1,6 +1,7 @@
 import os
 from params.fuzzparams import USE_MMU, INSERT_SPECTRE_GADGETS, TAINT_NONTAKEN_BRANCH_IMM
-
+from params.runparams_default import *
+from params.env_helperfuncs import get_env_int, get_env_bool
 # Ensure Cascade environment is sourced
 if "CASCADE_ENV_SOURCED" not in os.environ:
     raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
@@ -16,70 +17,6 @@ MODELSIM_REQ_DIR = os.path.join(PATH_TO_MNT, "modelsim_req")
 os.makedirs(MODELSIM_REQ_DIR, exist_ok=True)
 PATH_TO_COV = os.path.join(os.environ['COVDUMP_DIR'])
 PATH_TO_FIGURES = os.environ['CASCADE_PATH_TO_FIGURES']
-
-# Helper functions for environment variables with default values
-def get_env_bool(var_name, default):
-    value = bool(int(os.getenv(var_name, default)))
-    if var_name in os.environ:
-        print(f"Setting {var_name} = {value} from env vars.")
-    return value
-
-def get_env_int(var_name, default):
-    value = int(os.getenv(var_name, default))
-    if var_name in os.environ:
-        print(f"Setting {var_name} = {value} from env vars.")
-    return value
-
-# Default values
-DO_ASSERT_DEFAULT = True
-DO_EXPENSIVE_ASSERT_DEFAULT = False
-NO_REMOVE_TMPFILES_DEFAULT = False
-NO_REMOVE_TMPDIRS_DEFAULT = False
-RUN_TIMEOUT_SECONDS_DEFAULT = 60 * 3
-PRINT_FSM_TRANSITIONS_DEFAULT = False
-CHECK_REGS_T0_PRECISE_DEFAULT = False
-CHECK_MEM_T0_PRECISE_DEFAULT = False
-CHECK_MEM_DEFAULT = False
-PRINT_CHECK_REGS_T0_DEFAULT = False
-PRINT_CHECK_REGS_T0_MISMATCH_OK_DEFAULT = False
-PRINT_CHECK_REGS_DEFAULT = False
-PRINT_WRITEBACK_T0_DEFAULT = False
-PRINT_WRITEBACK_DEFAULT = False
-DUMP_WRITEBACK_DEFAULT = False
-DUMP_WRITEBACK_T0_DEFAULT = False
-PRINT_INSTRUCTION_EXECUTION_IN_SITU_DEFAULT = False
-PRINT_INSTRUCTION_EXECUTION_FINAL_DEFAULT = False
-PRINT_INSTRUCTION_EXECUTION_REDUCE_DEFAULT = False
-PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS_DEFAULT = False
-PRINT_COLOR_TAINT_DEFAULT = True
-PRINT_REG_TRACEBACK_DEFAULT = False
-PRINT_FILTERED_REG_TRACEBACK_DEFAULT = False
-PRINT_ENVIRONMENT_DEFAULT = False
-INSERT_REGDUMPS_DEFAULT = False
-INSERT_FENCE_DEFAULT = False
-CHECK_PC_SPIKE_AGAIN_DEFAULT = True
-PRINT_REGISTER_VALIDATION_DEFAULT = False
-PRINT_MEMORY_VALIDATION_DEFAULT = False
-PRINT_AND_COMPARE_DEFAULT = False
-PRINT_SKIPPED_CHECKS_DEFAULT = False
-PRINT_MEM_LOADS_DEFAULT = False
-PRINT_MEM_LOADS_T0_DEFAULT = False
-PRINT_MEM_STORES_DEFAULT = False
-PRINT_MEM_STORES_T0_DEFAULT = False
-GET_DATA_DEFAULT = False
-DEBUG_PRINT_DEFAULT = False
-ASSERT_ADDR_DEFAULT = True
-ASSERT_WRITEBACK_TRACE_DEFAULT = True
-PRINT_PRIV_STATS_DEFAULT = False
-DO_DOUBLECHECK_SIM_DEFAULT = True
-TRACE_EN_DEFAULT = False
-TRACE_FST_DEFAULT = False
-COLLECT_PERF_STATS_DEFAULT = False
-COLLECT_TAINT_STATS_DEFAULT = False
-COLLECT_EXCEPTION_STATS_DEFAULT = False
-USE_MODELSIM_DEFAULT = False
-DEBUG_RVC_DEFAULT = False
-
 
 # Actual values set from environment variables or defaults
 DO_ASSERT = get_env_bool('DO_ASSERT', str(int(DO_ASSERT_DEFAULT)))

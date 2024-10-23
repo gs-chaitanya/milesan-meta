@@ -1,35 +1,80 @@
-# Copyright 2023 Flavien Solt, ETH Zurich.
-# Licensed under the General Public License, Version 3.0, see LICENSE for details.
-# SPDX-License-Identifier: GPL-3.0-only
 
-from enum import IntEnum, auto
-import numpy as np
-import os 
+from params.fuzzparams_default import *
+from params.env_helperfuncs import get_env_bool, get_env_int, get_env_str
 
-##
-# MMU
-##
-USE_MMU = False
 
-##
-# RVC
-##
-USE_COMPRESSED = False
+USE_MMU = get_env_bool("USE_MMU",USE_MMU_DEFAULT)
+USE_COMPRESSED = get_env_bool("USE_COMPRESSED",USE_COMPRESSED_DEFAULT)
+# NUM_MIN_BBS_LOWERBOUND = 100 if USE_MMU else 10
+NUM_MIN_BBS_LOWERBOUND = get_env_int("NUM_MIN_BBS_LOWERBOUND",NUM_MIN_BBS_LOWERBOUND_DEFAULT)
+NUM_MAX_BBS_UPPERBOUND = get_env_int("NUM_MAX_BBS_UPPERBOUND",NUM_MAX_BBS_UPPERBOUND_DEFAULT)
+assert NUM_MAX_BBS_UPPERBOUND > NUM_MIN_BBS_LOWERBOUND
+NUM_BBS = get_env_int("NUM_BBS",NUM_BBS_DEFAULT)
+TAINT_IMMRD_IMM = get_env_bool("TAINT_IMMRD_IMM",TAINT_IMMRD_IMM_DEFAULT)
+TAINT_REGIMM_IMM = get_env_bool("TAINT_REGIMM_IMM",TAINT_REGIMM_IMM_DEFAULT)
+# Tainting immediates of branches could taint the pc without taking the branch as the BPU is updated speculatively.
+TAINT_NONTAKEN_BRANCH_IMM = get_env_bool("TAINT_NONTAKEN_BRANCH_IMM",TAINT_NONTAKEN_BRANCH_IMM_DEFAULT)
+# We can disable non-taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges. Useful if we look for leakage through e.g. shared BPU and we probe it in one of the NO_TAINT privs 
+ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = get_env_bool("ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS",ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS_DEFAULT)
+# We can disable taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges. Useful if we look for leakage through e.g. shared BPU and we probe it in one of the NO_TAINT privs 
+ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = get_env_bool("ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS",ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS_DEFAULT)
+ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS = get_env_bool("ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS",ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS_DEFAULT)
+# We can disable non-taken branches in the privileges that have no access to taint to avoid tainting the pc in those privileges. Useful if we search for e.g. BNE in taint privs that leaks
+ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS = get_env_bool("ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS",ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS_DEFAULT)
+
+# We can disable non-taken branches in M mode s.t. we don't get any prediction based on unmapped data where M is a confused deputy.
+ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS = get_env_bool("ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS",ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS_DEFAULT)
+
+ALLOW_JALR_IN_NEUTRAL_PRIVS = get_env_bool("ALLOW_JALR_IN_NEUTRAL_PRIVS",ALLOW_JALR_IN_NEUTRAL_PRIVS_DEFAULT)
+ALLOW_BRANCH_IN_NEUTRAL_PRIVS = get_env_bool("ALLOW_BRANCH_IN_NEUTRAL_PRIVS",ALLOW_BRANCH_IN_NEUTRAL_PRIVS_DEFAULT)
+# WIP: Taint source privileges have access to all pages, therefore they can't trigger page faults for now.
+ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = get_env_bool("ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS",ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS_DEFAULT)
+assert not ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS, "Not implemented yet. WIP."
+
+ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SINK_PRIVS = get_env_bool("ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SINK_PRIVS",ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SINK_PRIVS_DEFAULT)
+# When this is enabled, tainted data will be loaded but not computed on. This allows testing if leakage is coming from the dataflow.
+DISABLE_COMPUTATION_ON_TAINT = get_env_bool("DISABLE_COMPUTATION_ON_TAINT",DISABLE_COMPUTATION_ON_TAINT_DEFAULT)
+# We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
+TAINT_SOURCE_PRIVS = get_env_str("TAINT_SOURCE_PRIVS",TAINT_SOURCE_PRIVS_DEFAULT)
+# We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
+TAINT_SINK_PRIVS = get_env_str("TAINT_SINK_PRIVS",TAINT_SINK_PRIVS_DEFAULT)
+DUMP_MCYCLES = False
+assert not (DUMP_MCYCLES and USE_MMU), f"We can only dump MCYCLES when executing in M-mode in final BB. This is not ensured when using the MMU."
+INIT_MIE = False
+FILL_MEM_WITH_DEAD_CODE = False
+if USE_MMU:
+    FILL_MEM_WITH_DEAD_CODE = True
+    print("USE_MMU is enabled. Enabling FILL_MEM_WITH_DEAD_CODE.")
+
+if USE_MMU:
+    NUM_MIN_FREE_INTREGS = 3 # 3, we need at least 2 free regs which are not 0
+else:
+    NUM_MIN_FREE_INTREGS = 2
+
+if USE_MMU:
+    MAX_NUM_PICKABLE_REGS = 22
+else:
+    MAX_NUM_PICKABLE_REGS = 24
+
+def reset_reg_settings():
+    global MAX_NUM_PICKABLE_REGS
+    global MIN_NUM_PICKABLE_REGS
+    global NUM_MIN_FREE_INTREGS
+    global USE_MMU
+    if USE_MMU:
+        MAX_NUM_PICKABLE_REGS = 22
+        NUM_MIN_FREE_INTREGS = 3
+    # elif USE_COMPRESSED:
+    #     MAX_NUM_PICKABLE_REGS = 10 # Use less regs so we get more compressed instructions.
+    #     NUM_MIN_FREE_INTREGS = 2
+    else:
+        MAX_NUM_PICKABLE_REGS = 24
+        NUM_MIN_FREE_INTREGS = 2
+    MIN_NUM_PICKABLE_REGS = 8
+
 COMPRESS_INSTRUCTION = 1
 
 FENCE_CF_INSTR = False
-
-# assert not (USE_MMU and USE_COMPRESSED)
-
-if "USE_MMU" in os.environ:
-    USE_MMU = int(os.environ["USE_MMU"]) == 1
-    print(f"Setting USE_MMU = {USE_MMU} from env vars.")
-
-if "USE_COMPRESSED" in os.environ:
-    USE_COMPRESSED = int(os.environ["USE_COMPRESSED"]) == 1
-    print(f"Setting USE_COMPRESSED = {USE_COMPRESSED} from env vars.")
-
-# assert not (USE_COMPRESSED and USE_MMU), "This does not work yet."
 
 MAX_NUM_LAYOUTS = 5
 PROBA_ENTANGLE_LAYOUT = 0
@@ -105,32 +150,6 @@ LIMIT_MEM_SATURATION_RATIO = 0.8
 # When a register is produced, it gets this probability to be picked next. What is nice is that it immediately saturates: producing it twice does not increase picking proba.
 REGPICK_PROTUBERANCE_RATIO = 0.2 
 
-if USE_MMU:
-    NUM_MIN_FREE_INTREGS = 3 # 3, we need at least 2 free regs which are not 0
-else:
-    NUM_MIN_FREE_INTREGS = 2
-
-if USE_MMU:
-    MAX_NUM_PICKABLE_REGS = 22
-else:
-    MAX_NUM_PICKABLE_REGS = 24
-
-def reset_reg_settings():
-    global MAX_NUM_PICKABLE_REGS
-    global MIN_NUM_PICKABLE_REGS
-    global NUM_MIN_FREE_INTREGS
-    global USE_MMU
-    if USE_MMU:
-        MAX_NUM_PICKABLE_REGS = 22
-        NUM_MIN_FREE_INTREGS = 3
-    # elif USE_COMPRESSED:
-    #     MAX_NUM_PICKABLE_REGS = 10 # Use less regs so we get more compressed instructions.
-    #     NUM_MIN_FREE_INTREGS = 2
-    else:
-        MAX_NUM_PICKABLE_REGS = 24
-        NUM_MIN_FREE_INTREGS = 2
-    MIN_NUM_PICKABLE_REGS = 8
-
 # # Reduce the registers that we allow ourselves to pick randomly
 MIN_NUM_PICKABLE_REGS = 10
 NUM_MAX_CONSUMED_INTREGS = 2
@@ -145,7 +164,6 @@ PROTURBANCE_CONSUMED_REGS_EXCEPTION = 1.2
 
 NUM_MAX_RELOCUSED_INTREGS = 3
 PROTURBANCE_RELOCUSED_REGS_ALU = 3
-
 
 
 NUM_MAX_PRODUCED0_REGS = 2
@@ -180,7 +198,6 @@ assert MPP_BOTH_ENDIS_REGISTER_ID >= MAX_NUM_PICKABLE_REGS
 assert MPP_TOP_ENDIS_REGISTER_ID >= MAX_NUM_PICKABLE_REGS
 assert SPP_ENDIS_REGISTER_ID >= MAX_NUM_PICKABLE_REGS
 assert REGDUMP_REGISTER_ID >= MAX_NUM_PICKABLE_REGS
-
 
 assert RDEP_MASK_REGISTER_ID != RELOCATOR_REGISTER_ID
 # Check that they are all distinct
@@ -258,120 +275,10 @@ TAINT_IMM_PROTURBANCE_FACTOR = 10
 
 LOG2_MEMSIZE_UPPERBOUND = 20
 LOG2_MEMSIZE_LOWERBOUND = 17
-# NUM_MIN_BBS_LOWERBOUND = 100 if USE_MMU else 10
-NUM_MIN_BBS_LOWERBOUND = 10 # Used this for BOOM
-if "NUM_MIN_BBS_LOWERBOUND" in os.environ:
-    NUM_MIN_BBS_LOWERBOUND = int(os.environ["NUM_MIN_BBS_LOWERBOUND"])
-    print(f"Setting NUM_MIN_BBS_LOWERBOUND = {NUM_MIN_BBS_LOWERBOUND} from env vars.")
-
-NUM_MAX_BBS_UPPERBOUND = 300 if USE_MMU else 100
-if "NUM_MAX_BBS_UPPERBOUND" in os.environ:
-    NUM_MAX_BBS_UPPERBOUND = int(os.environ["NUM_MAX_BBS_UPPERBOUND"])
-    print(f"Setting NUM_MAX_BBS_UPPERBOUND = {NUM_MAX_BBS_UPPERBOUND} from env vars.")
-
-assert NUM_MAX_BBS_UPPERBOUND > NUM_MIN_BBS_LOWERBOUND
-NUM_BBS = 0 # When set to a positive value, fixes the number of BBs.
-
-# The tanh saturates, so that we don't neglect registers that have only few bits tainted when there are regs that have much more bits tainted
-USE_TAINT_TANH = True
-USE_TAINT_HW = False
-USE_TAINT_BIN = False
-assert USE_TAINT_TANH or USE_TAINT_BIN or USE_TAINT_HW
-
-INSERT_SPECTRE_GADGETS = False
-
-# Tainting the immediates might taint the PC if instruction code is loaded and speculated on.
-TAINT_IMMRD_IMM = False
-if "TAINT_IMMRD_IMM" in os.environ:
-    TAINT_IMMRD_IMM = int(os.environ["TAINT_IMMRD_IMM"]) == 1
-    print(f"Setting TAINT_IMMRD_IMM = {TAINT_IMMRD_IMM} from env vars.")
-
-TAINT_REGIMM_IMM = False
-if "TAINT_REGIMM_IMM" in os.environ:
-    TAINT_REGIMM_IMM = int(os.environ["TAINT_REGIMM_IMM"]) == 1
-    print(f"Setting TAINT_REGIMM_IMM = {TAINT_REGIMM_IMM} from env vars.")
-
-# Tainting immediates of branches could taint the pc without taking the branch as the BPU is updated speculatively.
-TAINT_NONTAKEN_BRANCH_IMM = False
-if "TAINT_NONTAKEN_BRANCHES" in os.environ:
-    TAINT_NONTAKEN_BRANCH_IMM = int(os.environ["TAINT_NONTAKEN_BRANCHES"]) == 1
-    print(f"Setting TAINT_NONTAKEN_BRANCHES = {TAINT_NONTAKEN_BRANCH_IMM} from env vars.")
-
-# We can disable non-taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges. Useful if we look for leakage through e.g. shared BPU and we probe it in one of the NO_TAINT privs 
-ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = True
-if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS" in os.environ:
-    ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS"]) == 1
-    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS} from env vars.")
-
-# We can disable taken branches in the privileges that have access to taint to avoid tainting the pc in those privileges. Useful if we look for leakage through e.g. shared BPU and we probe it in one of the NO_TAINT privs 
-ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = True
-if "ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS" in os.environ:
-    ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS"]) == 1
-    print(f"Setting ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS = {ALLOW_TAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS} from env vars.")
-
-# To disable jalr in taint source privilegen for triaging. Might still need some to connect the BBs.
-ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS = True
-if "ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS" in os.environ:
-    ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS"]) == 1
-    print(f"Setting ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS = {ALLOW_INDIRECT_JUMPS_IN_TAINT_SOURCE_PRIVS} from env vars.")
-
-# We can disable non-taken branches in the privileges that have no access to taint to avoid tainting the pc in those privileges. Useful if we search for e.g. BNE in taint privs that leaks
-ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS = True
-if "ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS" in os.environ:
-    ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS"]) == 1
-    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS} from env vars.")
-
-# We can disable non-taken branches in M mode s.t. we don't get any prediction based on unmapped data where M is a confused deputy.
-ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS = False
-if "ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS" in os.environ:
-    ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS = int(os.environ["ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS"]) == 1
-    print(f"Setting ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS = {ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS} from env vars.")
-
-ALLOW_JALR_IN_NEUTRAL_PRIVS = False
-if "ALLOW_JALR_IN_NEUTRAL_PRIVS" in os.environ:
-    ALLOW_JALR_IN_NEUTRAL_PRIVS = int(os.environ["ALLOW_JALR_IN_NEUTRAL_PRIVS"]) == 1
-    print(f"Setting ALLOW_JALR_IN_NEUTRAL_PRIVS = {ALLOW_JALR_IN_NEUTRAL_PRIVS} from env vars.")
-
-ALLOW_BRANCH_IN_NEUTRAL_PRIVS = False
-if "ALLOW_BRANCH_IN_NEUTRAL_PRIVS" in os.environ:
-    ALLOW_BRANCH_IN_NEUTRAL_PRIVS = int(os.environ["ALLOW_BRANCH_IN_NEUTRAL_PRIVS"]) == 1
-    print(f"Setting ALLOW_BRANCH_IN_NEUTRAL_PRIVS = {ALLOW_BRANCH_IN_NEUTRAL_PRIVS} from env vars.")
-
-# WIP: Taint source privileges have access to all pages, therefore they can't trigger page faults for now.
-ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = False
-if "ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS" in os.environ:
-    ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS"]) == 1
-    print(f"Setting ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = {ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS} from env vars.")
-
-assert not ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS, "Not implemented yet. WIP."
-
-ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SINK_PRIVS = True
-if "ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS" in os.environ:
-    ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = int(os.environ["ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS"]) == 1
-    print(f"Setting ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS = {ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS} from env vars.")
-
-
-# When this is enabled, tainted data will be loaded but not computed on. This allows testing if leakage is coming from the dataflow.
-DISABLE_COMPUTATION_ON_TAINT = False
-if "DISABLE_COMPUTATION_ON_TAINT" in os.environ:
-    DISABLE_COMPUTATION_ON_TAINT = int(os.environ["DISABLE_COMPUTATION_ON_TAINT"]) == 1
-    print(f"Setting DISABLE_COMPUTATION_ON_TAINT = {DISABLE_COMPUTATION_ON_TAINT} from env vars.")
-
-# We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
-TAINT_SOURCE_PRIVS = None
-if "TAINT_SOURCE_PRIVS" in os.environ:
-    TAINT_SOURCE_PRIVS = os.environ["TAINT_SOURCE_PRIVS"]
-    # assert TAINT_SOURCE_PRIVS != "M", f"Taint only in M-mode not supported right now."
-    print(f"Setting TAINT_SOURCE_PRIVS = {TAINT_SOURCE_PRIVS} from env vars.")
-
-# We can statically set which privileges should have access to taints, e.g. "MSU" for all of them. If this is None, they are chosen randomly. This is ignored when MMU is disabled.
-TAINT_SINK_PRIVS = None
-if "TAINT_SINK_PRIVS" in os.environ:
-    TAINT_SINK_PRIVS = os.environ["TAINT_SINK_PRIVS"]
-    print(f"Setting TAINT_SINK_PRIVS = {TAINT_SINK_PRIVS} from env vars.")
 
 P_TWO_TAINT_SOURCE_PRIVS = 0
 P_TWO_TAINT_SINK_PRIVS = 0
+
 # Abort fuzzing run if the computed program does not execute in taint sink privilege.
 ASSERT_EXEC_IN_TAINT_SINK_PRIV = True
 ASSERT_EXEC_IN_TAINT_SRC_PRIV = True
@@ -386,10 +293,10 @@ IGNORE_SPIKE_MISMATCH = False
 # Use the uninstrumented design for fuzzing/reducing. This helps checking if theres a translation bug in yosys.
 USE_VANILLA = False
 
-DUMP_MCYCLES = False
-assert not (DUMP_MCYCLES and USE_MMU), f"We can only dump MCYCLES when executing in M-mode in final BB. This is not ensured when using the MMU."
-INIT_MIE = False
-FILL_MEM_WITH_DEAD_CODE = False
-if USE_MMU:
-    FILL_MEM_WITH_DEAD_CODE = True
-    print("USE_MMU is enabled. Enabling FILL_MEM_WITH_DEAD_CODE.")
+INSERT_SPECTRE_GADGETS = False
+
+# The tanh saturates, so that we don't neglect registers that have only few bits tainted when there are regs that have much more bits tainted
+USE_TAINT_TANH = True
+USE_TAINT_HW = False
+USE_TAINT_BIN = False
+assert USE_TAINT_TANH or USE_TAINT_BIN or USE_TAINT_HW

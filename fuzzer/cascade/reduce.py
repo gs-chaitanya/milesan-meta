@@ -24,7 +24,7 @@ from cascade.registers import ABI_INAMES
 from rv.asmutil import li_into_reg, to_unsigned
 from cascade.cfinstructionclasses import IntStoreInstruction
 from drfuzz_mem.check_isa_sim_taint import FailTypeEnum
-
+from params.reduceparams import *
 from copy import deepcopy, copy
 import itertools
 import os
@@ -34,13 +34,6 @@ import subprocess
 import time
 from pathlib import Path
 
-REDUCTION_SIMULATOR = SimulatorEnum.VERILATOR
-NOPIZE_SANDWICH_INSTRUCTIONS = True
-FLATTEN_SANDWICH_INSTRUCTIONS = False
-REDUCE_TAINT = True
-REDUCE_DEAD_CODE = True
-FIND_PILLARS = True
-DOUBLECHECK_MODELSIM = True
 # @brief since stopsig and regdump addr are vitrual, the final block also needs some context, mainly, the translation scheme of stores in the current priviledge
 def gen_ctxt_finalbock(priv_level, layout_id, fuzzerstate, bb_id, instr_id):
     assert bb_id != -1
@@ -440,7 +433,7 @@ def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int =
         print(f"Generated RTL elf: {rtl_elfpath}")
 
     del fuzzerstate
-    is_success, exception = runtest_simulator(test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs, REDUCTION_SIMULATOR)
+    is_success, exception = runtest_simulator(test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs)
 
     if not is_success and exception.fail_type == FailTypeEnum.TAINT_MISMATCH and IGNORE_TAINT_MISMATCH:
         is_success = True # We triggered leakage, but we are reducing for an architectural bug, not leakage.
