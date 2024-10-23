@@ -37,7 +37,9 @@ def test_done_callback(ret):
 
 def __check_isa_sim_worker(design_name, seed):
     try:
-        check_isa_sim_taint(design_name,seed).remove_tmp_dir()
+        fuzzerstate = check_isa_sim_taint(design_name,seed)
+        if not NO_REMOVE_TMPFILES:
+            fuzzerstate.remove_tmp_dir()
         if PRINT_THREAD_STATUS:
             print(f"No mismatch detected for {design_name} with seed {seed}")
         return None
@@ -61,7 +63,7 @@ def __check_isa_sim_worker(design_name, seed):
                     f.write(f"seed {seed}: {str(e)}\n")
 
                 return None
-        elif not NO_REMOVE_TMPDIRS and isinstance(e, FuzzerStateException):
+        elif not NO_REMOVE_TMPFILES and isinstance(e, FuzzerStateException):
             e.fuzzerstate.remove_tmp_dir()
 
 

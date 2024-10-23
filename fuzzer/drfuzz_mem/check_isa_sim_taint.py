@@ -99,12 +99,30 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             json.dump(fuzzerstate.compute_taint_stats(),f)
     fuzzerstate.write_imm_t0_to_mem() # Write the immediate taints from the program code to the imem.
     fuzzerstate.dump_memview_t0()
+
     try:
         start_time_rtl = time.time()
         regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(fuzzerstate)
         time_seconds_spent_in_rtl = time.time() - start_time_rtl
-        if not len(final_regvals_rtl):
-            raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: Modelsim timeout: Did not receive register requests.",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.RTL_TIMEOUT, timestamp=time.time()-start_time)
+
+        if COLLECT_PERF_STATS:
+            # print(f'dumping to {os.path.join(fuzzerstate.tmp_dir, "perfstats.json")}')
+            with open(os.path.join(fuzzerstate.tmp_dir, "perfstats.json"), "w") as f:
+                json.dump({
+                    "id": fuzzerstate.instance_to_str(),
+                    "dut": fuzzerstate.design_name,
+                    "t_gen_bbs": time_seconds_spent_in_gen_bbs,
+                    "t_spike_resol": time_seconds_spent_in_spike_resol,
+                    "t_gen_elf": time_seconds_spent_in_gen_elf,
+                    "t_rtl" : time_seconds_spent_in_rtl,
+                    "n_bbs": len(fuzzerstate.instr_objs_seq),
+                    "n_instrs": sum([len(i) for i in fuzzerstate.instr_objs_seq]) + len(fuzzerstate.final_bb),
+                    "t_total":time.time() - start_time,
+                    # "fail_type": e.fail_type.name,
+                    "seed":fuzzerstate.randseed
+                }, f)
+        if len(final_regvals_rtl[0]) < MAX_NUM_PICKABLE_REGS-1:
+            raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: Modelsim timeout: Did not receive all register requests. ({len(final_regvals_rtl[0])}<{MAX_NUM_PICKABLE_REGS-1} register dumps found)",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.RTL_TIMEOUT, timestamp=time.time()-start_time)
 
         regstream_rtl_val, regstream_rtl_val_t0 = regstream_rtl
 
@@ -257,22 +275,6 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.RTL_TIMEOUT, timestamp=time.time()-start_time)
 
         elif isinstance(e, MismatchError):
-            if COLLECT_PERF_STATS:
-                # print(f'dumping to {os.path.join(fuzzerstate.tmp_dir, "perfstats.json")}')
-                with open(os.path.join(fuzzerstate.tmp_dir, "perfstats.json"), "w") as f:
-                    json.dump({
-                        "id": fuzzerstate.instance_to_str(),
-                        "dut": fuzzerstate.design_name,
-                        "t_gen_bbs": time_seconds_spent_in_gen_bbs,
-                        "t_spike_resol": time_seconds_spent_in_spike_resol,
-                        "t_gen_elf": time_seconds_spent_in_gen_elf,
-                        "t_rtl" : time_seconds_spent_in_rtl,
-                        "n_bbs": len(fuzzerstate.instr_objs_seq),
-                        "n_instrs": sum([len(i) for i in fuzzerstate.instr_objs_seq]) + len(fuzzerstate.final_bb),
-                        "t_total":time.time() - start_time,
-                        "fail_type": e.fail_type.name,
-                        "seed":fuzzerstate.randseed
-                    }, f)
             raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: {e}",fuzzerstate=fuzzerstate, fail_type=e.fail_type, timestamp=time.time()-start_time)
         else:
             raise e
