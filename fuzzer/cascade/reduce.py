@@ -12,7 +12,7 @@ from cascade.finalblock import finalblock
 from cascade.mmu_utils import phys2virt, PAGE_ALIGNMENT_MASK, virt2phys
 from cascade.cfinstructionclasses import filter_reg_traceback, is_placeholder, SpeculativeInstructionEncapsulator
 from cascade.cfinstructionclasses_t0 import JALInstruction_t0, RegImmInstruction_t0, JALRInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0, R12DInstruction_t0, BranchInstruction_t0
-from cascade.fuzzsim import SimulatorEnum, runtest_simulator
+from cascade.fuzzsim import SimulatorEnum, runtest_simulator, run_rtl_and_load_regstream
 from cascade.spikeresolution import gen_elf_from_bbs, gen_regdump_reqs_reduced, gen_ctx_regdump_reqs, run_trace_regs_at_pc_locs, spike_resolution, gen_regdump_reqs_all_rds
 from cascade.contextreplay import SavedContext, gen_context_setter
 from cascade.gen_ctxt_final_block import *
@@ -1166,77 +1166,16 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
                 pillar_instr_id = _find_pillar_instr(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, fault_from_prev_bb, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr, quiet=quiet)
             time_pillar_instr_search = time.time()-start_pillar_instr_search
 
-        # fuzzerstate, _, _, _ = gen_reduced_elf(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id)
-        #  # We remove the BBs [1,pillar_bb_id) so the index of the last interesting BB needs to be adjusted and the pillar BB id becomes 1.
-        # if pillar_bb_id == 0:
-        #     find_pillars = False # Failed at finding pillar BB so don't try to nopize initial BB.
-        # else:
-        #     print(f"failing_bb_id: {failing_bb_id} -> {failing_bb_id - (pillar_bb_id-1)}, pillar_bb_id: {pillar_bb_id}")
-        #     failing_bb_id -= (pillar_bb_id-1)
-        #     pillar_bb_id = 1
-        #     if pillar_bb_id == failing_bb_id:
-        #         # We remove the instructions [0,pillar_instr_id) in the BB so the index of the failing instruction shifts by pillar_instr_id-1.
-        #         failing_instr_id -= pillar_instr_id
-            # pillar_instr_id = 0 # All instructions before the pillar instruction are removed, thus the index changes to 0.
-
-
     ###
     # Transform some instructions into nops.
     ###
 
-    if NOPIZE_SANDWICH_INSTRUCTIONS and pillar_bb_id > 0:
+    if NOPIZE_SANDWICH_INSTRUCTIONS and FIND_PILLARS and pillar_bb_id > 0:
         # The advantage of doing this before the reduction of the ELF size is that we may successfully remove some load instructions targeting the instructions we will remove. The downside is that it is slower than cleaning up after the reduction.
         start_nopize_instr = time.time()
         fuzzerstate = _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, fault_from_prev_bb, quiet=quiet)
         time_nopize_instr = time.time()-start_nopize_instr
-        n_nops, n_non_nop_instrs  =  _count_instructions(fuzzerstate,failing_bb_id,failing_instr_id, pillar_bb_id, pillar_instr_id)
         # fuzzerstate.verify_program(print_execution=False,print_trace=False)
-
-    # Not mature code yet.
-    if FIND_PILLARS and FLATTEN_SANDWICH_INSTRUCTIONS and not pillar_bb_id == failing_bb_id:
-        raise NotImplementedError
-        if not quiet:
-            print('Flattening the control flow.')
-        try:
-            fuzzerstate, is_success_flattening = _try_flatten_cf(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, quiet=quiet)
-        except Exception as e:
-            print(f"Exception while flattening the control flow: {e}")
-            is_success_flattening = False
-            raise e
-        # Warning: Flattening cf outdates the indices of problematic and pillar instructions.
-        if not quiet:
-            print('is_success_flattening', is_success_flattening)
-
-        if is_success_flattening:
-            failing_bb_id = 1
-            pillar_bb_id = 1
-            fault_from_prev_bb = False
-
-            failing_instr_id = _find_failing_instr_in_bb(fuzzerstate, failing_bb_id, quiet=quiet)
-            pillar_instr_id = _find_pillar_instr(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, fault_from_prev_bb, quiet=quiet)
-            # Remove the instructions after and before
-            fuzzerstate.instr_objs_seq[failing_bb_id] = fuzzerstate.instr_objs_seq[failing_bb_id][:failing_instr_id+2]
-            jal_instr = JALInstruction_t0(fuzzerstate, "jal", 0, fuzzerstate.bb_start_addr_seq[1] + 4*(pillar_instr_id) - (fuzzerstate.ctxsv_bb_start_addr_seq[0] + 4*fuzzerstate.ctxsv_bb_jal_instr_id))
-            jal_instr.paddr = fuzzerstate.ctxsv_bb_base_addr + 4*fuzzerstate.ctxsv_bb_jal_instr_id + SPIKE_STARTADDR
-            fuzzerstate.ctxsv_bb[fuzzerstate.ctxsv_bb_jal_instr_id] = jal_instr
-            for instr_id in range(pillar_instr_id):
-                nop_instr = RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0) # RawDataWord(0)
-                nop_instr.paddr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id + SPIKE_STARTADDR
-                fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id] = nop_instr
-
-            # We can do this one more time
-            fuzzerstate = _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, fault_from_prev_bb, quiet=quiet)
-            if not quiet:
-                print(f"Failing bb id                    : {failing_bb_id}")
-                print(f"Failing bb start addr            : {hex(fuzzerstate.bb_start_addr_seq[failing_bb_id] + SPIKE_STARTADDR)}")
-                print(f"Failing instrs in bb excluding cf: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}")
-                print(f"Failing instr                    : {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}")
-                if FIND_PILLARS:
-                    print(f"Pillar bb id                     : {pillar_bb_id}")
-                    print(f"Pillar bb addr                   : {hex(fuzzerstate.bb_start_addr_seq[pillar_bb_id] + SPIKE_STARTADDR)}")
-                    print(f"Pillar instr                     : {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr_id].get_str()}")
-
-            fuzzerstate.verify_program(print_execution=False,print_trace=False)
 
 
     ## LARGER ELF ##
@@ -1325,14 +1264,14 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     ret_msg = f"{fuzzerstate.instance_to_str()}:\n"
     if FIND_PILLARS:
         ret_msg += f"\t Pillar bb id: {pillar_bb_id}\n"
-        ret_msg += f"\t Pillar instr id: {pillar_instr_id}\n"
+        ret_msg += f"\t Pillar instr id: {pillar_instr_id}/{len(fuzzerstate.instr_objs_seq[pillar_instr_id])}\n"
         ret_msg += f"\t Pillar instr: {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr_id].get_str()}\n"
-    ret_msg += f"\t Failing bb id: {failing_bb_id}\n"
-    ret_msg += f"\t Failing instr id: {failing_instr_id}\n"
+    ret_msg += f"\t Failing bb id: {failing_bb_id}/{len(fuzzerstate.instr_objs_seq)}\n"
+    ret_msg += f"\t Failing instr id: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}\n"
     ret_msg += f"\t Failing instr: {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}\n"
     if FIND_PILLARS:
         ret_msg += f"\t Total number of bbs: {failing_bb_id-pillar_bb_id+1}\n"
-    if NOPIZE_SANDWICH_INSTRUCTIONS:
+        n_nops, n_non_nop_instrs  =  _count_instructions(fuzzerstate,failing_bb_id,failing_instr_id, pillar_bb_id, pillar_instr_id)
         ret_msg += f"\t Total number of non-nop instructions before leaking instruction: {n_non_nop_instrs} ({n_nops} nops)\n"
     if REDUCE_TAINT:
         ret_msg += f"\t Leaked address: {hex(leaked_address)}\n"
@@ -1399,3 +1338,16 @@ def _count_instructions(fuzzerstate, max_bb, max_instr, min_bb, min_instr):
                 n_non_nop_insts +=1
 
     return n_nops, n_non_nop_insts
+
+# Repeatedly run the reduced program with different data and check PC valuations
+def _check_leakage_without_cellift(fuzzerstate, n_elfs:int , multithread:bool, max_bb_id_to_consider, max_instr_id_except_cf, index_first_bb_to_consider, index_first_instr_to_consider):
+    assert REDUCE_TAINT
+    for i in range(n_elfs):
+        test_fuzzerstate = deepcopy(fuzzerstate)
+        for addr, val_t0 in test_fuzzerstate.memview.data_t0.items():
+            if val_t0:
+                test_fuzzerstate.memview.data[addr] = random.randint(0, 1<<32-1)
+        
+        elfpath = gen_elf_from_bbs(test_fuzzerstate, False, f"vanilla_datafuzz{i}", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", test_fuzzerstate.design_base_addr)
+        test_fuzzerstate.setup_env(elfpath, test_fuzzerstate.seed)
+        run_rtl_and_load_regstream(test_fuzzerstate, use_vanilla=True, trace_en=True)
