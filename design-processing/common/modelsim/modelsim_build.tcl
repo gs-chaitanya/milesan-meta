@@ -39,7 +39,7 @@ vlog -64 -suppress 3009 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG $CASCADE_META_CO
 if { $TRACE != "trace_fst" && $TRACE != "trace" } {
     vopt -64 -sv -work $LIB tb_top -o tb_top_opt
 } else {
-    vopt -64 -sv -work $LIB tb_top +acc -debugdb -o tb_top_trace
+    vopt -64 -sv +acc -debugdb  -work $LIB tb_top -o tb_top_trace
 }
 
 quit -f
