@@ -185,5 +185,6 @@ def create_speculative_instr(fuzzerstate, curr_addr: int):
 
     isa_class = _gen_next_isainstrclass_from_weights(weights)
     instr_str = gen_next_instrstr_from_isaclass(isa_class, fuzzerstate)
-
-    return SpeculativeInstructionEncapsulator(fuzzerstate,_create_speculative_instr(instr_str, fuzzerstate, curr_addr))
+    instr = _create_speculative_instr(instr_str, fuzzerstate, curr_addr)
+    instr.paddr = curr_addr
+    return SpeculativeInstructionEncapsulator(fuzzerstate,instr)

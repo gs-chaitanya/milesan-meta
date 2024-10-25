@@ -724,8 +724,7 @@ class FuzzerState:
                 bb_idx = self.bb_start_addr_seq.index(addr)
                 addr += sum([2+2*int(not i.iscompressed) for i in self.instr_objs_seq[bb_idx]])
             if self.memview.is_mem_range_free(addr,addr+4):
-                next_instr = create_speculative_instr(self, addr)
-                next_instr.paddr = addr
+                next_instr = create_speculative_instr(self, addr+SPIKE_STARTADDR)
                 self.spec_instr_objs_seq += [next_instr]
                 # next_instr.print()
                 if next_instr.iscompressed:

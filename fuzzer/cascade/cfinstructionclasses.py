@@ -1680,7 +1680,8 @@ class SpeculativeInstructionEncapsulator(BaseInstruction):
         super().__init__(fuzzerstate, "SpeculativeInstructionEncapsulator")
         self.instr = instr
         self.iscompressed = instr.iscompressed
-        
+        self.paddr = instr.paddr&~SPIKE_STARTADDR # TODO we assume SPIKE_STARTADDR == design start address, not good...
+
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{hex(self.paddr)}: {self.instr.get_str(is_spike_resolution)} (SpeculativeInstructionEncapsulator)"
 
