@@ -16,14 +16,25 @@ import os
 import re
 
 def _parse_logfile(path, design_name):
+    if path.endswith("reduce.log"):
+        is_reduction_log = True
+        print("Detected reduction log. Parsing seeds for cross-privilege leakage.")
+    else:
+        is_reduction_log = False
     with open(path, "r") as f:
         logs = f.read()
     seeds = []
+    cross_privilege = []
     for line in logs.split("\n"):
         fuzz_id = re.findall(f"[0-9]+_{design_name}_[0-9]+_[0-9]+",line)
         if len(fuzz_id):
-            assert len(fuzz_id) == 1
+            assert len(fuzz_id) == 1 or is_reduction_log
             seeds += [int(fuzz_id[0].split("_")[2])]
+            cross_privilege += [False]
+        if "Detected leakage" in line:
+            cross_privilege[-1] = True
+    if is_reduction_log:
+        return [seed for i,seed in enumerate(seeds) if cross_privilege[i]]
     return seeds
 
 if __name__ == '__main__':
@@ -48,7 +59,7 @@ if __name__ == '__main__':
 
     if num_cores > len(seeds):
         num_cores = len(seeds)
-    
+
     calibrate_spikespeed()
     profile_get_medeleg_mask(design_name)
     profile_get_asid_mask(design_name)
