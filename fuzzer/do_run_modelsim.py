@@ -14,7 +14,6 @@ PRINT_THREAD_STATUS = True
 LOG_THREAD_STATUS = True
 MAX_N_THREADS = 60 # This is a cap for the request throughput.
 MUTE = True
-TRACE_EN = False
 DELETE_REQS = True
 KILL_THREADS = True
 WAIT_UNTIL_FINISHED = True
@@ -60,7 +59,9 @@ def modelsim_worker(new_req_path):
     assert "DESIGN_DIR" in req_env, "DESIGN_DIR not found in req!"
     assert "REGDUMP_PATH" in req_env, "REGDUMP_PATH not found in req!"
     assert "REGSTREAM_PATH" in req_env, "REGSTREAM_PATH not found in req!"
-    assert not TRACE_EN or "TRACEFILE" in req_env, "TRACEFILE not found in req!"
+    assert "TRACE_EN" in req_env, "TRACE_EN not found in req!"
+    assert "TRACE_FST" in req_env, "TRACE_FST not found in req!"
+    assert "TRACEFILE" in req_env, "TRACEFILE not found in req!"
     assert "SIMLEN" in req_env, "SIMLEN not found in req!"
     assert "MODELSIM_TIMEOUT" in req_env, "MODELSIM_TIMEOUT not found in req!"
 
@@ -68,7 +69,12 @@ def modelsim_worker(new_req_path):
     simsramtaint = req_env["SIMSRAMTAINT"]
     design_dir = req_env["DESIGN_DIR"]
     msim_timeout = int(req_env["MODELSIM_TIMEOUT"])
-
+    trace_en = req_env["TRACE_EN"]
+    trace_fst = req_env["TRACE_FST"]
+    del req_env["TRACE_EN"]
+    del req_env["TRACE_FST"]
+    del req_env["USE_VANILLA"]
+    assert not trace_fst, f"FST tracing not implemented in modelsim yet."
     while(not os.path.exists(simsramelf)):
         time.sleep(1)
         if PRINT_THREAD_STATUS:
@@ -85,7 +91,7 @@ def modelsim_worker(new_req_path):
     env.update(req_env)
     cmd = [
         "make",
-        "rerun_drfuzz_mem_notrace_modelsim" if not TRACE_EN else "rerun_drfuzz_mem_trace_modelsim"
+        "rerun_drfuzz_mem_notrace_modelsim" if not trace_en else "rerun_drfuzz_mem_trace_modelsim"
     ]
     start_time = time.time()
 
