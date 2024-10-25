@@ -264,7 +264,7 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
 # @param max_instr_id_except_cf: the number of instructions in the bb `max_bb_id_to_consider` to consider in total, including the cf instruction that may be added (equivalently, the max instruction index to consider in the bb `max_bb_id_to_consider` when ignoring the cf instruction). -1 means that we only want the CF instruction. None means that we do not expect to do any replacement.
 # @param index_first_bb_to_consider: the index of the first BB to consider. 1 if we remove no bb on the left side.
 # @return test_fuzzerstate, rtl_elfpath, (finalintregvals_spikeresol[1:], finalfloatregvals_spikeresol), numinstrs
-def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except_cf: int = None, index_first_bb_to_consider: int = 1, index_first_instr_to_consider: int = 0):
+def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except_cf: int = None, index_first_bb_to_consider: int = 1, index_first_instr_to_consider: int = 0, keep_dead_code_in_memory: bool = True):
     # print(f"gen_reduced_elf with max_bb_id_to_consider: {max_bb_id_to_consider}, max_instr_id_except_cf: {max_instr_id_except_cf}, index_first_bb_to_consider: {index_first_bb_to_consider}, index_first_instr_to_consider: {index_first_instr_to_consider}")
     if DO_ASSERT:
         assert not USE_COMPRESSED, f"Addr offset at end of function does not work with compressed yet."
@@ -324,16 +324,17 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
         gen_ctxt_finalbock(last_addr_priv, last_addr_layout, test_fuzzerstate, max_bb_id_to_consider, max_instr_id_except_cf)
 
         test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+1] = new_jal
-        if REMOVE_DEAD_INSTRUCTIONS:
-            test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
-            test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider] = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][:max_instr_id_except_cf+2]
-        else:
+        
+        if keep_dead_code_in_memory:
             for instr in test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][max_instr_id_except_cf+2:]:
-                instr.isdead = True
+                test_fuzzerstate.spec_instr_objs_seq += [SpeculativeInstructionEncapsulator(test_fuzzerstate,instr)]
             for bb in test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider+1:]:
                 for instr in bb:
-                    instr.isdead = True
+                    test_fuzzerstate.spec_instr_objs_seq += [SpeculativeInstructionEncapsulator(test_fuzzerstate,instr)]
     
+        test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
+        test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider] = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][:max_instr_id_except_cf+2]
+
     # Remove the cf-ambiguous instruction
     else:
         # last_addr_layout, last_addr_priv = get_last_bb_layout_and_priv(test_fuzzerstate, max_bb_id_to_consider, -1, True)
@@ -351,12 +352,11 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
         gen_ctxt_finalbock(last_addr_priv, last_addr_layout, test_fuzzerstate, max_bb_id_to_consider, -1)
         test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1] = new_jal
         
-        if REMOVE_DEAD_INSTRUCTIONS:
-            test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
-        else:
-            for bb in test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider+2]:
+        if keep_dead_code_in_memory:
+            for bb in test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider+1:]:
                 for instr in bb:
-                    instr.isdead = True
+                    test_fuzzerstate.spec_instr_objs_seq += [SpeculativeInstructionEncapsulator(test_fuzzerstate,instr)]
+        test_fuzzerstate.instr_objs_seq = test_fuzzerstate.instr_objs_seq[:max_bb_id_to_consider+1]
 
     test_fuzzerstate.bb_start_addr_seq = test_fuzzerstate.bb_start_addr_seq[:max_bb_id_to_consider+1]
 
@@ -409,10 +409,18 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
         numinstrs += len(bb)
 
     # We delete the instructions only here as the array size is changed.
+    if keep_dead_code_in_memory:
+        for instr in test_fuzzerstate.instr_objs_seq[index_first_bb_to_consider][:index_first_instr_to_consider]:
+            test_fuzzerstate.spec_instr_objs_seq += [SpeculativeInstructionEncapsulator(test_fuzzerstate,instr)]
+        for bb in test_fuzzerstate.instr_objs_seq[1:index_first_bb_to_consider]:
+            for instr in bb:
+                test_fuzzerstate.spec_instr_objs_seq += [SpeculativeInstructionEncapsulator(test_fuzzerstate,instr)]
+
     del test_fuzzerstate.instr_objs_seq[index_first_bb_to_consider][:index_first_instr_to_consider]
     test_fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] += 4*index_first_instr_to_consider # The bb start address changes since we remove the instructions before pillar instr.
     del test_fuzzerstate.instr_objs_seq[1:index_first_bb_to_consider]
     del test_fuzzerstate.bb_start_addr_seq[1:index_first_bb_to_consider]
+
 
     # Verify that the modifed program still has a valid taint propagation. 
     test_fuzzerstate.verify_program()
@@ -1143,11 +1151,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     time_failing_instr_search = time.time()-start_failing_instr_search
     
+
     ###
     # Find the Pillar BB
     ##
 
-    
     # pillar_bb_id: the index of the last bb such as the test case still succeeds when the bb `pillar_bb_id` is removed (and all the preceding instructions and bbs).
     # We have as an invariant: pillar_bb_id <= failing_bb_id
     if FIND_PILLARS:
@@ -1166,6 +1174,10 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
                 pillar_instr_id = _find_pillar_instr(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, fault_from_prev_bb, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr, quiet=quiet)
             time_pillar_instr_search = time.time()-start_pillar_instr_search
 
+        if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id-1, pillar_bb_id, pillar_instr_id, quiet=quiet):
+            print(f"Pillar reduction changed leaking instruction! Resetting pillar BB id to 0.")
+            pillar_bb_id = 0
+
     ###
     # Transform some instructions into nops.
     ###
@@ -1177,8 +1189,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         time_nopize_instr = time.time()-start_nopize_instr
         # fuzzerstate.verify_program(print_execution=False,print_trace=False)
 
+    ###
+    ## Check that we reduced correctly.
+    ### 
 
-    ## LARGER ELF ##
+    ## Generate larger elf that should trigger mismatch.
     if fault_from_prev_bb:
         test_fuzzerstate_larger, rtl_elfpath_larger, expected_regvals_pairs_larger, numinstrs_larger = gen_reduced_elf(fuzzerstate, failing_bb_id+1, 0)
     
@@ -1190,7 +1205,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     print(f"Larger: failing_bb_id: {failing_bb_id}, failing_instr_id: {failing_instr_id}, numinstrs_larger: {numinstrs_larger}")
     print(f"Larger ELF: {rtl_elfpath_larger}") 
 
-    ## SMALLER ELF ##
+    ## Generate smaller elf that should not trigger mismatch.
     if failing_instr_id == -1 and fault_from_prev_bb:
         ret = gen_reduced_elf(fuzzerstate, failing_bb_id)
         if ret is False:
@@ -1211,7 +1226,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     print(f"Smaller ELF: {rtl_elfpath_smaller}")
 
 
-    ## CHECK THAT SMALLER ELF SUCCEEDS AND LARGER ELF TRIGGERS BUG ##
+    ## Verify that larger elf fails and smaller succeeds.
     is_success_larger, rtl_msg_larger = runtest_simulator(test_fuzzerstate_larger, rtl_elfpath_larger, expected_regvals_pairs_larger, numinstrs_larger)
     if not quiet:
         print('Success larger:', is_success_larger)
@@ -1223,8 +1238,10 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     assert is_success_smaller and not is_success_larger, f"Reduction failed: is_success_smaller: {is_success_smaller}, is_success_larger: {is_success_larger}"
 
+    ###
+    ## Check that the leakage is not caused by a verilator bug.
+    ###
 
-    ## CHECK THAT BUG IS NOT FROM VERILATOR ##
     if DOUBLECHECK_MODELSIM and fuzzerstate.simulator == SimulatorEnum.VERILATOR: 
         if DO_ASSERT:
             assert test_fuzzerstate_larger.simulator == SimulatorEnum.VERILATOR
@@ -1250,17 +1267,51 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         test_fuzzerstate_larger.simulator =  SimulatorEnum.VERILATOR
         test_fuzzerstate_smaller.simulator =  SimulatorEnum.VERILATOR
 
+    if pillar_bb_id>0:
+        if fault_from_prev_bb:
+            test_fuzzerstate_compact, rtl_elfpath_compact, expected_regvals_pairs_compact, numinstrs_compact = gen_reduced_elf(fuzzerstate, failing_bb_id+1, 0, pillar_bb_id, pillar_instr_id, keep_dead_code_in_memory=True)
+        else:
+            test_fuzzerstate_compact, rtl_elfpath_compact, expected_regvals_pairs_compact, numinstrs_compact = gen_reduced_elf(fuzzerstate, failing_bb_id, failing_instr_id, pillar_instr_id, keep_dead_code_in_memory=True)
+
+        test_fuzzerstate_compact.rtl_elfpath = rtl_elfpath_compact
+        test_fuzzerstate_compact.expected_regvals = expected_regvals_pairs_compact
+        is_success_compact, rtl_msg_compact = runtest_simulator(test_fuzzerstate_compact, rtl_elfpath_compact, expected_regvals_pairs_compact, numinstrs_compact)
+
+        if not is_success_compact:
+            print(f"Compactify success: {rtl_msg_compact}")
+            final_fuzzerstate = test_fuzzerstate_compact
+        else:
+            print(f"Compactify fail: {rtl_msg_compact}")
+            final_fuzzerstate = test_fuzzerstate_larger
+    else:
+        final_fuzzerstate = test_fuzzerstate_larger
+
+
     if REDUCE_DEAD_CODE:
         start_reduce_dead_code = time.time()
-        test_fuzzerstate_larger = _reduce_dead_code(test_fuzzerstate_larger)
+        try:
+            final_fuzzerstate = _reduce_dead_code(final_fuzzerstate)
+            reduce_dead_code_success = True
+        except Exception as e:
+            print(f"Dead code reduction failed: {e}")
+            reduce_dead_code_success = False
+
         time_reduce_dead_code = time.time()-start_reduce_dead_code
 
     if REDUCE_TAINT:
         start_reduce_taint = time.time()
-        test_fuzzerstate_larger, leaked_address = _reduce_taint(test_fuzzerstate_larger)
+        try:
+            final_fuzzerstate, leaked_address = _reduce_taint(final_fuzzerstate)
+            reduce_taint_success = True
+        except Exception as e:
+            print(f"Taint reduction failed: {e}")
+            reduce_taint_success = False
         time_reduce_taint = time.time() - start_reduce_taint
 
-    ## GENERATE RETURN MESSAGE FOR LOGS ##
+    ###
+    ## Generate final summary.
+    ###
+
     ret_msg = f"{fuzzerstate.instance_to_str()}:\n"
     if FIND_PILLARS:
         ret_msg += f"\t Pillar bb id: {pillar_bb_id}\n"
@@ -1275,10 +1326,13 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_msg += f"\t Total number of non-nop instructions before leaking instruction: {n_non_nop_instrs} ({n_nops} nops)\n"
     if REDUCE_TAINT:
         ret_msg += f"\t Leaked address: {hex(leaked_address)}\n"
-    ret_msg += f"\t Reduced ELF: {rtl_elfpath_larger}\n"
+    if pillar_bb_id>0:
+        ret_msg += f"\t Compactify success: {not is_success_compact}\n"
+    ret_msg += f"\t Reduced ELF: {final_fuzzerstate.rtl_elfpath}\n"
+    cross_privilege = False
     if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level in fuzzerstate.taint_sink_privs:
         ret_msg += f"\t Detected leakage from {[p.name for p in fuzzerstate.taint_source_privs]} -> {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name}\n"
-
+        cross_privilege = True
     if is_success_larger:
         ret_msg += f"\t Bug disappears in modelsim!\n"
     elif not is_success_smaller:
@@ -1295,15 +1349,17 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_msg += f"\t Time to nopize instr: {time_nopize_instr}s\n"    
     if REDUCE_TAINT:
         ret_msg += f"\t Time to reduce taint: {time_reduce_taint}s\n"
+        ret_msg += f"\t Taint reduction success: {reduce_taint_success}\n"
     if REDUCE_DEAD_CODE:
         ret_msg += f"\t Time to reduce dead code: {time_reduce_dead_code}s\n"
+        ret_msg += f"\t Dead code reduction success: {reduce_dead_code_success}\n"
   
 
     if not quiet:
         print(ret_msg)
     fuzzerstate.log(ret_msg)
 
-    if not NO_REMOVE_TMPFILES:
+    if not NO_REMOVE_TMPFILES and not cross_privilege:
         fuzzerstate.remove_tmp_files()
         if not NO_REMOVE_TMPDIRS:
             fuzzerstate.remove_tmp_dir()
@@ -1341,7 +1397,6 @@ def _count_instructions(fuzzerstate, max_bb, max_instr, min_bb, min_instr):
 
 # Repeatedly run the reduced program with different data and check PC valuations
 def _check_leakage_without_cellift(fuzzerstate, n_elfs:int , multithread:bool, max_bb_id_to_consider, max_instr_id_except_cf, index_first_bb_to_consider, index_first_instr_to_consider):
-    assert REDUCE_TAINT
     for i in range(n_elfs):
         test_fuzzerstate = deepcopy(fuzzerstate)
         for addr, val_t0 in test_fuzzerstate.memview.data_t0.items():
