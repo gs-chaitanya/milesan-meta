@@ -35,11 +35,11 @@ vlog -64 -ccflags '-std=c++14' -work $LIB $MODELSIM_VLOG_COVERFLAG -dpiheader $C
 
 vlog -64 -suppress 3009 -sv -work $LIB $MODELSIM_VLOG_COVERFLAG $CASCADE_META_COMMON/dv/sv/rst_gen.sv $CASCADE_META_COMMON/dv/sv/clk_rst_gen.sv $SV_TOP
 
-# Optimize only if we don't need tracing.
+# Optimize with +acc and -debugdb when tracing.
 if { $TRACE != "trace_fst" && $TRACE != "trace" } {
     vopt -64 -sv -work $LIB tb_top -o tb_top_opt
 } else {
-    vopt -64 -sv +acc -debugdb  -work $LIB tb_top -o tb_top_trace
+    vopt -64 -sv -debugdb  +acc -work $LIB tb_top -o tb_top_trace
 }
 
 quit -f

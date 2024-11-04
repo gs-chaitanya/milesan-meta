@@ -31,7 +31,7 @@ if { [info exists ::env(MODELSIM_NOQUIT)] } { set MODELSIM_NOQUIT $::env(MODELSI
 if { $TRACE != "trace_fst" && $TRACE != "trace" } {
     vsim -64 -suppress 3009 -suppress 3085 -suppress 3015 -suppress 2718 -suppress 2685 -suppress 2244 -lib $LIB $MODELSIM_VSIM_COVERFLAG tb_top_opt
 } else {
-    vsim -64 -suppress 3009 -suppress 3085 -suppress 3015 -suppress 2718 -suppress 2685 -suppress 2244 -lib $LIB $MODELSIM_VSIM_COVERFLAG tb_top_trace
+    vsim -64 -suppress 3009 -suppress 3085 -suppress 3015 -suppress 2718 -suppress 2685 -suppress 2244 -lib $LIB $MODELSIM_VSIM_COVERFLAG -voptargs=+acc -debugdb tb_top_trace
 }
 if { [string equal $TRACE trace_fst] } { 
     log -r /*
