@@ -466,56 +466,58 @@ def gen_context_setter(fuzzerstate, saved_context, next_jmp_addr: int,tgt_addr_l
     # curr_addr += 4 # NO_COMPRESSED
 
 
-    # Fifth, set the sum and mprv bits in mstatus if needed
-    ##
-    lui_imm, addi_imm = li_into_reg(saved_context.mstatus & 0x60000, False)
-    fuzzerstate.ctxsv_bb.append(ImmRdInstruction_t0(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID_VIRT, lui_imm, is_rd_nonpickable_ok=True))
-    fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID_VIRT, addi_imm, is_rd_nonpickable_ok=True))
-    fuzzerstate.ctxsv_bb.append(R12DInstruction_t0(fuzzerstate,"and", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID_VIRT, RPROD_MASK_REGISTER_ID, is_rd_nonpickable_ok=True))
-    fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrs", 0, RDEP_MASK_REGISTER_ID_VIRT, CSR_IDS.MSTATUS))
-    curr_addr += 16
+    if USE_MMU:
+        # Fifth, set the sum and mprv bits in mstatus if needed
+        ##
+        lui_imm, addi_imm = li_into_reg(saved_context.mstatus & 0x60000, False)
+        fuzzerstate.ctxsv_bb.append(ImmRdInstruction_t0(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID_VIRT, lui_imm, is_rd_nonpickable_ok=True))
+        fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID_VIRT, addi_imm, is_rd_nonpickable_ok=True))
+        fuzzerstate.ctxsv_bb.append(R12DInstruction_t0(fuzzerstate,"and", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID_VIRT, RPROD_MASK_REGISTER_ID, is_rd_nonpickable_ok=True))
+        fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrs", 0, RDEP_MASK_REGISTER_ID_VIRT, CSR_IDS.MSTATUS))
+        curr_addr += 16
 
 
 
     ###
     # Finally, set the correct privilege level, if the saved context specifies something else than machine mode (at the end, to avoid having to deal with virtual memory fot the loads)
     ###
-
-    if saved_context.privilege == PrivilegeStateEnum.SUPERVISOR or saved_context.privilege == PrivilegeStateEnum.USER:
-        # Populate mpp
-        if saved_context.privilege == PrivilegeStateEnum.SUPERVISOR:
-            fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrs", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
-            fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrc", 0, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
-        else:
-            fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrc", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+    if USE_MMU:
+        if saved_context.privilege == PrivilegeStateEnum.SUPERVISOR or saved_context.privilege == PrivilegeStateEnum.USER:
+            # Populate mpp
+            if saved_context.privilege == PrivilegeStateEnum.SUPERVISOR:
+                fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrs", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+                fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrc", 0, MPP_TOP_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+            else:
+                fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrc", 0, MPP_BOTH_ENDIS_REGISTER_ID, CSR_IDS.MSTATUS))
+                fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0, is_rd_nonpickable_ok=True))
+            curr_addr += 8 # NO_COMPRESSED
+            # Populate mepc
+            if tgt_addr_layout == -1:
+                mepc_target = curr_addr + 12
+                fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID_VIRT, MAX_NUM_PICKABLE_REGS, mepc_target, is_rd_nonpickable_ok=True)) # The reg `MAX_NUM_PICKABLE_REGS` contains the start address of the context sette, is_rd_nonpickable_ok=Truer
+                fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, RDEP_MASK_REGISTER_ID_VIRT, CSR_IDS.MEPC))
+            else:
+                mepc_target = curr_addr + 20
+                mepc_target_virt = phys2virt(((mepc_target)+SPIKE_STARTADDR), tgt_addr_priv, tgt_addr_layout, fuzzerstate)
+                lui_imm, addi_imm = li_into_reg((mepc_target_virt | 0x80000000) & 0xffffffff, False)
+                fuzzerstate.ctxsv_bb.append(ImmRdInstruction_t0(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID_VIRT, lui_imm, is_rd_nonpickable_ok=True))
+                fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID_VIRT, addi_imm, is_rd_nonpickable_ok=True))
+                fuzzerstate.ctxsv_bb.append(R12DInstruction_t0(fuzzerstate,"and", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID_VIRT, RPROD_MASK_REGISTER_ID, is_rd_nonpickable_ok=True))
+                fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, RDEP_MASK_REGISTER_ID_VIRT, CSR_IDS.MEPC))
+            mret = PrivilegeDescentInstruction_t0(fuzzerstate,True)
+            mret.priv_level_after_op = tgt_addr_priv
+            mret.va_layout_after_op = tgt_addr_layout
+            # print(f"MEPC TARGET: phys: {hex(mepc_target)}, virt: {hex(mepc_target_virt)}")
+            fuzzerstate.ctxsv_bb.append(mret) # mret
+            # Add 2 nops for the mret, just in case the CPU is not doing great with mret sometimes :)
             fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0, is_rd_nonpickable_ok=True))
-        curr_addr += 8 # NO_COMPRESSED
-        # Populate mepc
-        if tgt_addr_layout == -1:
-            mepc_target = curr_addr + 12
-            fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID_VIRT, MAX_NUM_PICKABLE_REGS, mepc_target, is_rd_nonpickable_ok=True)) # The reg `MAX_NUM_PICKABLE_REGS` contains the start address of the context sette, is_rd_nonpickable_ok=Truer
-            fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, RDEP_MASK_REGISTER_ID_VIRT, CSR_IDS.MEPC))
-        else:
-            mepc_target = curr_addr + 20
-            mepc_target_virt = phys2virt(((mepc_target)+SPIKE_STARTADDR), tgt_addr_priv, tgt_addr_layout, fuzzerstate)
-            lui_imm, addi_imm = li_into_reg((mepc_target_virt | 0x80000000) & 0xffffffff, False)
-            fuzzerstate.ctxsv_bb.append(ImmRdInstruction_t0(fuzzerstate,"lui", RDEP_MASK_REGISTER_ID_VIRT, lui_imm, is_rd_nonpickable_ok=True))
-            fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID_VIRT, addi_imm, is_rd_nonpickable_ok=True))
-            fuzzerstate.ctxsv_bb.append(R12DInstruction_t0(fuzzerstate,"and", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID_VIRT, RPROD_MASK_REGISTER_ID, is_rd_nonpickable_ok=True))
-            fuzzerstate.ctxsv_bb.append(CSRRegInstruction_t0(fuzzerstate,"csrrw", 0, RDEP_MASK_REGISTER_ID_VIRT, CSR_IDS.MEPC))
-        mret = PrivilegeDescentInstruction_t0(fuzzerstate,True)
-        mret.priv_level_after_op = tgt_addr_priv
-        mret.va_layout_after_op = tgt_addr_layout
-        # print(f"MEPC TARGET: phys: {hex(mepc_target)}, virt: {hex(mepc_target_virt)}")
-        fuzzerstate.ctxsv_bb.append(mret) # mret
-        # Add 2 nops for the mret, just in case the CPU is not doing great with mret sometimes :)
-        fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0, is_rd_nonpickable_ok=True))
-        curr_addr = (mepc_target+4) # NO_COMPRESSED
+            curr_addr = (mepc_target+4) # NO_COMPRESSED
 
-    # Reset the reg MAX_NUM_PICKABLE_REGS to 0 and RDEP_MASK_REGISTER_ID_VIRT
-    fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, 0, 0, is_rd_nonpickable_ok=True))
-    fuzzerstate.ctxsv_bb.append(R12DInstruction_t0(fuzzerstate,"sub", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, is_rd_nonpickable_ok=True))
-    curr_addr += 8 # NO_COMPRESSED
+        # Reset the reg MAX_NUM_PICKABLE_REGS to 0 and RDEP_MASK_REGISTER_ID_VIRT
+        fuzzerstate.ctxsv_bb.append(RegImmInstruction_t0(fuzzerstate,"addi", MAX_NUM_PICKABLE_REGS, 0, 0, is_rd_nonpickable_ok=True))
+        curr_addr += 4 # NO_COMPRESSED
+        fuzzerstate.ctxsv_bb.append(R12DInstruction_t0(fuzzerstate,"sub", RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, is_rd_nonpickable_ok=True))
+        curr_addr += 4 # NO_COMPRESSED
 
     # Jump to the next bb
     if DO_ASSERT:
