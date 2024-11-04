@@ -80,7 +80,8 @@ def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_c
     tgt_pc =  target_instr.vaddr if USE_MMU else target_instr.paddr
     assert tgt_pc is not None
     tgt_addr_layout = target_instr.va_layout
-    assert tgt_addr_layout is not None
+    if USE_MMU:
+        assert tgt_addr_layout is not None
     tgt_addr_priv = target_instr.priv_level
     tgt_addr_priv is not None
 
@@ -505,7 +506,6 @@ def _reduce_taint(fuzzerstate,quiet:bool=False):
     assert is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1), f"Leaked address {hex(tainted_addresses[left_bound])} at bound {left_bound} incorrect."
     return test_fuzzerstate, tainted_addresses[left_bound]
 
-# TODO: reduce also code that is removed with ctx setter and jump to final BB.
 def _reduce_dead_code(fuzzerstate):
     assert FILL_MEM_WITH_DEAD_CODE
     assert len(fuzzerstate.spec_instr_objs_seq) > 0
@@ -622,6 +622,8 @@ def _try_flatten_cf(fuzzerstate, failing_bb, failing_instr, pillar_bb, pillar_in
 # hint_right_bound_bb: when the bb with id `hint_right_bound_bb` is removed and all the subsequent bbs are removed, the bug should still be here.
 # @return failing_bb_id is the index of the first bb that, when removed as well as the subsequent ones, makes the bug disappear.
 def _find_failing_bb(fuzzerstate, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, quiet: bool = False):
+    if FAILING_BB_ID != -1:
+        return FAILING_BB_ID
     # Take the hints
     if hint_left_bound_bb is not None:
         if DO_ASSERT:
@@ -665,14 +667,23 @@ def _find_failing_bb(fuzzerstate, hint_left_bound_bb: int = None, hint_right_bou
 
     return right_bound
 
+# Check if the leakage indeed still disappears when removing the leaker instruction.
+def _leaker_changed(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id: int = 1, pillar_instr_id: int = 0, quiet: bool = True, fault_from_prev_bb: bool = False):
+    if not fault_from_prev_bb:
+        return is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id-1, pillar_bb_id, pillar_instr_id, quiet=quiet)
+    return is_mismatch(fuzzerstate, failing_bb_id, len(fuzzerstate.instr_objs_seq[failing_bb_id])-2, pillar_bb_id, pillar_instr_id, quiet=quiet)
+
+
 # @param failing_bb_id is the index of the first bb that, when removed as well as the subsequent ones, makes the bug disappear.
 # @param failing_instr_id is the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore. It is None if the failing instruction is actually the last one in the previous bb.
 # @param pillar_bb_id is the index of the last bb such as the test case still succeeds when the bb `pillar_bb_id` is removed (and all the preceding instructions and bbs).
 def _find_pillar_bb(fuzzerstate, failing_bb_id: int, failing_instr_id: int, fault_from_prev_bb: bool, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, quiet: bool = False):
+    if PILLAR_BB_ID != -1:
+        return PILLAR_BB_ID
     if DO_ASSERT:
         assert failing_bb_id > 0, f"In _find_pillar_bb, we assume that the initial block does not fail."
         assert failing_bb_id < len(fuzzerstate.instr_objs_seq)
-    print("### SEARCHING FOR PILLAR BB ###")
+
     # Take the hints. Invariants: left bound always ok, right bound always wrong.
     if hint_left_bound_pillar_bb is not None:
         if DO_ASSERT:
@@ -692,6 +703,8 @@ def _find_pillar_bb(fuzzerstate, failing_bb_id: int, failing_instr_id: int, faul
     if DO_ASSERT:
         assert right_bound <= failing_bb_id + 1, f"right_bound: `{right_bound}`, failing_bb_id: `{failing_bb_id}`"
 
+    print("### SEARCHING FOR PILLAR BB ###")
+
     # Binary search
     # Invariant:
     #   is_mismatch(fuzzerstate, left_bound)  always False
@@ -701,6 +714,14 @@ def _find_pillar_bb(fuzzerstate, failing_bb_id: int, failing_instr_id: int, faul
             assert right_bound > left_bound
         candidate_bound = (right_bound + left_bound) // 2
         if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, candidate_bound, quiet=quiet):
+            if CHECK_LEAKER_INVARIANCE:
+                if _leaker_changed(fuzzerstate, failing_bb_id, failing_instr_id, candidate_bound, quiet=quiet, fault_from_prev_bb=fault_from_prev_bb):
+                    if not quiet:
+                        print(candidate_bound, 'pillar bb mismatch: leaker changed')
+                    right_bound = candidate_bound
+                    continue
+                else:
+                    print(candidate_bound, 'pillar bb mismatch: leaker consistent')
             if not quiet:
                 print(candidate_bound, 'pillar bb mismatch')
             left_bound = candidate_bound
@@ -725,6 +746,8 @@ def _find_pillar_bb(fuzzerstate, failing_bb_id: int, failing_instr_id: int, faul
 # @param failing_bb_id is the index of the first bb that, when removed as well as the subsequent ones, makes the bug disappear.
 # @return failing_instr_id is the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore. It is None if the failing instruction is actually the last one in the previous bb.
 def _find_failing_instr_in_bb(fuzzerstate, failing_bb_id: int, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, quiet: bool = False):
+    if FAILING_INSTR_ID != -1:
+        return FAILING_INSTR_ID
     if DO_ASSERT:
         assert failing_bb_id > 0
         assert failing_bb_id < len(fuzzerstate.instr_objs_seq)
@@ -786,12 +809,12 @@ def _find_failing_instr_in_bb(fuzzerstate, failing_bb_id: int, hint_left_bound_i
 # @param failing_instr_id is the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore. It is None if the failing instruction is actually the last one in the previous bb.
 # @return similarly to find_pillar_bb: returns the index of the first instruction in first_pillar_bb that, when removed, makes the bug disappear.
 def _find_pillar_instr(fuzzerstate, failing_bb_id: int, failing_instr_id: int, pillar_bb_id: int, fault_from_prev_bb: bool, hint_left_pillar_instr: int = None, hint_right_pillar_instr: int = None, quiet: bool = False):
+    if PILLAR_INSTR_ID != -1:
+        return PILLAR_INSTR_ID
     if DO_ASSERT:
         assert pillar_bb_id <= failing_bb_id + 1
-    raise NotImplementedError("Not used currently. Use _nopize instead")
-    # TODO Remove
-    # if fault_from_prev_bb:
-    #     raise NotImplementedError('TODO case where fault_from_prev_bb is True')
+    if USE_MMU:
+        raise NotImplementedError("Not implemented when MMU is used. Nopize instead.")
 
     # Take the hints
     if hint_left_pillar_instr is not None:
@@ -822,6 +845,10 @@ def _find_pillar_instr(fuzzerstate, failing_bb_id: int, failing_instr_id: int, p
     if DO_ASSERT:
         assert right_bound > left_bound
 
+    print("### SEARCHING FOR PILLAR INSTRUCTION ###")
+    if not quiet:
+        print('left_bound', left_bound, 'right_bound', right_bound, 'candidate_bound', (right_bound + left_bound) // 2)
+
     # Binary search
     # Invariant:
     #   is_mismatch(fuzzerstate, failing_bb_id, left_bound)  always False
@@ -834,6 +861,14 @@ def _find_pillar_instr(fuzzerstate, failing_bb_id: int, failing_instr_id: int, p
             assert right_bound > left_bound
         candidate_bound = (right_bound + left_bound) // 2
         if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, candidate_bound, quiet=quiet):
+            if CHECK_LEAKER_INVARIANCE:
+                if _leaker_changed(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, candidate_bound, quiet=quiet, fault_from_prev_bb=fault_from_prev_bb):
+                    if not quiet:
+                        print(candidate_bound, 'pillar instr: leaker changed')
+                    right_bound = candidate_bound
+                    continue
+                else:
+                    print(candidate_bound, 'pillar instr: leaker consistent')
             if not quiet:
                 print(candidate_bound, 'pillar instr mismatch')
             left_bound = candidate_bound
@@ -846,6 +881,8 @@ def _find_pillar_instr(fuzzerstate, failing_bb_id: int, failing_instr_id: int, p
         assert left_bound + 1 == right_bound, f"{left_bound}, {right_bound}"
 
     return right_bound-1
+
+    
 
 # @param failing_bb_id is the index of the first bb that, when removed as well as the subsequent ones, makes the bug disappear.
 # @param failing_instr_id is the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore. It is None if the failing instruction is actually the last one in the previous bb.
@@ -1158,34 +1195,49 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
     # pillar_bb_id: the index of the last bb such as the test case still succeeds when the bb `pillar_bb_id` is removed (and all the preceding instructions and bbs).
     # We have as an invariant: pillar_bb_id <= failing_bb_id
+    find_pillar_success = False
     if FIND_PILLARS:
         start_pillar_bb = time.time()
-        pillar_bb_id = _find_pillar_bb(fuzzerstate, failing_bb_id, failing_instr_id, fault_from_prev_bb, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, quiet=quiet)
+        try:
+            pillar_bb_id = _find_pillar_bb(fuzzerstate, failing_bb_id, failing_instr_id, fault_from_prev_bb, hint_left_bound_pillar_bb, hint_right_bound_pillar_bb, quiet=quiet)
+            find_pillar_success = True
+        except Exception as e:
+            print(f"Failed finding pillar BB: {e}")
+            pillar_bb_id = 0
         time_pillar_bb_search = time.time()-start_pillar_bb
         ###
         # Cut the first instructions of the pillar bb.
         ###
         pillar_instr_id = 0
-        if FIND_PILLAR_INSTRUCTION:
+        find_pillar_instr_success = False
+        if FIND_PILLAR_INSTRUCTION and pillar_bb_id>0:
             start_pillar_instr_search = time.time()
             if USE_MMU: # instruction level not implemented for virtual memory. Its enough to nopize them anyway and is tricky with layout preparation etc.
                 pillar_instr_id = 0
             else:
                 pillar_instr_id = _find_pillar_instr(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, fault_from_prev_bb, hint_left_bound_pillar_instr, hint_right_bound_pillar_instr, quiet=quiet)
+            find_pillar_instr_success = True
             time_pillar_instr_search = time.time()-start_pillar_instr_search
 
-        if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id-1, pillar_bb_id, pillar_instr_id, quiet=quiet):
-            print(f"Pillar reduction changed leaking instruction! Resetting pillar BB id to 0.")
-            pillar_bb_id = 0
+        if not CHECK_LEAKER_INVARIANCE: # When enabled, we check during pillar reduction
+            if find_pillar_success and _leaker_changed(fuzzerstate,failing_bb_id,failing_instr_id,pillar_bb_id,quiet,fault_from_prev_bb):
+                print(f"Pillar reduction changed leaker instruction! Resetting pillar BB id to 0.")
+                pillar_bb_id = 0
+
 
     ###
     # Transform some instructions into nops.
     ###
 
-    if NOPIZE_SANDWICH_INSTRUCTIONS and FIND_PILLARS and pillar_bb_id > 0:
+    nopize_success = False
+    if NOPIZE_SANDWICH_INSTRUCTIONS and FIND_PILLARS and pillar_bb_id > 0 and find_pillar_success:
         # The advantage of doing this before the reduction of the ELF size is that we may successfully remove some load instructions targeting the instructions we will remove. The downside is that it is slower than cleaning up after the reduction.
         start_nopize_instr = time.time()
-        fuzzerstate = _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, fault_from_prev_bb, quiet=quiet)
+        try:
+            fuzzerstate = _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, fault_from_prev_bb, quiet=quiet)
+            nopize_success = True
+        except Exception as e:
+            print(f"Failed nopizing instructions: {e}")
         time_nopize_instr = time.time()-start_nopize_instr
         # fuzzerstate.verify_program(print_execution=False,print_trace=False)
 
@@ -1267,11 +1319,17 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         test_fuzzerstate_larger.simulator =  SimulatorEnum.VERILATOR
         test_fuzzerstate_smaller.simulator =  SimulatorEnum.VERILATOR
 
-    if pillar_bb_id>0:
+
+    ###
+    ## Try to generate compact elf where leading and trailing instructions are skipped
+    ###
+
+    is_success_compact = False
+    if FIND_PILLARS and pillar_bb_id>0:
         if fault_from_prev_bb:
             test_fuzzerstate_compact, rtl_elfpath_compact, expected_regvals_pairs_compact, numinstrs_compact = gen_reduced_elf(fuzzerstate, failing_bb_id+1, 0, pillar_bb_id, pillar_instr_id, keep_dead_code_in_memory=True)
         else:
-            test_fuzzerstate_compact, rtl_elfpath_compact, expected_regvals_pairs_compact, numinstrs_compact = gen_reduced_elf(fuzzerstate, failing_bb_id, failing_instr_id, pillar_instr_id, keep_dead_code_in_memory=True)
+            test_fuzzerstate_compact, rtl_elfpath_compact, expected_regvals_pairs_compact, numinstrs_compact = gen_reduced_elf(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, keep_dead_code_in_memory=True)
 
         test_fuzzerstate_compact.rtl_elfpath = rtl_elfpath_compact
         test_fuzzerstate_compact.expected_regvals = expected_regvals_pairs_compact
@@ -1287,6 +1345,10 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         final_fuzzerstate = test_fuzzerstate_larger
 
 
+    ###
+    ## Reduce dead cdode
+    ###
+
     if REDUCE_DEAD_CODE:
         start_reduce_dead_code = time.time()
         try:
@@ -1298,6 +1360,10 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
         time_reduce_dead_code = time.time()-start_reduce_dead_code
 
+    ###
+    ## Reduce taint in data pages
+    ###
+
     if REDUCE_TAINT:
         start_reduce_taint = time.time()
         try:
@@ -1305,6 +1371,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             reduce_taint_success = True
         except Exception as e:
             print(f"Taint reduction failed: {e}")
+            leaked_address = -1
             reduce_taint_success = False
         time_reduce_taint = time.time() - start_reduce_taint
 
@@ -1324,11 +1391,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_msg += f"\t Total number of bbs: {failing_bb_id-pillar_bb_id+1}\n"
         n_nops, n_non_nop_instrs  =  _count_instructions(fuzzerstate,failing_bb_id,failing_instr_id, pillar_bb_id, pillar_instr_id)
         ret_msg += f"\t Total number of non-nop instructions before leaking instruction: {n_non_nop_instrs} ({n_nops} nops)\n"
-    if REDUCE_TAINT:
-        ret_msg += f"\t Leaked address: {hex(leaked_address)}\n"
-    if pillar_bb_id>0:
-        ret_msg += f"\t Compactify success: {not is_success_compact}\n"
+        if pillar_bb_id>0:
+            ret_msg += f"\t Compactify success: {not is_success_compact}\n"
+        
     ret_msg += f"\t Reduced ELF: {final_fuzzerstate.rtl_elfpath}\n"
+
     cross_privilege = False
     if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level in fuzzerstate.taint_sink_privs:
         ret_msg += f"\t Detected leakage from {[p.name for p in fuzzerstate.taint_source_privs]} -> {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name}\n"
@@ -1341,18 +1408,28 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     ret_msg += f"\t Total time: {time.time()-start_time}s\n"
     ret_msg += f"\t Time to find failing BB: {time_failing_bb_search}s\n"    
     ret_msg += f"\t Time to find failing instr: {time_failing_instr_search}s\n"    
+
     if FIND_PILLARS: 
         ret_msg += f"\t Time to find pillar BB: {time_pillar_bb_search}s\n"
+        ret_msg += f"\t Success find pillar BB: {find_pillar_success}\n"
     if FIND_PILLAR_INSTRUCTION:
         ret_msg += f"\t Time to find pillar instr: {time_pillar_instr_search}s\n" 
+        ret_msg += f"\t Succes find pillar instr: {find_pillar_instr_success}\n" 
     if NOPIZE_SANDWICH_INSTRUCTIONS:   
         ret_msg += f"\t Time to nopize instr: {time_nopize_instr}s\n"    
+        ret_msg += f"\t Success nopize instr: {nopize_success}\n"
+
     if REDUCE_TAINT:
         ret_msg += f"\t Time to reduce taint: {time_reduce_taint}s\n"
         ret_msg += f"\t Taint reduction success: {reduce_taint_success}\n"
+        if reduce_taint_success:
+            ret_msg += f"\t Leaked address: {hex(leaked_address)}\n"
+    
     if REDUCE_DEAD_CODE:
         ret_msg += f"\t Time to reduce dead code: {time_reduce_dead_code}s\n"
         ret_msg += f"\t Dead code reduction success: {reduce_dead_code_success}\n"
+        if reduce_dead_code_success:
+            ret_msg += f"\t Dead code at {hex(final_fuzzerstate.spec_instr_objs_seq[0].paddr)}, {len(final_fuzzerstate.spec_instr_objs_seq)} dead instructions.\n"
   
 
     if not quiet:
