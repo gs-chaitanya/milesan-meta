@@ -170,8 +170,7 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     else:
         imm_t0 = 0
         rd = fuzzerstate.intregpickstate.pick_int_outputreg_nonzero()
-
-
+    #TODO: if auipc we need to set rd to consumed if SPIKE_STARTADDR != design_bootaddr like for OpenC910
     if rd > 0:
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
 
