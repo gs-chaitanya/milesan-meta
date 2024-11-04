@@ -102,7 +102,7 @@ class FuzzerState:
             # If MMU is disabled, all privileges can compute on and access taint.
             else:
                 self.taint_source_privs = {PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.USER}
-                self.taint_sink_privs = {}
+                self.taint_sink_privs = set()
 
         # For benchmarks
         if GET_DATA:
