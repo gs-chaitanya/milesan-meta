@@ -41,10 +41,10 @@ TAINT_SINK_PRIVS = get_env_str("TAINT_SINK_PRIVS",TAINT_SINK_PRIVS_DEFAULT)
 DUMP_MCYCLES = False
 assert not (DUMP_MCYCLES and USE_MMU), f"We can only dump MCYCLES when executing in M-mode in final BB. This is not ensured when using the MMU."
 INIT_MIE = False
-FILL_MEM_WITH_DEAD_CODE = False
-if USE_MMU:
-    FILL_MEM_WITH_DEAD_CODE = True
-    print("USE_MMU is enabled. Enabling FILL_MEM_WITH_DEAD_CODE.")
+# FILL_MEM_WITH_DEAD_CODE = False
+# if USE_MMU:
+FILL_MEM_WITH_DEAD_CODE = True
+# print("USE_MMU is enabled. Enabling FILL_MEM_WITH_DEAD_CODE.")
 
 if USE_MMU:
     NUM_MIN_FREE_INTREGS = 3 # 3, we need at least 2 free regs which are not 0
