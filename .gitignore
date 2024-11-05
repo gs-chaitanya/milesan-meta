@@ -9,3 +9,4 @@ whisperfuzz_programs/src/
 whisperfuzz_programs/build/
 **/build/
 venv
+*.svg
