@@ -170,9 +170,8 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     else:
         imm_t0 = 0
         rd = fuzzerstate.intregpickstate.pick_int_outputreg_nonzero()
-    #TODO: if auipc we need to set rd to consumed if SPIKE_STARTADDR != design_bootaddr like for OpenC910
     if rd > 0:
-        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
+        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE if SPIKE_STARTADDR == fuzzerstate.design_base_addr else IntRegIndivState.RELOCUSED, force=True)
 
     if USE_COMPRESSED and instr_str in IS_COMPRESSABLE:
         instr_str_cmp, is_compressable = handle_ImRd(rd, imm, instr_str)
@@ -283,8 +282,9 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
 def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg()
     imm = fuzzerstate.next_bb_addr-curr_addr
-    if rd > 0:
-        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
+    if rd > 0: 
+        # When the design start addr and spike start addr don't match, the PC values will be different.
+        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE if SPIKE_STARTADDR == fuzzerstate.design_base_addr else IntRegIndivState.RELOCUSED,force=True)
 
     if USE_COMPRESSED and len(fuzzerstate.instr_objs_seq) > 1 and instr_str in IS_COMPRESSABLE: # no compressed in initial block
         instr_str_cmp, is_compressable = handle_JAL(rd, imm, instr_str, fuzzerstate.is_design_64bit)
@@ -303,7 +303,7 @@ def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool, cur
     producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
     fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCUSED)
     if rd > 0:
-        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE)
+        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE if SPIKE_STARTADDR == fuzzerstate.design_base_addr else IntRegIndivState.RELOCUSED,force=True)
     if DO_ASSERT:
         assert producer_id > 0
 

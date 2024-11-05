@@ -3,7 +3,7 @@ import shutil
 import glob
 import json
 
-from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, NO_REMOVE_TMPFILES, DO_DOUBLECHECK_SIM, CHECK_MEM, COLLECT_PERF_STATS, COLLECT_EXCEPTION_STATS, COLLECT_TAINT_STATS
+from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, NO_REMOVE_TMPFILES, DO_DOUBLECHECK_SIM, CHECK_MEM, COLLECT_PERF_STATS, COLLECT_EXCEPTION_STATS, COLLECT_TAINT_STATS, IGNORE_SPIKE_OFFSET_IN_REG_CHECK
 from params.fuzzparams import IGNORE_RTL_TIMEOUT, IGNORE_SPIKE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, ASSERT_EXEC_IN_TAINT_SRC_PRIV, DUMP_MCYCLES
 from cascade.toleratebugs import  is_tolerate_cva6_mhpmcounter,  is_tolerate_cva6_mhpmevent31
@@ -225,6 +225,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                 elif isinstance(last_instr, CSRInstruction) and last_instr.csr_id in (CSR_IDS.SCAUSE, CSR_IDS.MCAUSE):
                     pass # TODO check that *cause values are either misaligned/pagefault
                 elif isinstance(last_instr, GenericCSRWriterInstruction) and last_instr.csr_instr.csr_id in (CSR_IDS.SCAUSE, CSR_IDS.MCAUSE):
+                    pass
+                elif is_spike_design_addr_mismatch_instr(last_instr) and IGNORE_SPIKE_OFFSET_IN_REG_CHECK:
                     pass
                 elif not IGNORE_VALUE_MISMATCH and is_tolerate(design_name, last_instr):
                     raise MismatchError(f"(RTL) Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}", fail_type=FailTypeEnum.VALUE_MISMATCH)

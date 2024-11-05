@@ -1938,4 +1938,5 @@ class PrivilegeDescentInstruction(BaseInstruction):
             return rvprivileged_sret()
 
 
-
+def is_spike_design_addr_mismatch_instr(instr: BaseInstruction):
+    return isinstance(instr, (JALRInstruction, JALInstruction, PlaceholderProducerInstr0, PlaceholderProducerInstr1,PlaceholderPreConsumerInstr, PlaceholderConsumerInstr)) or "auipc" in instr.instr_str
