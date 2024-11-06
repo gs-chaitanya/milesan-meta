@@ -14,7 +14,7 @@ from common.spike import calibrate_spikespeed
 import sys
 import os
 import re
-
+MUTE_OUTPUT=False
 def _parse_logfile(path, design_name):
     if path.endswith("reduce.log"):
         is_reduction_log = True
@@ -64,7 +64,7 @@ if __name__ == '__main__':
     profile_get_medeleg_mask(design_name)
     profile_get_asid_mask(design_name)
 
-    reduce_programs(design_name,num_cores,seeds,mute_output=True)
+    reduce_programs(design_name,num_cores,seeds,mute_output=MUTE_OUTPUT)
 
 
 else:
