@@ -5,7 +5,7 @@ import json
 
 from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, NO_REMOVE_TMPFILES, DO_DOUBLECHECK_SIM, CHECK_MEM, COLLECT_PERF_STATS, COLLECT_EXCEPTION_STATS, COLLECT_TAINT_STATS, IGNORE_SPIKE_OFFSET_IN_REG_CHECK
 from params.fuzzparams import IGNORE_RTL_TIMEOUT, IGNORE_SPIKE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
-from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, ASSERT_EXEC_IN_TAINT_SRC_PRIV, DUMP_MCYCLES
+from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, ASSERT_EXEC_IN_TAINT_SRC_PRIV, ASSERT_EXEC_IN_TAINT_SRC_LAYOUT ,DUMP_MCYCLES
 from cascade.toleratebugs import  is_tolerate_cva6_mhpmcounter,  is_tolerate_cva6_mhpmevent31
 from cascade.toleratebugs import is_tolerate_boom_minstret
 from cascade.toleratebugs import is_tolerate_rocket_minstret
@@ -74,7 +74,9 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         if USE_MMU:
             exec_taint_source_priv = sum([fuzzerstate.n_instr_in_priv[priv] for priv in fuzzerstate.taint_source_privs]) > 0
             exec_taint_sink_priv = sum([fuzzerstate.n_instr_in_priv[priv] for priv in fuzzerstate.taint_sink_privs]) > 0
+            exec_in_taint_source_layout = sum([fuzzerstate.n_instr_in_layout[layout] for layout in fuzzerstate.taint_source_layouts]) > 0
             assert (not ASSERT_EXEC_IN_TAINT_SINK_PRIV or exec_taint_sink_priv) and (not ASSERT_EXEC_IN_TAINT_SRC_PRIV or exec_taint_source_priv), f"Computed program does not execute in all required privilege(s):\n\tSource privs ({[p.name for p in fuzzerstate.taint_source_privs]}): {exec_taint_source_priv}.\n\tSink privs  ({[p.name for p in fuzzerstate.taint_sink_privs]}): {exec_taint_sink_priv}.\n\t{fuzzerstate.n_instr_in_priv}"
+            assert (not ASSERT_EXEC_IN_TAINT_SRC_LAYOUT or exec_in_taint_source_layout), f"Computed program does not execute in taint-source layouts:\n\tExecuted in {fuzzerstate.n_instr_in_layout}. Taint-source layouts are {fuzzerstate.taint_source_layouts}"
         fuzzerstate.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         fuzzerstate.memview.restore(0) # Restore contents before anything was executed.
         fuzzerstate.csrfile.reset() # Reset all CSRs to zero.

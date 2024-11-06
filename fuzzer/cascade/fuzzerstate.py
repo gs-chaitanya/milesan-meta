@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP,PATH_TO_MNT, PATH_TO_MNT_ENV_VAR, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, USE_MODELSIM, DEBUG_RVC, MODELSIM_TIMEOUT
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS, NONPICKABLE_REGISTERS, FENCE_CF_INSTR
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_SOURCE_PRIVS, TAINT_SINK_PRIVS, P_TWO_TAINT_SOURCE_PRIVS, P_TWO_TAINT_SINK_PRIVS
-from params.fuzzparams import MAX_N_TAINT_SOURCE_LAYOUTS, MAX_N_TAINT_SINK_LAYOUTS, MIN_N_TAINT_SINK_LAYOUTS, MIN_N_TAINT_SOURCE_LAYOUTS
+from params.fuzzparams import MAX_N_TAINT_SOURCE_LAYOUTS, MIN_N_TAINT_SOURCE_LAYOUTS
 from params.fuzzparams import reset_reg_settings
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_cascade_path, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48, get_design_boot_addr
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
@@ -127,6 +127,11 @@ class FuzzerState:
                 self.ptesize = 4
             self.get_design_mmu(design_name)
             self.select_prog_mmu_params()
+            if TAINT_EN:
+                self.n_instr_in_layout = {
+                    i:0 for i in range(-1,self.num_layouts) # -1 is special case for M-mode bare translation
+                }
+
 
         if not USE_MODELSIM:
             self.simulator = SimulatorEnum.VERILATOR
@@ -160,18 +165,16 @@ class FuzzerState:
     # @brief return the MODE and page sizes we will support in the current program
     # @return [(MODE, #level_used)]
     def select_prog_mmu_params(self):
-        num_layouts = random.randint(1, MAX_NUM_LAYOUTS)
-        # num_taint_source_layouts = random.randint(MIN_N_TAINT_SOURCE_LAYOUTS,MAX_N_TAINT_SOURCE_LAYOUTS)
-        # num_taint_sink_layouts = random.randint(MIN_N_TAINT_SINK_LAYOUTS,MAX_N_TAINT_SINK_LAYOUTS)
-        num_taint_source_layouts = 1
-        self.taint_source_layouts = range(0,num_taint_source_layouts)
+        self.num_layouts = random.randint(1, MAX_NUM_LAYOUTS)
+        num_taint_source_layouts = random.randint(MIN_N_TAINT_SOURCE_LAYOUTS,MAX_N_TAINT_SOURCE_LAYOUTS)
+        self.taint_source_layouts = range(0,num_taint_source_layouts if MAX_N_TAINT_SOURCE_LAYOUTS>0 else self.num_layouts)
 
         # self.taint_sink_layouts = range(num_taint_source_layouts,num_taint_source_layouts+num_taint_sink_layouts)
         if self.is_design_64bit:
             allowed_params = MODES_PARAMS_RV64
         else:
             allowed_params = MODES_PARAM_RV32
-        for _ in range(num_layouts):
+        for _ in range(self.num_layouts):
             mode = random.choices(list(allowed_params.keys()), self.mmu_capabilities)[0]
             # n_level = random.randint(1, allowed_params[mode][2])
             n_level = allowed_params[mode][2]
@@ -423,7 +426,7 @@ class FuzzerState:
         instr.execute(is_spike_resolution = True)
         if USE_MMU:
             self.n_instr_in_priv[instr.priv_level] += 1
-
+            self.n_instr_in_layout[instr.va_layout] += 1
         if insert_regdump:
             if 'cva6' in self.design_name:
                 assert INSERT_FENCE, f"{self.design_name} needs INSERT_FENCE enabled when using register dumps!"

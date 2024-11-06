@@ -445,11 +445,12 @@ def is_mismatch(fuzzerstate, max_bb_id_to_consider: int, failing_instr_id: int =
     del fuzzerstate
     is_success, exception = runtest_simulator(test_fuzzerstate, rtl_elfpath, expected_regvals_pairs, numinstrs)
 
-    if not is_success and exception.fail_type == FailTypeEnum.TAINT_MISMATCH and IGNORE_TAINT_MISMATCH:
-        is_success = True # We triggered leakage, but we are reducing for an architectural bug, not leakage.
+    if not is_success:
+        if exception.fail_type == FailTypeEnum.TAINT_MISMATCH and IGNORE_TAINT_MISMATCH:
+            is_success = True # We triggered leakage, but we are reducing for an architectural bug, not leakage.
     
     if DO_ASSERT:
-        assert is_success or exception.fail_type == FailTypeEnum.TAINT_MISMATCH, f"Failed but not because of taint-mismatch: {str(exception)}"
+        assert is_success or exception.fail_type == FailTypeEnum.TAINT_MISMATCH or IGNORE_TAINT_MISMATCH, f"Failed but not because of taint-mismatch: {str(exception)}"
 
     if quiet and not is_success:
         print(str(exception))

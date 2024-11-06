@@ -483,6 +483,11 @@ def gen_satp_write(fuzzerstate, curr_addr):
     old_asid                        = fuzzerstate.curr_asid
     is_from_bare                    = (fuzzerstate.target_layout == -1) or (fuzzerstate.effective_curr_layout == -1)
 
+    if fuzzerstate.target_layout not in fuzzerstate.taint_source_layouts:
+        instr_objs += clear_taints_with_random_instructions(fuzzerstate,untaint_all=True)
+        assert fuzzerstate.effective_curr_layout in fuzzerstate.taint_source_layouts or len(instr_objs) == 0
+        curr_addr += 4*len(instr_objs)
+
     # Set the destination of stvec if needed
     if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR and fuzzerstate.stvec_satp_op_coordinates != (None, None):
         if DEBUG_PRINT: print(f"{hex(curr_addr+SPIKE_STARTADDR)}: In supervisor mode, going to layout {fuzzerstate.target_layout}")
@@ -524,8 +529,6 @@ def gen_satp_write(fuzzerstate, curr_addr):
         instr_objs.append(ImmRdInstruction_t0(fuzzerstate,"lui", satp_val_reg, lui_imm))
         instr_objs.append(RegImmInstruction_t0(fuzzerstate,"addi", satp_val_reg, satp_val_reg, addi_imm))
 
-    if fuzzerstate.target_layout not in fuzzerstate.taint_source_layouts:
-        instr_objs += clear_taints_with_random_instructions(fuzzerstate,untaint_all=True)
     # Write to SATP
     is_satp_smode = ((fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR), fuzzerstate.target_layout)
     instr_objs.append(CSRRegInstruction_t0(fuzzerstate, "csrrw", satp_val_reg, satp_val_reg, CSR_IDS.SATP, is_satp_smode=is_satp_smode))

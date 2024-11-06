@@ -45,9 +45,7 @@ INIT_MIE = False
 # if USE_MMU:
 FILL_MEM_WITH_DEAD_CODE = True
 # print("USE_MMU is enabled. Enabling FILL_MEM_WITH_DEAD_CODE.")
-MAX_N_TAINT_SINK_LAYOUTS = get_env_int("MAX_N_TAINT_SINK_LAYOUTS",MAX_N_TAINT_SINK_LAYOUTS_DEFAULT)
 MAX_N_TAINT_SOURCE_LAYOUTS = get_env_int("MAX_N_TAINT_SOURCE_LAYOUTS",MAX_N_TAINT_SOURCE_LAYOUTS_DEFAULT)
-MIN_N_TAINT_SINK_LAYOUTS = get_env_int("MIN_N_TAINT_SINK_LAYOUTS",MIN_N_TAINT_SINK_LAYOUTS_DEFAULT)
 MIN_N_TAINT_SOURCE_LAYOUTS = get_env_int("MIN_N_TAINT_SOURCE_LAYOUTS",MIN_N_TAINT_SOURCE_LAYOUTS_DEFAULT)
 
 
@@ -284,9 +282,11 @@ LOG2_MEMSIZE_LOWERBOUND = 17
 P_TWO_TAINT_SOURCE_PRIVS = 0
 P_TWO_TAINT_SINK_PRIVS = 0
 
-# Abort fuzzing run if the computed program does not execute in taint sink privilege.
+# Abort fuzzing run if the computed program does not execute in taint sink and taint source privileges.
 ASSERT_EXEC_IN_TAINT_SINK_PRIV = True
 ASSERT_EXEC_IN_TAINT_SRC_PRIV = True
+# Abort fuzzing run if it does not execute in taint source layout.
+ASSERT_EXEC_IN_TAINT_SRC_LAYOUT = True
 
 # Ignore exception types to e.g. only fuzz for leakage and ignore architectural bugs that trigger timeouts or value mismatches.
 IGNORE_RTL_TIMEOUT = False

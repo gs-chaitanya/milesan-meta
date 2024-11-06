@@ -343,17 +343,12 @@ def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     assert alignment is not None, f"Invalid instr_str: {instr_str}"
     imm = random.randrange(-PHYSICAL_PAGE_SIZE//2,PHYSICAL_PAGE_SIZE//2, alignment)
 
-
     if USE_COMPRESSED and instr_str in IS_COMPRESSABLE:
         instr_str_cmp, is_compressable = handle_IntLoad(rd, rs1, imm, instr_str)
         if is_compressable and (random.random() < COMPRESS_INSTRUCTION):
             iscompressed = True
             # print(f"compressed {instr_str} into {instr_str_cmp}") #DEBUG
             instr_str = instr_str_cmp
-    if taint:
-        print(f"Loading from taint page")
-    else:
-        print("loading from notaint page")
     return IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, None, iscompressed)
 
 def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
