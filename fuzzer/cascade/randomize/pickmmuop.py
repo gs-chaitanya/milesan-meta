@@ -7,6 +7,7 @@ from cascade.mmu_utils import li_doubleword, MODES_PARAM_RV32, MODES_PARAMS_RV64
 from rv.csrids import CSR_IDS
 from rv.asmutil import li_into_reg
 import random
+from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
 from cascade.util import BASIC_BLOCK_MIN_SPACE, MmuState, IntRegIndivState, ExceptionCauseVal
 #DEBUG_PRINT = True
 
@@ -323,7 +324,7 @@ def handle_idle_state_rv64(fuzzerstate, curr_addr):
     target_layout   = random.choices(range(-1, len(fuzzerstate.prog_mmu_params)), weights)[0]
 
     if DEBUG_PRINT:
-        print(f"current layout: {fuzzerstate.effective_curr_layout}, target: {target_layout}")
+        print(f"current layout: {fuzzerstate.effective_curr_layout}, target: {target_layout}, taint_source: {target_layout in fuzzerstate.taint_source_layouts}")
 
     # There is one corner case, if the target layout has the same base page as a layout which has the same 
     # virtual memory base address as us, we will not tarp, so we should jump to the new layout after setting satp
@@ -523,6 +524,8 @@ def gen_satp_write(fuzzerstate, curr_addr):
         instr_objs.append(ImmRdInstruction_t0(fuzzerstate,"lui", satp_val_reg, lui_imm))
         instr_objs.append(RegImmInstruction_t0(fuzzerstate,"addi", satp_val_reg, satp_val_reg, addi_imm))
 
+    if fuzzerstate.target_layout not in fuzzerstate.taint_source_layouts:
+        instr_objs += clear_taints_with_random_instructions(fuzzerstate,untaint_all=True)
     # Write to SATP
     is_satp_smode = ((fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR), fuzzerstate.target_layout)
     instr_objs.append(CSRRegInstruction_t0(fuzzerstate, "csrrw", satp_val_reg, satp_val_reg, CSR_IDS.SATP, is_satp_smode=is_satp_smode))

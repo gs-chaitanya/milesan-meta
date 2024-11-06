@@ -461,14 +461,22 @@ class PageTablesGen:
                     continue
                 is_random_data_block = ppn_leaf-SPIKE_STARTADDR in [addr[0] for addr in fuzzerstate.random_data_block_ranges]
                 if TAINT_EN and is_random_data_block and fuzzerstate.random_data_block_has_taint[ppn_leaf-SPIKE_STARTADDR]:
-                    # If this is a random data block with taint and we only allow taint in one privilege, we map it accordingly s.t. only that privelege has access.
-                    # We then need to ensure that tainted data is also only written to pages that were tainted initially.
-                    curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_source_privs, is_executable=False)
-                    # When M-mode is the only taint source privilege, we map a PTE for S-mode with the U bit set we can trigger page faults with it.
-                    curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_source_privs or fuzzerstate.taint_source_privs == {PrivilegeStateEnum.MACHINE}, is_executable=False)
-                    self.ppn_leaf_to_priv_dict[ppn_leaf] = fuzzerstate.taint_source_privs
-                    if DEBUG_PRINT:
-                        print(f"{hex(ppn_leaf)} maps data page with taints: U-PTE: {hex(curr_pte)}, S-PTE: {hex(curr_pte_supervisor)}")
+                    if layout_id in fuzzerstate.taint_source_layouts:
+                        # If this is a random data block with taint and we only allow taint in one privilege, we map it accordingly s.t. only that privelege has access.
+                        # We then need to ensure that tainted data is also only written to pages that were tainted initially.
+                        curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_source_privs, is_executable=False)
+                        # When M-mode is the only taint source privilege, we map a PTE for S-mode with the U bit set we can trigger page faults with it.
+                        curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_source_privs or fuzzerstate.taint_source_privs == {PrivilegeStateEnum.MACHINE}, is_executable=False)
+                        self.ppn_leaf_to_priv_dict[ppn_leaf] = fuzzerstate.taint_source_privs
+                        if DEBUG_PRINT:
+                            print(f"{hex(ppn_leaf)} maps data page with taints: U-PTE: {hex(curr_pte)}, S-PTE: {hex(curr_pte_supervisor)}")
+                    else:
+                        curr_pte = 0
+                        curr_pte_supervisor = 0
+                        self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.MACHINE}
+                        if DEBUG_PRINT:
+                            print(f"{hex(ppn_leaf)} maps data page with taints, skipping in taint-sink-layout {layout_id}")
+
                 elif is_random_data_block:
                     # If it is a random data block without taint, map it to both privileges. It will be a shared memory, where only untainted data can be written to.
                     curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=True, is_executable=False)

@@ -324,13 +324,13 @@ def _create_SpecialInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
 def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in IntLoadInstructions
-        if TAINT_EN and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs:
+        if TAINT_EN and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and fuzzerstate.effective_curr_layout in fuzzerstate.taint_source_layouts:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
         else:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR)
 
     if TAINT_EN:
-        if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs:
+        if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and fuzzerstate.effective_curr_layout in fuzzerstate.taint_source_layouts:
             if fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
                 taint = random.random() < P_LOAD_TAINT
             else:
@@ -350,21 +350,24 @@ def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
             iscompressed = True
             # print(f"compressed {instr_str} into {instr_str_cmp}") #DEBUG
             instr_str = instr_str_cmp
-
+    if taint:
+        print(f"Loading from taint page")
+    else:
+        print("loading from notaint page")
     return IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, None, iscompressed)
 
 def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     if DO_ASSERT:
         assert instr_str in IntStoreInstructions
         assert  fuzzerstate.num_store_locations <  fuzzerstate.max_num_store_locations
-        if TAINT_EN and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs:
+        if TAINT_EN and fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and fuzzerstate.effective_curr_layout in fuzzerstate.taint_source_layouts:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
         else:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR)
 
     fuzzerstate.num_store_locations += 1
     if TAINT_EN:
-        taint = fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs
+        taint = fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and fuzzerstate.effective_curr_layout in fuzzerstate.taint_source_layouts
     rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_T0_ADDR if taint else IntRegIndivState.PAGE_ADDR)
     rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
     alignment = 1 if instr_str == "sb" else 2 if instr_str == "sh" else 4 if instr_str == "sw" else 8 if instr_str == "sd" else None

@@ -56,7 +56,12 @@ def gen_priv_descent_instr(fuzzerstate):
             # Set the effective va layout to -1
             fuzzerstate.effective_curr_layout = -1
         else:
-            if DEBUG_PRINT: print(f"---------- Switching to layout number {fuzzerstate.real_curr_layout} to ", fuzzerstate.privilegestate.privstate)
+            if DEBUG_PRINT: 
+                print(f"---------- Switching to layout number {fuzzerstate.real_curr_layout} to {fuzzerstate.privilegestate.privstate.name}")
+                if fuzzerstate.real_curr_layout in fuzzerstate.taint_source_layouts: 
+                    print(f"{fuzzerstate.real_curr_layout} is a taint source layout")
+                if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs:
+                    print(f"{fuzzerstate.privilegestate.privstate.name} is a taint source privilege")
             # We do not want to allow U=>S transitions with big pages, so we disable exception delegation
             if fuzzerstate.is_design_64bit:
                 user_sup_offset = (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.SUPERVISOR] | 0x7fffffff) - (fuzzerstate.pagetablestate.vmem_base_list[fuzzerstate.real_curr_layout][PrivilegeStateEnum.USER] | 0x7fffffff)
