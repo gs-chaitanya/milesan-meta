@@ -167,8 +167,8 @@ class FuzzerState:
     def select_prog_mmu_params(self):
         self.num_layouts = random.randint(1, MAX_NUM_LAYOUTS)
         num_taint_source_layouts = random.randint(MIN_N_TAINT_SOURCE_LAYOUTS,MAX_N_TAINT_SOURCE_LAYOUTS)
-        self.taint_source_layouts = range(0,num_taint_source_layouts if MAX_N_TAINT_SOURCE_LAYOUTS>0 else self.num_layouts)
-
+        # -1 is always a taint_source_layout
+        self.taint_source_layouts = range(-1,num_taint_source_layouts if MAX_N_TAINT_SOURCE_LAYOUTS>0 else self.num_layouts)
         # self.taint_sink_layouts = range(num_taint_source_layouts,num_taint_source_layouts+num_taint_sink_layouts)
         if self.is_design_64bit:
             allowed_params = MODES_PARAMS_RV64
