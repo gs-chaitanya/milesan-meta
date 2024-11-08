@@ -1401,6 +1401,11 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level in fuzzerstate.taint_sink_privs:
         ret_msg += f"\t Detected leakage from {[p.name for p in fuzzerstate.taint_source_privs]} -> {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name}\n"
         cross_privilege = True
+    cross_layout = False
+    if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].va_layout not in fuzzerstate.taint_source_layouts:
+        ret_msg += f"\t Detected leakage from layout {fuzzerstate.taint_source_layout} -> {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].va_layout}\n"
+        cross_layout = True
+
     if is_success_larger:
         ret_msg += f"\t Bug disappears in modelsim!\n"
     elif not is_success_smaller:
@@ -1437,7 +1442,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         print(ret_msg)
     fuzzerstate.log(ret_msg)
 
-    if not NO_REMOVE_TMPFILES and not cross_privilege:
+    if not NO_REMOVE_TMPFILES and not cross_privilege and not cross_layout:
         fuzzerstate.remove_tmp_files()
         if not NO_REMOVE_TMPDIRS:
             fuzzerstate.remove_tmp_dir()
