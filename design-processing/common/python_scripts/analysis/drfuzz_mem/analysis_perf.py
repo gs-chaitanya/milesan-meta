@@ -259,14 +259,15 @@ ax.grid(axis="y")
 ax.legend()
 #%%
 def load_reduce_perf():
-    TAINT_MISMATCH_PATH = "/mnt/cascade-data/REDUCE_PERF_*/"
     PERFORMANCE_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/performance"
     sys.path.append("/mnt/cascade-meta/fuzzer")
     from cascade.util import INSTRUCTIONS_BY_ISA_CLASS
     from cascade.util import ISAInstrClass
     perf_df = pd.DataFrame()
     new_entry = {}
-    for file in glob.glob(TAINT_MISMATCH_PATH+ "**/*.reduce.log", recursive=True):
+    paths = glob.glob( "/mnt/cascade-data/REDUCE_PERF*/" + "**/*.reduce.log", recursive=True)
+    paths += glob.glob( "/mnt/cascade-data/CT-*/"+ "**/*.reduce.log", recursive=True)
+    for file in paths:
         dut = file.split("/")[-1].split(".")[0]
         with open(file, "r") as f:
             for line in f.read().split("\n"):
@@ -338,8 +339,8 @@ ax2.set_ylabel("Distribution [%]",fontsize=LABELSIZE)
 ax2.set_yticklabels([i*10 for i in range(6)],fontsize=TICKSIZE)
 reduce_perf_df = load_reduce_perf()
 sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Control-Flow",binwidth=BINWIDTH)
-sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Memop",binwidth=BINWIDTH)
-sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "ct-violation",binwidth=BINWIDTH)
+sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Memory",binwidth=BINWIDTH)
+sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Arithmetic",binwidth=BINWIDTH)
 ax2.legend(fontsize=LEGENDSIZE)
 plt.savefig(f"{PERFORMANCE_PLOTS_PATH}/throughput_leaking_instr.svg")
 # %%
@@ -348,5 +349,12 @@ fig, ax = plt.subplots(figsize=FIGSIZE_RECTANGLE)
 sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax,kde=True,stat="percent",label = "Control-Flow",binwidth=BINWIDTH)
 sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax,kde=True,stat="percent",label = "Memop",binwidth=BINWIDTH)
 sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax,kde=True,stat="percent",label = "ct-violation",binwidth=BINWIDTH)
+# ax.set_xlim([0,10000])
+ax.legend()
+#%%
+fig, ax = plt.subplots(figsize=FIGSIZE_RECTANGLE)
+sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_bbs",ax=ax,kde=True,stat="percent",label = "Control-Flow",binwidth=BINWIDTH)
+sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_bbs",ax=ax,kde=True,stat="percent",label = "Memop",binwidth=BINWIDTH)
+sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_bbs",ax=ax,kde=True,stat="percent",label = "ct-violation",binwidth=BINWIDTH)
 # ax.set_xlim([0,10000])
 ax.legend()
