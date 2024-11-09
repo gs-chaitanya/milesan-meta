@@ -473,7 +473,10 @@ class PageTablesGen:
                     else:
                         curr_pte = 0
                         curr_pte_supervisor = 0
-                        self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.MACHINE}
+                        if ppn_leaf not in self.ppn_leaf_to_priv_dict: # might be mapped from another privilege, don't overwrite in this case
+                            self.ppn_leaf_to_priv_dict[ppn_leaf] = {PrivilegeStateEnum.MACHINE}
+                        else:
+                            self.ppn_leaf_to_priv_dict[ppn_leaf] |= {PrivilegeStateEnum.MACHINE}
                         if DEBUG_PRINT:
                             print(f"{hex(ppn_leaf)} maps data page with taints, skipping in taint-sink-layout {layout_id}")
 

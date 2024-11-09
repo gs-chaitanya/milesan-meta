@@ -76,7 +76,7 @@ class FuzzerState:
                 if TAINT_SINK_PRIVS is None:
                     possible_taint_sink_privs = {PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR, PrivilegeStateEnum.USER} - self.taint_source_privs
                     # If we could have more than one taint sink privilege, we either chose multiple or only a single one
-                    self.taint_sink_privs = set(random.choices(list(possible_taint_sink_privs),k=1+int(len(possible_taint_sink_privs)>1)*int(random.random()<P_TWO_TAINT_SINK_PRIVS)))
+                    self.taint_sink_privs = set(random.choices(list(possible_taint_sink_privs),k=1+int(len(possible_taint_sink_privs)>1)*int(random.random()<P_TWO_TAINT_SINK_PRIVS))) if len(possible_taint_sink_privs) > 0 else set()
                 else:
                     self.taint_sink_privs = set()
                     if "M" in TAINT_SINK_PRIVS:
@@ -127,11 +127,6 @@ class FuzzerState:
                 self.ptesize = 4
             self.get_design_mmu(design_name)
             self.select_prog_mmu_params()
-            if TAINT_EN:
-                self.n_instr_in_layout = {
-                    i:0 for i in range(-1,self.num_layouts) # -1 is special case for M-mode bare translation
-                }
-
 
         if not USE_MODELSIM:
             self.simulator = SimulatorEnum.VERILATOR
@@ -166,7 +161,7 @@ class FuzzerState:
     # @return [(MODE, #level_used)]
     def select_prog_mmu_params(self):
         self.num_layouts = random.randint(1, MAX_NUM_LAYOUTS)
-        num_taint_source_layouts = random.randint(MIN_N_TAINT_SOURCE_LAYOUTS,MAX_N_TAINT_SOURCE_LAYOUTS) if MAX_N_TAINT_SOURCE_LAYOUTS!=-1 else self.num_layouts
+        num_taint_source_layouts = random.randint(max(MIN_N_TAINT_SOURCE_LAYOUTS,0), min(self.num_layouts, MAX_N_TAINT_SOURCE_LAYOUTS)) if MAX_N_TAINT_SOURCE_LAYOUTS!=-1 else self.num_layouts
         # -1 is always a taint_source_layout
         self.taint_source_layouts = range(-1,num_taint_source_layouts)
         # self.taint_sink_layouts = range(num_taint_source_layouts,num_taint_source_layouts+num_taint_sink_layouts)
@@ -181,7 +176,9 @@ class FuzzerState:
             self.prog_mmu_params.append((mode, n_level))
         if DEBUG_PRINT: print(f"generated parameters: {self.prog_mmu_params}: taint source layouts: {self.taint_source_layouts} ({num_taint_source_layouts}/{self.num_layouts})")
 
-       
+        self.n_instr_in_layout = {
+            i:0 for i in range(-1,self.num_layouts) # -1 is special case for M-mode bare translation
+        }
 
     # @brief cleans up the fuzzerstate. Used in case of failed input generation.
     def reset(self):

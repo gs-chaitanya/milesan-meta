@@ -162,9 +162,8 @@ def _get_isainstrclass_filtered_weights(fuzzerstate, curr_alloc_cursor):
         ret_dict[ISAInstrClass.MEM] = 0
     if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
         ret_dict[ISAInstrClass.MEM] = 0
-    if USE_MMU:
-        if fuzzerstate.effective_curr_layout in fuzzerstate.taint_source_layouts and not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
-            ret_dict[ISAInstrClass.MEM] = 0
+    if fuzzerstate.effective_curr_layout in fuzzerstate.taint_source_layouts and not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+        ret_dict[ISAInstrClass.MEM] = 0
 
 
     # Normalize the weights

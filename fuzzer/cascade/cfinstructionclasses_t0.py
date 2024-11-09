@@ -684,8 +684,10 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
+
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         addr = INSTR_FUNCS["addi"](rs1_val,self.imm, self.fuzzerstate.is_design_64bit)
+
         try:
             res = self.fuzzerstate.memview.read(addr,self.n_bytes, self.priv_level, self.va_layout)
         except Exception as e:
@@ -877,7 +879,7 @@ class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
             self.execute_t0(res,is_spike_resolution)
         self.fuzzerstate.csrfile.regs[self.csr_id].set_val(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(csr_val)
-
+        
         if USE_MMU and is_satp_smode:
             # The SATP write is followed by an SFENCE.VMA, which causes the page fault.
             self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT)

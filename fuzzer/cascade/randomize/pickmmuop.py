@@ -511,14 +511,15 @@ def gen_satp_write(fuzzerstate, curr_addr):
         fuzzerstate.instr_objs_seq[bb_id][instr_id+1].imm   = addi_imm
         fuzzerstate.stvec_satp_op_coordinates = (None, None)
 
-    if DEBUG_PRINT: 
-        print(f"{hex(curr_addr+SPIKE_STARTADDR)}: going to layout {fuzzerstate.target_layout}, base: {hex(base_page_addr)}")
 
     # Generate the register which will hold the SATP value
     if fuzzerstate.target_layout != -1:
         satp_val, new_asid = gen_satp_val(fuzzerstate, fuzzerstate.target_layout, base_page_addr)
     else:
         satp_val, new_asid = 0, 0
+
+    if DEBUG_PRINT: 
+        print(f"{hex(curr_addr+SPIKE_STARTADDR)}: going to layout {fuzzerstate.target_layout}, base: {hex(base_page_addr)}, satp: {hex(satp_val)}")
 
     if fuzzerstate.is_design_64bit:
         satp_val_reg, tmp = fuzzerstate.intregpickstate.pick_int_inputregs_nonzero(2)

@@ -25,7 +25,7 @@ from cascade.toleratebugs import is_tolerate_cva6_rem_ct_violation, is_tolerate_
 from cascade.toleratebugs import is_tolerate_openc910_div_ct_violation, is_tolerate_openc910_divu_ct_violation, is_tolerate_openc910_divuw_ct_violation, is_tolerate_openc910_divw_ct_violation
 from cascade.toleratebugs import is_tolerate_openc910_rem_ct_violation, is_tolerate_openc910_remu_ct_violation, is_tolerate_openc910_remuw_ct_violation, is_tolerate_openc910_remw_ct_violation
 
-from cascade.mmu_utils import li_doubleword, PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_BITS, PAGE_ALIGNMENT_MASK
+from cascade.mmu_utils import li_doubleword, virt2phys, PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_BITS, PAGE_ALIGNMENT_MASK
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
 # This module creates an instruction from its instruction string, and some state which will condition which registers and immediates will be picked, and with which probability.
 
@@ -369,7 +369,6 @@ def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool)
     assert alignment is not None, f"Invalid instr_str: {instr_str}"
     imm = random.randrange(-PHYSICAL_PAGE_SIZE//2,PHYSICAL_PAGE_SIZE//2, alignment)
 
-
     if USE_COMPRESSED and instr_str in IS_COMPRESSABLE:
         instr_str_cmp, is_compressable = handle_IntStore(rs1, rs2, imm, instr_str)
         if is_compressable and (random.random() < COMPRESS_INSTRUCTION):
@@ -602,6 +601,7 @@ def create_memfsm_instrobjs(fuzzerstate):
 
         fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.PAGE_T0_ADDR if tainted else IntRegIndivState.PAGE_ADDR, force=True)
         addr = phys2virt(addr, priv_level, va_layout,fuzzerstate,absolute_addr=True)
+
         # print(f"Vaddr: {hex(addr)}, tainted: {tainted}")
         if fuzzerstate.is_design_64bit:
             instr_objs = li_doubleword(addr, rd, tmp, fuzzerstate)

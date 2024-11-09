@@ -74,7 +74,10 @@ def gen_priv_descent_instr(fuzzerstate):
             # Update the true va layout
             fuzzerstate.effective_curr_layout = fuzzerstate.real_curr_layout
             fuzzerstate.satp_set_not_used = False
-    
+            
+        if fuzzerstate.real_curr_layout not in fuzzerstate.taint_source_layouts: 
+            instr_objs += clear_taints_with_random_instructions(fuzzerstate, untaint_all=True)
+
     # The following is only relevant if leave machine mode
     if USE_MMU and fuzzerstate.privilegestate.privstate != PrivilegeStateEnum.MACHINE:
         # When leaving machine mode, mprv bit is cleared
