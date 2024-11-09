@@ -1,5 +1,5 @@
 from params.runparams import DO_ASSERT, INSERT_FENCE, INSERT_REGDUMPS
-from params.fuzzparams import USE_MMU
+from params.fuzzparams import USE_MMU, MAX_NUM_PICKABLE_REGS
 import enum
 
 
@@ -320,7 +320,7 @@ class IntRegIndivState(IntEnum):
     PRODUCED1          = auto() # aka "ready"
     CONSUMED           = auto() # aka "applied". Was either PRODUCED1 and directly consumed as input and output of the consumer, or FREE and just output of the consumer.
     UNRELIABLE         = auto() # If offset but not chosen as applied
-    RELOCUSED          = auto() # Already used by cf-ambiguous instruction, value differs between in-situ and spike/final rtl simulation and must be excluded from df computation. E.g. after JAL when design boot addr != spike start addr
+    RELOCUSED          = auto() # Already used by cf-ambiguous instruction, value differs between in-situ and spike/final rtl simulation and must be excluded from df computation. E.g. after JAL[R] when design boot addr != spike start addr
     PAGE_ADDR          = auto()
     PAGE_T0_ADDR       = auto()
 BASIC_BLOCK_MIN_SPACE = 24
@@ -329,3 +329,4 @@ SPECTRE_GADGET_MIN_SPACE = 2*LI_DOUBLEWORD_SPACE + 4*4 # 4 speculative instructi
 BASIC_BLOCK_MIN_SPACE += BASIC_BLOCK_MIN_SPACE * int(USE_MMU)
 BASIC_BLOCK_MIN_SPACE += BASIC_BLOCK_MIN_SPACE * int(INSERT_REGDUMPS)
 BASIC_BLOCK_MIN_SPACE += BASIC_BLOCK_MIN_SPACE * int(INSERT_FENCE)
+BASIC_BLOCK_MIN_SPACE += MAX_NUM_PICKABLE_REGS * 4 # Clearing registers taints when switching context
