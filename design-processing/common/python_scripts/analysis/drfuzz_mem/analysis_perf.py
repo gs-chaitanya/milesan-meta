@@ -259,14 +259,15 @@ ax.grid(axis="y")
 ax.legend()
 #%%
 def load_reduce_perf():
-    TAINT_MISMATCH_PATH = "/mnt/cascade-data/REDUCE_PERF_*/"
     PERFORMANCE_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/performance"
     sys.path.append("/mnt/cascade-meta/fuzzer")
     from cascade.util import INSTRUCTIONS_BY_ISA_CLASS
     from cascade.util import ISAInstrClass
     perf_df = pd.DataFrame()
     new_entry = {}
-    for file in glob.glob(TAINT_MISMATCH_PATH+ "**/*.reduce.log", recursive=True):
+    paths = glob.glob( "/mnt/cascade-data/REDUCE_PERF*/" + "**/*.reduce.log", recursive=True)
+    paths += glob.glob( "/mnt/cascade-data/CT-*/"+ "**/*.reduce.log", recursive=True)
+    for file in paths:
         dut = file.split("/")[-1].split(".")[0]
         with open(file, "r") as f:
             for line in f.read().split("\n"):
@@ -320,7 +321,7 @@ BINWIDTH = 1000
 duts = ["kronos","rocket","cva6","boom","openc910"]
 pretty_names = ["Kronos","Rocket","CVA6","Boom","OpenC910"]
 colors = ["red","peru","greenyellow","forestgreen","black"]
-fig, ax = plt.subplots(figsize=FIGSIZE_RECTANGLE)
+fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
 for i,dut in enumerate(duts):
     sns.scatterplot(perf_df[perf_df["dut"] == dut],x='n_instrs',y='throughput', ax=ax,label=PRETTY_DUT_NAMES_DICT[dut],color=colors[i])
 # ax.legend(pretty_names)
@@ -332,21 +333,66 @@ ax.set_ylabel("throughput [#instr/s]",fontsize=LABELSIZE)
 ax.set_xlabel("#instr",fontsize=LABELSIZE)
 ax.legend(fontsize=LEGENDSIZE)
 ax.yaxis.set_tick_params(labelsize=TICKSIZE)
-ax2 = ax.twinx()
-ax2.set_ylim([0,50])
-ax2.set_ylabel("Distribution [%]",fontsize=LABELSIZE)
-ax2.set_yticklabels([i*10 for i in range(6)],fontsize=TICKSIZE)
-reduce_perf_df = load_reduce_perf()
-sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Control-Flow",binwidth=BINWIDTH)
-sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Memop",binwidth=BINWIDTH)
-sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "ct-violation",binwidth=BINWIDTH)
-ax2.legend(fontsize=LEGENDSIZE)
-plt.savefig(f"{PERFORMANCE_PLOTS_PATH}/throughput_leaking_instr.svg")
+# ax2 = ax.twinx()
+# ax2.set_ylim([0,0.00015])
+# ax2.set_yticks([0,0.00005,0.0001,0.00015])
+# ax2.set_yticklabels(["0","5e-3","1e-2","1.5e-2"])
+# ax2.set_ylabel("Kernel Density [%]",fontsize=LABELSIZE)
+# ax2.set_yticklabels([i*10 for i in range(6)],fontsize=TICKSIZE)
+# reduce_perf_df = load_reduce_perf()
+# sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Control-Flow",binwidth=BINWIDTH)
+# sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Memory",binwidth=BINWIDTH)
+# sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Arithmetic",binwidth=BINWIDTH)
+# sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax2,label = "Control-Flow")
+# sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax2,label = "Memory")
+# sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax2,label = "Arithmetic")
+# ax2.legend(fontsize=LEGENDSIZE)
+# plt.savefig(f"{PERFORMANCE_PLOTS_PATH}/throughput.svg")
 # %%
+# reduce_perf_df = load_reduce_perf()
 BINWIDTH = 1000
 fig, ax = plt.subplots(figsize=FIGSIZE_RECTANGLE)
-sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax,kde=True,stat="percent",label = "Control-Flow",binwidth=BINWIDTH)
-sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax,kde=True,stat="percent",label = "Memop",binwidth=BINWIDTH)
-sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax,kde=True,stat="percent",label = "ct-violation",binwidth=BINWIDTH)
+sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax,label = "Control-Flow")
+sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax,label = "Memop")
+sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax,label = "ct-violation")
+ax.set_xlim([0,16000])
+ax.legend()
+#%%
+# reduce_perf_df = load_reduce_perf()
+BINWIDTH = 100
+fig, ax = plt.subplots(figsize=FIGSIZE_RECTANGLE)
+sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="failing_bb_id",ax=ax,kde=True,stat="percent",label = "Control-Flow",binwidth=BINWIDTH)
+sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="failing_bb_id",ax=ax,kde=True,stat="percent",label = "Memop",binwidth=BINWIDTH)
+sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="failing_bb_id",ax=ax,kde=True,stat="percent",label = "ct-violation",binwidth=BINWIDTH)
 # ax.set_xlim([0,10000])
 ax.legend()
+#%%
+#%%
+BINWIDTH = 1000
+fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
+ax.set_ylim([0,0.00015])
+ax.set_yticks([0,0.00005,0.0001,0.00015])
+ax.set_yticklabels(["0","5e-3","1e-2","1.5e-2"])
+ax.set_ylabel("Kernel Density [%]",fontsize=LABELSIZE)
+# ax2.set_yticklabels([i*10 for i in range(6)],fontsize=TICKSIZE)
+reduce_perf_df = load_reduce_perf()
+# sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Control-Flow",binwidth=BINWIDTH)
+# sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Memory",binwidth=BINWIDTH)
+# sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Arithmetic",binwidth=BINWIDTH)
+sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax,label = "Control-Flow",color="red")
+sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax,label = "Memory",color="peru")
+sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax,label = "Arithmetic",color="blue")
+ax.legend(fontsize=LEGENDSIZE)
+ax.set_xlabel("#instr",fontsize=LABELSIZE)
+ax.set_xticklabels([f"{i//1000}k" for i in range(0,16000,1000)],fontsize=TICKSIZE)
+ax2 = ax.twinx()
+
+sns.regplot(perf_df,x='n_instrs',y='throughput', ax=ax2,color="grey")
+# ax.legend(pretty_names)
+ax2.set_yscale("log")
+ax2.set_xlim([0,16000])
+ax2.set_ylim([0,10**3])
+ax2.set_ylabel("throughput [#instr/s]",fontsize=LABELSIZE)
+ax2.legend(fontsize=LEGENDSIZE)
+ax2.yaxis.set_tick_params(labelsize=TICKSIZE)
+# plt.savefig(f"{PERFORMANCE_PLOTS_PATH}/dist_over_program_length.svg")
