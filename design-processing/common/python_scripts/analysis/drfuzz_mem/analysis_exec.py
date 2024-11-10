@@ -25,6 +25,7 @@ for i,file in enumerate(glob.glob(CASCADE_DATADIR+ "**/taint_stats.json", recurs
 
 # %%
 
+
 idx = 3
 fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
 priv = [i["priv"] for i in exec_traces[idx]]
@@ -32,14 +33,15 @@ taint_source_privs = [i["taint_source_privs"] for i in exec_traces[idx]]
 taint_sink_privs = [i["taint_sink_privs"] for i in exec_traces[idx]]
 taint = [i["n_tainted_regs_ratio"]*100 for i in exec_traces[idx]]
 sns.lineplot(taint,ax=ax,color="black")
-ax.fill_between(range(0,len(priv)), 0, 1, where=[i in j for i,j in zip(priv, taint_sink_privs)],
-            color='blue', alpha=0.5, transform=ax.get_xaxis_transform(), label="Taint-sink")
-
 ax.fill_between(range(0,len(priv)), 0, 1,  where=[i in j for i,j in zip(priv, taint_source_privs)],
-                color='red', alpha=0.5, transform=ax.get_xaxis_transform(), label="Taint-source")
+                color='red', alpha=0.5, transform=ax.get_xaxis_transform(), label="$C_+$")
 
-ax.fill_between(range(0,len(priv)), 0, 1, where=[i not in j+k for i,j,k in zip(priv, taint_sink_privs,taint_source_privs)],
-            color='grey', alpha=0.1, transform=ax.get_xaxis_transform(), label="Neutral")
+ax.fill_between(range(0,len(priv)), 0, 1, where=[i in j for i,j in zip(priv, taint_sink_privs)],
+            color='blue', alpha=0.5, transform=ax.get_xaxis_transform(), label="$C_-$")
+
+
+# ax.fill_between(range(0,len(priv)), 0, 1, where=[i not in j+k for i,j,k in zip(priv, taint_sink_privs,taint_source_privs)],
+#             color='grey', alpha=0.1, transform=ax.get_xaxis_transform(), label="$C_{\bot}$")
 
 ax.grid(axis="y")
 ax.set_ylim(0,100)
@@ -51,7 +53,7 @@ ax.set_xticklabels(["0","1k","2k","3k","4k"],fontsize=TICKSIZE)
 ax.set_ylabel("Tainted registers [%]",fontsize=LABELSIZE)
 ax.set_xlabel("Simulation cycle [1]",fontsize=LABELSIZE)
 ax.legend(fontsize=LEGENDSIZE,loc="best")
-plt.savefig(os.path.join(EXEC_PLOTS_PATH, "taint_in_regs.svg"))
+# plt.savefig(os.path.join(EXEC_PLOTS_PATH, "taint_in_regs.svg"))
 
 # %%
 ratios = []
@@ -151,7 +153,7 @@ for priv in set([0,1]):
     ax.set_xticklabels([0,20,40,60,80,100],fontsize=TICKSIZE)
     ax.set_xlabel(f"Ratio of taint-source instructions {priv_names[priv]}-mode [%]",fontsize=LABELSIZE)
     ax.legend(fontsize=LEGENDSIZE)
-    plt.savefig(os.path.join(EXEC_PLOTS_PATH, f"comp_in_taint_source_priv_{[priv_names[priv]]}.svg"))
+    # plt.savefig(os.path.join(EXEC_PLOTS_PATH, f"comp_in_taint_source_priv_{[priv_names[priv]]}.svg"))
 
 # %%
 ratios_all_privs = pd.DataFrame()
@@ -281,7 +283,7 @@ ax.set_xlabel("Taint-source privilege", fontsize=LABELSIZE)
 ax.set_ylabel("Execution in privilege [%]", fontsize=LABELSIZE)
 ax.grid(axis="y")
 ax.legend(fontsize=LEGENDSIZE)
-plt.savefig(os.path.join(EXEC_PLOTS_PATH, "priv_stat.svg"))
+# plt.savefig(os.path.join(EXEC_PLOTS_PATH, "priv_stat.svg"))
 #%%
 ###
 ## TAINT OVERAPPROX STATS
@@ -342,6 +344,6 @@ ax_t.spines["bottom"].set_visible(False)
 ax_b.spines["top"].set_visible(False)
 ax_b.set_xlabel("In-situ taint over-approximation [%]", fontsize=LABELSIZE)
 ax_t.legend(fontsize=LEGENDSIZE)
-plt.savefig(os.path.join(EXEC_PLOTS_PATH, "taint_overapprox.svg"))
+# plt.savefig(os.path.join(EXEC_PLOTS_PATH, "taint_overapprox.svg"))
 
 # %%
