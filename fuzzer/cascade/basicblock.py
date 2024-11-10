@@ -776,7 +776,6 @@ def gen_basicblocks(fuzzerstate):
         if pop_success:
             break
         # Staying in the external loop is typically extremely rare. Staying corresponds to not being able to jump to the final bb despite popping any number of bbs. This may happen mostly with large memories and with a very high prevalence of direct control flow instructions (JAL or branches)
-
     # Generate the content of the final basic block, now that we know the final privilege level.
     fuzzerstate.final_bb = finalblock(fuzzerstate, fuzzerstate.design_name)
 

@@ -467,7 +467,7 @@ class PageTablesGen:
                         curr_pte            = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_source_privs, is_executable=False)
                         # When M-mode is the only taint source privilege, we map a PTE for S-mode with the U bit set we can trigger page faults with it.
                         curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf, is_curr_layout_global, is_user=PrivilegeStateEnum.USER in fuzzerstate.taint_source_privs or fuzzerstate.taint_source_privs == {PrivilegeStateEnum.MACHINE}, is_executable=False)
-                        self.ppn_leaf_to_priv_dict[ppn_leaf] = fuzzerstate.taint_source_privs
+                        self.ppn_leaf_to_priv_dict[ppn_leaf] = set(fuzzerstate.taint_source_privs) # need a copy here, so create new set
                         if DEBUG_PRINT:
                             print(f"{hex(ppn_leaf)} maps data page with taints: U-PTE: {hex(curr_pte)}, S-PTE: {hex(curr_pte_supervisor)}")
                     else:

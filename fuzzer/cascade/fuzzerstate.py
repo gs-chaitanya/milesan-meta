@@ -85,7 +85,6 @@ class FuzzerState:
                         self.taint_sink_privs.add(PrivilegeStateEnum.SUPERVISOR)
                     if "U" in TAINT_SINK_PRIVS:
                         self.taint_sink_privs.add(PrivilegeStateEnum.USER)
-
                 # If the MMU is disabled, all privileges can acccess tainted data.
                 if DO_ASSERT:
                     assert self.taint_sink_privs & self.taint_source_privs == set(), f"Privilege can't be both taint source and sink! {self.taint_source_privs}/{self.taint_sink_privs}"
@@ -146,6 +145,7 @@ class FuzzerState:
         os.makedirs(self.tmp_dir,exist_ok=True)
 
         self.pmonitor = PerformanceMonitor(os.path.join(self.tmp_dir,'perf_stats.json'))
+
 
     # @brief return the MMU capabilities of the design 
     # @return [bool] : [sv32, sv39, sv48]

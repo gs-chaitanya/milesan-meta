@@ -1403,7 +1403,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         cross_privilege = True
     cross_layout = False
     if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].va_layout not in fuzzerstate.taint_source_layouts:
-        ret_msg += f"\t Detected leakage from layout {fuzzerstate.taint_source_layout} -> {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].va_layout}\n"
+        ret_msg += f"\t Detected leakage from layout {fuzzerstate.taint_source_layouts} -> {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].va_layout}\n"
         cross_layout = True
 
     if is_success_larger:
