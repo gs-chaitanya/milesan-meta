@@ -33,7 +33,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-
+import json
 # @brief since stopsig and regdump addr are vitrual, the final block also needs some context, mainly, the translation scheme of stores in the current priviledge
 def gen_ctxt_finalbock(priv_level, layout_id, fuzzerstate, bb_id, instr_id):
     assert bb_id != -1
@@ -1379,22 +1379,34 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     ###
     ## Generate final summary.
     ###
-
+    ret_dict = {}
     ret_msg = f"{fuzzerstate.instance_to_str()}:\n"
     if FIND_PILLARS:
         ret_msg += f"\t Pillar bb id: {pillar_bb_id}\n"
         ret_msg += f"\t Pillar instr id: {pillar_instr_id}/{len(fuzzerstate.instr_objs_seq[pillar_instr_id])}\n"
         ret_msg += f"\t Pillar instr: {fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr_id].get_str()}\n"
+        ret_dict["pillar_bb_id"] = pillar_bb_id
+        ret_dict["pillar_instr_id"] = pillar_instr_id
+        ret_dict["pillar_instr"] = fuzzerstate.instr_objs_seq[pillar_bb_id][pillar_instr_id].get_str()
+
     ret_msg += f"\t Failing bb id: {failing_bb_id}/{len(fuzzerstate.instr_objs_seq)}\n"
     ret_msg += f"\t Failing instr id: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}\n"
     ret_msg += f"\t Failing instr: {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}\n"
+
+    ret_dict["failing_bb_id"] = failing_bb_id
+    ret_dict["failing_instr_id"] = failing_instr_id
+    ret_dict["failing_instr"] = fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()
+
     if FIND_PILLARS:
         ret_msg += f"\t Total number of bbs: {failing_bb_id-pillar_bb_id+1}\n"
         n_nops, n_non_nop_instrs  =  _count_instructions(fuzzerstate,failing_bb_id,failing_instr_id, pillar_bb_id, pillar_instr_id)
         ret_msg += f"\t Total number of non-nop instructions before leaking instruction: {n_non_nop_instrs} ({n_nops} nops)\n"
         if pillar_bb_id>0:
             ret_msg += f"\t Compactify success: {not is_success_compact}\n"
-        
+        ret_dict["n_bbs_between_pillar_and_leaker"] = failing_bb_id-pillar_bb_id+1
+        ret_dict["n_non_nop_instrs"] = n_non_nop_instrs
+        ret_dict["n_nops"] = n_nops
+    ret_dict["reduced_elf"] = final_fuzzerstate.rtl_elfpath
     ret_msg += f"\t Reduced ELF: {final_fuzzerstate.rtl_elfpath}\n"
 
     cross_privilege = False
@@ -1406,6 +1418,9 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_msg += f"\t Detected leakage from layout {fuzzerstate.taint_source_layouts} -> {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].va_layout}\n"
         cross_layout = True
 
+    ret_dict["cross-priv"] = cross_privilege
+    ret_dict["cross-layout"] = cross_layout
+
     if is_success_larger:
         ret_msg += f"\t Bug disappears in modelsim!\n"
     elif not is_success_smaller:
@@ -1414,33 +1429,53 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     ret_msg += f"\t Total time: {time.time()-start_time}s\n"
     ret_msg += f"\t Time to find failing BB: {time_failing_bb_search}s\n"    
     ret_msg += f"\t Time to find failing instr: {time_failing_instr_search}s\n"    
+    ret_dict["time_to_find_failling_bb"] = time_failing_bb_search
+    ret_dict["time_to_find_failing_instr"] = time_failing_instr_search
 
     if FIND_PILLARS: 
         ret_msg += f"\t Time to find pillar BB: {time_pillar_bb_search}s\n"
         ret_msg += f"\t Success find pillar BB: {find_pillar_success}\n"
+        ret_dict["time_to_find_pillar_bb"] = time_pillar_bb_search
+        ret_dict["success_find_pillar_bb"] = find_pillar_success
     if FIND_PILLAR_INSTRUCTION:
         ret_msg += f"\t Time to find pillar instr: {time_pillar_instr_search}s\n" 
         ret_msg += f"\t Succes find pillar instr: {find_pillar_instr_success}\n" 
+        ret_dict["time_to_find_pillar_instr"] = time_pillar_instr_search
+        ret_dict["success_find_pillar_instr"] = find_pillar_instr_success
+
     if NOPIZE_SANDWICH_INSTRUCTIONS:   
         ret_msg += f"\t Time to nopize instr: {time_nopize_instr}s\n"    
         ret_msg += f"\t Success nopize instr: {nopize_success}\n"
+        ret_dict["time_to_nopize"] = time_nopize_instr
+        ret_dict["success_nopize"] = nopize_success
 
     if REDUCE_TAINT:
         ret_msg += f"\t Time to reduce taint: {time_reduce_taint}s\n"
         ret_msg += f"\t Taint reduction success: {reduce_taint_success}\n"
+        ret_dict["time_reduce_taint"] = time_reduce_taint
+        ret_dict["success_reduce_taint"] = reduce_taint_success
         if reduce_taint_success:
             ret_msg += f"\t Leaked address: {hex(leaked_address)}\n"
+            ret_dict["leaked_addr"] = hex(leaked_address)
     
+
     if REDUCE_DEAD_CODE:
         ret_msg += f"\t Time to reduce dead code: {time_reduce_dead_code}s\n"
         ret_msg += f"\t Dead code reduction success: {reduce_dead_code_success}\n"
+        ret_dict["time_reduce_dead_code"] = time_reduce_dead_code
+        ret_dict["success_reduce_dead_code"] = time_reduce_dead_code
+
         if reduce_dead_code_success:
             ret_msg += f"\t Dead code at {hex(final_fuzzerstate.spec_instr_objs_seq[0].paddr)}, {len(final_fuzzerstate.spec_instr_objs_seq)} dead instructions.\n"
-  
+            ret_dict["dead_code"] = final_fuzzerstate.spec_instr_objs_seq[0].get_str()
+
 
     if not quiet:
         print(ret_msg)
     fuzzerstate.log(ret_msg)
+    
+    with open(f"{fuzzerstate.tmp_dir}/reduce.log","w") as f:
+        json.dump(ret_dict,f)
 
     if not NO_REMOVE_TMPFILES and not cross_privilege and not cross_layout:
         fuzzerstate.remove_tmp_files()
