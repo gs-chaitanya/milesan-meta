@@ -9,7 +9,7 @@ from common.spike import SPIKE_STARTADDR
 from rv.csrids import CSR_IDS
 from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES, FENCE_CF_INSTR
 from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, INSERT_SPECTRE_GADGETS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS, ALLOW_JALR_IN_NEUTRAL_PRIVS, ALLOW_BRANCH_IN_NEUTRAL_PRIVS
-from params.fuzzparams import FILL_MEM_WITH_DEAD_CODE
+from params.fuzzparams import FILL_MEM_WITH_DEAD_CODE, NUM_MAX_N_INSTRS
 from params.runparams import INSERT_REGDUMPS, INSERT_FENCE, GET_DATA, DEBUG_PRINT
 from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memfsm_instrobjs
 from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
@@ -70,6 +70,8 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     return True
 
 def is_there_more_space_for_bb(fuzzerstate, required_space: int = BASIC_BLOCK_MIN_SPACE):
+    if  NUM_MAX_N_INSTRS > 0 and sum([len(i) for i in fuzzerstate.instr_objs_seq]) >= NUM_MAX_N_INSTRS:
+        return False
     if USE_MMU:
         ret = fuzzerstate.memview.get_available_contig_space() > required_space and fuzzerstate.privilegestate.privstate in fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[((fuzzerstate.get_curr_paddr(add_spike_offset=False)+required_space)&PAGE_ALIGNMENT_MASK)+SPIKE_STARTADDR]
         return ret
@@ -765,7 +767,7 @@ def gen_basicblocks(fuzzerstate):
                 break
             # Save the states
             fuzzerstate.save_states()
-            if fuzzerstate.nmax_bbs is not None and len(fuzzerstate.instr_objs_seq) >= fuzzerstate.nmax_bbs or fuzzerstate.memview.get_allocated_ratio() >= LIMIT_MEM_SATURATION_RATIO:
+            if fuzzerstate.nmax_bbs is not None and len(fuzzerstate.instr_objs_seq) >= fuzzerstate.nmax_bbs or fuzzerstate.memview.get_allocated_ratio() >= LIMIT_MEM_SATURATION_RATIO or NUM_MAX_N_INSTRS and sum([len(i) for i in fuzzerstate.instr_objs_seq]) > NUM_MAX_N_INSTRS:
                 break
             # fuzzerstate.memview.alloc_mem_range(fuzzerstate.next_bb_addr, fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)
 
@@ -779,7 +781,8 @@ def gen_basicblocks(fuzzerstate):
 
     # Generate the content of the final basic block, now that we know the final privilege level.
     fuzzerstate.final_bb = finalblock(fuzzerstate, fuzzerstate.design_name)
-
+    if DO_ASSERT:
+        assert not NUM_MAX_N_INSTRS or sum(len(i) for i in fuzzerstate.instr_objs_seq) < NUM_MAX_N_INSTRS+BASIC_BLOCK_MIN_SPACE//4, f"Program has {sum(len(i) for i in fuzzerstate.instr_objs_seq)} > {NUM_MAX_N_INSTRS+BASIC_BLOCK_MIN_SPACE//4} instructions."
     # # Forbid loads from addresses where instructions change between spike resolution and RTL sim.
     # blacklist_changing_instructions(fuzzerstate)
     # blacklist_final_block(fuzzerstate) # Must be done once the bb is created, else we could also blacklist upper bounds over the basic block size.

@@ -530,12 +530,9 @@ class FuzzerState:
 
     def remove_tmp_files(self):
         if os.path.isdir(self.tmp_dir):
-            for file in glob.glob(f"{self.tmp_dir}/spike*.elf"):
-                os.remove(file)
-            for file in glob.glob(f"{self.tmp_dir}/spike*.txt"):
-                os.remove(file)
-
-                
+            for file in glob.glob(f"{self.tmp_dir}/*"):
+                if not ("log" in file or "perfstats" in file):
+                    os.remove(file)      
 
     def load_init_regvals_from_memview(self):
         self.initial_reg_data_content.clear()
@@ -707,6 +704,16 @@ class FuzzerState:
 
         self.reset_states()
         return stats_per_cycle
+
+    def comp_instr_dist(self):
+        dist = {}
+        for instrs in self.instr_objs_seq[1:]: # skip initial block
+            for instr in instrs:
+                if instr.instr_str in dist:
+                    dist[instr.instr_str] += 1
+                else:
+                    dist[instr.instr_str] = 1
+        return dist
 
     def log(self, log_msg):
         os.makedirs(self.tmp_dir,exist_ok=True)

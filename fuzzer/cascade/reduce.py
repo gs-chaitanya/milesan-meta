@@ -1387,7 +1387,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     ret_msg += f"\t Failing bb id: {failing_bb_id}/{len(fuzzerstate.instr_objs_seq)}\n"
     ret_msg += f"\t Failing instr id: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}\n"
     ret_msg += f"\t Failing instr: {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}\n"
-    ret_msg += f"\t Total #instr: {sum([len(i) for i in fuzzerstate.instr_objs_seq[1:]])}"
+    ret_msg += f"\t Total #instr: {sum([len(i) for i in fuzzerstate.instr_objs_seq[1:]])}\n"
     if FIND_PILLARS:
         ret_msg += f"\t Total number of bbs: {failing_bb_id-pillar_bb_id+1}\n"
         n_nops, n_non_nop_instrs  =  _count_instructions(fuzzerstate,failing_bb_id,failing_instr_id, pillar_bb_id, pillar_instr_id)

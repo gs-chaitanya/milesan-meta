@@ -331,6 +331,9 @@ def wait_and_load_regstream(fuzzerstate, use_vanilla: bool = False, trace_en: bo
     with open(req_path, "w") as f:
         json.dump(req_dict, f)
 
+    os.chmod(MODELSIM_REQ_DIR, 0o777)
+    os.chmod(req_path, 0o777)
+
     if PRINT_THREAD_STATUS:
         print(f"Dumped request to {req_path}")
     start = time.time()
