@@ -23,6 +23,7 @@ then
 echo "Running natively."
 export LOCAL_MNT=/scratch/tkovats/ssh_mnt
 export PATH=$PATH:/usr/local/questa-2022-03/questasim/bin
+export VSIM=/usr/local/questa-2023-04/questasim/linux_x86_64/vsim
 source $LOCAL_MNT/cellift-meta/env.sh
 else
 echo "Running inside container."
@@ -199,3 +200,5 @@ export COVDUMP_DIR=$LOCAL_MNT/cov_dump
 # Generous timeouts. Shorter timeouts may be enfored from python runparams when using the modelsim server.
 export MODELSIM_TIMEOUT=12000
 export MODELSIM_TIMEOUT_TRACE_EN=12000
+
+cd $CASCADE_META_ROOT/fuzzer
