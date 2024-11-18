@@ -15,23 +15,27 @@ set LIB ${MODELSIM_WORKROOT}/${TOP_SOC}${VARIANT_ID}_${FUZZCOREID}/work_${INSTRU
 if { [info exists ::env(TRACEFILE)] }    { set TRACEFILE $::env(TRACEFILE) }       else { puts "Please set TRACEFILE environment variable"; exit 1 }
 if { [info exists ::env(VCD_WILDCARD)] } { set VCD_WILDCARD $::env(VCD_WILDCARD) } else { set VCD_WILDCARD /* }
 if { [info exists ::env(MODELSIM_NOQUIT)] } { set MODELSIM_NOQUIT $::env(MODELSIM_NOQUIT) } else { set MODELSIM_NOQUIT "0" }
+if { [info exists ::env(VCD_REGEX)] } { set VCD_REGEX $::env(VCD_REGEX) } else { set VCD_REGEX "*" }
 
-# if { [string equal $TRACE trace_fst] } { 
-#     set VOPTARGS "-voptargs=+acc"
-#     set DEBUGDBARG "-debugdb"
-# } elseif {[string equal $TRACE trace]} {
-#     set VOPTARGS "-voptargs=+acc" 
-#     set DEBUGDBARG "-debugdb"
-# } else {
-#     set VOPTARGS ""
-#     set DEBUGDBARG ""
-# }
 
+if { [string equal $TRACE trace_fst] } { 
+    set VOPTARGS "-voptargs=+acc"
+    set DEBUGDBARG "-debugdb"
+} elseif {[string equal $TRACE trace]} {
+    set VOPTARGS "-voptargs=+acc" 
+    set DEBUGDBARG "-debugdb"
+} else {
+    set VOPTARGS ""
+    set DEBUGDBARG ""
+}
+
+
+# vsim -64 -lib $LIB $MODELSIM_VSIM_COVERFLAG  $DEBUGDBARG $VOPTARGS tb_top
 
 if { $TRACE != "trace_fst" && $TRACE != "trace" } {
     vsim -64 -suppress 3009 -suppress 3085 -suppress 3015 -suppress 2718 -suppress 2685 -suppress 2244 -lib $LIB $MODELSIM_VSIM_COVERFLAG tb_top_opt
 } else {
-    vsim -64 -suppress 3009 -suppress 3085 -suppress 3015 -suppress 2718 -suppress 2685 -suppress 2244 -lib $LIB $MODELSIM_VSIM_COVERFLAG -voptargs=+acc -debugdb tb_top_trace
+    vsim -64 -lib $LIB $MODELSIM_VSIM_COVERFLAG -debugdb -voptargs=+acc tb_top_trace
 }
 if { [string equal $TRACE trace_fst] } { 
     log -r /*
@@ -39,32 +43,11 @@ if { [string equal $TRACE trace_fst] } {
     vcd file $TRACEFILE
     # vcd add -r i_dut/*
     # vcd add -r i_dut/i_ariane_mem_top/i_ariane/i_cva6/*
-    vcd add -r *
+    # vcd add -r *
+    vcd add -r $VCD_REGEX
 }
 
 run -a
-
-if { [string equal $TRACE trace_fst] } {
-    add wave sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/tile_prci_domain/tile_reset_domain/tile/frontend/npc
-    add wave \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/clock \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/reset \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_a_valid \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_a_bits_opcode \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_a_bits_param \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_a_bits_size \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_a_bits_source \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_a_bits_address \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_a_bits_mask \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_a_bits_corrupt \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_d_ready
-    add wave \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_a_ready \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_d_valid \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_d_bits_size \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_d_bits_source \
-        sim:/tb_top/i_dut/i_mem_top/i_chip_top/system/bootROMDomainWrapper/bootrom/auto_in_d_bits_data
-}
 
 if { [string equal $MODELSIM_VSIM_COVERFLAG -coverage] } {
     coverage save $MODELSIM_VSIM_COVERPATH
