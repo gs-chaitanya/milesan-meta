@@ -40,6 +40,7 @@ if __name__ == '__main__':
         for design_name in cfg["DUTS"]: 
             cfg_cpy = cfg.copy()
             cfg_cpy.pop("DUTS")
+            env = os.environ.copy()
             env.update(cfg_cpy)                
             datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["NAME"])
             env["CASCADE_DATADIR"] = datadir
@@ -55,8 +56,9 @@ if __name__ == '__main__':
                         str(cfg["N_THREADS"]),
                         str(cfg["N_TESTS"]),
                         str(cfg["SEED_OFFSET"]) if "SEED_OFFSET" in cfg else str(0),
-                        str(cfg["TIMEOUT"])
                     ]
+                    if "TIMEOUT" in cfg:
+                        cmd += [str(cfg["TIMEOUT"])]
 
                     subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
 
