@@ -38,20 +38,19 @@ perf_df["throughput"] = perf_df["n_instrs"]/perf_df["t_total"]
 PERF_T =  ["t_gen_bbs", "t_spike_resol","t_gen_elf","t_rtl"]
 perf_means = pd.DataFrame()
 for dut in set(perf_df["dut"]):
-    for i in range(3):
-        where = (perf_df["dut"] == dut) & (perf_df["n_instrs"] < 10**(i+1))  & (perf_df["n_instrs"] > 10**i)
+        where = (perf_df["dut"] == dut)
         t_gen_bbs = np.mean(perf_df[where]["t_gen_bbs"])
-        t_spike_resol = np.mean(perf_df[where]["t_spike_resol"])
+        # t_spike_resol = np.mean(perf_df[where]["t_spike_resol"])
         t_gen_elf = np.mean(perf_df[where]["t_gen_elf"])
         t_rtl = np.mean(perf_df[where]["t_rtl"])
-        t_sum = t_gen_bbs + t_spike_resol + t_gen_elf + t_rtl
+        t_sum = t_gen_bbs + t_gen_elf + t_rtl
         perf_means = pd.concat([
             perf_means,
             pd.DataFrame([
                 {
                 "dut": dut,
                 "t_gen_bbs": t_gen_bbs,
-                "t_spike_resol":t_spike_resol,
+                # "t_spike_resol":t_spike_resol,
                 "t_gen_elf":t_gen_elf,
                 "t_rtl": t_rtl,
                 "t_sum": t_sum,
@@ -64,8 +63,8 @@ palette = ['r', 'g', 'b', 'c', 'y', 'm', 'k']
 patterns = [ "/" , "*", "o", ".", "+","0"]
 duts = ["kronos","rocket","cva6","boom","openc910"]
 pretty_names = ["Kronos","Rocket","CVA6","Boom","OpenC910"]
-pretty_names_t = ["Program Generation","ELF Compilation", "Spike","RTL Simulation"]
-perf_t = ["t_gen_bbs","t_gen_elf","t_spike_resol","t_rtl"]
+pretty_names_t = ["Program Generation","ELF Compilation","RTL Simulation"]
+perf_t = ["t_gen_bbs","t_gen_elf","t_rtl"]
 w = 0.6
 fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
 for i,dut in enumerate(duts):
@@ -75,8 +74,8 @@ for i,dut in enumerate(duts):
         r =  perf_means[perf_means["dut"] == dut][t].values[0]/t_sum*100
         ax.bar(i,r,color=palette[j], hatch=patterns[j], width=w, bottom=bottom, label= None if i != 0 else pretty_names_t[j])
         bottom += r
-        if t == perf_t[-2]:
-            ax.text(i-w/4, bottom+0.5, '{0:.1f}%'.format(bottom),size=LEGENDSIZE)
+        # if t == perf_t[-2]:
+        #     ax.text(i-w/4, bottom+0.5, '{0:.1f}%'.format(bottom),size=LEGENDSIZE)
 
 ax.set_xticks(np.arange(5),labels=pretty_names,fontsize=TICKSIZE)
 ax.set_yticks([0,25,50,75,100],labels=[0,25,50,75,100],fontsize=TICKSIZE)
@@ -86,21 +85,8 @@ ax.set_ylabel("Time per step [%]", fontsize=LABELSIZE)
 
 ax.grid(axis="y")
 ax.legend(fontsize=LEGENDSIZE)
-# plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot.svg"))
-# %%
-# fig, axs = plt.subplots(2,2,figsize=(10,5))
-# for i,(ax,t) in enumerate(zip(axs.flatten(), PERF_T)):
-#     sns.histplot(perf_df, x=t, hue='dut' if t=="t_rtl" else None,ax=ax)
+plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot.svg"))
 
-# plt.tight_layout()    
-# # %%
-# fig, axs = plt.subplots(2)
-# for i,(ax,t) in enumerate(zip(axs.flatten(), ["n_instrs","n_bbs"])):
-#     sns.histplot(perf_df, x=t, ax=ax)
-
-# axs[0].set_xlabel("#instructions")
-# axs[1].set_xlabel("#BBs")
-# plt.tight_layout()    
 
 
 #%%
@@ -185,7 +171,6 @@ ax.grid(axis="y")
 ax.legend()
 # plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"total_time_ninstrs.svg"))
 #%%
-#%%
 duts = ["kronos","rocket","cva6","boom","openc910"]
 pretty_names = ["Kronos","Rocket","CVA6","Boom","OpenC910"]
 colors = ["red","peru","greenyellow","forestgreen","black"]
@@ -266,7 +251,7 @@ def load_reduce_perf():
     perf_df = pd.DataFrame()
     new_entry = {}
     paths = glob.glob( "/mnt/cascade-data/REDUCE_PERF*/" + "**/*.reduce.log", recursive=True)
-    paths += glob.glob( "/mnt/cascade-data/CT-*/"+ "**/*.reduce.log", recursive=True)
+    paths += glob.glob( "/mnt/cascade-data/CT-VIOLATIONS/"+ "**/*.reduce.log", recursive=True)
     for file in paths:
         dut = file.split("/")[-1].split(".")[0]
         with open(file, "r") as f:
@@ -349,48 +334,4 @@ ax.yaxis.set_tick_params(labelsize=TICKSIZE)
 # ax2.legend(fontsize=LEGENDSIZE)
 plt.savefig(f"{PERFORMANCE_PLOTS_PATH}/throughput.svg")
 # %%
-BINWIDTH = 1000
-fig, ax = plt.subplots(figsize=FIGSIZE_RECTANGLE)
-sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax,label = "Control-Flow")
-sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax,label = "Memop")
-sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax,label = "ct-violation")
-ax.set_xlim([0,16000])
-ax.legend()
-#%%
-BINWIDTH = 100
-fig, ax = plt.subplots(figsize=FIGSIZE_RECTANGLE)
-sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="failing_bb_id",ax=ax,kde=True,stat="percent",label = "Control-Flow",binwidth=BINWIDTH)
-sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="failing_bb_id",ax=ax,kde=True,stat="percent",label = "Memop",binwidth=BINWIDTH)
-sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="failing_bb_id",ax=ax,kde=True,stat="percent",label = "ct-violation",binwidth=BINWIDTH)
-# ax.set_xlim([0,10000])
-ax.legend()
-#%%
-#%%
-BINWIDTH = 1000
-fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
-ax.set_ylim([0,0.00015])
-ax.set_yticks([0,0.00005,0.0001,0.00015])
-ax.set_yticklabels(["0","5e-3","1e-2","1.5e-2"])
-ax.set_ylabel("Kernel Density [%]",fontsize=LABELSIZE)
-# ax2.set_yticklabels([i*10 for i in range(6)],fontsize=TICKSIZE)
-reduce_perf_df = load_reduce_perf()
-# sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Control-Flow",binwidth=BINWIDTH)
-# sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Memory",binwidth=BINWIDTH)
-# sns.histplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax2,kde=True,stat="percent",label = "Arithmetic",binwidth=BINWIDTH)
-sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "cf"],x="n_instrs_before_leaker",ax=ax,label = "Control-Flow",color="red")
-sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "memop"],x="n_instrs_before_leaker",ax=ax,label = "Memory",color="peru")
-sns.kdeplot(reduce_perf_df[reduce_perf_df["leaker_t"] == "ct-violation"],x="n_instrs_before_leaker",ax=ax,label = "Arithmetic",color="blue")
-ax.legend(fontsize=LEGENDSIZE)
-ax.set_xlabel("#instr",fontsize=LABELSIZE)
-ax.set_xticklabels([f"{i//1000}k" for i in range(0,16000,1000)],fontsize=TICKSIZE)
-ax2 = ax.twinx()
-
-sns.regplot(perf_df,x='n_instrs',y='throughput', ax=ax2,color="grey")
-# ax.legend(pretty_names)
-ax2.set_yscale("log")
-ax2.set_xlim([0,16000])
-ax2.set_ylim([0,10**3])
-ax2.set_ylabel("throughput [#instr/s]",fontsize=LABELSIZE)
-ax2.legend(fontsize=LEGENDSIZE)
-ax2.yaxis.set_tick_params(labelsize=TICKSIZE)
-plt.savefig(f"{PERFORMANCE_PLOTS_PATH}/dist_over_program_length.svg")
+# %%

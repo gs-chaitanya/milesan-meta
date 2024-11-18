@@ -266,13 +266,14 @@ def load_reduce_perf():
     perf_df = pd.DataFrame()
     new_entry = {}
     paths = glob.glob( "/mnt/cascade-data/REDUCE_PERF*/" + "**/*.reduce.log", recursive=True)
-    paths += glob.glob( "/mnt/cascade-data/CT-*/"+ "**/*.reduce.log", recursive=True)
+    paths += glob.glob( "/mnt/cascade-data/CT-VIOLATIONS/"+ "**/*.reduce.log", recursive=True)
     for file in paths:
         dut = file.split("/")[-1].split(".")[0]
         with open(file, "r") as f:
             for line in f.read().split("\n"):
                 if "seed" in line:
                     if len(new_entry):
+
                         new_entry["success_find_pillar_instr"] = new_entry["pillar_instr"] > 0
                         if "leaker_t" in new_entry and new_entry["n_instrs_before_leaker"] > 0 and new_entry["success_find_pillar_bb"] and new_entry["success_find_pillar_instr"]:
                             perf_df = pd.concat([perf_df, pd.DataFrame([new_entry])])
@@ -393,4 +394,6 @@ ax2.set_ylim([0,10**3])
 ax2.set_ylabel("throughput [#instr/s]",fontsize=LABELSIZE)
 ax2.legend(fontsize=LEGENDSIZE)
 ax2.yaxis.set_tick_params(labelsize=TICKSIZE)
-plt.savefig(f"{PERFORMANCE_PLOTS_PATH}/dist_over_program_length.svg")
+# plt.savefig(f"{PERFORMANCE_PLOTS_PATH}/dist_over_program_length.svg")
+# %%
+sns.boxplot(reduce_perf_df,y="leaker_t",x="n_instrs_before_leaker",hue="dut",saturation=1,showfliers=0)

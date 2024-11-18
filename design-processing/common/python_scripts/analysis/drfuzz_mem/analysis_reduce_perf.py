@@ -18,7 +18,7 @@ PRETTY_NAMES = {
     "boom":"BOOM",
     "openc910":"OpenC910"
 }
-TAINT_MISMATCH_PATH = "/mnt/cascade-data/REDUCE_PERF_*/"
+TAINT_MISMATCH_PATH = "/mnt/cascade-data/REDUCTION_PERF_NO_MMU/"
 PERFORMANCE_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/performance"
 #%%
 perf_df = pd.DataFrame()
@@ -70,6 +70,7 @@ for file in glob.glob(TAINT_MISMATCH_PATH+ "**/*.reduce.log", recursive=True):
                 new_entry["total_time"] = float(line.split(":")[-1][:-1])
 
 #%%
+
 perf_means = pd.DataFrame()
 for dut in set(perf_df["dut"]):
     for n_bbs in set(perf_df[perf_df["dut"] == dut]["n_bbs"]):
@@ -79,11 +80,11 @@ for dut in set(perf_df["dut"]):
         pillar_bb = np.mean(perf_df[(where) & (perf_df["success_find_pillar_bb"])]["pillar_bb"])
         pillar_instr_vals = perf_df[(where) & (perf_df["success_find_pillar_instr"])]["pillar_instr"]
         pillar_instr = np.mean(pillar_instr_vals) if len(pillar_instr_vals) else 0
-        # nopize_vals = perf_df[(where) & (perf_df["success_nopize"])]["nopize"]
-        # nopize = np.mean(nopize_vals) if len(nopize_vals) else 0
-        # taint = np.mean(perf_df[(where) & (perf_df["success_reduce_taint"])]["taint"])
-        # dead_code = np.mean(perf_df[(where)]["dead_code"])
-        t_sum = failing_bb + failing_instr + pillar_bb + pillar_instr
+        nopize_vals = perf_df[(where) & (perf_df["success_nopize"])]["nopize"]
+        nopize = np.mean(nopize_vals) if len(nopize_vals) else 0
+        taint = np.mean(perf_df[(where) & (perf_df["success_reduce_taint"])]["taint"])
+        dead_code = np.mean(perf_df[(where)]["dead_code"])
+        t_sum = failing_bb + failing_instr + pillar_bb + pillar_instr + taint + dead_code
         perf_means = pd.concat([
             perf_means,
             pd.DataFrame([
@@ -93,9 +94,9 @@ for dut in set(perf_df["dut"]):
                 "failing_instr":failing_instr,
                 "pillar_bb":pillar_bb,
                 "pillar_instr":pillar_instr,
-                # "nopize": nopize,
-                # "taint":taint,
-                # "dead_code":dead_code,
+                "nopize": nopize,
+                "taint":taint,
+                "dead_code":dead_code,
                 "primer":(pillar_bb+pillar_instr),
                 "leaker":(failing_bb+failing_instr),
                 "t_sum": t_sum,
@@ -106,14 +107,14 @@ for dut in set(perf_df["dut"]):
             ])
         ])
 
-
+perf_means = perf_means.dropna()
 # %%
 palette = ['r', 'g', 'b', 'c', 'y', 'm', 'k']
 patterns = [ "" ,"////", "*", "o", ".", "+","0"]
 duts = [i for i,j in PRETTY_NAMES.items() if i in set(perf_df["dut"])]
 #%%
-PERF_T =  ["program","taint","dead_code"]
-PRETTY_NAMES_T = ["Program","Taint","Dead Code"]
+PERF_T =  ["leaker","primer"]
+PRETTY_NAMES_T = ["Leaker","Primer"]
 w = 0.6
 fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
 for i,dut in enumerate(duts):
@@ -123,23 +124,21 @@ for i,dut in enumerate(duts):
         ax.bar(i, perf_means[perf_means["dut"] == dut][t]/t_sum*100,color=palette[j], hatch=patterns[j], width=w, bottom=bottom, label= None if i != 0 else PRETTY_NAMES_T[j])
         split = perf_means[perf_means["dut"] == dut][t].values[0]/t_sum*100
         bottom += split
-        if t != PERF_T[-1]:
-            ax.text(i-w/4, bottom+0.5, '{0:.1f}%'.format(split),size=LEGENDSIZE)
+        # if t != PERF_T[-1]:
+        #     ax.text(i-w/4, bottom+0.5, '{0:.1f}%'.format(split),size=LEGENDSIZE)
 
-ax.set_xticks(np.arange(len(duts)),labels=[PRETTY_NAMES[i] for i in duts],fontsize=TICKSIZE)
-ax.set_yticks([0,25,50,75,100],labels=[0,25,50,75,100],fontsize=TICKSIZE)
-ax.set_ylim([0,100])
+
 # ax.set_xlabel("DUT", fontsize=LABELSIZE)
 ax.set_ylabel("Time per step [%]", fontsize=LABELSIZE)
 
 ax.grid(axis="y")
 ax.legend(fontsize=LEGENDSIZE)
-plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot_relative.svg"))
+# plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot_relative.svg"))
 #%%
-# PERF_T =  ["failing_bb","failing_instr","pillar_bb","pillar_instr"]
-# PRETTY_NAMES_T = ["Leaking BB","Leaking Instruction","Primer BB","Primer Instruction"]
-PERF_T =  ["leaker","primer"]
-PRETTY_NAMES_T = ["Leaker","Primer"]
+PERF_T =  ["failing_bb","failing_instr","pillar_bb","pillar_instr"]
+PRETTY_NAMES_T = ["Leaking BB","Leaking Instruction","Primer BB","Primer Instruction"]
+# PERF_T =  ["leaker","primer"]
+# PRETTY_NAMES_T = ["Leaker","Primer"]
 n_bbs_list = list(set(perf_means["n_bbs"]))
 n_bbs_list.sort()
 w = 0.5
@@ -158,7 +157,7 @@ for i,dut in enumerate(duts):
             # time_str = f"{bottom//60:.0f}m{bottom%60:.0f}s"
             # ax.text(i-w/4, bottom+0.5, time_str,size=LEGENDSIZE)
 
-ax.set_yscale("log")
+# ax.set_yscale("log")
 # ax.set_xticks(np.arange(len(duts)),labels=[PRETTY_NAMES[i] for i in duts],fontsize=TICKSIZE)
 # ax.set_yticks([0,60*15,60*30,60*45],labels=[0,15,30,45],fontsize=TICKSIZE)
 # ax.set_xlabel("DUT", fontsize=LABELSIZE)
@@ -169,31 +168,24 @@ ax.legend(fontsize=LEGENDSIZE)
 # plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot_total.svg"))
 # %%
 
-duts = ["kronos","rocket","cva6","boom","openc910"]
-pretty_names = ["Kronos","Rocket","CVA6","Boom","OpenC910"]
+duts = ["rocket","cva6","boom","openc910"]
+pretty_names = ["Rocket","CVA6","Boom","OpenC910"]
 colors = ["red","peru","greenyellow","forestgreen","black"]
-n_instrs_list = list(set(perf_means["min_n_instr"]))
-n_instrs_list.sort()
 w = 1
 x_ticks = []
 fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
 for i,dut in enumerate(duts):
-    for j,n_instrs in enumerate(n_instrs_list):
-        where = (perf_means["dut"] == dut) & (perf_means["min_n_instr"] == n_instrs)
-        total_time = perf_means[where]["t_sum"].values[0]
-        ax.bar(i*w+j*len(duts)*4, total_time,color=colors[i], width=w, label=pretty_names[i] if j == 0 else None)
-        if i == len(duts)//2:
-            x_ticks += [i+j*len(duts)*4]
-        # t = f"{total_time//60:.0f}m{total_time%60:.0f}s"
-        # ax.text(i-w/2+0.08, total_time+0.5, t ,size=LEGENDSIZE)
+    where = (perf_means["dut"] == dut)
+    total_time = perf_means[where]["t_sum"].values[0]
+    ax.bar(i*w+j*len(duts), total_time,color=colors[i], width=w, label=pretty_names[i] if j == 0 else None)
 
 # ax.set_yticks([60,60*5,60*10,60*15],[1,5,10,15])
-ax.set_yscale("log")
-ax.set_ylim([1,10**3])
-ax.set_xticks(x_ticks,labels=n_instrs_list,fontsize=TICKSIZE)
+# ax.set_yscale("log")
+# ax.set_ylim([1,10**3])
+# ax.set_xticks(x_ticks,labels=n_instrs_list,fontsize=TICKSIZE)
 
-ax.set_xlabel("Program size [#instructions]", fontsize=LABELSIZE)
-ax.set_ylabel("Total runtime [s]", fontsize=LABELSIZE)
+# ax.set_xlabel("Program size [#instructions]", fontsize=LABELSIZE)
+# ax.set_ylabel("Total runtime [s]", fontsize=LABELSIZE)
 
 ax.grid(axis="y")
 ax.legend()
@@ -216,3 +208,34 @@ for i,dut in enumerate(duts):
     sns.histplot(perf_df[perf_df["dut"] == dut],x="n_instrs_before_leaker",hue="leaker_t",kde=True,stat="density",ax=ax)
 #%%
 sns.histplot(perf_df,x="n_instrs_before_leaker",hue="leaker_t",kde=True,stat="density")
+
+#%%
+palette = ['r', 'g', 'b', 'c', 'y', 'm', 'k']
+patterns = [ "/" , "*", "o", ".", "+","0"]
+duts = ["rocket","cva6","boom","openc910"]
+pretty_names = ["Rocket","CVA6","Boom","OpenC910"]
+pretty_names_t = ["Program", "Taint","Dead Code"]
+perf_t = ["program","taint","dead_code"]
+w = 0.6
+fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
+for i,dut in enumerate(duts):
+    bottom = 0
+    t_sum =  perf_means[perf_means["dut"] == dut]["t_sum"].values[0]
+    print(f"{dut}: {t_sum}")
+    for j,t in enumerate(perf_t):
+        r =  perf_means[perf_means["dut"] == dut][t].values[0]/t_sum*100
+        ax.bar(i,r,color=palette[j], hatch=patterns[j], width=w, bottom=bottom, label= None if i != 0 else pretty_names_t[j])
+        bottom += r
+        # if t == perf_t[-2]:
+        #     ax.text(i-w/4, bottom+0.5, '{0:.1f}%'.format(bottom),size=LEGENDSIZE)
+
+ax.set_xticks(np.arange(4),labels=pretty_names,fontsize=TICKSIZE)
+ax.set_yticks([0,25,50,75,100],labels=[0,25,50,75,100],fontsize=TICKSIZE)
+ax.set_ylim([0,100])
+ax.set_xlabel("DUT", fontsize=LABELSIZE)
+ax.set_ylabel("Time per step [%]", fontsize=LABELSIZE)
+
+ax.grid(axis="y")
+ax.legend(fontsize=LEGENDSIZE)
+plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot_relative.svg"))
+# %%

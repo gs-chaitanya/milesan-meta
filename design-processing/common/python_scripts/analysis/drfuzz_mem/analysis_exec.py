@@ -34,10 +34,10 @@ taint_sink_privs = [i["taint_sink_privs"] for i in exec_traces[idx]]
 taint = [i["n_tainted_regs_ratio"]*100 for i in exec_traces[idx]]
 sns.lineplot(taint,ax=ax,color="black")
 ax.fill_between(range(0,len(priv)), 0, 1,  where=[i in j for i,j in zip(priv, taint_source_privs)],
-                color='red', alpha=0.5, transform=ax.get_xaxis_transform(), label="$C_+$")
+                color='red', alpha=0.5, transform=ax.get_xaxis_transform(), label="$D_+$")
 
-ax.fill_between(range(0,len(priv)), 0, 1, where=[i in j for i,j in zip(priv, taint_sink_privs)],
-            color='blue', alpha=0.5, transform=ax.get_xaxis_transform(), label="$C_-$")
+ax.fill_between(range(0,len(priv)), 0, 1, where=[i not in j for i,j in zip(priv, taint_source_privs)],
+            color='blue', alpha=0.5, transform=ax.get_xaxis_transform(), label="$D_-$")
 
 
 # ax.fill_between(range(0,len(priv)), 0, 1, where=[i not in j+k for i,j,k in zip(priv, taint_sink_privs,taint_source_privs)],
@@ -51,9 +51,9 @@ ax.set_xlim(0,4000)
 ax.set_xticks([0,1000,2000,3000,4000])
 ax.set_xticklabels(["0","1k","2k","3k","4k"],fontsize=TICKSIZE)
 ax.set_ylabel("Tainted registers [%]",fontsize=LABELSIZE)
-ax.set_xlabel("Simulation cycle [1]",fontsize=LABELSIZE)
+ax.set_xlabel("Simulation cycle",fontsize=LABELSIZE)
 ax.legend(fontsize=LEGENDSIZE,loc="best")
-# plt.savefig(os.path.join(EXEC_PLOTS_PATH, "taint_in_regs.svg"))
+plt.savefig(os.path.join(EXEC_PLOTS_PATH, "taint_in_regs.svg"))
 
 # %%
 ratios = []
