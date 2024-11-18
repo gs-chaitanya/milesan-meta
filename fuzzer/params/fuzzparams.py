@@ -45,6 +45,7 @@ INIT_MIE = False
 # if USE_MMU:
 FILL_MEM_WITH_DEAD_CODE = True
 # print("USE_MMU is enabled. Enabling FILL_MEM_WITH_DEAD_CODE.")
+NUM_MAX_N_INSTRS = get_env_int("NUM_MAX_N_INSTRS",NUM_MAX_N_INSTRS_DEFAULT)
 
 if USE_MMU:
     NUM_MIN_FREE_INTREGS = 3 # 3, we need at least 2 free regs which are not 0

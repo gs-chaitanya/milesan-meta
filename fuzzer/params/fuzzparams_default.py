@@ -20,6 +20,7 @@ USE_COMPRESSED_DEFAULT = False
 NUM_MIN_BBS_LOWERBOUND_DEFAULT = 10 # Used this for BOOM
 NUM_MAX_BBS_UPPERBOUND_DEFAULT = 300
 NUM_BBS_DEFAULT = 0 # When set to a positive value, fixes the number of BBs.
+NUM_MAX_N_INSTRS_DEFAULT = 0 # When set to positive value, sets upper bound on program length
 # Tainting the immediates might taint the PC if instruction code is loaded and speculated on.
 TAINT_IMMRD_IMM_DEFAULT = False
 TAINT_REGIMM_IMM_DEFAULT = False

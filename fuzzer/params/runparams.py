@@ -65,6 +65,7 @@ TRACE_FST = get_env_bool('TRACE_FST', str(int(TRACE_FST_DEFAULT)))
 COLLECT_PERF_STATS = get_env_bool('COLLECT_PERF_STATS', str(int(COLLECT_PERF_STATS_DEFAULT)))
 COLLECT_EXCEPTION_STATS = get_env_bool('COLLECT_EXCEPTION_STATS', str(int(COLLECT_EXCEPTION_STATS_DEFAULT)))
 COLLECT_TAINT_STATS = get_env_bool('COLLECT_TAINT_STATS', str(int(COLLECT_TAINT_STATS_DEFAULT)))
+SKIP_RTL = get_env_bool("SKIP_RTL",str(int(SKIP_RTL_DEFAULT)))
 USE_MODELSIM = get_env_bool('USE_MODELSIM', str(int(USE_MODELSIM_DEFAULT)))
 DEBUG_RVC = get_env_bool('DEBUG_RVC', str(int(DEBUG_RVC_DEFAULT)))
 IGNORE_SPIKE_OFFSET_IN_REG_CHECK = get_env_bool('IGNORE_SPIKE_OFFSET_IN_REG_CHECK', str(int(IGNORE_SPIKE_OFFSET_IN_REG_CHECK_DEFAULT)))
@@ -76,8 +77,8 @@ if INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN:
 if COLLECT_TAINT_STATS or COLLECT_PERF_STATS or COLLECT_EXCEPTION_STATS:
     print(f"WARNING: Enabling NO_REMOVE_TMPDIRS for *_STATS collection.")
     NO_REMOVE_TMPDIRS = True
-    print(f"WARNING: Enabling NO_REMOVE_TMPFILES for *_STATS collection.")
-    NO_REMOVE_TMPFILES = True
+if SKIP_RTL:
+    print("WARNING: SKIP_RTL is enabled.")
 
 # Ensure specific assertions
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
@@ -85,5 +86,6 @@ assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not suppo
 assert not (TAINT_NONTAKEN_BRANCH_IMM and INSERT_REGDUMPS), "Enabling TAINT_NONTAKEN_BRANCH_IMM might render INSERT_REGDUMPS useless as pc might get tainted if non-taken branch is predicted taken."
 assert not (INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN), f"Cannot check pc trace from spike when INSERT_REGDUMPS is enabled."
 assert not (INSERT_FENCE and not INSERT_REGDUMPS), f"INSERT_REGDUMPS must be enabled."
+assert not (SKIP_RTL and not COLLECT_PERF_STATS),f"SKIP_RTL enabled while COLLECT_PER_STATS disabled... "
 # Timestamp
 TIMESTAMP_START = None
