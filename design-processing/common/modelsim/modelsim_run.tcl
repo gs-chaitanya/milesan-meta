@@ -12,7 +12,6 @@ if { [info exists ::env(MODELSIM_VSIM_COVERPATH)] }  { set MODELSIM_VSIM_COVERPA
 
 set LIB ${MODELSIM_WORKROOT}/${TOP_SOC}${VARIANT_ID}_${FUZZCOREID}/work_${INSTRUMENTATION}_${TRACE}
 
-if { [info exists ::env(TRACEFILE)] }    { set TRACEFILE $::env(TRACEFILE) }       else { puts "Please set TRACEFILE environment variable"; exit 1 }
 if { [info exists ::env(VCD_WILDCARD)] } { set VCD_WILDCARD $::env(VCD_WILDCARD) } else { set VCD_WILDCARD /* }
 if { [info exists ::env(MODELSIM_NOQUIT)] } { set MODELSIM_NOQUIT $::env(MODELSIM_NOQUIT) } else { set MODELSIM_NOQUIT "0" }
 if { [info exists ::env(VCD_REGEX)] } { set VCD_REGEX $::env(VCD_REGEX) } else { set VCD_REGEX "*" }
@@ -21,9 +20,11 @@ if { [info exists ::env(VCD_REGEX)] } { set VCD_REGEX $::env(VCD_REGEX) } else {
 if { [string equal $TRACE trace_fst] } { 
     set VOPTARGS "-voptargs=+acc"
     set DEBUGDBARG "-debugdb"
+    if { [info exists ::env(TRACEFILE)] }    { set TRACEFILE $::env(TRACEFILE) }       else { puts "Please set TRACEFILE environment variable"; exit 1 }
 } elseif {[string equal $TRACE trace]} {
     set VOPTARGS "-voptargs=+acc" 
     set DEBUGDBARG "-debugdb"
+    if { [info exists ::env(TRACEFILE)] }    { set TRACEFILE $::env(TRACEFILE) }       else { puts "Please set TRACEFILE environment variable"; exit 1 }
 } else {
     set VOPTARGS ""
     set DEBUGDBARG ""
@@ -35,7 +36,7 @@ if { [string equal $TRACE trace_fst] } {
 if { $TRACE != "trace_fst" && $TRACE != "trace" } {
     vsim -64 -suppress 3009 -suppress 3085 -suppress 3015 -suppress 2718 -suppress 2685 -suppress 2244 -lib $LIB $MODELSIM_VSIM_COVERFLAG tb_top_opt
 } else {
-    vsim -64 -lib $LIB $MODELSIM_VSIM_COVERFLAG -debugdb -voptargs=+acc tb_top_trace
+    vsim -64 -suppress 3009 -suppress 3085 -suppress 3015 -suppress 2718 -suppress 2685 -suppress 2244 -lib $LIB $MODELSIM_VSIM_COVERFLAG -debugdb -voptargs=+acc tb_top_trace
 }
 if { [string equal $TRACE trace_fst] } { 
     log -r /*
