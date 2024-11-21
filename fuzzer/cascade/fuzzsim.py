@@ -333,6 +333,7 @@ def wait_and_load_regstream(fuzzerstate, use_vanilla: bool = False, trace_en: bo
 
     os.chmod(MODELSIM_REQ_DIR, 0o777)
     os.chmod(req_path, 0o777)
+    os.chmod(fuzzerstate.tmp_dir, 0o777)
 
     if PRINT_THREAD_STATUS:
         print(f"Dumped request to {req_path}")
