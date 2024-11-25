@@ -252,7 +252,7 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
-            assert fuzzerstate.privilegestate.prev_privstate not in fuzzerstate.taint_source_privs # we only do page faults to tainted pages
+            assert fuzzerstate.privilegestate.prev_privstate not in fuzzerstate.taint_source_privs or fuzzerstate.effective_prev_layout not in fuzzerstate.taint_source_layouts # we only do page faults to tainted pages
         instr_str = random.choice([i for i in IntLoadInstruction_t0.authorized_instr_strs if not i.startswith("c")])
         alignment = 1 if "lb" in instr_str else 2 if "lh" in instr_str else 4 if "lw" in instr_str else 8 if "ld" in instr_str else None
         assert alignment is not None, f"Invalid instr_str: {instr_str}"
@@ -283,7 +283,7 @@ def gen_exception_instr(fuzzerstate):
             is_mtvec = not (fuzzerstate.privilegestate.medeleg_val & (1 << exception_op_type.value))
 
         # We untaint the registers if we either delegate the exception to a privilege that does not have taint access, or we do not delegate and M mode does not have taint access.
-        if not is_mtvec and PrivilegeStateEnum.SUPERVISOR not in fuzzerstate.taint_source_privs or is_mtvec and PrivilegeStateEnum.MACHINE not in fuzzerstate.taint_source_privs:
+        if not is_mtvec and (PrivilegeStateEnum.SUPERVISOR not in fuzzerstate.taint_source_privs or fuzzerstate.effective_curr_layout not in fuzzerstate.taint_source_layouts) or is_mtvec and PrivilegeStateEnum.MACHINE not in fuzzerstate.taint_source_privs:
             instr_objs += clear_taints_with_random_instructions(fuzzerstate, untaint_all=True)
     instr_objs += [gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type)]
     fuzzerstate.intregpickstate.free_pageregs()

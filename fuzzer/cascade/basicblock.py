@@ -8,7 +8,7 @@ from params.runparams import DO_ASSERT
 from common.spike import SPIKE_STARTADDR
 from rv.csrids import CSR_IDS
 from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES, FENCE_CF_INSTR
-from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, INSERT_SPECTRE_GADGETS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS, ALLOW_JALR_IN_NEUTRAL_PRIVS, ALLOW_BRANCH_IN_NEUTRAL_PRIVS
+from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS, ALLOW_JALR_IN_NEUTRAL_PRIVS, ALLOW_BRANCH_IN_NEUTRAL_PRIVS
 from params.fuzzparams import FILL_MEM_WITH_DEAD_CODE, NUM_MAX_N_INSTRS
 from params.runparams import INSERT_REGDUMPS, INSERT_FENCE, GET_DATA, DEBUG_PRINT
 from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memfsm_instrobjs
@@ -23,7 +23,7 @@ from cascade.randomize.forbidden_random_value import is_forbidden_random_value
 from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
 from cascade.randomize.createspeculativeinstr import create_speculative_instrs
 from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator, SpeculativeInstructionEncapsulator
-from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, SPECTRE_GADGET_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
+from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
 from cascade.finalblock import get_finalblock_max_size,finalblock
 from cascade.initialblock import gen_initial_basic_block
 from cascade.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setter
@@ -272,16 +272,6 @@ def gen_basicblock(fuzzerstate):
             next_instr = gen_epcfill_instr(fuzzerstate)
         elif curr_isa_class == ISAInstrClass.RANDOM_CSR:
             next_instr = gen_random_csr_op(fuzzerstate)
-        elif INSERT_SPECTRE_GADGETS and (curr_isa_class in (ISAInstrClass.JAL, ISAInstrClass.JALR) or fuzzerstate.curr_branch_taken) and is_there_more_space_for_bb(fuzzerstate, curr_addr, SPECTRE_GADGET_MIN_SPACE):
-            instr_str = gen_next_instrstr_from_isaclass(curr_isa_class, fuzzerstate)
-            new_instrobjs = create_speculative_instrs(instr_str, fuzzerstate)
-            fuzzerstate.append_and_execute_instr(new_instrobjs[0])
-            for new_instrobj_id in range(1, len(new_instrobjs)):
-                # fuzzerstate.memview.alloc_mem_range(curr_alloc_cursor, curr_alloc_cursor+CURR_ALLOC_CURSOR_INC)
-                # curr_alloc_cursor += CURR_ALLOC_CURSOR_INC
-                fuzzerstate.append_and_execute_instr(new_instrobjs[new_instrobj_id])
-            del new_instrobjs
-            return True
         else:
             if FENCE_CF_INSTR and curr_isa_class in (ISAInstrClass.JALR, ISAInstrClass.BRANCH):
                 # curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
@@ -778,7 +768,6 @@ def gen_basicblocks(fuzzerstate):
         if pop_success:
             break
         # Staying in the external loop is typically extremely rare. Staying corresponds to not being able to jump to the final bb despite popping any number of bbs. This may happen mostly with large memories and with a very high prevalence of direct control flow instructions (JAL or branches)
-
     # Generate the content of the final basic block, now that we know the final privilege level.
     fuzzerstate.final_bb = finalblock(fuzzerstate, fuzzerstate.design_name)
     if DO_ASSERT:

@@ -7,6 +7,7 @@ from cascade.mmu_utils import li_doubleword, MODES_PARAM_RV32, MODES_PARAMS_RV64
 from rv.csrids import CSR_IDS
 from rv.asmutil import li_into_reg
 import random
+from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
 from cascade.util import BASIC_BLOCK_MIN_SPACE, MmuState, IntRegIndivState, ExceptionCauseVal
 #DEBUG_PRINT = True
 
@@ -323,7 +324,7 @@ def handle_idle_state_rv64(fuzzerstate, curr_addr):
     target_layout   = random.choices(range(-1, len(fuzzerstate.prog_mmu_params)), weights)[0]
 
     if DEBUG_PRINT:
-        print(f"current layout: {fuzzerstate.effective_curr_layout}, target: {target_layout}")
+        print(f"current layout: {fuzzerstate.effective_curr_layout}, target: {target_layout}, taint_source: {target_layout in fuzzerstate.taint_source_layouts}")
 
     # There is one corner case, if the target layout has the same base page as a layout which has the same 
     # virtual memory base address as us, we will not tarp, so we should jump to the new layout after setting satp
@@ -482,6 +483,11 @@ def gen_satp_write(fuzzerstate, curr_addr):
     old_asid                        = fuzzerstate.curr_asid
     is_from_bare                    = (fuzzerstate.target_layout == -1) or (fuzzerstate.effective_curr_layout == -1)
 
+    if fuzzerstate.target_layout not in fuzzerstate.taint_source_layouts:
+        instr_objs += clear_taints_with_random_instructions(fuzzerstate,untaint_all=True)
+        assert fuzzerstate.effective_curr_layout in fuzzerstate.taint_source_layouts or len(instr_objs) == 0
+        curr_addr += 4*len(instr_objs)
+
     # Set the destination of stvec if needed
     if fuzzerstate.privilegestate.privstate == PrivilegeStateEnum.SUPERVISOR and fuzzerstate.stvec_satp_op_coordinates != (None, None):
         if DEBUG_PRINT: print(f"{hex(curr_addr+SPIKE_STARTADDR)}: In supervisor mode, going to layout {fuzzerstate.target_layout}")
@@ -505,14 +511,15 @@ def gen_satp_write(fuzzerstate, curr_addr):
         fuzzerstate.instr_objs_seq[bb_id][instr_id+1].imm   = addi_imm
         fuzzerstate.stvec_satp_op_coordinates = (None, None)
 
-    if DEBUG_PRINT: 
-        print(f"{hex(curr_addr+SPIKE_STARTADDR)}: going to layout {fuzzerstate.target_layout}, base: {hex(base_page_addr)}")
 
     # Generate the register which will hold the SATP value
     if fuzzerstate.target_layout != -1:
         satp_val, new_asid = gen_satp_val(fuzzerstate, fuzzerstate.target_layout, base_page_addr)
     else:
         satp_val, new_asid = 0, 0
+
+    if DEBUG_PRINT: 
+        print(f"{hex(curr_addr+SPIKE_STARTADDR)}: going to layout {fuzzerstate.target_layout}, base: {hex(base_page_addr)}, satp: {hex(satp_val)}")
 
     if fuzzerstate.is_design_64bit:
         satp_val_reg, tmp = fuzzerstate.intregpickstate.pick_int_inputregs_nonzero(2)

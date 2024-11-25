@@ -1,5 +1,5 @@
 import os
-from params.fuzzparams import USE_MMU, INSERT_SPECTRE_GADGETS, TAINT_NONTAKEN_BRANCH_IMM
+from params.fuzzparams import USE_MMU, TAINT_NONTAKEN_BRANCH_IMM
 from params.runparams_default import *
 from params.env_helperfuncs import get_env_int, get_env_bool
 # Ensure Cascade environment is sourced
@@ -82,7 +82,7 @@ if SKIP_RTL:
 
 # Ensure specific assertions
 assert not (USE_MMU and INSERT_REGDUMPS), "Regdumps are not supported when MMU is enabled."
-assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not supported when spectre gadgets enabled."
+# assert not (INSERT_SPECTRE_GADGETS and INSERT_REGDUMPS), "Regdumps are not supported when spectre gadgets enabled."
 assert not (TAINT_NONTAKEN_BRANCH_IMM and INSERT_REGDUMPS), "Enabling TAINT_NONTAKEN_BRANCH_IMM might render INSERT_REGDUMPS useless as pc might get tainted if non-taken branch is predicted taken."
 assert not (INSERT_REGDUMPS and CHECK_PC_SPIKE_AGAIN), f"Cannot check pc trace from spike when INSERT_REGDUMPS is enabled."
 assert not (INSERT_FENCE and not INSERT_REGDUMPS), f"INSERT_REGDUMPS must be enabled."

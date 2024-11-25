@@ -272,6 +272,8 @@ class MemoryView:
         if DO_ASSERT:
             assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
             assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
+            assert addr&PAGE_ALIGNMENT_MASK in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict or va_layout == -1, f"Memory at {hex(addr)} not mapped with layout {va_layout}"
+            assert priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have read permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
         val = 0
         for i in range(n_bytes):
             assert addr+i in self.data, f"Read request from invalid address {hex(addr+i)}."
@@ -288,6 +290,9 @@ class MemoryView:
         if DO_ASSERT:
             assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
             assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
+            assert addr&PAGE_ALIGNMENT_MASK in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict or va_layout == -1, f"Memory at {hex(addr)} not mapped with layout {va_layout}"
+            assert priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have read permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
+        
         val_t0 = 0
         for i in range(n_bytes):
             assert addr+i in self.data_t0, f"Taint read request from invalid address {hex(addr+i)}."
@@ -296,6 +301,9 @@ class MemoryView:
             val_t0 |= (b << (i*8))
         if PRINT_MEM_LOADS_T0:
             print(f"TAINT: Reading {n_bytes} bytes {hex(val_t0)} from {hex(addr)}")
+        if DO_ASSERT:
+            assert not USE_MMU or va_layout == -1 or priv_level in self.fuzzerstate.taint_source_privs or val_t0 == 0, f"Write from unauthorized privilege: {priv_level.name}, allowed are {self.fuzzerstate.taint_source_privs}"
+            assert not USE_MMU or va_layout == -1  or va_layout in self.fuzzerstate.taint_source_layouts or val_t0 == 0, f"Write from unmapped layout: {va_layout}, allowed are {self.fuzzerstate.taint_source_layouts}"
         return val_t0
 
     def write(self, addr, val, n_bytes, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
@@ -304,6 +312,9 @@ class MemoryView:
         if DO_ASSERT:
             assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
             assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
+            assert addr&PAGE_ALIGNMENT_MASK in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict or va_layout == -1, f"Memory at {hex(addr)} not mapped with layout {va_layout}"
+            assert priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have read permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
+
         if PRINT_MEM_STORES: 
             print(f"VAL: Writing {n_bytes} bytes {hex(val)} to {hex(addr)}")
         for i in range(n_bytes):
@@ -316,16 +327,19 @@ class MemoryView:
     def write_t0(self, addr, val_t0, n_bytes, priv_level: PrivilegeStateEnum = PrivilegeStateEnum.MACHINE, va_layout: int = -1):
         if USE_MMU:
             addr = virt2phys(addr, priv_level, va_layout, self.fuzzerstate,absolute_addr=False)
-
         if DO_ASSERT:
             assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
             assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
+            assert addr&PAGE_ALIGNMENT_MASK in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict or va_layout == -1, f"Memory at {hex(addr)} not mapped with layout {va_layout}"
+            assert priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have read permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
+
         if PRINT_MEM_STORES_T0: 
             print(f"TAINT: Writing {n_bytes} bytes {hex(val_t0)} to {hex(addr)}")
         for i in range(n_bytes):
             b = (val_t0&(0xFF<<(i*8)))>>(i*8)
             # print(f"Writing to {hex(addr+i)}: {hex(b)}")
             self.data_t0[addr+i] = b # little endian
+
 
 
     def set_initial_register_values(self,fuzzerstate, start_addr):

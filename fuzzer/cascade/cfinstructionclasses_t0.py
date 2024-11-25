@@ -144,7 +144,7 @@ class RDInstruction_t0(CFInstruction_t0):
             if self.fuzzerstate.intregpickstate.regs[self.rd].fsm_state !=  IntRegIndivState.FREE:
                 self.rd_unreliable = True
         if DO_ASSERT:
-            assert res_t0 == 0 or self.priv_level in self.fuzzerstate.taint_source_privs or self.iscontext, f"{self.get_str()}: Taint detected in forbidden privelege: allowed are {[p.name for p in self.fuzzerstate.taint_source_privs]}. Taint is {hex(res_t0)}"
+            assert res_t0 == 0 or self.iscontext or (self.priv_level in self.fuzzerstate.taint_source_privs and self.va_layout in self.fuzzerstate.taint_source_layouts), f"{self.get_str()}: Taint detected in forbidden privelege or layout: allowed are {[p.name for p in self.fuzzerstate.taint_source_privs]} in layouts {self.fuzzerstate.taint_source_layouts}. Taint is {hex(res_t0)}"
         self.writeback_trace["in-situ" if is_spike_resolution else "final"] = (res, res_t0)
         if not is_spike_resolution and ASSERT_WRITEBACK_TRACE:
             self.assert_writeback_trace()
@@ -684,8 +684,10 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += (2 if self.iscompressed else 4)
+
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         addr = INSTR_FUNCS["addi"](rs1_val,self.imm, self.fuzzerstate.is_design_64bit)
+
         try:
             res = self.fuzzerstate.memview.read(addr,self.n_bytes, self.priv_level, self.va_layout)
         except Exception as e:
@@ -877,7 +879,7 @@ class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
             self.execute_t0(res,is_spike_resolution)
         self.fuzzerstate.csrfile.regs[self.csr_id].set_val(res)
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(csr_val)
-
+        
         if USE_MMU and is_satp_smode:
             # The SATP write is followed by an SFENCE.VMA, which causes the page fault.
             self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT)

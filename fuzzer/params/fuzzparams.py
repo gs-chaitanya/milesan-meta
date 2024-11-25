@@ -46,6 +46,9 @@ INIT_MIE = False
 FILL_MEM_WITH_DEAD_CODE = True
 # print("USE_MMU is enabled. Enabling FILL_MEM_WITH_DEAD_CODE.")
 NUM_MAX_N_INSTRS = get_env_int("NUM_MAX_N_INSTRS",NUM_MAX_N_INSTRS_DEFAULT)
+MAX_N_TAINT_SOURCE_LAYOUTS = get_env_int("MAX_N_TAINT_SOURCE_LAYOUTS",MAX_N_TAINT_SOURCE_LAYOUTS_DEFAULT)
+MIN_N_TAINT_SOURCE_LAYOUTS = get_env_int("MIN_N_TAINT_SOURCE_LAYOUTS",MIN_N_TAINT_SOURCE_LAYOUTS_DEFAULT)
+
 
 if USE_MMU:
     NUM_MIN_FREE_INTREGS = 3 # 3, we need at least 2 free regs which are not 0
@@ -280,9 +283,11 @@ LOG2_MEMSIZE_LOWERBOUND = 17
 P_TWO_TAINT_SOURCE_PRIVS = 0
 P_TWO_TAINT_SINK_PRIVS = 0
 
-# Abort fuzzing run if the computed program does not execute in taint sink privilege.
+# Abort fuzzing run if the computed program does not execute in taint sink and taint source privileges.
 ASSERT_EXEC_IN_TAINT_SINK_PRIV = True
 ASSERT_EXEC_IN_TAINT_SRC_PRIV = True
+# Abort fuzzing run if it does not execute in taint source layout.
+ASSERT_EXEC_IN_TAINT_SRC_LAYOUT = True
 
 # Ignore exception types to e.g. only fuzz for leakage and ignore architectural bugs that trigger timeouts or value mismatches.
 IGNORE_RTL_TIMEOUT = False
@@ -293,8 +298,6 @@ IGNORE_SPIKE_MISMATCH = False
 
 # Use the uninstrumented design for fuzzing/reducing. This helps checking if theres a translation bug in yosys.
 USE_VANILLA = False
-
-INSERT_SPECTRE_GADGETS = False
 
 # The tanh saturates, so that we don't neglect registers that have only few bits tainted when there are regs that have much more bits tainted
 USE_TAINT_TANH = True

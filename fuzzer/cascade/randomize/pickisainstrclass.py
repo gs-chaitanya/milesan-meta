@@ -160,8 +160,11 @@ def _get_isainstrclass_filtered_weights(fuzzerstate, curr_alloc_cursor):
     #     ret_dict[ISAInstrClass.MEM] = 0
     if fuzzerstate.privilegestate.privstate not in fuzzerstate.taint_source_privs and not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
         ret_dict[ISAInstrClass.MEM] = 0
-    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and fuzzerstate.effective_curr_layout in fuzzerstate.taint_source_layouts and not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
         ret_dict[ISAInstrClass.MEM] = 0
+    # if fuzzerstate.effective_curr_layout in fuzzerstate.taint_source_layouts and not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR):
+    #     ret_dict[ISAInstrClass.MEM] = 0
+
 
     # Normalize the weights
     if DO_ASSERT:
@@ -230,7 +233,7 @@ def _filter_sensitive_instr_weights(fuzzerstate, filtered_weights: list):
 # When there's too much taint, we untaint some register(s).
 # When there's only little taint, we add taint with loads or immediates.
 def _filter_taint(fuzzerstate, filtered_weights: list):
-    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and not DISABLE_COMPUTATION_ON_TAINT:
+    if fuzzerstate.privilegestate.privstate in fuzzerstate.taint_source_privs and fuzzerstate.effective_curr_layout in fuzzerstate.taint_source_layouts and not DISABLE_COMPUTATION_ON_TAINT:
         n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
         if n_free_untainted_regs < NUM_MIN_UNTAINTED_INTREGS:
             filtered_weights = dict.fromkeys(filtered_weights,0)
