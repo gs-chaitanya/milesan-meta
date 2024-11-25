@@ -1,5 +1,5 @@
 from params.runparams import DO_ASSERT, INSERT_FENCE, INSERT_REGDUMPS
-from params.fuzzparams import USE_MMU, MAX_NUM_PICKABLE_REGS
+from params.fuzzparams import USE_MMU, MAX_NUM_PICKABLE_REGS, MAX_N_TAINT_SOURCE_LAYOUTS
 import enum
 
 
@@ -324,9 +324,7 @@ class IntRegIndivState(IntEnum):
     PAGE_ADDR          = auto()
     PAGE_T0_ADDR       = auto()
 BASIC_BLOCK_MIN_SPACE = 24
-LI_DOUBLEWORD_SPACE = 7*4 # 7 instructions to prepare one virtual address.
-# SPECTRE_GADGET_MIN_SPACE = 2*LI_DOUBLEWORD_SPACE + 4*4 # 4 speculative instructions.
 BASIC_BLOCK_MIN_SPACE += BASIC_BLOCK_MIN_SPACE * int(USE_MMU)
 BASIC_BLOCK_MIN_SPACE += BASIC_BLOCK_MIN_SPACE * int(INSERT_REGDUMPS)
 BASIC_BLOCK_MIN_SPACE += BASIC_BLOCK_MIN_SPACE * int(INSERT_FENCE)
-# BASIC_BLOCK_MIN_SPACE += MAX_NUM_PICKABLE_REGS * 4 # Clearing registers taints when switching context
+# BASIC_BLOCK_MIN_SPACE += MAX_NUM_PICKABLE_REGS * 4 * (MAX_N_TAINT_SOURCE_LAYOUTS > 0) # Clearing registers taints when switching layout. Do we need this?
