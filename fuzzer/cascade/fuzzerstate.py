@@ -32,7 +32,7 @@ import itertools
 import shutil
 import glob
 from cascade.randomize.createspecinstr import create_speculative_instr
-
+import pickle
 class FuzzerState:
     # @param randseed for identification purposes only.
     def __init__(self, design_base_addr: int, design_name: str, memsize: int, randseed: int, nmax_bbs: int, authorize_privileges: bool):
@@ -126,7 +126,8 @@ class FuzzerState:
                 self.ptesize = 4
             self.get_design_mmu(design_name)
             self.select_prog_mmu_params()
-
+        else:
+            self.taint_source_layouts = range(-1,0) # effective layout is always -1
         if not USE_MODELSIM:
             self.simulator = SimulatorEnum.VERILATOR
         else:
@@ -748,3 +749,8 @@ class FuzzerState:
             else:
                 # print(f"Addr {hex(addr)} occupied.")
                 addr += 4
+
+    def pickle(self, prefixname, test_identifier):
+        pickle_path = os.path.join(self.tmp_dir, f"{prefixname}{test_identifier}.fuzzerstate.pickle")
+        with open(pickle_path,"wb") as f:
+            pickle.dump(self, f)

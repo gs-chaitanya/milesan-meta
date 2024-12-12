@@ -414,13 +414,17 @@ class MemoryView:
                 # 8 bytes of memory response not appended to frist 8 bytes to form 16 byte CL for taints, always first 
                 # 8 bytes used twice??
                 # f.write("0 {:x} {:x} ".format(addr + 8 * int("cva6" in self.fuzzerstate.design_name), n_bytes))
-                f.write("0 {:x} {:x} ".format(addr, n_bytes))
+                s = "0 {:x} {:x} ".format(addr, n_bytes)
+                is_zero = True
                 for i in range(n_bytes):
                     # Little endian.
                     b = self.data_t0[addr+i] if addr+i in self.data_t0 else 0
-                    f.write("{:02x}".format(b))
+                    if b != 0:
+                        is_zero = False
+                    s += "{:02x}".format(b)
                     dumped_addresses += [addr+i]
-                f.write("\n")
+                if not is_zero:
+                    f.write(s + "\n")
 
 
     def print(self):

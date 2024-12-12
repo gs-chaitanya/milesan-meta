@@ -18,7 +18,7 @@ from cascade.contextreplay import SavedContext, gen_context_setter
 from cascade.gen_ctxt_final_block import *
 from cascade.privilegestate import PrivilegeStateEnum
 from cascade.genelf import gen_elf_from_bbs
-from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS
+from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, PICKLE_FUZZERSTATE
 from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF, RELOCATOR_REGISTER_ID, IGNORE_TAINT_MISMATCH, USE_MMU, USE_COMPRESSED, FILL_MEM_WITH_DEAD_CODE
 from cascade.registers import ABI_INAMES
 from rv.asmutil import li_into_reg, to_unsigned
@@ -371,11 +371,9 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
         # storenumbytes is a list which, for each store operation, returns the number of bytes stored
         test_fuzzerstate, ctxt_exit_layout, ctxt_exit_prv  = _save_ctx_and_jump_to_pillar_specific_instr(test_fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider)
         spikereduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "spikereduce_reducedstart", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", SPIKE_STARTADDR)
-        rtlreduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "rtlreduce_reducestart", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", test_fuzzerstate.design_base_addr)
     else:
         ctxt_exit_layout, ctxt_exit_prv = -1, PrivilegeStateEnum.MACHINE
         spikereduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "spikereduce", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", SPIKE_STARTADDR)
-        rtlreduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "rtlreduce", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", test_fuzzerstate.design_base_addr)
 
 
     ###
@@ -426,6 +424,15 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
     # Verify that the modifed program still has a valid taint propagation. 
     test_fuzzerstate.verify_program()
     test_fuzzerstate.reset_states()
+
+    test_fuzzerstate.expected_regvals =  (finalintregvals_spikeresol[1:], finalfloatregvals_spikeresol, rd_regdump_reqs, rd_regvals)
+    if index_first_bb_to_consider > 1 or index_first_instr_to_consider > 0:
+        # First, we must record the context in the end of the last removed bb and after the correct number of instructions in that bb
+        # storenumbytes is a list which, for each store operation, returns the number of bytes stored
+        rtlreduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "rtlreduce_reducestart", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", test_fuzzerstate.design_base_addr)
+    else:
+        rtlreduce_elfpath = gen_elf_from_bbs(test_fuzzerstate, False, "rtlreduce", f"{test_fuzzerstate.instance_to_str()}_{max_bb_id_to_consider}_{max_instr_id_except_cf}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", test_fuzzerstate.design_base_addr)
+
     return test_fuzzerstate, rtlreduce_elfpath, (finalintregvals_spikeresol[1:], finalfloatregvals_spikeresol, rd_regdump_reqs, rd_regvals), numinstrs
 
 # This module resolves a mismatch between design and simulation by finding the first basic block that causes a mismatch.
