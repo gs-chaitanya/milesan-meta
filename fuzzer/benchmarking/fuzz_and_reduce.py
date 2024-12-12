@@ -6,7 +6,9 @@ import os
 import json
 from time import gmtime, strftime
 import argparse 
+import git
 
+SHA = git.Repo(search_parent_directories=True).head.object.hexsha
 TIMEOUT_REDUCE=7200*2
 FUZZ = True
 REDUCE_TAINT_MISMATCH = False
@@ -36,18 +38,24 @@ if __name__ == '__main__':
     assert not "TRACE_EN" in env or env["TRACE_EN"] == "0", f"This is a bad idea."
     cmd = []
     for cfg in cfgs:
+        cfg_cpy = cfg.copy()
+        cfg_cpy.pop("DUTS")
+        env = os.environ.copy()
+        env.update(cfg_cpy)                
+        datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["NAME"])
+        env["CASCADE_DATADIR"] = datadir
+        os.makedirs(datadir, exist_ok=True)
+        metadir = os.path.join(datadir,"meta")
+        os.makedirs(metadir, exist_ok=True)
         print(f"Fuzzing {cfg}")
+        with open(os.path.join(metadir,"config.json"), "w") as f:
+            json.dump(cfg,f)
+        with open(os.path.join(metadir,"env.sh"), "w") as f:
+            f.write('\n'.join([f"export {varname}={varval}" for varname, varval in env.items()]))
+        with open(os.path.join(metadir,"commithash.txt"), "w") as f:
+            f.write(SHA)
         for design_name in cfg["DUTS"]: 
-            cfg_cpy = cfg.copy()
-            cfg_cpy.pop("DUTS")
-            env = os.environ.copy()
-            env.update(cfg_cpy)                
-            datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["NAME"])
-            env["CASCADE_DATADIR"] = datadir
-            os.makedirs(datadir, exist_ok=True)
             if not args.reduce_only:
-                with open(os.path.join(datadir,"config.json"), "w") as f:
-                    json.dump(cfg,f)
                 try:
                     cmd = [
                         "python",
