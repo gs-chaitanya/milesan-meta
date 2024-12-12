@@ -9,7 +9,7 @@ import os
 ##
 # MMU
 ##
-USE_MMU_DEFAULT = False
+USE_MMU_DEFAULT = True
 
 ##
 # RVC
