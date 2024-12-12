@@ -19,7 +19,7 @@ endif
 
 FUZZCOREID ?= 0
 VARIANT_ID ?=
-VSIM = /usr/local/questa-2023-04/questasim/linux_x86_64/vsim
+VSIM ?= /usr/local/questa-2023-04/questasim/linux_x86_64/vsim
 MODELSIM_TIMEOUT ?= 600
 MODELSIM_TIMEOUT_TRACE_EN ?= 6000
 MODELSIM_SV_VANILLA = generated/out/vanilla.sv dv/sv/tb_top.sv src/$(TOP_SOC).sv $(CASCADE_DESIGN_PROCESSING_ROOT)/common/src/sram_mem.sv

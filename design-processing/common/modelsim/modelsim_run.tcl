@@ -42,9 +42,6 @@ if { [string equal $TRACE trace_fst] } {
     log -r /*
 } elseif { [string equal $TRACE trace] } {
     vcd file $TRACEFILE
-    # vcd add -r i_dut/*
-    # vcd add -r i_dut/i_ariane_mem_top/i_ariane/i_cva6/*
-    # vcd add -r *
     vcd add -r $VCD_REGEX
 }
 
