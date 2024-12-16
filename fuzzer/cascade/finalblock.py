@@ -9,9 +9,9 @@ from params.fuzzparams import USE_MMU, DUMP_MCYCLES
 from rv.csrids import CSR_IDS
 from common.designcfgs import is_design_32bit, get_design_stop_sig_addr, get_design_reg_dump_addr, design_has_float_support, get_design_fpreg_dump_addr
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, RPROD_MASK_REGISTER_ID
-from cascade.privilegestate import PrivilegeStateEnum
+from milesan.privilegestate import PrivilegeStateEnum
 from rv.asmutil import li_into_reg
-from cascade.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, IntStoreInstruction, FloatStoreInstruction, JALInstruction, SpecialInstruction, CSRRegInstruction, R12DInstruction, CSRImmInstruction
+from milesan.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, IntStoreInstruction, FloatStoreInstruction, JALInstruction, SpecialInstruction, CSRRegInstruction, R12DInstruction, CSRImmInstruction
 
 def get_finalblock_max_size():
     return (10 + 2*MAX_NUM_PICKABLE_REGS + 2*MAX_NUM_PICKABLE_FLOATING_REGS - 1) * 4 + 10*4 

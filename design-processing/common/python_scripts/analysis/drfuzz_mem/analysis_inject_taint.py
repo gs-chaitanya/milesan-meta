@@ -23,8 +23,8 @@ IMMI_BIT = 10
 IMMI_MASK = 0xfff
 OVERTAINT_TH = 0.8
 # COV_DUMPS = "/mnt/cov_dump/"    
-COV_DUMPS = "/cascade-data/cov_dump/"
-PLOT_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots"
+COV_DUMPS = "/milesan-data/cov_dump/"
+PLOT_PATH = "/mnt/milesan-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots"
 #%% reader function to parallelize reading
 def read_json(p):
     with open(p, 'r') as f:

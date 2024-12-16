@@ -4,8 +4,8 @@ import time
 import threading
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
-from cascade.randomize.pickbytecodetaints import MAX_N_INJECT_PER_BB
-from cascade.util import CFInstructionClass
+from milesan.randomize.pickbytecodetaints import MAX_N_INJECT_PER_BB
+from milesan.util import CFInstructionClass
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 total_finished_tests = 0

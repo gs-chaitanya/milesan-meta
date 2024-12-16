@@ -4,7 +4,7 @@
 
 # This module is responsible for blacklisting addresses, aka strong allocations.
 
-from cascade.cfinstructionclasses import BranchInstruction, PlaceholderProducerInstr0, PlaceholderProducerInstr1, PlaceholderConsumerInstr
+from milesan.cfinstructionclasses import BranchInstruction, PlaceholderProducerInstr0, PlaceholderProducerInstr1, PlaceholderConsumerInstr
 
 # Blacklisting is typically used for forbidding loads from loading instructions that will change between spike resolution and RTL sim.
 

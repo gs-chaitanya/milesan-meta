@@ -2,7 +2,7 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from cascade.util import ISAInstrClass
+from milesan.util import ISAInstrClass
 from analyzeelfs.dependencies import INTREG_ABINAMES, FPREG_ABINAMES
 
 ##

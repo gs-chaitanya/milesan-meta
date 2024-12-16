@@ -8,9 +8,9 @@ from params.runparams import DO_ASSERT, PATH_TO_TMP, PICKLE_FUZZERSTATE
 from params.fuzzparams import USE_MMU, USE_COMPRESSED, FILL_MEM_WITH_DEAD_CODE
 from common.bytestoelf import gen_elf
 from common.spike import SPIKE_STARTADDR
-from cascade.finalblock import finalblock_spike_resolution
-from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
-from cascade.cfinstructionclasses import SpeculativeInstructionEncapsulator
+from milesan.finalblock import finalblock_spike_resolution
+from milesan.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
+from milesan.cfinstructionclasses import SpeculativeInstructionEncapsulator
 from collections import defaultdict
 from copy import copy
 import os

@@ -111,7 +111,7 @@ for design_name in design_names:
 cached_configs = defaultdict(dict)
 cached_start_addrs = defaultdict(dict)
 
-def get_design_cascade_path(design_name):
+def get_design_milesan_path(design_name):
     # 1. Find the designs folder.
     designs_folder = os.getenv("MILESAN_DESIGN_PROCESSING_ROOT")
     if not designs_folder:
@@ -130,21 +130,21 @@ def get_design_cascade_path(design_name):
 # @return the design config of the relevant repo.
 def get_design_cfg(design_name):
     if not cached_configs[design_name]:
-        with open(os.path.join(get_design_cascade_path(design_name), "meta", "cfg.json"), "r") as f:
+        with open(os.path.join(get_design_milesan_path(design_name), "meta", "cfg.json"), "r") as f:
             cached_configs[design_name] = json.load(f)
     return cached_configs[design_name]
 
 # For Verilator
 # @param design_name: must be one of the keys of the design_repos.json dict.
 # @param extended_target a stringified pair (instrumentation_method, trace_type). For instance vanilla_trace 
-# @return the HSB path relative to the given cascade dir.
+# @return the HSB path relative to the given milesan dir.
 def get_design_hsb_path(design_name, extended_target):
     toplevel_name = get_design_cfg(design_name)["toplevel"]
     return "build/run_{}_0.1/default-verilator/V{}".format(extended_target, toplevel_name)
 # For Modelsim. Not used.
 # @param design_name: must be one of the keys of the design_repos.json dict.
 # @param extended_target a stringified pair (instrumentation_method, trace_type). For instance vanilla_trace 
-# @return the worklib path relative to the given cascade dir.
+# @return the worklib path relative to the given milesan dir.
 def get_design_worklib_path(extended_target):
     return "modelsim/work_{}".format(extended_target)
 
@@ -154,27 +154,27 @@ def get_design_worklib_path(extended_target):
 
 # First-stage worker, called only once per design.
 def pre_instrumentation_worker(design_name):
-    design_cascade_path = get_design_cascade_path(design_name)
-    cmdline = ["make", "-C", design_cascade_path, "before_instrumentation"]
+    design_milesan_path = get_design_milesan_path(design_name)
+    cmdline = ["make", "-C", design_milesan_path, "before_instrumentation"]
     subprocess.check_call(cmdline)
 
 # Second-stage worker, called once per (design, instrumentation_type) pair.
 # @param instrumentation_method: "vanilla"
 def instrumentation_worker(design_name, instrumentation_method):
-    design_cascade_path = get_design_cascade_path(design_name)
-    cmdline = ["make", "-C", design_cascade_path, "generated/out/{}.sv".format(instrumentation_method)]
+    design_milesan_path = get_design_milesan_path(design_name)
+    cmdline = ["make", "-C", design_milesan_path, "generated/out/{}.sv".format(instrumentation_method)]
     subprocess.check_call(cmdline)
 
 # Last-stage worker, called for each (design, extended_target) pair.
 # @param extended_target a stringified pair (instrumentation_method, trace_type). For instance vanilla_trace 
 def synthesis_worker_verilator(design_name, extended_target):
-    design_cascade_path = get_design_cascade_path(design_name)
-    cmdline = ["make", "-C", design_cascade_path, get_design_hsb_path(design_name, extended_target)]
+    design_milesan_path = get_design_milesan_path(design_name)
+    cmdline = ["make", "-C", design_milesan_path, get_design_hsb_path(design_name, extended_target)]
     subprocess.check_call(cmdline)
 # @param extended_target a stringified pair (instrumentation_method, trace_type). For instance vanilla_trace 
 def synthesis_worker_modelsim(design_name, extended_target):
-    design_cascade_path = get_design_cascade_path(design_name)
-    cmdline = ["make", "-C", design_cascade_path, f"build_{extended_target}_modelsim"]
+    design_milesan_path = get_design_milesan_path(design_name)
+    cmdline = ["make", "-C", design_milesan_path, f"build_{extended_target}_modelsim"]
     subprocess.check_call(cmdline)
 
 

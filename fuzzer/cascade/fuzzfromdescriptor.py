@@ -9,10 +9,10 @@ from common.designcfgs import get_design_boot_addr
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
 from params.fuzzparams import LOG2_MEMSIZE_LOWERBOUND, LOG2_MEMSIZE_UPPERBOUND, NUM_MIN_BBS_LOWERBOUND, NUM_MAX_BBS_UPPERBOUND, NUM_BBS
 from params.fuzzparams import PROBA_AUTHORIZE_PRIVILEGES, TAINT_EN
-from cascade.basicblock import gen_basicblocks
-from cascade.fuzzsim import SimulatorEnum, runtest_simulator
-from cascade.genelf import gen_elf_from_bbs
-from cascade.spikeresolution import spike_resolution
+from milesan.basicblock import gen_basicblocks
+from milesan.fuzzsim import SimulatorEnum, runtest_simulator
+from milesan.genelf import gen_elf_from_bbs
+from milesan.spikeresolution import spike_resolution
 import numpy as np
 import os
 import random
@@ -31,7 +31,7 @@ def gen_new_test_instance(design_name: str, randseed: int, can_authorize_privile
 # The main function for a single fuzzer run. It creates a new fuzzer state, populates it with basic blocks, and then runs the spike resolution. It does not run the RTL simulation.
 # @return (fuzzerstate, rtl_elfpath, expected_regvals: list) where expected_regval is a list of num_pickable_regs-1 expected reg values (we ignore x0)
 def gen_fuzzerstate_elf_expectedvals(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, check_pc_spike_again: bool):
-    from cascade.fuzzerstate import FuzzerState
+    from milesan.fuzzerstate import FuzzerState
     if DO_ASSERT:
         assert nmax_bbs is None or nmax_bbs > 0
 
@@ -64,7 +64,7 @@ def gen_fuzzerstate_elf_flipped_bits(fuzzerstate):
 
 
 def gen_fuzzerstate_elf_expectedvals_interm(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, check_pc_spike_again: bool, en_taint: bool = TAINT_EN):
-    from cascade.fuzzerstate import FuzzerState
+    from milesan.fuzzerstate import FuzzerState
     if DO_ASSERT:
         assert nmax_bbs is None or nmax_bbs > 0
 

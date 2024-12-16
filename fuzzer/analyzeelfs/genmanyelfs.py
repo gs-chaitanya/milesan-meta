@@ -6,7 +6,7 @@
 
 from common.profiledesign import profile_get_medeleg_mask
 from common.spike import calibrate_spikespeed
-from cascade.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
+from milesan.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 
 import multiprocessing as mp
 import os

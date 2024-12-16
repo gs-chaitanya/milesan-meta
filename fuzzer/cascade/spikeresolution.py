@@ -7,12 +7,12 @@ from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, USE_
 from common.designcfgs import get_design_march_flags, get_design_march_flags_nocompressed
 from common.spike import run_trace_all_pcs, run_trace_regs_at_pc_locs, SPIKE_STARTADDR, FPREG_ABINAMES
 
-from cascade.cfinstructionclasses import *
-from cascade.genelf import gen_elf_from_bbs
-from cascade.util import IntRegIndivState
+from milesan.cfinstructionclasses import *
+from milesan.genelf import gen_elf_from_bbs
+from milesan.util import IntRegIndivState
 
-from cascade.mmu_utils import phys2virt
-from cascade.privilegestate import PrivilegeStateEnum
+from milesan.mmu_utils import phys2virt
+from milesan.privilegestate import PrivilegeStateEnum
 
 import os
 import random
@@ -460,7 +460,7 @@ def spike_resolution_return_interm(fuzzerstate, check_pc_spike_again: bool = Fal
     # len(flat_instr_objs)+1: the +1 is to reach the final basic block and thereby overwrite the potential destination register of a jal/jalr
     regvals, (finalintregvals_spikeresol, finalfpuregvals_spikeresol) = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags(design_name), SPIKE_STARTADDR, regdump_reqs, True, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 
-    # retrieves the rd stream throughout execution to compare to cascade sim
+    # retrieves the rd stream throughout execution to compare to milesan sim
     rd_regdump_reqs = gen_regdump_reqs_all_rds(fuzzerstate)
     rd_regvals = run_trace_regs_at_pc_locs(fuzzerstate.instance_to_str(), spike_resolution_elfpath, get_design_march_flags(design_name), SPIKE_STARTADDR, rd_regdump_reqs, False, fuzzerstate.final_bb_base_addr+SPIKE_STARTADDR, fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud)
 

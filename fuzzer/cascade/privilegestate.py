@@ -1,6 +1,6 @@
 from params.runparams import DO_ASSERT
 from params.fuzzparams import USE_MMU, ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SINK_PRIVS, ALLOW_LOAD_PAGE_FAULT_IN_TAINT_SOURCE_PRIVS
-from cascade.util import ExceptionCauseVal, IntRegIndivState
+from milesan.util import ExceptionCauseVal, IntRegIndivState
 from functools import reduce
 from enum import IntEnum
 ONLY_ALLOW_DELEGATED_EXCEPTIONS = False

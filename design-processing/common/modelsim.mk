@@ -15,7 +15,7 @@ endif
 # Requires the env variables
 # - MODELSIM_PATH_TO_BUILD_TCL: path to the ModelSim build TCL script
 # - TOP_SOC: the top SoC name, for ibex_tiny_soc
-# - MILESAN_DIR: the path of the design's cascade/ directory
+# - MILESAN_DIR: the path of the design's milesan/ directory
 
 FUZZCOREID ?= 0
 VARIANT_ID ?=

@@ -7,7 +7,7 @@
 from params.runparams import PATH_TO_TMP
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
-from cascade.fuzzfromdescriptor import run_rtl
+from milesan.fuzzfromdescriptor import run_rtl
 from top.fuzzdesign import gen_new_test_instance
 
 import multiprocessing as mp

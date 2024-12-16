@@ -6,7 +6,7 @@
 
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
-from cascade.fuzzfromdescriptor import gen_new_test_instance, fuzz_single_from_descriptor
+from milesan.fuzzfromdescriptor import gen_new_test_instance, fuzz_single_from_descriptor
 
 import time
 import threading

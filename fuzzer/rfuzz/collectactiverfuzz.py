@@ -6,7 +6,7 @@
 # We call this "Active RFUZZ" as opposed to running Cascade and collecting the multiplexer select coverage.
 
 from common.threads import capture_process_output
-from common.designcfgs import get_design_cascade_path
+from common.designcfgs import get_design_milesan_path
 from params.runparams import PATH_TO_TMP
 
 import json
@@ -14,7 +14,7 @@ import os
 
 def collect_active_coverage_rfuzz(design_name: str, timeout_seconds: int):
     # Run the active RFUZZ on the required design
-    cmd = ['make', '-C', f"{get_design_cascade_path(design_name)}", 'rerun_drfuzz_notrace']
+    cmd = ['make', '-C', f"{get_design_milesan_path(design_name)}", 'rerun_drfuzz_notrace']
 
     lines = capture_process_output(cmd, timeout_seconds)
 

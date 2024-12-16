@@ -11,29 +11,29 @@ from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RA
 from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS, ALLOW_JALR_IN_NEUTRAL_PRIVS, ALLOW_BRANCH_IN_NEUTRAL_PRIVS
 from params.fuzzparams import FILL_MEM_WITH_DEAD_CODE, NUM_MAX_N_INSTRS
 from params.runparams import INSERT_REGDUMPS, INSERT_FENCE, GET_DATA, DEBUG_PRINT
-from cascade.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memfsm_instrobjs
-from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
-from cascade.randomize.pickisainstrclass import gen_next_isainstrclass, ISAInstrClass
-from cascade.randomize.pickmemop import get_alignment_bits, is_instrstr_load
-from cascade.randomize.pickfpuop import gen_fpufsm_instrs
-from cascade.randomize.pickexceptionop import gen_exception_instr, gen_tvecfill_instr, gen_epcfill_instr, gen_medeleg_instr, gen_ppfill_instrs
-from cascade.randomize.pickrandomcsrop import gen_random_csr_op
-from cascade.randomize.pickprivilegedescentop import gen_priv_descent_instr
-from cascade.randomize.forbidden_random_value import is_forbidden_random_value
-from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
-from cascade.randomize.createspeculativeinstr import create_speculative_instrs
-from cascade.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator, SpeculativeInstructionEncapsulator
-from cascade.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
-from cascade.finalblock import get_finalblock_max_size,finalblock
-from cascade.initialblock import gen_initial_basic_block
-from cascade.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setter
-from cascade.privilegestate import PrivilegeStateEnum
-from cascade.toleratebugs import is_tolerate_ras1
-from cascade.mmu_utils import phys2virt
-from cascade.randomize.pickmmuop import update_mmu_fsm_rv32, update_mmu_fsm_rv64
-from cascade.mmu_utils import PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_BITS
+from milesan.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memfsm_instrobjs
+from milesan.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
+from milesan.randomize.pickisainstrclass import gen_next_isainstrclass, ISAInstrClass
+from milesan.randomize.pickmemop import get_alignment_bits, is_instrstr_load
+from milesan.randomize.pickfpuop import gen_fpufsm_instrs
+from milesan.randomize.pickexceptionop import gen_exception_instr, gen_tvecfill_instr, gen_epcfill_instr, gen_medeleg_instr, gen_ppfill_instrs
+from milesan.randomize.pickrandomcsrop import gen_random_csr_op
+from milesan.randomize.pickprivilegedescentop import gen_priv_descent_instr
+from milesan.randomize.forbidden_random_value import is_forbidden_random_value
+from milesan.randomize.pickcleartaintops import clear_taints_with_random_instructions
+from milesan.randomize.createspeculativeinstr import create_speculative_instrs
+from milesan.cfinstructionclasses import is_placeholder, JALInstruction, JALRInstruction, BranchInstruction, ExceptionInstruction, TvecWriterInstruction, EPCWriterInstruction, GenericCSRWriterInstruction, MisalignedMemInstruction, PrivilegeDescentInstruction, MstatusWriterInstruction, SimpleExceptionEncapsulator, SpeculativeInstructionEncapsulator
+from milesan.util import get_range_bits_per_instrclass, IntRegIndivState, BASIC_BLOCK_MIN_SPACE, INSTRUCTIONS_BY_ISA_CLASS, MmuState
+from milesan.finalblock import get_finalblock_max_size,finalblock
+from milesan.initialblock import gen_initial_basic_block
+from milesan.blacklist import blacklist_changing_instructions, blacklist_final_block, blacklist_context_setter
+from milesan.privilegestate import PrivilegeStateEnum
+from milesan.toleratebugs import is_tolerate_ras1
+from milesan.mmu_utils import phys2virt
+from milesan.randomize.pickmmuop import update_mmu_fsm_rv32, update_mmu_fsm_rv64
+from milesan.mmu_utils import PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_BITS
 
-from cascade.gen_ctxt_final_block import *
+from milesan.gen_ctxt_final_block import *
 
 import numpy as np
 import random

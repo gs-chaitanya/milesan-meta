@@ -4,16 +4,16 @@
 
 # This module is for debugging the context setter.
 
-from common.designcfgs import get_design_march_flags_nocompressed, get_design_boot_addr, get_design_cascade_path, get_design_march_ccflags_nocompressed
+from common.designcfgs import get_design_march_flags_nocompressed, get_design_boot_addr, get_design_milesan_path, get_design_march_ccflags_nocompressed
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES, get_spike_timeout_seconds
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES, PATH_TO_TMP
-from cascade.basicblock import gen_basicblocks
-from cascade.cfinstructionclasses import JALInstruction, RegImmInstruction
-from cascade.fuzzsim import SimulatorEnum, runtest_simulator
-from cascade.spikeresolution import gen_elf_from_bbs, gen_regdump_reqs_reduced, gen_ctx_regdump_reqs, run_trace_regs_at_pc_locs, spike_resolution, run_trace_all_pcs
-from cascade.contextreplay import SavedContext, gen_context_setter
-from cascade.privilegestate import PrivilegeStateEnum
-from cascade.reduce import _save_ctx_and_jump_to_pillar_specific_instr
+from milesan.basicblock import gen_basicblocks
+from milesan.cfinstructionclasses import JALInstruction, RegImmInstruction
+from milesan.fuzzsim import SimulatorEnum, runtest_simulator
+from milesan.spikeresolution import gen_elf_from_bbs, gen_regdump_reqs_reduced, gen_ctx_regdump_reqs, run_trace_regs_at_pc_locs, spike_resolution, run_trace_all_pcs
+from milesan.contextreplay import SavedContext, gen_context_setter
+from milesan.privilegestate import PrivilegeStateEnum
+from milesan.reduce import _save_ctx_and_jump_to_pillar_specific_instr
 
 from copy import deepcopy
 import random
@@ -239,7 +239,7 @@ def compare_parsed_traces(expected_trace: List[List[str]], actual_trace: List[Li
     print(f"Matches: {num_matches}/{num_matches + num_mismatches} -- {num_matches / (num_matches + num_mismatches) * 100}%")
 
 def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, start_bb: int, start_instr: int, end_addr: int):
-    from cascade.fuzzerstate import FuzzerState
+    from milesan.fuzzerstate import FuzzerState
     random.seed(randseed)
 
     # Generate the full program
@@ -342,8 +342,8 @@ def debug_top(memsize: int, design_name: str, randseed: int, nmax_bbs: int, auth
 # @return a list of fuzzerstate.num_pickable_regs
 # 1 (does not contain the zero register)
 def spike_resolution_debug(fuzzerstate, check_pc_spike_again: bool, start_bb: int, start_instr: int, num_interesting_instrs: int):
-    from cascade.spikeresolution import _transmit_addrs_to_producers_for_spike_resolution, gen_regdump_reqs, _feed_regdump_to_instrs, _check_pc_trace_from_spike
-    from cascade.util import IntRegIndivState
+    from milesan.spikeresolution import _transmit_addrs_to_producers_for_spike_resolution, gen_regdump_reqs, _feed_regdump_to_instrs, _check_pc_trace_from_spike
+    from milesan.util import IntRegIndivState
     import itertools
     
     design_name = fuzzerstate.design_name

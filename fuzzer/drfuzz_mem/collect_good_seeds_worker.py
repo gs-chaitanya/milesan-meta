@@ -8,11 +8,11 @@ import shutil
 import os
 import glob
 from drfuzz_mem.inject_instructions import gen_elf_and_inject_instructions
-from cascade.fuzzfromdescriptor import gen_new_test_instance
+from milesan.fuzzfromdescriptor import gen_new_test_instance
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
-from cascade.randomize.pickbytecodetaints import MAX_N_INJECT_PER_BB
-from cascade.util import CFInstructionClass
+from milesan.randomize.pickbytecodetaints import MAX_N_INJECT_PER_BB
+from milesan.util import CFInstructionClass
 from params.runparams import PATH_TO_TMP, PATH_TO_COV
 
 N_COV_PTS = 1517 # rocket

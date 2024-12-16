@@ -10,18 +10,18 @@ from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
 from rv.asmutil import li_into_reg, INSTR_FUNCS
-from cascade.util_compressed import COMPRESSED_INST_EQUIV
+from milesan.util_compressed import COMPRESSED_INST_EQUIV
 from common.designcfgs import get_design_boot_addr, is_design_32bit, get_design_stop_sig_addr, get_design_reg_dump_addr, design_has_supervisor_mode, get_design_march_flags
 from params.fuzzparams import RDEP_MASK_REGISTER_ID
 from params.runparams import DEBUG_PRINT
-from cascade.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, IntStoreInstruction, CSRImmInstruction, CSRRegInstruction, SpecialInstruction
-from cascade.cfinstructionclasses_t0 import RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction, CSRImmInstruction
-from cascade.fuzzerstate import FuzzerState
-from cascade.genelf import gen_elf_from_bbs
-from cascade.fuzzsim import runtest_verilator_forprofiling, run_rtl_and_load_regstream
-from cascade.util import INSTRUCTIONS_BY_ISA_CLASS
-from cascade.registers import MAX_32b, MAX_64b, MAX_20b, MAX_12b, ABI_INAMES
-from cascade.spikeresolution import SPIKE_STARTADDR
+from milesan.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, IntStoreInstruction, CSRImmInstruction, CSRRegInstruction, SpecialInstruction
+from milesan.cfinstructionclasses_t0 import RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction, CSRImmInstruction
+from milesan.fuzzerstate import FuzzerState
+from milesan.genelf import gen_elf_from_bbs
+from milesan.fuzzsim import runtest_verilator_forprofiling, run_rtl_and_load_regstream
+from milesan.util import INSTRUCTIONS_BY_ISA_CLASS
+from milesan.registers import MAX_32b, MAX_64b, MAX_20b, MAX_12b, ABI_INAMES
+from milesan.spikeresolution import SPIKE_STARTADDR
 ###
 # Internal functions
 ###

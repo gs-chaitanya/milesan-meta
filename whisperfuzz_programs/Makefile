@@ -6,10 +6,10 @@ RISCV_GCC_OPTS ?= $(RV_ARCH_FLAGS) -DPREALLOCATE=1 -mcmodel=medany -static -std=
 LDFLAGS = -Tlink.ld -static -nostdlib -nostartfiles -lm -lgcc
 RISCV_OBJDUMP ?= $(RISCV_PREFIX)-objdump -d
 CC = $(RISCV_PREFIX)-gcc
-CADD_0_CVA6 = /mnt/cascade-meta/whisperfuzz_programs/build/c.add_0_1_cva6.elf
-CADD_2047_CVA6 = /mnt/cascade-meta/whisperfuzz_programs/build/c.add_2047_1_cva6.elf
-CADD_0_BOOM = /mnt/cascade-meta/whisperfuzz_programs/build/c.add_0_1_boom.elf
-CADD_2047_BOOM = /mnt/cascade-meta/whisperfuzz_programs/build/c.add_2047_1_boom.elf
+CADD_0_CVA6 = /mnt/milesan-meta/whisperfuzz_programs/build/c.add_0_1_cva6.elf
+CADD_2047_CVA6 = /mnt/milesan-meta/whisperfuzz_programs/build/c.add_2047_1_cva6.elf
+CADD_0_BOOM = /mnt/milesan-meta/whisperfuzz_programs/build/c.add_0_1_boom.elf
+CADD_2047_BOOM = /mnt/milesan-meta/whisperfuzz_programs/build/c.add_2047_1_boom.elf
 
 # # Edit the rounding mode
 # build/app.elf: build/app_nobbe.elf
@@ -26,12 +26,12 @@ build:
 all: $(patsubst src%, build%, $(patsubst %.S,%.elf,$(wildcard src/*.S)))
 
 run_cva6: all
-	cd /mnt/cascade-designs/cva6-test/cascade && SIMSRAMELF=$(CADD_0_CVA6) make rerun_vanilla_notrace
-	cd /mnt/cascade-designs/cva6-test/cascade && SIMSRAMELF=$(CADD_2047_CVA6) make run_vanilla_notrace
+	cd /mnt/milesan-designs/cva6-test/milesan && SIMSRAMELF=$(CADD_0_CVA6) make rerun_vanilla_notrace
+	cd /mnt/milesan-designs/cva6-test/milesan && SIMSRAMELF=$(CADD_2047_CVA6) make run_vanilla_notrace
 
 run_boom: all
-	cd /mnt/cascade-designs/cascade-chipyard-rvc/cascade-boom && SIMSRAMELF=$(CADD_0_BOOM) TRACFILE=$(CADD_0_BOOM).trace.vcd make rerun_vanilla_notrace
-	cd /mnt/cascade-designs/cascade-chipyard-rvc/cascade-boom && SIMSRAMELF=$(CADD_2047_BOOM)  TRACFILE=$(CADD_2047_BOOM).trace.vcd make rerun_vanilla_notrace
+	cd /mnt/milesan-designs/milesan-chipyard-rvc/milesan-boom && SIMSRAMELF=$(CADD_0_BOOM) TRACFILE=$(CADD_0_BOOM).trace.vcd make rerun_vanilla_notrace
+	cd /mnt/milesan-designs/milesan-chipyard-rvc/milesan-boom && SIMSRAMELF=$(CADD_2047_BOOM)  TRACFILE=$(CADD_2047_BOOM).trace.vcd make rerun_vanilla_notrace
 
 .PHONY: clean all
 clean:

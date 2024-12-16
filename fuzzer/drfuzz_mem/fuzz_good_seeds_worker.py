@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
-from cascade.randomize.pickbytecodetaints import MAX_N_INJECT_PER_BB
-from cascade.util import CFInstructionClass
+from milesan.randomize.pickbytecodetaints import MAX_N_INJECT_PER_BB
+from milesan.util import CFInstructionClass
 N_COV_PTS = 1517 # rocket
 callback_lock = threading.Lock()
 newly_finished_tests = 0

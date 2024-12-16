@@ -17,7 +17,7 @@ def is_design_name_known(design_name: str):
         read_dict = json.load(f)
     return design_name in read_dict
 
-def get_design_cascade_path(design_name):
+def get_design_milesan_path(design_name):
     # 1. Find the designs folder.
     designs_folder = os.getenv("MILESAN_DESIGN_PROCESSING_ROOT")
     if not designs_folder:
@@ -36,7 +36,7 @@ def get_design_cascade_path(design_name):
 # @return the design config of the relevant repo.
 @cache
 def get_design_cfg(design_name):
-    with open(os.path.join(get_design_cascade_path(design_name), "meta", "cfg.json"), "r") as f:
+    with open(os.path.join(get_design_milesan_path(design_name), "meta", "cfg.json"), "r") as f:
         return json.load(f)
 
 # @param design_name: must be one of the keys of the design_repos.json dict.
@@ -172,19 +172,19 @@ def design_has_pmp(design_name) -> str:
 # For Verilator
 # @param design_name: must be one of the keys of the design_repos.json dict.
 # @param dotrace: boolean.
-# @return pair(the base path to the 'cascade' folder of the design repository, the RELATIVE path to the hardware simulation binary of the given design with the given parameters).
+# @return pair(the base path to the 'milesan' folder of the design repository, the RELATIVE path to the hardware simulation binary of the given design with the given parameters).
 def get_design_hsb_path(design_name, dotrace):
-    design_cascade_path = get_design_cascade_path(design_name)
+    design_milesan_path = get_design_milesan_path(design_name)
     dotrace_str = "trace" if dotrace else "notrace"
     toplevel_name = get_design_cfg(design_name)["toplevel"]
-    return design_cascade_path, "build/run_vanilla_{}_0.1/default-verilator/V{}".format(dotrace_str, toplevel_name)
+    return design_milesan_path, "build/run_vanilla_{}_0.1/default-verilator/V{}".format(dotrace_str, toplevel_name)
 
 # For Modelsim
 # @param design_name: must be one of the keys of the design_repos.json dict.
 # @param dotrace: boolean.
-# @return pair(the base path to the 'cascade' folder of the design repository, the RELATIVE path to the hardware simulation binary of the given design with the given parameters).
+# @return pair(the base path to the 'milesan' folder of the design repository, the RELATIVE path to the hardware simulation binary of the given design with the given parameters).
 def get_design_worklib_path(design_name, dotrace, fuzzcoreid: int = 0):
-    design_cascade_path = get_design_cascade_path(design_name)
+    design_milesan_path = get_design_milesan_path(design_name)
     dotrace_str = "trace" if dotrace else "notrace"
     if design_name == 'rocket':
         local_dirname = f"{get_design_top_soc(design_name)}_rocket_{fuzzcoreid}"
@@ -192,7 +192,7 @@ def get_design_worklib_path(design_name, dotrace, fuzzcoreid: int = 0):
         local_dirname = f"{get_design_top_soc(design_name)}_boom_{fuzzcoreid}"
     else:
         local_dirname = f"{get_design_top_soc(design_name)}_{fuzzcoreid}"
-    return design_cascade_path, os.path.join(os.getenv('MODELSIM_WORKROOT'), local_dirname, f"work_vanilla_{dotrace_str}")
+    return design_milesan_path, os.path.join(os.getenv('MODELSIM_WORKROOT'), local_dirname, f"work_vanilla_{dotrace_str}")
 
 # Prettifies known design names.
 def get_design_prettyname(design_name):
@@ -212,9 +212,9 @@ def get_design_prettyname(design_name):
 
 # Get the path to V<toplevel_name>__024root.h'
 def get_root_c_header_path(design_name, dotrace):
-    cascade_path = get_design_cascade_path(design_name)
+    milesan_path = get_design_milesan_path(design_name)
     run_target_str = "run_vanilla_{}_0.1".format("trace" if dotrace else "notrace")
-    return os.path.join(cascade_path, "build", run_target_str, "default-verilator")
+    return os.path.join(milesan_path, "build", run_target_str, "default-verilator")
 
 # The instructions to stop a benchmark
 def get_stop_instructions(design_name, rd_id: int):

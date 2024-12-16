@@ -8,7 +8,7 @@ from params.runparams import PATH_TO_TMP
 from common.timeout import timeout
 from common.profiledesign import profile_get_medeleg_mask
 from common.spike import calibrate_spikespeed
-from cascade.fuzzfromdescriptor import gen_new_test_instance, run_rtl
+from milesan.fuzzfromdescriptor import gen_new_test_instance, run_rtl
 
 import threading
 import time

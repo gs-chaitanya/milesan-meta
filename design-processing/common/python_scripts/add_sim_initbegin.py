@@ -9,8 +9,8 @@ import multiprocessing as mp
 import re
 import sys
 
-# sys.argv[1]: path to source cascade.sv
-# sys.argv[2]: path to target cascade.sv file where the initial states are randomized
+# sys.argv[1]: path to source milesan.sv
+# sys.argv[2]: path to target milesan.sv file where the initial states are randomized
 
 MODULE_REGEX = r"(module(?:\s|\n)+(?:.+?)(?:\s|\n)*(?:\(|#|import)(?:.|\n)+?endmodule)"
 MODULE_FF_LINE0 = r"always_ff @\((?:pos|neg)edge\s+[a-zA-Z0-9_]+\)\s*$"
@@ -29,7 +29,7 @@ def add_initial_blocks(module_definition: str):
         if re.match(MODULE_FF_LINE0, module_definition_lines[module_line_id]):
             # print(module_line_id, module_definition_lines[module_line_id+1])
             curr_module_line_id_for_assignment = module_line_id+1
-            # Manage cascaded ifs
+            # Manage milesand ifs
             while re.match(r"if\s*\([\\$!a-zA-Z0-9_]+\)\s*$", module_definition_lines[curr_module_line_id_for_assignment].strip()):
                 curr_module_line_id_for_assignment += 1
             curr_assignment_line = module_definition_lines[curr_module_line_id_for_assignment]
@@ -59,15 +59,15 @@ def add_initial_blocks(module_definition: str):
     return '\n'.join(module_definition_lines)
 
 if __name__ == "__main__":
-    global cascade_in_lines
-    cascade_in_path =  sys.argv[1]
-    cascade_out_path = sys.argv[2]
+    global milesan_in_lines
+    milesan_in_path =  sys.argv[1]
+    milesan_out_path = sys.argv[2]
 
-    with open(cascade_in_path, "r") as f:
-        cascade_in_content = f.read()
+    with open(milesan_in_path, "r") as f:
+        milesan_in_content = f.read()
 
     # module_definitions will be a list of pairs (module_content including module and endmodule keywords, module name)
-    module_definitions = re.findall(MODULE_REGEX, cascade_in_content, re.MULTILINE | re.DOTALL)
+    module_definitions = re.findall(MODULE_REGEX, milesan_in_content, re.MULTILINE | re.DOTALL)
 
     with mp.Pool(processes=NUM_PARALLEL_TASKS) as pool:
         # ret_strlines: list of per-instruction lists of strings
@@ -75,5 +75,5 @@ if __name__ == "__main__":
         pool.close()
         pool.join()
 
-    with open(cascade_out_path, "w") as f:
+    with open(milesan_out_path, "w") as f:
         f.write('\n\n'.join(initialized_module_definitions))

@@ -10,7 +10,7 @@ CARGOEXEC=$(CARGO_HOME)/bin/cargo
 
 LOGFILES=log
 
-installtools: install_verilator install_morty install_rust install_bender install_fusesoc install_sv2v install_cascade_python install_yosys install_miniconda install_toolchain install_spike install_makeelf
+installtools: install_verilator install_morty install_rust install_bender install_fusesoc install_sv2v install_milesan_python install_yosys install_miniconda install_toolchain install_spike install_makeelf
 
 install_verilator: | log
 	( unset VERILATOR_ROOT && cd verilator && autoconf && ./configure --prefix=$(PREFIX_MILESAN) && make -j$(MILESAN_JOBS) && make install ) >$(LOGFILES)/verilator.log 2>&1
@@ -22,16 +22,16 @@ $(PREFIX_MILESAN)/bin/stack: | log
 	sh stack/gethaskellstack.sh -d $(PREFIX_MILESAN)/bin
 
 install_yosys: | log
-	( cd cascade-yosys && make config-gcc && make PREFIX=$(PREFIX_MILESAN) -j$(MILESAN_JOBS) && make PREFIX=$(PREFIX_MILESAN) install ) >$(LOGFILES)/yosys.log 2>&1
+	( cd milesan-yosys && make config-gcc && make PREFIX=$(PREFIX_MILESAN) -j$(MILESAN_JOBS) && make PREFIX=$(PREFIX_MILESAN) install ) >$(LOGFILES)/yosys.log 2>&1
 
 install_rust: $(RUSTEXEC)
 
-install_cascade_python: $(MILESAN_PYTHON_VENV) | log
+install_milesan_python: $(MILESAN_PYTHON_VENV) | log
 	(  \
 		set -e; \
 		$(MILESAN_PYTHON_VENV)/bin/pip install -r ../design-processing/python-requirements.txt; \
 		$(MILESAN_PYTHON_VENV)/bin/pip install ninja==1.10.2 \
-	)  >$(LOGFILES)/cascade-python.log 2>&1
+	)  >$(LOGFILES)/milesan-python.log 2>&1
 
 $(RUSTEXEC): | log
 	( CARGO_HOME=\$CARGO_HOME RUSTUP_HOME=\$RUSTUP_HOME curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y ) >$(LOGFILES)/rust.log 2>&1

@@ -9,7 +9,7 @@ import numpy as np
 import os
 from matplotlib import pyplot as plt
 
-def plot_cascade_dependencies(json_path):
+def plot_milesan_dependencies(json_path):
     in_dict = json.load(open(json_path, 'r'))
     instr_ages = in_dict['instr_ages']
     instr_ages_cfonly = in_dict['instr_ages_cfonly']
@@ -66,12 +66,12 @@ def plot_cascade_dependencies(json_path):
 
     fig.tight_layout()
 
-    print('Saving figure to', os.path.join(PATH_TO_FIGURES, 'cascade_dependencies.png'))
+    print('Saving figure to', os.path.join(PATH_TO_FIGURES, 'milesan_dependencies.png'))
     os.makedirs(PATH_TO_FIGURES, exist_ok=True)
-    plt.savefig(os.path.join(PATH_TO_FIGURES, 'cascade_dependencies.png'), dpi=300)
+    plt.savefig(os.path.join(PATH_TO_FIGURES, 'milesan_dependencies.png'), dpi=300)
 
 
-def plot_cascade_prevalences(json_path):
+def plot_milesan_prevalences(json_path):
     # Load prevalences.json
     instr_prevalences = json.load(open(json_path, 'r'))
 
@@ -126,9 +126,9 @@ def plot_cascade_prevalences(json_path):
 
     fig.tight_layout()
 
-    print('Saving figure to', os.path.join(PATH_TO_FIGURES, 'cascade_prevalences.png'))
+    print('Saving figure to', os.path.join(PATH_TO_FIGURES, 'milesan_prevalences.png'))
     os.makedirs(PATH_TO_FIGURES, exist_ok=True)
-    plt.savefig(os.path.join(PATH_TO_FIGURES, 'cascade_prevalences.png'), dpi=300)
+    plt.savefig(os.path.join(PATH_TO_FIGURES, 'milesan_prevalences.png'), dpi=300)
 
 
 

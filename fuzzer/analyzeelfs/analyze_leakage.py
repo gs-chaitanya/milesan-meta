@@ -2,7 +2,7 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-LOG_REDUCE_PATH="/cascade-data/logs/boom.reduce.log"
+LOG_REDUCE_PATH="/milesan-data/logs/boom.reduce.log"
 
 #%%
 with open(LOG_REDUCE_PATH, "r") as f:

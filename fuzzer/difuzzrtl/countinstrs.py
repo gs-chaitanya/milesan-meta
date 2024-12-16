@@ -9,9 +9,9 @@ import subprocess
 from pathlib import Path
 
 
-def countinstrs_cascade_fromelf(elf_id: int, elfpath: str, rvflags: str, final_addr: int) -> int:
+def countinstrs_milesan_fromelf(elf_id: int, elfpath: str, rvflags: str, final_addr: int) -> int:
     # Generate the spike debug commands file
-    path_to_debug_file = __gen_spike_dbgcmd_file_for_count_instrs(identifier_str=f"cascade_countinstrs{elf_id}", startpc=SPIKE_STARTADDR, endpc=final_addr)
+    path_to_debug_file = __gen_spike_dbgcmd_file_for_count_instrs(identifier_str=f"milesan_countinstrs{elf_id}", startpc=SPIKE_STARTADDR, endpc=final_addr)
 
     # Second, run the Spike command
     spike_shell_command = (
@@ -35,7 +35,7 @@ def countinstrs_cascade_fromelf(elf_id: int, elfpath: str, rvflags: str, final_a
     return len(list(filter(lambda s: s.startswith('core   0: 0x'), spike_out.split('\n'))))
 
 
-def countinstrs_cascade(elf_id: int) -> int:
+def countinstrs_milesan(elf_id: int) -> int:
     rvflags = 'rv64g'
     design_name = 'rocket'
     # elfpath = os.path.join(PATH_TO_TMP, 'manyelfs_modelsim', f"{design_name}_{elf_id}.elf")
@@ -45,7 +45,7 @@ def countinstrs_cascade(elf_id: int) -> int:
     #     content = file.read()
     # final_addr = SPIKE_STARTADDR + int(content, 16)
 
-    # return countinstrs_cascade_fromelf(elf_id, elfpath, rvflags, final_addr)
+    # return countinstrs_milesan_fromelf(elf_id, elfpath, rvflags, final_addr)
 
     # Actually, we just take the pre-computed number of instructions
     num_instrs_path = os.path.join(PATH_TO_TMP, 'manyelfs_modelsim', f"{design_name}_{elf_id}_numinstrs.txt")

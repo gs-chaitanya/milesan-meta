@@ -10,7 +10,7 @@
 # sys.argv[4]: authorize privileges (by default 1)
 
 from top.fuzzdesigntiming import measure_time_to_bug, plot_bug_timings
-from cascade.toleratebugs import tolerate_bug_for_bug_timing
+from milesan.toleratebugs import tolerate_bug_for_bug_timing
 
 from params.runparams import PATH_TO_TMP
 import json

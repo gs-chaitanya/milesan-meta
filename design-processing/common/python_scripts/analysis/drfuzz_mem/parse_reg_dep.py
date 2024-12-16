@@ -1,7 +1,7 @@
 #%%
 import re
 import pandas as pd
-p =  "/cascade-data/spikeresol368790_kronos_8_3.elf.dump"
+p =  "/milesan-data/spikeresol368790_kronos_8_3.elf.dump"
 with open(p,"r") as f:
     file = f.read()
 df = pd.DataFrame()

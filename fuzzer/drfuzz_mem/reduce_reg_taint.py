@@ -4,15 +4,15 @@ import glob
 import json
 
 from params.runparams import PATH_TO_TMP, PATH_TO_COV, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS
-from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance, gen_fuzzerstate_elf_flipped_bits
-from cascade.cfinstructionclasses import *
-from cascade.fuzzsim import run_rtl_and_load_regstream
+from milesan.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance, gen_fuzzerstate_elf_flipped_bits
+from milesan.cfinstructionclasses import *
+from milesan.fuzzsim import run_rtl_and_load_regstream
 import subprocess, itertools
 from common import designcfgs
 from common.spike import SPIKE_STARTADDR
-from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
-from cascade.registers import ABI_INAMES,MAX_32b
-from cascade.spikeresolution import spike_resolution_return_interm
+from milesan.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
+from milesan.registers import ABI_INAMES,MAX_32b
+from milesan.spikeresolution import spike_resolution_return_interm
 from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint, FuzzerStateException
 
 MAX_CYCLES_PER_INSTR = 30

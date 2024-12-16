@@ -6,11 +6,11 @@
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA, MAX_CYCLES_PER_INSTR, SETUP_CYCLES
 from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_FST, TRACE_EN, CHECK_MEM, PATH_TO_MNT, MODELSIM_REQ_DIR, PATH_FROM_MODELSIM_TO_MNT, INSERT_REGDUMPS, USE_MODELSIM
-from cascade.util import IntRegIndivState, SimulatorEnum
+from milesan.util import IntRegIndivState, SimulatorEnum
 from common.sim.modelsim import get_next_worker_id
 from common.sim.commonsim import setup_sim_env
 from common import designcfgs
-from cascade.spikeresolution import SPIKE_STARTADDR
+from milesan.spikeresolution import SPIKE_STARTADDR
 from time import gmtime, strftime
 
 import itertools
@@ -30,10 +30,10 @@ def runsim_verilator(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_P
         assert coveragepath is None or not get_rfuzz_coverage_mask
 
     design_cfg       = designcfgs.get_design_cfg(design_name)
-    cascadedir       = designcfgs.get_design_cascade_path(design_name)
-    builddir         = os.path.join(cascadedir,'build')
+    milesandir       = designcfgs.get_design_milesan_path(design_name)
+    builddir         = os.path.join(milesandir,'build')
 
-    my_env = setup_sim_env(elfpath, '/dev/null', '/dev/null', simlen, cascadedir, coveragepath, False)
+    my_env = setup_sim_env(elfpath, '/dev/null', '/dev/null', simlen, milesandir, coveragepath, False)
 
     simdir               = f"run_{'coverage' if coveragepath else 'rfuzz' if get_rfuzz_coverage_mask else 'vanilla'}_{'notrace'}_0.1"
     verilatordir         = 'default-verilator'
@@ -83,9 +83,9 @@ def runsim_verilator(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_P
 
 # Return a pair (is_stop_successful: bool, reg_vals: int list of length <= MAX_NUM_PICKABLE_REGS-1 or None if is_stop_successful is False)
 def runsim_modelsim(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PICKABLE_REGS-1, num_float_regs: int = MAX_NUM_PICKABLE_FLOATING_REGS, coveragepath = None):
-    cascadedir       = designcfgs.get_design_cascade_path(design_name)
+    milesandir       = designcfgs.get_design_milesan_path(design_name)
 
-    my_env = setup_sim_env(elfpath, '/dev/null', '/dev/null', simlen, cascadedir, coveragepath, False)
+    my_env = setup_sim_env(elfpath, '/dev/null', '/dev/null', simlen, milesandir, coveragepath, False)
     # Run the simulation on the same worker id as the core used for this worker. This may not be absolutely optimal.
     curr_coreid = get_next_worker_id()
     my_env["FUZZCOREID"] = str(curr_coreid)
@@ -97,9 +97,9 @@ def runsim_modelsim(design_name, simlen, elfpath, num_int_regs: int = MAX_NUM_PI
     if not os.path.exists(workdir):
         print("Error: Need {} to run this experiment. Design is {}.\n"
               "Please run 'make build_{}_{}_modelsim' to build the the modelsim library.\n"
-              "Also be in the cascade dir so the path is right.\n".format(workdir, design_name, 'vanilla', tracestr, cascadedir))
+              "Also be in the milesan dir so the path is right.\n".format(workdir, design_name, 'vanilla', tracestr, milesandir))
         sys.exit(1)
-    cmdline=['make', '-C', cascadedir, f"rerun_vanilla_{tracestr}_modelsim"]
+    cmdline=['make', '-C', milesandir, f"rerun_vanilla_{tracestr}_modelsim"]
 
     # We expect the simulation to take at most 4*simlen + 20 seconds.
     exec_out = subprocess.run(cmdline, cwd=workdir, check=True, text=True, capture_output=True, env=my_env, timeout=min(4*simlen + 20, 1800))
@@ -264,10 +264,10 @@ def run_rtl_and_load_regstream(fuzzerstate, use_vanilla: bool = False, trace_en:
     if fuzzerstate.simulator == SimulatorEnum.MODELSIM:
         return wait_and_load_regstream(fuzzerstate, use_vanilla, trace_en, trace_fst)
     cmd = ["make",f"rerun_{'drfuzz_mem' if not use_vanilla else 'vanilla'}_{'notrace' if not trace_en else 'trace' if not trace_fst else 'trace_fst'}"]
-    cascadedir = designcfgs.get_design_cascade_path(design_name)
+    milesandir = designcfgs.get_design_milesan_path(design_name)
     env = os.environ
     env.update(fuzzerstate.env)
-    subprocess.run(cmd,cwd=cascadedir,env=env,capture_output=True,check=True)
+    subprocess.run(cmd,cwd=milesandir,env=env,capture_output=True,check=True)
 
     assert "REGDUMP_PATH" in env
     with open(env["REGDUMP_PATH"], "rb") as f:

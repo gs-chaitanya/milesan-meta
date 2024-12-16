@@ -6,9 +6,9 @@ import os
 from params.runparams import DO_ASSERT
 
 # Replace the environment with new values.
-# sram_taintfile: path relative to cascadedir
-# bootrom_elf: path relative to cascadedir
-def setup_sim_env(sram_elf, bootrom_elf, tracefile, simtime, cascadedir, coveragefile, verbose: bool = True):
+# sram_taintfile: path relative to milesandir
+# bootrom_elf: path relative to milesandir
+def setup_sim_env(sram_elf, bootrom_elf, tracefile, simtime, milesandir, coveragefile, verbose: bool = True):
     if DO_ASSERT:
         assert isinstance(sram_elf, str)
         assert isinstance(bootrom_elf, str) or bootrom_elf is None
@@ -18,7 +18,7 @@ def setup_sim_env(sram_elf, bootrom_elf, tracefile, simtime, cascadedir, coverag
 
     # Make all paths absolute.
     if bootrom_elf:
-        bootrom_elf = os.path.join(cascadedir, bootrom_elf)
+        bootrom_elf = os.path.join(milesandir, bootrom_elf)
 
     # Copy the OS environment.
     my_env = os.environ.copy()

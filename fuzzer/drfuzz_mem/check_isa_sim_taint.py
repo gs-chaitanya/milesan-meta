@@ -6,17 +6,17 @@ import json
 from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, NO_REMOVE_TMPFILES, DO_DOUBLECHECK_SIM, CHECK_MEM, COLLECT_PERF_STATS, COLLECT_EXCEPTION_STATS, COLLECT_TAINT_STATS, IGNORE_SPIKE_OFFSET_IN_REG_CHECK
 from params.fuzzparams import IGNORE_RTL_TIMEOUT, IGNORE_SPIKE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, ASSERT_EXEC_IN_TAINT_SRC_PRIV, ASSERT_EXEC_IN_TAINT_SRC_LAYOUT ,DUMP_MCYCLES
-from cascade.toleratebugs import  is_tolerate_cva6_mhpmcounter,  is_tolerate_cva6_mhpmevent31
-from cascade.toleratebugs import is_tolerate_boom_minstret
-from cascade.toleratebugs import is_tolerate_rocket_minstret
-from cascade.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
-from cascade.cfinstructionclasses import *
-from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0
-from cascade.fuzzsim import run_rtl_and_load_regstream
-from cascade.util import IntRegIndivState
+from milesan.toleratebugs import  is_tolerate_cva6_mhpmcounter,  is_tolerate_cva6_mhpmevent31
+from milesan.toleratebugs import is_tolerate_boom_minstret
+from milesan.toleratebugs import is_tolerate_rocket_minstret
+from milesan.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
+from milesan.cfinstructionclasses import *
+from milesan.cfinstructionclasses_t0 import RegdumpInstruction_t0
+from milesan.fuzzsim import run_rtl_and_load_regstream
+from milesan.util import IntRegIndivState
 from common.spike import SPIKE_STARTADDR
-from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
-from cascade.registers import ABI_INAMES,MAX_32b
+from milesan.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
+from milesan.registers import ABI_INAMES,MAX_32b
 import enum
 import subprocess
 import time

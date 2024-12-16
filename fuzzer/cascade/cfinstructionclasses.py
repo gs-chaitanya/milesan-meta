@@ -7,9 +7,9 @@ from params.fuzzparams import USE_MMU, USE_COMPRESSED, USE_SPIKE_INTERM_ELF, NON
 from params.runparams import DO_ASSERT, PRINT_CHECK_REGS, PRINT_REG_TRACEBACK, PRINT_FILTERED_REG_TRACEBACK, ASSERT_ADDR
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
-from cascade.util import CFInstructionClass
-from cascade.util_compressed import COMPRESSED_INST_EQUIV
-from cascade.mmu_utils import phys2virt
+from milesan.util import CFInstructionClass
+from milesan.util_compressed import COMPRESSED_INST_EQUIV
+from milesan.mmu_utils import phys2virt
 from rv.asmutil import li_into_reg, twos_complement, to_unsigned, INSTR_FUNCS, INSTR_FUNCS_T0
 from rv.rvprivileged import rvprivileged_mret, rvprivileged_sret
 from rv.zifencei import *
@@ -25,12 +25,12 @@ from rv.rv64m import *
 #COMPRESSED
 from rv.rv32ic import *
 from rv.rv64ic import *
-from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
+from milesan.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
 from common.spike import SPIKE_STARTADDR
-from cascade.registers import ABI_INAMES, MAX_32b, MAX_64b, MAX_20b
-from cascade.util import ExceptionCauseVal
-from cascade.privilegestate import PrivilegeStateEnum
-from cascade.mmu_utils import PAGE_ALIGNMENT_MASK
+from milesan.registers import ABI_INAMES, MAX_32b, MAX_64b, MAX_20b
+from milesan.util import ExceptionCauseVal
+from milesan.privilegestate import PrivilegeStateEnum
+from milesan.mmu_utils import PAGE_ALIGNMENT_MASK
 import random
 import numpy as np
 
@@ -131,7 +131,7 @@ class BaseInstruction:
         self.instr_func = INSTR_FUNCS[self.instr_str]
 
     def reset_addr(self):
-        from cascade.spikeresolution import get_current_layout
+        from milesan.spikeresolution import get_current_layout
         if not len(self.fuzzerstate.instr_objs_seq[0]): # This is the first instruction, special case.
             self.priv_level = PrivilegeStateEnum.MACHINE
             self.va_layout = -1
@@ -1715,7 +1715,7 @@ class MisalignedMemInstruction(ExceptionInstruction):
     def __init__(self,fuzzerstate, is_mtvec: bool, is_load: bool, iscompressed: bool = False):
         super().__init__(fuzzerstate, is_mtvec, None) # We compute the producer id later
 
-        from cascade.randomize.pickreg import IntRegIndivState
+        from milesan.randomize.pickreg import IntRegIndivState
         # First, choose a consumed register.
         if DO_ASSERT:
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)

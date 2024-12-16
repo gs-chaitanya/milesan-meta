@@ -12,7 +12,7 @@ extern "C" {
   const char *Get_SRAM_TaintsPath(void);
   const char *Get_BootROM_ELF_object_filename(void);
   const char *Get_BootROM_TaintsPath(void);
-  const char *cascade_getenv(char *varname);
+  const char *milesan_getenv(char *varname);
   const char *Get_SRAM_DumpPath(void);
 }
 
@@ -37,8 +37,8 @@ extern "C" const char *Get_BootROM_ELF_object_filename(void)
     return simrom_env;
 }
 
-/* workaround for inconsistent prototype when getenv() is directly imported; we import cascade_getenv() instead */
-extern "C" const char *cascade_getenv(char *varname)
+/* workaround for inconsistent prototype when getenv() is directly imported; we import milesan_getenv() instead */
+extern "C" const char *milesan_getenv(char *varname)
 {
     return (char *) getenv((char *) varname);
 }
@@ -73,6 +73,6 @@ extern "C" const char *Get_SRAM_DumpPath(void)
      * SIMROMTAINT can be used to override the default.
      */
     const char* taint_env = std::getenv("SRAMDUMP_PATH");
-    if(taint_env == NULL) return "/cascade_data/sramdump.json";
+    if(taint_env == NULL) return "/milesan_data/sramdump.json";
     return taint_env;
 }

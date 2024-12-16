@@ -68,7 +68,7 @@ if __name__ == '__main__':
                     if "TIMEOUT" in cfg:
                         cmd += [str(cfg["TIMEOUT"])]
 
-                    subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/")
+                    subprocess.run(cmd, env=env, cwd="/mnt/milesan-meta/fuzzer/")
 
                 except Exception as e:
                     print(f"Failed running {' '.join(cmd)}: {e}")
@@ -91,7 +91,7 @@ if __name__ == '__main__':
                             str(cfg["N_THREADS"]),
                             f"--log-file={log_file}"
                         ]
-                        subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
+                        subprocess.run(cmd, env=env, cwd="/mnt/milesan-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
 
                 except Exception as e:
                     print(f"Failed running {' '.join(cmd)}: {e}")
@@ -112,7 +112,7 @@ if __name__ == '__main__':
                             str(cfg["N_THREADS"]),
                             f"--log-file={log_file}"
                         ]
-                        subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
+                        subprocess.run(cmd, env=env, cwd="/mnt/milesan-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
 
                 except Exception as e:
                     print(f"Failed running {' '.join(cmd)}: {e}")
@@ -133,7 +133,7 @@ if __name__ == '__main__':
                             str(cfg["N_THREADS"]),
                             f"--log-file={log_file}"
                         ]
-                        subprocess.run(cmd, env=env, cwd="/mnt/cascade-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
+                        subprocess.run(cmd, env=env, cwd="/mnt/milesan-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
 
                 except Exception as e:
                     print(f"Failed running {' '.join(cmd)}: {e}")

@@ -7,7 +7,7 @@ import pandas as pd
 import subprocess
 import seaborn as sns
 import matplotlib.pyplot as plt
-from fuzzer.common.designcfgs import get_design_stop_sig_addr, get_design_reg_dump_addr, get_design_cascade_path
+from fuzzer.common.designcfgs import get_design_stop_sig_addr, get_design_reg_dump_addr, get_design_milesan_path
 #%%%
 DUTS = ["cva6-test"]
 SECTION_STR = ".section \".text.init\",\"ax\",@progbits\n\t.globl _start\n\t.align 2\n_start:\n"
@@ -17,9 +17,9 @@ CINSTR_STR = [f"c.{inst}" for inst in INSTR_STRS]
 CINSTR_STR= [] 
 # IMMS = [0] + [1<<i for i in range(20)]
 IMMS = [0,2047]
-CWD =  "/mnt/cascade-meta/whisperfuzz_programs/"
-SRCDIR = "/mnt/cascade-meta/whisperfuzz_programs/src"
-BUILDDIR = "/mnt/cascade-meta/whisperfuzz_programs/build"
+CWD =  "/mnt/milesan-meta/whisperfuzz_programs/"
+SRCDIR = "/mnt/milesan-meta/whisperfuzz_programs/src"
+BUILDDIR = "/mnt/milesan-meta/whisperfuzz_programs/build"
 #%%
 def generate_program(inst_str: str, imm: int, stopsig_addr: int, regdump_addr: int, clear_csr = bool):
     prog_str = SECTION_STR
@@ -68,7 +68,7 @@ for dut in DUTS:
     for target,instr,imm,clear_csr in zip(targets,instr_strs,imms,clear_csrs):
         env["SIMSRAMELF"] = f"{CWD}/{target}"
         cmd = ["make","run_vanilla_notrace"]
-        output = subprocess.run(cmd,cwd=get_design_cascade_path(dut),env=env, capture_output=True)
+        output = subprocess.run(cmd,cwd=get_design_milesan_path(dut),env=env, capture_output=True)
         mcycles = int(re.findall("Dump of reg x01:\s*0x[0-9a-zA-Z]+",str(output))[0].split(":")[-1].strip(),16)
         row = {
             "target":target,

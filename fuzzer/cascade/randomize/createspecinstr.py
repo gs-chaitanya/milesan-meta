@@ -6,12 +6,12 @@ import random
 from copy import copy
 from params.runparams import DO_ASSERT
 from params.fuzzparams import USE_COMPRESSED, COMPRESS_INSTRUCTION
-from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
-from cascade.util import INSTRUCTIONS_BY_ISA_CLASS
-from cascade.randomize.pickisainstrclass import _get_isainstrclass_filtered_weights, _gen_next_isainstrclass_from_weights
-from cascade.util_compressed import *
-from cascade.cfinstructionclasses import *
-from cascade.cfinstructionclasses_t0 import *
+from milesan.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
+from milesan.util import INSTRUCTIONS_BY_ISA_CLASS
+from milesan.randomize.pickisainstrclass import _get_isainstrclass_filtered_weights, _gen_next_isainstrclass_from_weights
+from milesan.util_compressed import *
+from milesan.cfinstructionclasses import *
+from milesan.cfinstructionclasses_t0 import *
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
 # This module creates an instruction from its instruction string, and some state which will condition which registers and immediates will be picked, and with which probability.
 

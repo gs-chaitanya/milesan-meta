@@ -19,11 +19,11 @@ import numpy as np
 # from params.runparams import DO_ASSERT
 from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS, P_UNTAINT_BIT, USE_MMU
 from params.runparams import CHECK_MEM_T0_PRECISE, PRINT_MEM_STORES, PRINT_MEM_STORES_T0, PRINT_MEM_LOADS, PRINT_MEM_LOADS_T0, INSERT_REGDUMPS
-from cascade.mmu_utils import PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_BITS, PHYSICAL_PAGE_SIZE
-from cascade.spikeresolution import SPIKE_STARTADDR
-from cascade.registers import MAX_32b, MAX_64b
-from cascade.privilegestate import PrivilegeStateEnum
-from cascade.mmu_utils import virt2phys
+from milesan.mmu_utils import PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_BITS, PHYSICAL_PAGE_SIZE
+from milesan.spikeresolution import SPIKE_STARTADDR
+from milesan.registers import MAX_32b, MAX_64b
+from milesan.privilegestate import PrivilegeStateEnum
+from milesan.mmu_utils import virt2phys
 from common.designcfgs import get_design_reg_dump_addr, get_design_fpreg_dump_addr, get_design_reg_stream_addr, get_design_cl_size
 
 DO_ASSERT = True

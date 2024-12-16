@@ -13,7 +13,7 @@
 from drfuzz_mem.check_isa_sim_worker import check_isa_sims
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask, profile_get_ct_instrs
-from cascade.toleratebugs import tolerate_bug_for_bug_timing
+from milesan.toleratebugs import tolerate_bug_for_bug_timing
 from params.runparams import NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_EN
 import os
 import sys

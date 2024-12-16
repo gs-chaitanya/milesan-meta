@@ -2,7 +2,7 @@ from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint, FailTypeEnum, Fu
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
 from workers.reduce_worker import reduce_programs
-from cascade.util import CFInstructionClass
+from milesan.util import CFInstructionClass
 from params.runparams import PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS
 import multiprocessing as mp
 import time

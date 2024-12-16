@@ -1,12 +1,12 @@
-from cascade.reduce import reduce_program
+from milesan.reduce import reduce_program
 
 from drfuzz_mem.check_isa_sim_taint import check_isa_sim_taint
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
-from cascade.randomize.pickbytecodetaints import MAX_N_INJECT_PER_BB
-from cascade.util import CFInstructionClass
+from milesan.randomize.pickbytecodetaints import MAX_N_INJECT_PER_BB
+from milesan.util import CFInstructionClass
 from params.runparams import PATH_TO_TMP
-from cascade.fuzzfromdescriptor import gen_new_test_instance
+from milesan.fuzzfromdescriptor import gen_new_test_instance
 
 import multiprocessing as mp
 import time

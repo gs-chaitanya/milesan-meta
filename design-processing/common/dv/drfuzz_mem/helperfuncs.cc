@@ -210,7 +210,7 @@ int check_regs(std::map<std::string, uint64_t> regs){
 }
 
 void recompute_elf(){
-  if(std::system("python /mnt/cascade-meta/fuzzer/do_recompute_elf.py") != 0){
+  if(std::system("python /mnt/milesan-meta/fuzzer/do_recompute_elf.py") != 0){
     exit(-1);
   }
 }

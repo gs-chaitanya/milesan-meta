@@ -19,7 +19,7 @@ if __name__ == '__main__':
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     num_workers = max(int(os.getenv('MILESAN_JOBS', 160)) // 4, 1)
-    path_to_cascade_elfs = os.path.join(PATH_TO_TMP, 'manyelfs_modelsim')
+    path_to_milesan_elfs = os.path.join(PATH_TO_TMP, 'manyelfs_modelsim')
 
     num_elfs_to_produce = 10000 # Heuristic, should ensure that we have enough to cover all instructions / durations
 
@@ -31,7 +31,7 @@ if __name__ == '__main__':
     # Cascade
 
     # Generate enough ELFs
-    # gen_many_elfs('rocket', 250, num_elfs_to_produce, path_to_cascade_elfs) # TODO Uncomment
+    # gen_many_elfs('rocket', 250, num_elfs_to_produce, path_to_milesan_elfs) # TODO Uncomment
     collect_coverage_modelsim_difuzzrtl_nomerge(False, 0, 'rocket', num_workers, target_numinstrs, None)
 
     # DifuzzRTL

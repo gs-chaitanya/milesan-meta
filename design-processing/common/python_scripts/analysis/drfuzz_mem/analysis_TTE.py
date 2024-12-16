@@ -5,12 +5,12 @@ import seaborn as sns
 import json
 import glob
 import pandas as pd
-TAINT_MISMATCH_PATH = "/mnt/cascade-data/CT-VIOLATIONS-TTE/"
+TAINT_MISMATCH_PATH = "/mnt/milesan-data/CT-VIOLATIONS-TTE/"
 FIGSIZE_FLAT = (8,2)
 LABELSIZE = 15
 TICKSIZE = 12
 LEGENDSIZE = 12
-TTE_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/tte"
+TTE_PLOTS_PATH = "/mnt/milesan-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/tte"
 PRETTY_NAMES_DUT = {
     "openc910":"OpenC910",
     "cva6":"CVA6"

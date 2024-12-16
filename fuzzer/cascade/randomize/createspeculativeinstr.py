@@ -1,9 +1,9 @@
-from cascade.cfinstructionclasses_t0 import *
-from cascade.mmu_utils import li_doubleword
-from cascade.randomize.createcfinstr import create_instr
-from cascade.spikeresolution import get_current_layout
-from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
-from cascade.util import ISAInstrClass
+from milesan.cfinstructionclasses_t0 import *
+from milesan.mmu_utils import li_doubleword
+from milesan.randomize.createcfinstr import create_instr
+from milesan.spikeresolution import get_current_layout
+from milesan.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
+from milesan.util import ISAInstrClass
 
 
 # @params: create_cf_ambigous_instrs: function that returns a list of instructions that redirect the control flow e.g. a taken branch, jalr et.c

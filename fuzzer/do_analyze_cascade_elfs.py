@@ -7,7 +7,7 @@
 from params.runparams import PATH_TO_TMP
 from analyzeelfs.genmanyelfs import gen_many_elfs
 from analyzeelfs.analyze import analyze_elf_prevalence, analyze_elf_dependencies
-from analyzeelfs.plot import plot_cascade_dependencies, plot_cascade_prevalences
+from analyzeelfs.plot import plot_milesan_dependencies, plot_milesan_prevalences
 
 import os
 
@@ -24,8 +24,8 @@ if __name__ == '__main__':
     prevalence_json = analyze_elf_prevalence(False, NUM_ELFS)
     dependencies_json = analyze_elf_dependencies(False, 'rocket', NUM_ELFS)
 
-    plot_cascade_prevalences(prevalence_json)
-    plot_cascade_dependencies(dependencies_json)
+    plot_milesan_prevalences(prevalence_json)
+    plot_milesan_dependencies(dependencies_json)
 
 else:
     raise Exception("This module must be at the toplevel.")

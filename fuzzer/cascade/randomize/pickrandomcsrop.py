@@ -7,11 +7,11 @@
 from params.runparams import DO_ASSERT
 from params.fuzzparams import ALLOW_CSR_TAINT
 from rv.csrids import CSR_IDS
-from cascade.util import IntRegIndivState
-from cascade.toleratebugs import is_no_interaction_minstret, is_tolerate_kronos_minstret, is_tolerate_vexriscv_minstret, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readnonimplcsr, is_tolerate_picorv32_writehpm, is_tolerate_cva6_mhpmcounter, is_tolerate_boom_minstret, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_vexriscv_mhpmcountern, is_tolerate_cva6_mhpmevent31
-from cascade.privilegestate import PrivilegeStateEnum
-from cascade.cfinstructionclasses import CSRRegInstruction, CSRImmInstruction
-from cascade.cfinstructionclasses_t0 import CSRRegInstruction_t0, CSRImmInstruction_t0
+from milesan.util import IntRegIndivState
+from milesan.toleratebugs import is_no_interaction_minstret, is_tolerate_kronos_minstret, is_tolerate_vexriscv_minstret, is_tolerate_picorv32_missingmandatorycsrs, is_tolerate_picorv32_readnonimplcsr, is_tolerate_picorv32_writehpm, is_tolerate_cva6_mhpmcounter, is_tolerate_boom_minstret, is_tolerate_picorv32_readhpm_nocsrrs, is_tolerate_vexriscv_mhpmcountern, is_tolerate_cva6_mhpmevent31
+from milesan.privilegestate import PrivilegeStateEnum
+from milesan.cfinstructionclasses import CSRRegInstruction, CSRImmInstruction
+from milesan.cfinstructionclasses_t0 import CSRRegInstruction_t0, CSRImmInstruction_t0
 import random
 
 from enum import Enum, auto

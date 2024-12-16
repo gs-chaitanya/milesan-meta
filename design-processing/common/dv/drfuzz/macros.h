@@ -9,7 +9,7 @@
 
 #define PERMISSIONS S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH
 
-#define DUMP_DIR "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/cov_dumps"
+#define DUMP_DIR "/mnt/milesan-meta/design-processing/common/python_scripts/analysis/cov_dumps"
 #define DUT_DIR DUMP_DIR "/" DUT
 #define INST_DIR DUT_DIR "/" INST
 #define SEED_DIR INST_DIR "/seed" STR(SEED)

@@ -8,8 +8,8 @@ from common.timeout import timeout
 from params.runparams import PATH_TO_TMP
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
-from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
-from cascade.fuzzsim import runtest_verilator_forrfuzz
+from milesan.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
+from milesan.fuzzsim import runtest_verilator_forrfuzz
 
 import json
 import multiprocessing as mp

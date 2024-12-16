@@ -12,7 +12,7 @@ import glob
 import pandas as pd
 import seaborn as sns
 COV_DUMPS = "/cellift-meta/design-processing/common/python_scripts/analysis/cov_dumps"
-MILESAN_DATA = "/cascade-data"
+MILESAN_DATA = "/milesan-data"
 Sodors = [f'Sodor{i}Stage' for i in [1,3,5]]
 # DUTs = ['PicoRV','VexRiscV']
 # DUTs = Sodors
@@ -25,7 +25,7 @@ dutname = {
     'vexriscv':'VexRiscV',
     'picorv32': 'PicoRV'
 }
-cascade = pd.DataFrame()
+milesan = pd.DataFrame()
 for p in glob.glob(f'{MILESAN_DATA}/*1000_100.json'):
     if('rocket' in p): continue
     if('boom' in p): continue
@@ -39,9 +39,9 @@ for p in glob.glob(f'{MILESAN_DATA}/*1000_100.json'):
         tmp['DUT'] = dutname[dut]
         tmp['rel_coverage'] = c/n_mux[dut]
         tmp['timestamp'] = t
-        tmp['inst'] = 'cascade'
+        tmp['inst'] = 'milesan'
         pd_dict = pd.DataFrame([tmp])
-        cascade = pd.concat([cascade,pd_dict],ignore_index=True)
+        milesan = pd.concat([milesan,pd_dict],ignore_index=True)
     
 # %%
 cpp = pd.DataFrame()
@@ -67,7 +67,7 @@ for p in glob.glob(f'{COV_DUMPS}/*/*/*/cov/*',recursive=True):
     pd_dict = pd.DataFrame([d])
     cpp = pd.concat([cpp, pd_dict], ignore_index = True)
 
-# cpp = pd.concat([cpp, cascade], ignore_index = True)
+# cpp = pd.concat([cpp, milesan], ignore_index = True)
 DUTs = np.unique(cpp['DUT'])
 #%% compute intersections
 perf_stats = pd.DataFrame()
@@ -218,7 +218,7 @@ for dut in DUTs:
     ax[1,i].grid()
     ax[1,i].axhline(y=max(cpp[(cpp['DUT']==dut) & (cpp['inst']=='drfuzz')]['rel_coverage']), color="dodgerblue", linestyle="--")
     ax[1,i].axhline(y=max(cpp[(cpp['DUT']==dut) & (cpp['inst']=='rfuzz')]['rel_coverage']), color="orange", linestyle="--")
-    # ax[1,i].axhline(y=max(cpp[(cpp['DUT']==dut) & (cpp['inst']=='cascade')]['rel_coverage']), color="green", linestyle="--")
+    # ax[1,i].axhline(y=max(cpp[(cpp['DUT']==dut) & (cpp['inst']=='milesan')]['rel_coverage']), color="green", linestyle="--")
 
     i +=1 
     # ax.set_ylim([0,1])
@@ -226,7 +226,7 @@ for dut in DUTs:
 plt.tight_layout()
 # ax.set_ylim([0.9,1])
 
-plt.savefig(f"{MILESAN_DATA}/cascade_drfuzz.png")
+plt.savefig(f"{MILESAN_DATA}/milesan_drfuzz.png")
 
 #%%
 

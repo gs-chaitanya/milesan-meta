@@ -6,11 +6,11 @@ from params.runparams import DO_ASSERT, DO_EXPENSIVE_ASSERT, PRINT_FSM_TRANSITIO
 from params.fuzzparams import REGPICK_PROTUBERANCE_RATIO,  REGPICK_PROTUBERANCE_RATIO_T0_POS, REGPICK_PROTUBERANCE_RATIO_T0_NEG, NUM_MIN_FREE_INTREGS,  MAX_NUM_PICKABLE_REGS, NUM_MIN_UNTAINTED_INTREGS, MIN_WEIGHT_T0, MAX_WEIGHT_T0, P_TAINT_REG, NUM_MIN_TAINTED_REGS, DISABLE_COMPUTATION_ON_TAINT
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID
 from params.fuzzparams import USE_TAINT_HW, USE_TAINT_TANH, USE_TAINT_BIN, NONPICKABLE_REGISTERS, TAINT_EN
-from cascade.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
-from cascade.util import IntRegIndivState
-from cascade.registers import IntRegister, ABI_INAMES
+from milesan.randomize.createcfinstr import create_targeted_producer0_instrobj, create_targeted_producer1_instrobj, create_targeted_consumer_instrobj
+from milesan.util import IntRegIndivState
+from milesan.registers import IntRegister, ABI_INAMES
 from common.spike import SPIKE_STARTADDR, SPIKE_BOOTVAL_A1
-from cascade.registers import ABI_INAMES,MAX_32b, MAX_64b
+from milesan.registers import ABI_INAMES,MAX_32b, MAX_64b
 from copy import copy, deepcopy
 import math
 import numpy as np

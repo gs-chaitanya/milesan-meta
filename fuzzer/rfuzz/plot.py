@@ -48,8 +48,8 @@ def plot_rfuzz(active_rfuzz_coverage_path_per_design: dict, passive_rfuzz_covera
             with open(json_path, 'r') as f:
                 coverage_durations_dicts[design_name] = json.load(f)
 
-    # Load the coverage data and durations for cascade on rfuzz coverage
-    coverage_durations_dicts_cascade = {}
+    # Load the coverage data and durations for milesan on rfuzz coverage
+    coverage_durations_dicts_milesan = {}
     for design_name in design_names:
         json_path = passive_rfuzz_coverage_path_per_design[design_name]
         if not os.path.exists(json_path):
@@ -57,7 +57,7 @@ def plot_rfuzz(active_rfuzz_coverage_path_per_design: dict, passive_rfuzz_covera
             ignored_design_names.add(design_name)
         else:
             with open(json_path, 'r') as f:
-                coverage_durations_dicts_cascade[design_name] = json.load(f)
+                coverage_durations_dicts_milesan[design_name] = json.load(f)
 
     # Remove absent design names
     for design_name in ignored_design_names:
@@ -66,11 +66,11 @@ def plot_rfuzz(active_rfuzz_coverage_path_per_design: dict, passive_rfuzz_covera
     coverage_dict = {design_name: 100*np.array(coverage_durations_dicts[design_name]['coverage_sequence'])/NUM_COVERAGE_POINTS[design_name] for design_name in design_names}
     durations_seconds_dict = {design_name: np.array(coverage_durations_dicts[design_name]['durations']) for design_name in design_names}
 
-    coverage_dict_cascade = {design_name: 100*np.array(coverage_durations_dicts_cascade[design_name]['coverage_sequence'])/NUM_COVERAGE_POINTS[design_name] for design_name in design_names}
-    durations_seconds_dict_cascade = {design_name: np.array(coverage_durations_dicts_cascade[design_name]['durations']) for design_name in design_names}
+    coverage_dict_milesan = {design_name: 100*np.array(coverage_durations_dicts_milesan[design_name]['coverage_sequence'])/NUM_COVERAGE_POINTS[design_name] for design_name in design_names}
+    durations_seconds_dict_milesan = {design_name: np.array(coverage_durations_dicts_milesan[design_name]['durations']) for design_name in design_names}
 
     # Cumulative sum of durations
-    durations_seconds_dict_cumsum_cascade = {design_name: [sum(durations_seconds_dict_cascade[design_name][0:id_in_tuple]) for id_in_tuple in range(len(durations_seconds_dict_cascade[design_name]))] for design_name in durations_seconds_dict.keys()}
+    durations_seconds_dict_cumsum_milesan = {design_name: [sum(durations_seconds_dict_milesan[design_name][0:id_in_tuple]) for id_in_tuple in range(len(durations_seconds_dict_milesan[design_name]))] for design_name in durations_seconds_dict.keys()}
 
     fig, axs = plt.subplots(len(design_names), 1, figsize=(7, 6), sharex=True)
 
@@ -78,29 +78,29 @@ def plot_rfuzz(active_rfuzz_coverage_path_per_design: dict, passive_rfuzz_covera
         design_name = design_names[i]
         X = durations_seconds_dict[design_name]
         Y = np.array(coverage_dict[design_name])
-        X_cascade = durations_seconds_dict_cumsum_cascade[design_name]
-        Y_cascade = np.array(coverage_dict_cascade[design_name])
+        X_milesan = durations_seconds_dict_cumsum_milesan[design_name]
+        Y_milesan = np.array(coverage_dict_milesan[design_name])
 
         # Truncate after X_SECONDS_AFTER_RFUZZ_END more
         if X_SECONDS_AFTER_RFUZZ_END is not None:
-            for j, x in enumerate(X_cascade):
+            for j, x in enumerate(X_milesan):
                 if x > X[-1] + X_SECONDS_AFTER_RFUZZ_END:
-                    X_cascade = X_cascade[:j+1]
-                    Y_cascade = Y_cascade[:j+1]
+                    X_milesan = X_milesan[:j+1]
+                    Y_milesan = Y_milesan[:j+1]
                     break
         if X_MAX_SECONDS is not None:
             ax.set_xlim(0, X_MAX_SECONDS)
-            for j, x in enumerate(X_cascade):
+            for j, x in enumerate(X_milesan):
                 if x > X_MAX_SECONDS:
-                    X_cascade = X_cascade[:j+1]
-                    Y_cascade = Y_cascade[:j+1]
+                    X_milesan = X_milesan[:j+1]
+                    Y_milesan = Y_milesan[:j+1]
                     break
 
-        # Extend X and Y to the max of X_cascade
-        X = np.append(X, X_cascade[-1])
+        # Extend X and Y to the max of X_milesan
+        X = np.append(X, X_milesan[-1])
         Y = np.append(Y, Y[-1])
 
-        ax.plot(X_cascade, Y_cascade, zorder=3, color='k', label='Cascade')
+        ax.plot(X_milesan, Y_milesan, zorder=3, color='k', label='Cascade')
         ax.plot(X, Y, zorder=3, color='red', label='RFUZZ')
         ax.set_title(f"{DESIGN_PRETTY_NAMES[design_name]} ({NUM_COVERAGE_POINTS[design_name]} coverage points)")
         ax.grid(zorder=0)

@@ -1,9 +1,9 @@
 from common.spike import SPIKE_STARTADDR
-# from cascade.cfinstructionclasses import R12DInstruction, ImmRdInstruction, RegImmInstruction
+# from milesan.cfinstructionclasses import R12DInstruction, ImmRdInstruction, RegImmInstruction
 from rv.asmutil import li_into_reg
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, PROBA_ENTANGLE_LAYOUT, PROBA_SAME_BASE_PT, TAINT_EN, ALLOC_PAGE_PER_PT
 from params.runparams import DEBUG_PRINT, DO_ASSERT
-from cascade.privilegestate import PrivilegeStateEnum
+from milesan.privilegestate import PrivilegeStateEnum
 from common.designcfgs import get_design_stop_sig_addr, get_design_reg_dump_addr, get_design_reg_stream_addr
 import random
 from math import ceil, floor
@@ -60,7 +60,7 @@ def virt2phys(vaddr, priv_level, va_layout, fuzzerstate, absolute_addr = True):
 
 # @brief Stores a 64 bit value into a 64 bit register. 
 def li_doubleword(value, rd, tmp, fuzzerstate, is_rd_nonpickable_ok: bool = False):
-    from cascade.cfinstructionclasses_t0 import R12DInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0
+    from milesan.cfinstructionclasses_t0 import R12DInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0
 
     instrs = []
     imm_0_to_31 = value & 0xffffffff
@@ -380,7 +380,7 @@ class PageTablesGen:
     # @brief populate the mmu pte list with the value of the PTE for all layouts to write them already initialized in memory
     # the program can later modify these lists to trigger page faults, etc 
     def gen_pt_in_mem(self, fuzzerstate):
-        from cascade.finalblock import get_finalblock_max_size
+        from milesan.finalblock import get_finalblock_max_size
         curr_layout_pt_content      = []
         ppn_leaf                    = 0
 

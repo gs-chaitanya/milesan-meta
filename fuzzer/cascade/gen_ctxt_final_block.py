@@ -1,6 +1,6 @@
 from common.spike import SPIKE_STARTADDR
-from cascade.cfinstructionclasses import MstatusWriterInstruction, PrivilegeDescentInstruction, ExceptionInstruction, CSRRegInstruction, SimpleExceptionEncapsulator, JALRInstruction
-from cascade.privilegestate import PrivilegeStateEnum
+from milesan.cfinstructionclasses import MstatusWriterInstruction, PrivilegeDescentInstruction, ExceptionInstruction, CSRRegInstruction, SimpleExceptionEncapsulator, JALRInstruction
+from milesan.privilegestate import PrivilegeStateEnum
 from params.fuzzparams import USE_MMU
 
 # TODO, for performance improvement, we can concat all these functions

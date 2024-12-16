@@ -1,13 +1,13 @@
 from params.fuzzparams import TAINT_EN
-from cascade.randomize.pickbytecodetaints import OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS
-from cascade.cfinstructionclasses import *
-from cascade.util import ExceptionCauseVal, SimulatorEnum
+from milesan.randomize.pickbytecodetaints import OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS
+from milesan.cfinstructionclasses import *
+from milesan.util import ExceptionCauseVal, SimulatorEnum
 from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
-from cascade.registers import ABI_INAMES
+from milesan.registers import ABI_INAMES
 from rv.csrids import CSR_ABI_NAMES
 from params.runparams import PRINT_CHECK_REGS_T0, PRINT_COLOR_TAINT, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT, PRINT_WRITEBACK_T0, PRINT_WRITEBACK, DUMP_WRITEBACK, DUMP_WRITEBACK_T0, ASSERT_WRITEBACK_TRACE
 from common.spike import SPIKE_STARTADDR
-from cascade.registers import IntRegIndivState
+from milesan.registers import IntRegIndivState
 import numpy as np
 from rv.csrids import MPP_BIT, MIE_BIT, MPIE_BIT
 from rv.csrids import SIE_BIT, SPIE_BIT, SPP_BIT
@@ -212,7 +212,7 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
         self.rd_t0 = 0
 
     def execute_t0(self, res, is_spike_resolution: bool):
-        from cascade.randomize.createcfinstr import is_tolerate_R12DInstruction
+        from milesan.randomize.createcfinstr import is_tolerate_R12DInstruction
         assert TAINT_EN
         if self.paddr == -1:
             print(f"Skipping execution of {self.get_str()}")

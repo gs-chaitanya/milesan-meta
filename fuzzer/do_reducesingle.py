@@ -8,12 +8,12 @@
 # sys.argv[2]: num of cores allocated to fuzzing
 # sys.argv[3]: offset for seed (to avoid running the fuzzing on the same instances over again)
 
-from cascade.reduce import reduce_program
+from milesan.reduce import reduce_program
 from params.fuzzparams import IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_RTL_TIMEOUT, IGNORE_SPIKE_TIMEOUT
-from cascade.toleratebugs import tolerate_bug_for_eval_reduction
+from milesan.toleratebugs import tolerate_bug_for_eval_reduction
 from common.profiledesign import profile_get_medeleg_mask, profile_get_asid_mask
 from common.spike import calibrate_spikespeed
-from cascade.fuzzfromdescriptor import gen_new_test_instance
+from milesan.fuzzfromdescriptor import gen_new_test_instance
 import sys
 import os
 

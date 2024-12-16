@@ -5,7 +5,7 @@
 # This utility finds n distinct failing program descriptors. It is supposed to be preceded by find_n_failing_descriptors.
 
 from params.runparams import PATH_TO_TMP
-from cascade.reduce import reduce_program
+from milesan.reduce import reduce_program
 from common.profiledesign import profile_get_medeleg_mask
 from common.spike import calibrate_spikespeed
 

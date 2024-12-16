@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
 
-from cascade.cfinstructionclasses_t0 import R12DInstruction_t0, RegImmInstruction_t0, ImmRdInstruction_t0
+from milesan.cfinstructionclasses_t0 import R12DInstruction_t0, RegImmInstruction_t0, ImmRdInstruction_t0
 from params.runparams import DO_ASSERT
 from params.fuzzparams import NUM_MIN_UNTAINTED_INTREGS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
-from cascade.util import ISAInstrClass, INSTRUCTIONS_BY_ISA_CLASS, IntRegIndivState
-from cascade.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
+from milesan.util import ISAInstrClass, INSTRUCTIONS_BY_ISA_CLASS, IntRegIndivState
+from milesan.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 import random
 def clear_taints_with_random_instructions(fuzzerstate, untaint_all: bool = False):
     instr_objs = []

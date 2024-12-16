@@ -18,8 +18,8 @@ PRETTY_NAMES = {
     "boom":"BOOM",
     "openc910":"OpenC910"
 }
-TAINT_MISMATCH_PATH = "/mnt/cascade-data/REDUCTION_PERF_NO_MMU/"
-PERFORMANCE_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/performance"
+TAINT_MISMATCH_PATH = "/mnt/milesan-data/REDUCTION_PERF_NO_MMU/"
+PERFORMANCE_PLOTS_PATH = "/mnt/milesan-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/performance"
 #%%
 perf_df = pd.DataFrame()
 new_entry = {}

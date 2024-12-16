@@ -6,19 +6,19 @@
 
 from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS
-from cascade.toleratebugs import is_forbid_vexriscv_csrs, is_tolerate_ras0, is_tolerate_ras1
-from cascade.cfinstructionclasses import FloatLoadInstruction
-from cascade.cfinstructionclasses_t0 import  ImmRdInstruction_t0, RegImmInstruction_t0, R12DInstruction_t0, IntLoadInstruction_t0, CSRRegInstruction_t0
-from cascade.randomize.createcfinstr import create_instr
-from cascade.randomize.pickisainstrclass import ISAInstrClass
-from cascade.randomize.forbidden_random_value import is_forbidden_random_value
-from cascade.util import get_range_bits_per_instrclass, BASIC_BLOCK_MIN_SPACE
+from milesan.toleratebugs import is_forbid_vexriscv_csrs, is_tolerate_ras0, is_tolerate_ras1
+from milesan.cfinstructionclasses import FloatLoadInstruction
+from milesan.cfinstructionclasses_t0 import  ImmRdInstruction_t0, RegImmInstruction_t0, R12DInstruction_t0, IntLoadInstruction_t0, CSRRegInstruction_t0
+from milesan.randomize.createcfinstr import create_instr
+from milesan.randomize.pickisainstrclass import ISAInstrClass
+from milesan.randomize.forbidden_random_value import is_forbidden_random_value
+from milesan.util import get_range_bits_per_instrclass, BASIC_BLOCK_MIN_SPACE
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, USE_MMU, INIT_MIE
 from params.runparams import INSERT_REGDUMPS
 from rv.asmutil import li_into_reg
 from common.spike import SPIKE_STARTADDR
 from common.designcfgs import get_design_reg_stream_addr, get_design_cl_size
-from cascade.mmu_utils import PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_BITS
+from milesan.mmu_utils import PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_BITS
 import numpy as np
 import random
 
@@ -255,13 +255,13 @@ def gen_initial_basic_block(fuzzerstate, offset_addr: int, csr_init_rounding_mod
     # Jump to the next basic block, say, with jal for simplicity
     # range_bits_each_direction = get_range_bits_per_instrclass(ISAInstrClass.JAL)
     # fuzzerstate.next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction))
-    from cascade.basicblock import gen_next_bb_addr
+    from milesan.basicblock import gen_next_bb_addr
     gen_next_bb_addr(fuzzerstate, ISAInstrClass.JAL,curr_addr)
     if fuzzerstate.next_bb_addr == None:
         return False
     # JAL at end of initial block is the first to modify the architectural state of the pickable registers, so execute it.
     next_instr = create_instr("jal", fuzzerstate, curr_addr)
-    # curr_addr += fuzzerstate.append_and_execute_instr(next_instr, insert_regdump = False) # first instruction that is considered for ISA cascade simulation crosscheck
+    # curr_addr += fuzzerstate.append_and_execute_instr(next_instr, insert_regdump = False) # first instruction that is considered for ISA milesan simulation crosscheck
     curr_addr += fuzzerstate.append_and_execute_instr(next_instr, insert_regdump = False)
      # NO_COMPRESSED
 

@@ -13,7 +13,7 @@
 from drfuzz_mem.reduce_reg_taint import reduce_reg_taint
 from common.spike import calibrate_spikespeed
 from common.profiledesign import profile_get_medeleg_mask
-from cascade.toleratebugs import tolerate_bug_for_bug_timing
+from milesan.toleratebugs import tolerate_bug_for_bug_timing
 
 
 

@@ -4,14 +4,14 @@ import glob
 import json
 
 from params.runparams import PATH_TO_TMP, PATH_TO_COV
-from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_new_test_instance
-from cascade.cfinstructionclasses import *
+from milesan.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_new_test_instance
+from milesan.cfinstructionclasses import *
 import subprocess, itertools
 from common import designcfgs
 from common.spike import SPIKE_STARTADDR
-from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
-from cascade.registers import ABI_INAMES,MAX_32b
-from cascade.spikeresolution import spike_resolution_return_interm
+from milesan.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
+from milesan.registers import ABI_INAMES,MAX_32b
+from milesan.spikeresolution import spike_resolution_return_interm
 
 MAX_CYCLES_PER_INSTR = 30
 SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
@@ -23,7 +23,7 @@ def spike_sim_taint(fuzzerstate, expected_regvals):
         pc_reg_pairs_0[req[0] + SPIKE_STARTADDR][req[2]] = regval
 
 
-    # Chose some random injecable instruction and inject taint. Also flip the corresponding bit in the alternative cascade program
+    # Chose some random injecable instruction and inject taint. Also flip the corresponding bit in the alternative milesan program
     # to derive the taints from the spike simulation
     injected_taint = False
     inject_addr = 0x0
@@ -42,7 +42,7 @@ def spike_sim_taint(fuzzerstate, expected_regvals):
     assert injected_taint,  "Did not inject taint."
 
 
-    # Run spike with the modified cascade program and obtaint the register dumps
+    # Run spike with the modified milesan program and obtaint the register dumps
     expected_regvals, elfpath = spike_resolution_return_interm(fuzzerstate)
 
     pc_reg_pairs_1 = {req[0] + SPIKE_STARTADDR:{} for req in expected_regvals[2]}

@@ -1,12 +1,12 @@
-from common.designcfgs import get_design_cascade_path
+from common.designcfgs import get_design_milesan_path
 from common.timeout import timeout
 from params.runparams import PATH_TO_TMP, PATH_TO_COV
 from common.threads import capture_process_output
-from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals, gen_fuzzerstate_interm_elf, gen_new_test_instance
+from milesan.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals, gen_fuzzerstate_interm_elf, gen_new_test_instance
 from common.profiledesign import profile_get_medeleg_mask
-from cascade.fuzzsim import runtest_verilator_fordrfuzz_mem, runtest_verilator_forrfuzz_mem
-from cascade.fuzzerstate import FuzzerState
-from cascade.genelf import gen_elf_from_bbs
+from milesan.fuzzsim import runtest_verilator_fordrfuzz_mem, runtest_verilator_forrfuzz_mem
+from milesan.fuzzerstate import FuzzerState
+from milesan.genelf import gen_elf_from_bbs
 
 import os
 
@@ -214,8 +214,8 @@ def _run_drfuzz_with_existing_elf_worker(fuzzerstate: FuzzerState, rtl_elfpath,i
 
 def recompile_rfuzz_and_drfuzz_mem(design_name):
     for inst in ['rfuzz_mem','drfuzz_mem']:
-        print(f"Recompiling {design_name} for {inst} in {get_design_cascade_path(design_name)}")
-        cmd = ['make', '-C', f"{get_design_cascade_path(design_name)}", f'recompile_{inst}_notrace']
+        print(f"Recompiling {design_name} for {inst} in {get_design_milesan_path(design_name)}")
+        cmd = ['make', '-C', f"{get_design_milesan_path(design_name)}", f'recompile_{inst}_notrace']
         subprocess.run(cmd)
 
 

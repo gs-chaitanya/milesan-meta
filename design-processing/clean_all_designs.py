@@ -20,15 +20,15 @@ confirmation_str = input("This will clean all the design repositories listed in 
 if confirmation_str.lower() not in ["y","yes"]:
     print("Aborted.")
 
-# Read the list of paths to the design cascade directories.
+# Read the list of paths to the design milesan directories.
 with open(PATH_TO_DESIGN_CFGS, "r") as f:
     design_json_content = json.load(f)
-design_cascade_paths = list(design_json_content.values())
+design_milesan_paths = list(design_json_content.values())
 
 # Run cleaning in parallel.
 num_processes = int(os.getenv("MILESAN_JOBS"))
-def worker(design_cascade_path):
-    cmdline = ["make", "-C", design_cascade_path, "clean"]
+def worker(design_milesan_path):
+    cmdline = ["make", "-C", design_milesan_path, "clean"]
     subprocess.check_call(cmdline)
 my_pool = multiprocessing.Pool(num_processes)
-my_pool.map(worker, design_cascade_paths)
+my_pool.map(worker, design_milesan_paths)

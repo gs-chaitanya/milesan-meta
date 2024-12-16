@@ -1,4 +1,4 @@
-from cascade.util import CFInstructionClass
+from milesan.util import CFInstructionClass
 import enum
 
 # If true only EITHER rd, rs1 etc are tainted, if false several bytecode fields can be tainted.

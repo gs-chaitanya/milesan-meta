@@ -1,4 +1,4 @@
-from cascade.registers import CSR, MStatus_CSR, SStatus_CSR, Medeleg_CSR, MAX_64b
+from milesan.registers import CSR, MStatus_CSR, SStatus_CSR, Medeleg_CSR, MAX_64b
 from rv.csrids import CSR_IDS, FUZZED_CSRS, CSR_TYPES, CSRTypeEnum, MSCAUSE_MASK, MSTATUS_START_VAL, SSTATUS_START_VAL
 from copy import copy, deepcopy
 

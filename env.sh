@@ -12,7 +12,7 @@ else
 	myroot=$(cd $(dirname $0) && pwd -P)
 fi
 
-echo "cascade metarepo root: $myroot"
+echo "milesan metarepo root: $myroot"
 
 # Set meta repo root
 export MILESAN_META_ROOT=$myroot
@@ -45,7 +45,7 @@ unset MILESAN_DESIGN
 
 # Where to install the binaries and other files of all the tools
 # (compiler toolchain, verilator, sv2v, etc.)
-export PREFIX_MILESAN=$HOME/prefix-cascade
+export PREFIX_MILESAN=$HOME/prefix-milesan
 
 # How many parallel jobs would you like to have issued?
 export MILESAN_JOBS=250 # Feel free to change this
@@ -83,7 +83,7 @@ then
 
     ulimit -n 4096 # many FD's
     export MILESAN_DATADIR=/data/"${USER}"/data-eda3
-    # export MILESAN_DATADIR=/home/flsolt/cascade-data
+    # export MILESAN_DATADIR=/home/flsolt/milesan-data
 elif [[ "${HOSTNAME}" == *"cn112"* ]]; # ETHZ cn112
 then
     # Example customization
@@ -130,13 +130,13 @@ then
     export MILESAN_JOBS=10
 
     ulimit -n 10000 # many FD's
-    export MILESAN_DATADIR=/home/"${USER}"/cascade-data
+    export MILESAN_DATADIR=/home/"${USER}"/milesan-data
 elif [ -z ${IS_DOCKER+x} ]
 then
     export MILESAN_JOBS=250
 
     ulimit -n 10000 # many FD's
-    export MILESAN_DATADIR=/mnt/cascade-data
+    export MILESAN_DATADIR=/mnt/milesan-data
 fi
 
 # Where should our python venv be?
@@ -157,7 +157,7 @@ export RUSTUP_HOME=$PREFIX_MILESAN/.rustup
 export MILESAN_ENV_VERSION=1
 
 # Set opentitan path (for Ibex)
-export OPENTITAN_ROOT=$myroot/external-dependencies/cascade-opentitan
+export OPENTITAN_ROOT=$myroot/external-dependencies/milesan-opentitan
 
 # Set yosys scripts location
 export MILESAN_YS=$MILESAN_DESIGN_PROCESSING_ROOT/common/yosys
@@ -186,12 +186,12 @@ export MODELSIM_LOCKFILE=$MILESAN_META_ROOT/tmp/modelsim_lock
 # RISC-V proxy kernel
 export MILESAN_PK64=$RISCV/riscv32-unknown-elf/bin/pk
 
-# TODO Remove, not really a cascade thing, just used to eval DifuzzRTL
+# TODO Remove, not really a milesan thing, just used to eval DifuzzRTL
 # PATH=/data/flsolt/opt/elf2hex:$PATH
 
 export MILESAN_PATH_TO_FIGURES=$MILESAN_META_ROOT/figures
 
-export MILESAN_PATH_TO_DIFUZZRTL_ELFS=/cascade-difuzzrtl/docker/shareddir/savedockerdifuzzrtl/Fuzzer/outdir/illegal/elf/
+export MILESAN_PATH_TO_DIFUZZRTL_ELFS=/milesan-difuzzrtl/docker/shareddir/savedockerdifuzzrtl/Fuzzer/outdir/illegal/elf/
 # export MILESAN_PATH_TO_DIFUZZRTL_ELFS=/scratch/flsolt/shareddir/Fuzzer/outdir1000/illegal/elf
 
 

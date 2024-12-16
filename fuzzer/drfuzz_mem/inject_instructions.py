@@ -4,11 +4,11 @@ import glob
 import json
 
 from params.runparams import PATH_TO_TMP, PATH_TO_COV
-from cascade.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_new_test_instance
-from cascade.cfinstructionclasses import RegImmInstruction,R12DInstruction
+from milesan.fuzzfromdescriptor import NUM_MAX_BBS_UPPERBOUND, gen_fuzzerstate_elf_expectedvals_interm, gen_new_test_instance
+from milesan.cfinstructionclasses import RegImmInstruction,R12DInstruction
 import subprocess, itertools
 from common import designcfgs
-from cascade.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
+from milesan.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
 MAX_CYCLES_PER_INSTR = 30
 SETUP_CYCLES = 1000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
 def gen_elf_and_inject_instructions(design_name: str, max_n_insts_per_bb: int, en_taint: bool,seed: int, fuzz_only_this_inst_type: int = None):    
@@ -105,8 +105,8 @@ def gen_elf_and_inject_instructions(design_name: str, max_n_insts_per_bb: int, e
             f.write(inst_str)
 
         cmd = ["make","rerun_drfuzz_mem_notrace" if en_taint else "rerun_rfuzz_mem_notrace"]
-        cascadedir = designcfgs.get_design_cascade_path(fuzzerstate.design_name)
-        subprocess.run(cmd,cwd=cascadedir,env=env,capture_output=False,check=True)
+        milesandir = designcfgs.get_design_milesan_path(fuzzerstate.design_name)
+        subprocess.run(cmd,cwd=milesandir,env=env,capture_output=False,check=True)
     except Exception as e:
         shutil.rmtree(root_dir)
         # os.removedirs(trace_dir)

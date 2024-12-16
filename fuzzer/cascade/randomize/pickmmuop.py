@@ -1,14 +1,14 @@
-from cascade.privilegestate import PrivilegeStateEnum
-from cascade.cfinstructionclasses_t0 import R12DInstruction_t0, CSRRegInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0, TvecWriterInstruction_t0, SpecialInstruction_t0, JALRInstruction_t0
+from milesan.privilegestate import PrivilegeStateEnum
+from milesan.cfinstructionclasses_t0 import R12DInstruction_t0, CSRRegInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0, TvecWriterInstruction_t0, SpecialInstruction_t0, JALRInstruction_t0
 from params.fuzzparams import RPROD_MASK_REGISTER_ID, MAX_NUM_INSTR_IN_LAYOUT, MIN_NUM_INSTR_IN_LAYOUT, PROBA_NEW_SATP_NOT_USED, PROBA_NEW_SATP_XEPC_POP, PROBA_NEW_SATP_STVEC_POP, RDEP_MASK_REGISTER_ID
 from params.runparams import DEBUG_PRINT, GET_DATA
 from common.spike import SPIKE_STARTADDR
-from cascade.mmu_utils import li_doubleword, MODES_PARAM_RV32, MODES_PARAMS_RV64, PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_SHIFT
+from milesan.mmu_utils import li_doubleword, MODES_PARAM_RV32, MODES_PARAMS_RV64, PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_SHIFT
 from rv.csrids import CSR_IDS
 from rv.asmutil import li_into_reg
 import random
-from cascade.randomize.pickcleartaintops import clear_taints_with_random_instructions
-from cascade.util import BASIC_BLOCK_MIN_SPACE, MmuState, IntRegIndivState, ExceptionCauseVal
+from milesan.randomize.pickcleartaintops import clear_taints_with_random_instructions
+from milesan.util import BASIC_BLOCK_MIN_SPACE, MmuState, IntRegIndivState, ExceptionCauseVal
 #DEBUG_PRINT = True
 
 # @brief checks if we can currently do an MMU operation

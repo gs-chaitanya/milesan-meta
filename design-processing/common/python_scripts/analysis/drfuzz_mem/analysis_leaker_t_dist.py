@@ -20,8 +20,8 @@ PRETTY_DUT_NAMES_DICT = {
     "cva6":"CVA6",
     "kronos":"Kronos"
 }
-TAINT_MISMATCH_PATH = "/mnt/cascade-data/PERF/"
-PERFORMANCE_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/performance"
+TAINT_MISMATCH_PATH = "/mnt/milesan-data/PERF/"
+PERFORMANCE_PLOTS_PATH = "/mnt/milesan-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/performance"
 #%%
 perf_df = pd.DataFrame()
 for file in glob.glob(TAINT_MISMATCH_PATH+ "**/perfstats.json", recursive=True):
@@ -259,14 +259,14 @@ ax.grid(axis="y")
 ax.legend()
 #%%
 def load_reduce_perf():
-    PERFORMANCE_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/performance"
-    sys.path.append("/mnt/cascade-meta/fuzzer")
-    from cascade.util import INSTRUCTIONS_BY_ISA_CLASS
-    from cascade.util import ISAInstrClass
+    PERFORMANCE_PLOTS_PATH = "/mnt/milesan-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/performance"
+    sys.path.append("/mnt/milesan-meta/fuzzer")
+    from milesan.util import INSTRUCTIONS_BY_ISA_CLASS
+    from milesan.util import ISAInstrClass
     perf_df = pd.DataFrame()
     new_entry = {}
-    paths = glob.glob( "/mnt/cascade-data/REDUCE_PERF*/" + "**/*.reduce.log", recursive=True)
-    paths += glob.glob( "/mnt/cascade-data/CT-VIOLATIONS/"+ "**/*.reduce.log", recursive=True)
+    paths = glob.glob( "/mnt/milesan-data/REDUCE_PERF*/" + "**/*.reduce.log", recursive=True)
+    paths += glob.glob( "/mnt/milesan-data/CT-VIOLATIONS/"+ "**/*.reduce.log", recursive=True)
     for file in paths:
         dut = file.split("/")[-1].split(".")[0]
         with open(file, "r") as f:

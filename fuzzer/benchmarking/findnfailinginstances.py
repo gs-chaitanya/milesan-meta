@@ -5,7 +5,7 @@
 # This utility finds n distinct failing program descriptors
 
 from params.runparams import PATH_TO_TMP
-from cascade.fuzzfromdescriptor import gen_new_test_instance, fuzz_single_from_descriptor
+from milesan.fuzzfromdescriptor import gen_new_test_instance, fuzz_single_from_descriptor
 from common.profiledesign import profile_get_medeleg_mask
 from common.spike import calibrate_spikespeed
 

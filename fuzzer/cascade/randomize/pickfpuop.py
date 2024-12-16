@@ -7,8 +7,8 @@
 from params.runparams import DO_ASSERT
 from rv.csrids import CSR_IDS
 from params.fuzzparams import FPU_ENDIS_REGISTER_ID
-from cascade.privilegestate import PrivilegeStateEnum
-from cascade.cfinstructionclasses import CSRRegInstruction, RegImmInstruction
+from milesan.privilegestate import PrivilegeStateEnum
+from milesan.cfinstructionclasses import CSRRegInstruction, RegImmInstruction
 import random
 
 ROUNDING_MODES = [0, 1, 2, 3, 4] # The non-reserved ones

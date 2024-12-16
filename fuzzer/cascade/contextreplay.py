@@ -7,15 +7,15 @@
 from dataclasses import dataclass
 from params.runparams import DO_ASSERT
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, USE_MMU, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, RPROD_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, RDEP_MASK_REGISTER_ID, RELOCATOR_REGISTER_ID, TAINT_EN, MAX_NUM_STORE_LOCATIONS
-from cascade.toleratebugs import is_tolerate_ras0
+from milesan.toleratebugs import is_tolerate_ras0
 from rv.csrids import CSR_IDS
 from common.spike import SPIKE_STARTADDR
-from cascade.spikeresolution import get_current_layout
-from cascade.privilegestate import PrivilegeStateEnum
-from cascade.cfinstructionclasses_t0 import ImmRdInstruction_t0, RegImmInstruction_t0, IntLoadInstruction_t0, IntStoreInstruction_t0, CSRRegInstruction_t0, JALInstruction_t0, RawDataWord_t0, PrivilegeDescentInstruction_t0, R12DInstruction_t0
-from cascade.randomize.pickstoreaddr import ALIGNMENT_BITS_MAX
+from milesan.spikeresolution import get_current_layout
+from milesan.privilegestate import PrivilegeStateEnum
+from milesan.cfinstructionclasses_t0 import ImmRdInstruction_t0, RegImmInstruction_t0, IntLoadInstruction_t0, IntStoreInstruction_t0, CSRRegInstruction_t0, JALInstruction_t0, RawDataWord_t0, PrivilegeDescentInstruction_t0, R12DInstruction_t0
+from milesan.randomize.pickstoreaddr import ALIGNMENT_BITS_MAX
 from common.designcfgs import get_design_cl_size
-from cascade.mmu_utils import phys2virt
+from milesan.mmu_utils import phys2virt
 from rv.asmutil import li_into_reg, to_unsigned
 
 # @brief This function computes an upper bound on the size of the context setter basic block.

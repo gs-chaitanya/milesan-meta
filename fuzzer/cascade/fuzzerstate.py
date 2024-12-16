@@ -7,31 +7,31 @@ from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGD
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_SOURCE_PRIVS, TAINT_SINK_PRIVS, P_TWO_TAINT_SOURCE_PRIVS, P_TWO_TAINT_SINK_PRIVS
 from params.fuzzparams import MAX_N_TAINT_SOURCE_LAYOUTS, MIN_N_TAINT_SOURCE_LAYOUTS
 from params.fuzzparams import reset_reg_settings
-from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_cascade_path, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48, get_design_boot_addr
+from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_milesan_path, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48, get_design_boot_addr
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
-from cascade.util import INSTRUCTIONS_BY_ISA_CLASS
-from cascade.util import ISAInstrClass, ExceptionCauseVal, MmuState, SimulatorEnum
-from cascade.cfinstructionclasses import is_placeholder
-from cascade.memview import MemoryView
-from cascade.csrfile import CSRFile
-from cascade.contextreplay import get_context_setter_max_size
-from cascade.privilegestate import PrivilegeState, PrivilegeStateEnum
-from cascade.randomize.pickstoreaddr import MemStoreState
-from cascade.randomize.pickreg import IntRegPickState, FloatRegPickState
-from cascade.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
-from cascade.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
-from cascade.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0, RDInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0
-from cascade.cfinstructionclasses import JALRInstruction, BranchInstruction
-from cascade.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen
+from milesan.util import INSTRUCTIONS_BY_ISA_CLASS
+from milesan.util import ISAInstrClass, ExceptionCauseVal, MmuState, SimulatorEnum
+from milesan.cfinstructionclasses import is_placeholder
+from milesan.memview import MemoryView
+from milesan.csrfile import CSRFile
+from milesan.contextreplay import get_context_setter_max_size
+from milesan.privilegestate import PrivilegeState, PrivilegeStateEnum
+from milesan.randomize.pickstoreaddr import MemStoreState
+from milesan.randomize.pickreg import IntRegPickState, FloatRegPickState
+from milesan.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
+from milesan.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
+from milesan.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0, RDInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0
+from milesan.cfinstructionclasses import JALRInstruction, BranchInstruction
+from milesan.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen
 from rv.csrids import CSR_IDS, CSR_ABI_NAMES
-from cascade.registers import ABI_INAMES
-from cascade.perfmonitor import PerformanceMonitor
+from milesan.registers import ABI_INAMES
+from milesan.perfmonitor import PerformanceMonitor
 import random
 import os
 import itertools
 import shutil
 import glob
-from cascade.randomize.createspecinstr import create_speculative_instr
+from milesan.randomize.createspecinstr import create_speculative_instr
 import pickle
 class FuzzerState:
     # @param randseed for identification purposes only.
@@ -510,7 +510,7 @@ class FuzzerState:
         env["SIMSRAMTAINT"] = simsramtaint_path
         env["TRACEFILE"] = tracefile_path
         env["WRITEBACK_PATH"] = writeback_path
-        env["DESIGN_DIR"] = os.path.abspath(get_design_cascade_path(self.design_name))
+        env["DESIGN_DIR"] = os.path.abspath(get_design_milesan_path(self.design_name))
         with open(env_path, "w") as f:
             f.write(f"export SIMSRAMELF={env['SIMSRAMELF'].replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
             f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF'].replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}.dump\n")

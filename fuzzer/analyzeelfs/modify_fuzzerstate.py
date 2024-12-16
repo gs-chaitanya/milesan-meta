@@ -6,11 +6,11 @@ sys.path.append("../")
 # %env PRINT_ENVIRONMENT=1
 %env MILESAN_DATADIR="pickletest-mod"
 import multiprocessing as mp
-from cascade.fuzzerstate import FuzzerState
+from milesan.fuzzerstate import FuzzerState
 import pickle
-from cascade.fuzzsim import runtest_simulator
-from cascade.spikeresolution import SPIKE_STARTADDR
-FUZZERSTATE_PATH = "/mnt/cascade-data/pickletest/boom/729549_boom_275_73/rtlreduce_reducestart729549_boom_275_73_7_28_7_0.fuzzerstate.pickle"
+from milesan.fuzzsim import runtest_simulator
+from milesan.spikeresolution import SPIKE_STARTADDR
+FUZZERSTATE_PATH = "/mnt/milesan-data/pickletest/boom/729549_boom_275_73/rtlreduce_reducestart729549_boom_275_73_7_28_7_0.fuzzerstate.pickle"
 # %%
 with open(FUZZERSTATE_PATH, "rb") as f:
     fuzzerstate = pickle.load(f)

@@ -6,7 +6,7 @@
 
 from benchmarking.timereduction import eval_reduction, plot_eval_reduction
 from benchmarking.findnfailinginstances import find_n_failing_descriptors
-from cascade.toleratebugs import tolerate_bug_for_eval_reduction
+from milesan.toleratebugs import tolerate_bug_for_eval_reduction
 
 import os
 

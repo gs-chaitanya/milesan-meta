@@ -1,5 +1,5 @@
-from cascade.util import IntRegIndivState, MmuState
-from cascade.cfinstructionclasses import SimpleExceptionEncapsulator, IntLoadInstruction, CSRRegInstruction
+from milesan.util import IntRegIndivState, MmuState
+from milesan.cfinstructionclasses import SimpleExceptionEncapsulator, IntLoadInstruction, CSRRegInstruction
 from rv.csrids import CSR_IDS
 from params.runparams import DEBUG_PRINT, GET_DATA
 
@@ -39,7 +39,7 @@ def id_instruction_page_fault(is_mtvec: bool, fuzzerstate):
 
 
 '''
-The issue with paging exception is that cascade has no lookahead in terms of addresses. When we want to trigger and exception, we have a granualrity of a page,
+The issue with paging exception is that milesan has no lookahead in terms of addresses. When we want to trigger and exception, we have a granualrity of a page,
 which will have a side effect on all instructions within that page. The best solution is not to trigger them by selecting and then updating paging, but rather
 select the address that will fault in advance. Than, whenver we will go to that address it triggers an exception.
 

@@ -4,25 +4,25 @@
 
 # This module provides facilities for reducing test cases
 
-from common.designcfgs import get_design_march_flags, get_design_march_flags_nocompressed, get_design_boot_addr, get_design_cascade_path
+from common.designcfgs import get_design_march_flags, get_design_march_flags_nocompressed, get_design_boot_addr, get_design_milesan_path
 from common.spike import SPIKE_STARTADDR
 
-from cascade.basicblock import gen_basicblocks
-from cascade.finalblock import finalblock
-from cascade.mmu_utils import phys2virt, PAGE_ALIGNMENT_MASK, virt2phys
-from cascade.cfinstructionclasses import filter_reg_traceback, is_placeholder, SpeculativeInstructionEncapsulator
-from cascade.cfinstructionclasses_t0 import JALInstruction_t0, RegImmInstruction_t0, JALRInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0, R12DInstruction_t0, BranchInstruction_t0
-from cascade.fuzzsim import SimulatorEnum, runtest_simulator, run_rtl_and_load_regstream
-from cascade.spikeresolution import gen_elf_from_bbs, gen_regdump_reqs_reduced, gen_ctx_regdump_reqs, run_trace_regs_at_pc_locs, spike_resolution, gen_regdump_reqs_all_rds
-from cascade.contextreplay import SavedContext, gen_context_setter
-from cascade.gen_ctxt_final_block import *
-from cascade.privilegestate import PrivilegeStateEnum
-from cascade.genelf import gen_elf_from_bbs
+from milesan.basicblock import gen_basicblocks
+from milesan.finalblock import finalblock
+from milesan.mmu_utils import phys2virt, PAGE_ALIGNMENT_MASK, virt2phys
+from milesan.cfinstructionclasses import filter_reg_traceback, is_placeholder, SpeculativeInstructionEncapsulator
+from milesan.cfinstructionclasses_t0 import JALInstruction_t0, RegImmInstruction_t0, JALRInstruction_t0, ImmRdInstruction_t0, RegImmInstruction_t0, R12DInstruction_t0, BranchInstruction_t0
+from milesan.fuzzsim import SimulatorEnum, runtest_simulator, run_rtl_and_load_regstream
+from milesan.spikeresolution import gen_elf_from_bbs, gen_regdump_reqs_reduced, gen_ctx_regdump_reqs, run_trace_regs_at_pc_locs, spike_resolution, gen_regdump_reqs_all_rds
+from milesan.contextreplay import SavedContext, gen_context_setter
+from milesan.gen_ctxt_final_block import *
+from milesan.privilegestate import PrivilegeStateEnum
+from milesan.genelf import gen_elf_from_bbs
 from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, PICKLE_FUZZERSTATE
 from params.fuzzparams import TAINT_EN, USE_SPIKE_INTERM_ELF, RELOCATOR_REGISTER_ID, IGNORE_TAINT_MISMATCH, USE_MMU, USE_COMPRESSED, FILL_MEM_WITH_DEAD_CODE
-from cascade.registers import ABI_INAMES
+from milesan.registers import ABI_INAMES
 from rv.asmutil import li_into_reg, to_unsigned
-from cascade.cfinstructionclasses import IntStoreInstruction
+from milesan.cfinstructionclasses import IntStoreInstruction
 from drfuzz_mem.check_isa_sim_taint import FailTypeEnum
 from params.reduceparams import *
 from copy import deepcopy, copy
@@ -1086,7 +1086,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 # @param find_pillars: If false, the front of the test case will not be reduced.
 # @return a boolean indicating whether the reduction was successful, a float measuring the elapesd time (in seconds), and the number of instructions in the test case.
 def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, quiet: bool = False, target_dir: str = None, hint_left_bound_bb: int = None, hint_right_bound_bb: int = None, hint_left_bound_instr: int = None, hint_right_bound_instr: int = None, hint_left_bound_pillar_bb: int = None, hint_right_bound_pillar_bb: int = None, hint_left_bound_pillar_instr: int = None, hint_right_bound_pillar_instr: int = None, check_pc_spike_again: bool = False):
-    from cascade.fuzzerstate import FuzzerState
+    from milesan.fuzzerstate import FuzzerState
 
     ###
     # Prepare the basic blocks
@@ -1148,7 +1148,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
                 print('Failure takes already place in the initial basic block. Copying the initial basic block.')
             test_fuzzerstate_larger, rtl_elfpath_larger, expected_regvals_pairs_larger, numinstrs = gen_reduced_elf(fuzzerstate, failing_bb_id, len(fuzzerstate.instr_objs_seq[0])-1)
             if target_dir is None:
-                target_dir = os.path.join(get_design_cascade_path(design_name), 'sw', 'fuzzsample')
+                target_dir = os.path.join(get_design_milesan_path(design_name), 'sw', 'fuzzsample')
             if not quiet:
                 Path(target_dir).mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(rtl_elfpath_larger, os.path.join(target_dir, 'app_buggy.elf'))

@@ -1,13 +1,13 @@
 import json
 
-from cascade.fuzzfromdescriptor import gen_new_test_instance
-from cascade.genelf import gen_elf_from_bbs
-from cascade.spikeresolution import spike_resolution_return_interm
+from milesan.fuzzfromdescriptor import gen_new_test_instance
+from milesan.genelf import gen_elf_from_bbs
+from milesan.spikeresolution import spike_resolution_return_interm
 from common.spike import calibrate_spikespeed
 from common.designcfgs import get_design_boot_addr
 from common.profiledesign import profile_get_medeleg_mask
-from cascade.fuzzerstate import FuzzerState
-from cascade.basicblock import gen_basicblocks
+from milesan.fuzzerstate import FuzzerState
+from milesan.basicblock import gen_basicblocks
 
 
 def inject_instrucion_in_elf(q_path):

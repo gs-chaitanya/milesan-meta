@@ -6,8 +6,8 @@ from params.runparams import PATH_TO_TMP, DO_ASSERT
 from common.timeout import timeout
 from common.spike import calibrate_spikespeed
 from common.sim.coverageutil import merge_and_extract_coverages_modelsim
-from difuzzrtl.countinstrs import countinstrs_difuzzrtl, countinstrs_cascade
-from cascade.fuzzsim import runsim_modelsim, MAX_CYCLES_PER_INSTR, SETUP_CYCLES
+from difuzzrtl.countinstrs import countinstrs_difuzzrtl, countinstrs_milesan
+from milesan.fuzzsim import runsim_modelsim, MAX_CYCLES_PER_INSTR, SETUP_CYCLES
 from common.profiledesign import profile_get_medeleg_mask
 
 import json
@@ -31,7 +31,7 @@ def run_rtl_fordifuzzrtl_modelsim(is_difuzzrtl, instance_id, rtl_elfpath, num_cy
     if is_difuzzrtl:
         coveragepath = os.path.join(PATH_TO_TMP, f"coverage_modelsim_difuzzrtl{instance_id}.ucdb")
     else:
-        coveragepath = os.path.join(PATH_TO_TMP, f"coverage_modelsim_cascade{instance_id}.ucdb")
+        coveragepath = os.path.join(PATH_TO_TMP, f"coverage_modelsim_milesan{instance_id}.ucdb")
     is_stop_successful, _ = runsim_modelsim('rocket', num_cycles, rtl_elfpath, 0, 0, coveragepath)
     return is_stop_successful, coveragepath
 
@@ -48,7 +48,7 @@ def __measure_coverage_modelsim_difuzzrtl(is_difuzzrtl: int, elf_id: int):
             num_instrs = countinstrs_difuzzrtl(elf_id)
         else:
             elfpath = os.path.join(PATH_TO_TMP, 'manyelfs_modelsim', f"{design_name}_{elf_id}.elf")
-            num_instrs = countinstrs_cascade(elf_id)
+            num_instrs = countinstrs_milesan(elf_id)
         start_time = time.time()
         is_stop_successful, coveragepath = run_rtl_fordifuzzrtl_modelsim(is_difuzzrtl, elf_id, elfpath, num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
         # Check successful stop
@@ -232,7 +232,7 @@ def merge_coverage_modelsim_difuzzrtl(is_difuzzrtl: bool, series_id: int, target
             if is_difuzzrtl:
                 merged_coverage_filepath = os.path.join(PATH_TO_TMP, f"merged_difuzzrtl_modelsim{design_name}_{coverage_path_id}.dat")
             else:
-                merged_coverage_filepath = os.path.join(PATH_TO_TMP, f"merged_cascade_modelsim{design_name}_{coverage_path_id}.dat")
+                merged_coverage_filepath = os.path.join(PATH_TO_TMP, f"merged_milesan_modelsim{design_name}_{coverage_path_id}.dat")
 
             if last_merged_coverage_filepath is not None:
                 local_coverage_paths = [last_merged_coverage_filepath, coverage_path]

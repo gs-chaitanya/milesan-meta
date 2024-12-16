@@ -1,7 +1,7 @@
 from abc import ABC
 import json
 
-from cascade.util import IntRegIndivState
+from milesan.util import IntRegIndivState
 from rv.csrids import CSR_IDS, CSR_TYPES, CSRTypeEnum
 from rv.csrids import SSTATUS_MASK, MSTATUS_MASK, MSTATUS_START_VAL, SSTATUS_START_VAL
 from params.runparams import PRINT_CHECK_REGS_T0, CHECK_REGS_T0_PRECISE, PRINT_CHECK_REGS_T0_MISMATCH_OK, DO_ASSERT, IGNORE_SPIKE_OFFSET_IN_REG_CHECK
@@ -137,7 +137,7 @@ class CheckableRegister(__Register):
         cmp_val &= self.mask
         mismatch = self.val_t0 != cmp_val
         if not precise:
-            cover = ~self.val_t0&cmp_val == 0 # overapproximates, check if spike taint is covered by cascade sim taint
+            cover = ~self.val_t0&cmp_val == 0 # overapproximates, check if spike taint is covered by milesan sim taint
             if cover:
                 if mismatch and PRINT_CHECK_REGS_T0_MISMATCH_OK:
                     print(f"\tTaint mismatch OK: {hex(self.val_t0)} covers {hex(cmp_val)}.")

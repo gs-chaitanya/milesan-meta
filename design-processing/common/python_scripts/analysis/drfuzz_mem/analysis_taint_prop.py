@@ -4,7 +4,7 @@ import seaborn as sns
 import pandas as pd
 import os
 #%%
-SOURCE_PATH = "/cascade-data/rocket/"
+SOURCE_PATH = "/milesan-data/rocket/"
 #%%
 for root, dirs, files in os.walk(SOURCE_PATH):
   for file in files:

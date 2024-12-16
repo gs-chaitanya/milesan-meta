@@ -22,7 +22,7 @@ n_finished_threads = 0
 
 
 def clean(*args):
-    assert "MODELSIM_REQ_DIR" in os.environ, f"MODELSIM_REQ_DIR not set. Did you source cascade-meta/env.sh?"
+    assert "MODELSIM_REQ_DIR" in os.environ, f"MODELSIM_REQ_DIR not set. Did you source milesan-meta/env.sh?"
     if DELETE_REQS:
         with callback_lock: # Use the lock so we don't run this for every thread.
             req_dir = os.environ["MODELSIM_REQ_DIR"]
@@ -143,7 +143,7 @@ if __name__ == '__main__':
         path_to_req = sys.argv[1]
         modelsim_worker(path_to_req)
     else:
-        assert "MODELSIM_REQ_DIR" in os.environ, f"MODELSIM_REQ_DIR not set. Did you source cascade-meta/env.sh?"
+        assert "MODELSIM_REQ_DIR" in os.environ, f"MODELSIM_REQ_DIR not set. Did you source milesan-meta/env.sh?"
         req_dir = os.environ["MODELSIM_REQ_DIR"]
         initiated_reqs = []
         with mp.Pool(processes=MAX_N_THREADS) as pool:

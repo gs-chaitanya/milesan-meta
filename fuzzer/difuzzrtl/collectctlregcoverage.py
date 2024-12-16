@@ -14,7 +14,7 @@ def collect_control_register_coverage(is_difuzzrtl: bool):
     if is_difuzzrtl:
         command = f"docker run -it -v {os.environ['MILESAN_DOCKER_MNT_DIR']}:/difuzzrtl {docker_img_name} bash -c 'cd /difuzzrtl && bash fuzz_difuzzrtl.sh'"
     else:
-        command = f"docker run -it -v {os.environ['MILESAN_DOCKER_MNT_DIR']}:/difuzzrtl {docker_img_name} bash -c 'cd /difuzzrtl && bash fuzz_cascade.sh'"
+        command = f"docker run -it -v {os.environ['MILESAN_DOCKER_MNT_DIR']}:/difuzzrtl {docker_img_name} bash -c 'cd /difuzzrtl && bash fuzz_milesan.sh'"
 
     ret_content = capture_process_output(command, duration_seconds)
 
