@@ -15,7 +15,7 @@ fi
 echo "cascade metarepo root: $myroot"
 
 # Set meta repo root
-export CASCADE_META_ROOT=$myroot
+export MILESAN_META_ROOT=$myroot
 
 PWD=$(pwd)
 if [[ "${PWD}" == *"tkovats"* ]];
@@ -36,31 +36,31 @@ fi
 export MODELSIM_REQ_DIR=$LOCAL_MNT/modelsim_req
 
 # Where are the design submodules located
-export CASCADE_DESIGN_PROCESSING_ROOT=$CASCADE_META_ROOT/design-processing
+export MILESAN_DESIGN_PROCESSING_ROOT=$MILESAN_META_ROOT/design-processing
 
 # Do not select any design by default
-unset CASCADE_DESIGN
+unset MILESAN_DESIGN
 
 # Defaults
 
 # Where to install the binaries and other files of all the tools
 # (compiler toolchain, verilator, sv2v, etc.)
-export PREFIX_CASCADE=$HOME/prefix-cascade
+export PREFIX_MILESAN=$HOME/prefix-cascade
 
 # How many parallel jobs would you like to have issued?
-export CASCADE_JOBS=250 # Feel free to change this
+export MILESAN_JOBS=250 # Feel free to change this
 
 # Where to store a lot of data?
-export CASCADE_DATADIR=$CASCADE_META_ROOT/experimental-data # Feel free to change this
+export MILESAN_DATADIR=$MILESAN_META_ROOT/experimental-data # Feel free to change this
 
-export CASCADE_META_COMMON=$CASCADE_DESIGN_PROCESSING_ROOT/common
+export MILESAN_META_COMMON=$MILESAN_DESIGN_PROCESSING_ROOT/common
 # Where the common HDL processing Python scripts are located.
-export CASCADE_PYTHON_COMMON=$CASCADE_DESIGN_PROCESSING_ROOT/common/python_scripts
+export MILESAN_PYTHON_COMMON=$MILESAN_DESIGN_PROCESSING_ROOT/common/python_scripts
 
 # If you would like to customize some of the settings, add another
 # $USER test clause like the one below.
 
-export CASCADE_RISCV_BITWIDTH=32
+export MILESAN_RISCV_BITWIDTH=32
 
 # Modelsim
 # export MODELSIM_VERSION=questa-2022.3
@@ -79,120 +79,120 @@ HOSTNAME=$(hostname)
 if [[ "${HOSTNAME}" == *"eda3"* ]]; # ETHZ EDA server
 then
     # Example customization
-    export CASCADE_JOBS=14
+    export MILESAN_JOBS=14
 
     ulimit -n 4096 # many FD's
-    export CASCADE_DATADIR=/data/"${USER}"/data-eda3
-    # export CASCADE_DATADIR=/home/flsolt/cascade-data
+    export MILESAN_DATADIR=/data/"${USER}"/data-eda3
+    # export MILESAN_DATADIR=/home/flsolt/cascade-data
 elif [[ "${HOSTNAME}" == *"cn112"* ]]; # ETHZ cn112
 then
     # Example customization
-    export CASCADE_JOBS=14
+    export MILESAN_JOBS=14
 
     ulimit -n 4096 # many FD's
-    export CASCADE_DATADIR=/data/"${USER}"/data
+    export MILESAN_DATADIR=/data/"${USER}"/data
     export MODELSIM_VERSION=
     export MODELSIM_WORKROOT=/data/"${USER}"/modelsimfuzz
 elif [[ "${HOSTNAME}" == *"cn106"* ]]; # ETHZ cn106
 then
     # Example customization
-    export CASCADE_JOBS=250
-    export CASCADE_DOCKER_MNT_DIR=/scratch/"${USER}"/shareddir
+    export MILESAN_JOBS=250
+    export MILESAN_DOCKER_MNT_DIR=/scratch/"${USER}"/shareddir
     export MODELSIM_MAX_INSTANCES=256
-    export CASCADE_RISCV_BITWIDTH=32
+    export MILESAN_RISCV_BITWIDTH=32
 
     ulimit -n 10000 # many FD's
-    export CASCADE_DATADIR=/scratch/"${USER}"/data/python-tmp
+    export MILESAN_DATADIR=/scratch/"${USER}"/data/python-tmp
     export MODELSIM_VERSION=
     # export MODELSIM_WORKROOT=//"${USER}"/modelsimfuzz
 elif [[ "${HOSTNAME}" == *"cn107"* ]]; # ETHZ cn107
 then
     # Example customization
-    export CASCADE_JOBS=250
+    export MILESAN_JOBS=250
     export MODELSIM_MAX_INSTANCES=256
 
     ulimit -n 4096 # many FD's
-    export CASCADE_DATADIR=/scratch/"${USER}"/data
+    export MILESAN_DATADIR=/scratch/"${USER}"/data
     export MODELSIM_VERSION=
     export MODELSIM_WORKROOT=/scratch/"${USER}"/modelsimfuzz
 elif [ "$USER" = flsolt ] # ETHZ Flavien big server
 then
     # Example customization
-    export CASCADE_JOBS=250
+    export MILESAN_JOBS=250
     export MODELSIM_MAX_INSTANCES=256
 
     ulimit -n 10000 # many FD's
-    export CASCADE_DATADIR=/scratch/"${USER}"/data
+    export MILESAN_DATADIR=/scratch/"${USER}"/data
     export MODELSIM_VERSION=
     export MODELSIM_WORKROOT=/scratch/"${USER}"/modelsimfuzz
 elif [ "$USER" = user ] # ETHZ Flavien laptop
 then
-    export CASCADE_JOBS=10
+    export MILESAN_JOBS=10
 
     ulimit -n 10000 # many FD's
-    export CASCADE_DATADIR=/home/"${USER}"/cascade-data
+    export MILESAN_DATADIR=/home/"${USER}"/cascade-data
 elif [ -z ${IS_DOCKER+x} ]
 then
-    export CASCADE_JOBS=250
+    export MILESAN_JOBS=250
 
     ulimit -n 10000 # many FD's
-    export CASCADE_DATADIR=/mnt/cascade-data
+    export MILESAN_DATADIR=/mnt/cascade-data
 fi
 
 # Where should our python venv be?
-export CASCADE_PYTHON_VENV=$PREFIX_CASCADE/python-venv
+export MILESAN_PYTHON_VENV=$PREFIX_MILESAN/python-venv
 
 # RISCV toolchain location
-export RISCV=$PREFIX_CASCADE/riscv
+export RISCV=$PREFIX_MILESAN/riscv
 
 # Have we been sourced?
-export CASCADE_ENV_SOURCED=yes
+export MILESAN_ENV_SOURCED=yes
 
 # Rust settings
-export CARGO_HOME=$PREFIX_CASCADE/.cargo
-export RUSTUP_HOME=$PREFIX_CASCADE/.rustup
+export CARGO_HOME=$PREFIX_MILESAN/.cargo
+export RUSTUP_HOME=$PREFIX_MILESAN/.rustup
 
 # If we add more variables, let consumers
 # of these variables detect it
-export CASCADE_ENV_VERSION=1
+export MILESAN_ENV_VERSION=1
 
 # Set opentitan path (for Ibex)
 export OPENTITAN_ROOT=$myroot/external-dependencies/cascade-opentitan
 
 # Set yosys scripts location
-export CASCADE_YS=$CASCADE_DESIGN_PROCESSING_ROOT/common/yosys
+export MILESAN_YS=$MILESAN_DESIGN_PROCESSING_ROOT/common/yosys
 
 # use which compiler?
-export CASCADE_GCC=riscv32-unknown-elf-gcc
-export CASCADE_OBJDUMP=riscv32-unknown-elf-objdump
+export MILESAN_GCC=riscv32-unknown-elf-gcc
+export MILESAN_OBJDUMP=riscv32-unknown-elf-objdump
 
 # use libstdc++ in this prefix
-export LD_LIBRARY_PATH=$PREFIX_CASCADE/lib64:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$PREFIX_MILESAN/lib64:$LD_LIBRARY_PATH
 
-export MPLCONFIGDIR=$PREFIX_CASCADE/matplotlib
+export MPLCONFIGDIR=$PREFIX_MILESAN/matplotlib
 mkdir -p $MPLCONFIGDIR
 
 
 # Make configuration usable; prioritize our tools
 PATH=/mnt/cellift-yosys-pub:$PATH
 PATH=/mnt/verilator/bin:$PATH
-PATH=$PREFIX_CASCADE/miniconda/bin:$PATH
-PATH=$PREFIX_CASCADE/bin:$PATH
-PATH=$PREFIX_CASCADE/bin:$CARGO_HOME/bin:$PREFIX_CASCADE/python-venv/bin/:$PATH
+PATH=$PREFIX_MILESAN/miniconda/bin:$PATH
+PATH=$PREFIX_MILESAN/bin:$PATH
+PATH=$PREFIX_MILESAN/bin:$CARGO_HOME/bin:$PREFIX_MILESAN/python-venv/bin/:$PATH
 PATH=$RISCV/bin:$PATH
 # For cooperative Modelsim locking
-export MODELSIM_LOCKFILE=$CASCADE_META_ROOT/tmp/modelsim_lock
+export MODELSIM_LOCKFILE=$MILESAN_META_ROOT/tmp/modelsim_lock
 
 # RISC-V proxy kernel
-export CASCADE_PK64=$RISCV/riscv32-unknown-elf/bin/pk
+export MILESAN_PK64=$RISCV/riscv32-unknown-elf/bin/pk
 
 # TODO Remove, not really a cascade thing, just used to eval DifuzzRTL
 # PATH=/data/flsolt/opt/elf2hex:$PATH
 
-export CASCADE_PATH_TO_FIGURES=$CASCADE_META_ROOT/figures
+export MILESAN_PATH_TO_FIGURES=$MILESAN_META_ROOT/figures
 
-export CASCADE_PATH_TO_DIFUZZRTL_ELFS=/cascade-difuzzrtl/docker/shareddir/savedockerdifuzzrtl/Fuzzer/outdir/illegal/elf/
-# export CASCADE_PATH_TO_DIFUZZRTL_ELFS=/scratch/flsolt/shareddir/Fuzzer/outdir1000/illegal/elf
+export MILESAN_PATH_TO_DIFUZZRTL_ELFS=/cascade-difuzzrtl/docker/shareddir/savedockerdifuzzrtl/Fuzzer/outdir/illegal/elf/
+# export MILESAN_PATH_TO_DIFUZZRTL_ELFS=/scratch/flsolt/shareddir/Fuzzer/outdir1000/illegal/elf
 
 
 export COVDUMP_DIR=$LOCAL_MNT/cov_dump
@@ -201,4 +201,4 @@ export COVDUMP_DIR=$LOCAL_MNT/cov_dump
 export MODELSIM_TIMEOUT=12000
 export MODELSIM_TIMEOUT_TRACE_EN=12000
 
-cd $CASCADE_META_ROOT/fuzzer
+cd $MILESAN_META_ROOT/fuzzer

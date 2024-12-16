@@ -4,18 +4,18 @@
 
 # Make fragment that designs can include for common functionality
 
-ifeq "" "$(CASCADE_ENV_SOURCED)"
+ifeq "" "$(MILESAN_ENV_SOURCED)"
 $(error Please re-source env.sh first, in the meta repo, and run from there, not this repo. See README.md in the meta repo)
 endif
 
-ifeq "" "$(CASCADE_META_ROOT)"
+ifeq "" "$(MILESAN_META_ROOT)"
 $(error Please re-source env.sh first, in the meta repo, and run from there, not this repo. See README.md in the meta repo)
 endif
 
 extract_timestamps:
 	for log in generated/out/*.sv.log; \
     do echo $$log; \
-    python3 $(CASCADE_META_ROOT)/python_scripts/extract_timestamps.py $$log split; \
+    python3 $(MILESAN_META_ROOT)/python_scripts/extract_timestamps.py $$log split; \
     done
 
 generated generated/common/dv generated/common generated/scattered generated/sv_sources generated/out generated/dv traces logs statistics build modelsim:

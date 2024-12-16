@@ -187,7 +187,7 @@ def import_difuzzrtl_elfs(num_elfs: int):
 # Only for difuzzrtl. Patches the ELFs to write to the suitable address to stop the testbench
 # @return True iff the ELF existed
 def replace_write_to_host(elf_id: int):
-    mountpath = os.getenv('CASCADE_DOCKER_MNT_DIR')
+    mountpath = os.getenv('MILESAN_DOCKER_MNT_DIR')
     path_to_origin_elf = os.path.join(mountpath, 'Fuzzer', 'outdir1000', 'illegal', 'elf', f"id_{elf_id}.elf")
     path_to_patched_elf = os.path.join(PATH_TO_TMP, 'difuzzrtl_elfs_patched', f"id_{elf_id}.elf")
 

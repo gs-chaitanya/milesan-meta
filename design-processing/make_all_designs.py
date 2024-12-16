@@ -24,11 +24,11 @@ import os
 import sys
 from collections import defaultdict
 
-if "CASCADE_ENV_SOURCED" not in os.environ:
+if "MILESAN_ENV_SOURCED" not in os.environ:
     raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
 DESIGN_CFGS_BASENAME = "design_repos.json"
-PATH_TO_DESIGN_CFGS = os.path.join(os.getenv("CASCADE_DESIGN_PROCESSING_ROOT"), DESIGN_CFGS_BASENAME)
+PATH_TO_DESIGN_CFGS = os.path.join(os.getenv("MILESAN_DESIGN_PROCESSING_ROOT"), DESIGN_CFGS_BASENAME)
 
 ####
 # Parse the command-line argumens
@@ -62,7 +62,7 @@ if exclude_designs:
 if force_single_threaded:
     tot_num_processes = 1
 else:
-    tot_num_processes = int(os.getenv("CASCADE_JOBS"))
+    tot_num_processes = int(os.getenv("MILESAN_JOBS"))
 
 ####
 # Prepare configurations to build
@@ -113,7 +113,7 @@ cached_start_addrs = defaultdict(dict)
 
 def get_design_cascade_path(design_name):
     # 1. Find the designs folder.
-    designs_folder = os.getenv("CASCADE_DESIGN_PROCESSING_ROOT")
+    designs_folder = os.getenv("MILESAN_DESIGN_PROCESSING_ROOT")
     if not designs_folder:
         raise Exception("Please re-source env.sh first, in the meta repo, and run from there, not this repo. See README.md in the meta repo")
     # 2. Find the repo name.

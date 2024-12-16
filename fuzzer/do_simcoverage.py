@@ -15,10 +15,10 @@ import multiprocessing as mp
 import os
 
 if __name__ == '__main__':
-    if "CASCADE_ENV_SOURCED" not in os.environ:
+    if "MILESAN_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
-    num_workers = max(int(os.getenv('CASCADE_JOBS', 160)) // 4, 1)
+    num_workers = max(int(os.getenv('MILESAN_JOBS', 160)) // 4, 1)
     path_to_cascade_elfs = os.path.join(PATH_TO_TMP, 'manyelfs_modelsim')
 
     num_elfs_to_produce = 10000 # Heuristic, should ensure that we have enough to cover all instructions / durations

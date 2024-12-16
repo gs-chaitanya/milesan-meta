@@ -12,13 +12,13 @@ import glob
 import pandas as pd
 import seaborn as sns
 COV_DUMPS = "/cellift-meta/design-processing/common/python_scripts/analysis/cov_dumps"
-CASCADE_DATA = "/cascade-data"
+MILESAN_DATA = "/cascade-data"
 Sodors = [f'Sodor{i}Stage' for i in [1,3,5]]
 # DUTs = ['PicoRV','VexRiscV']
 # DUTs = Sodors
 
 #%%
-# LOAD CASCADE RESULTS
+# LOAD MILESAN RESULTS
 n_mux = {'vexriscv':628,
         'picorv32':172}
 dutname = {
@@ -26,7 +26,7 @@ dutname = {
     'picorv32': 'PicoRV'
 }
 cascade = pd.DataFrame()
-for p in glob.glob(f'{CASCADE_DATA}/*1000_100.json'):
+for p in glob.glob(f'{MILESAN_DATA}/*1000_100.json'):
     if('rocket' in p): continue
     if('boom' in p): continue
     with open(p, 'r') as f:
@@ -226,7 +226,7 @@ for dut in DUTs:
 plt.tight_layout()
 # ax.set_ylim([0.9,1])
 
-plt.savefig(f"{CASCADE_DATA}/cascade_drfuzz.png")
+plt.savefig(f"{MILESAN_DATA}/cascade_drfuzz.png")
 
 #%%
 

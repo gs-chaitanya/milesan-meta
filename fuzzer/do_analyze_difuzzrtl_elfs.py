@@ -10,12 +10,12 @@ from analyzeelfs.plot import plot_difuzzrtl_completions, plot_difuzzrtl_prevalen
 import os
 
 if __name__ == '__main__':
-    if "CASCADE_ENV_SOURCED" not in os.environ:
+    if "MILESAN_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     NUM_ELFS = 50
 
-    num_cores_for_elf_generation = int(os.getenv('CASCADE_JOBS', 160))
+    num_cores_for_elf_generation = int(os.getenv('MILESAN_JOBS', 160))
 
     prevalence_json = analyze_elf_prevalence(True, NUM_ELFS)
     dependencies_json = analyze_elf_dependencies(True, 'rocket', NUM_ELFS)

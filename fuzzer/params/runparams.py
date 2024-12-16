@@ -3,11 +3,11 @@ from params.fuzzparams import USE_MMU, TAINT_NONTAKEN_BRANCH_IMM
 from params.runparams_default import *
 from params.env_helperfuncs import get_env_int, get_env_bool
 # Ensure Cascade environment is sourced
-if "CASCADE_ENV_SOURCED" not in os.environ:
+if "MILESAN_ENV_SOURCED" not in os.environ:
     raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
 # Paths
-PATH_TO_TMP_ENV_VAR = "CASCADE_DATADIR"
+PATH_TO_TMP_ENV_VAR = "MILESAN_DATADIR"
 PATH_TO_TMP = os.path.join(os.environ[PATH_TO_TMP_ENV_VAR])
 os.makedirs(PATH_TO_TMP, exist_ok=True)
 PATH_TO_MNT = os.path.join(os.environ['LOCAL_MNT'])
@@ -16,7 +16,7 @@ PATH_TO_MNT_ENV_VAR = "LOCAL_MNT"
 MODELSIM_REQ_DIR = os.path.join(PATH_TO_MNT, "modelsim_req")
 os.makedirs(MODELSIM_REQ_DIR, exist_ok=True)
 PATH_TO_COV = os.path.join(os.environ['COVDUMP_DIR'])
-PATH_TO_FIGURES = os.environ['CASCADE_PATH_TO_FIGURES']
+PATH_TO_FIGURES = os.environ['MILESAN_PATH_TO_FIGURES']
 
 # Actual values set from environment variables or defaults
 DO_ASSERT = get_env_bool('DO_ASSERT', str(int(DO_ASSERT_DEFAULT)))

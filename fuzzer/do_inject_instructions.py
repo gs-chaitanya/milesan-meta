@@ -16,7 +16,7 @@ import os
 import sys
 
 if __name__ == '__main__':
-    if "CASCADE_ENV_SOURCED" not in os.environ:
+    if "MILESAN_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     if len(sys.argv) < 4:

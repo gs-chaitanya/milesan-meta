@@ -12,12 +12,12 @@ import os
 import subprocess
 
 if __name__ == '__main__':
-    if "CASCADE_ENV_SOURCED" not in os.environ:
+    if "MILESAN_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     # First, generate enough ELF files from Cascade into the Docker mount
     NUM_ELFS = 50000
-    # gen_many_elfs('rocket', 250, NUM_ELFS, os.path.join(os.environ['CASCADE_DOCKER_MNT_DIR'], 'manyelfs_fordifuzzcoverage')) # TODO Uncomment
+    # gen_many_elfs('rocket', 250, NUM_ELFS, os.path.join(os.environ['MILESAN_DOCKER_MNT_DIR'], 'manyelfs_fordifuzzcoverage')) # TODO Uncomment
 
     # Run the experiment for Cascade and DifuzzRTL
     # TODO Parallelize

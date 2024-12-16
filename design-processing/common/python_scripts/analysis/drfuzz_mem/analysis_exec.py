@@ -11,11 +11,11 @@ FIGSIZE_FLAT = (8,2)
 LABELSIZE = 15
 TICKSIZE = 12
 LEGENDSIZE = 12
-CASCADE_DATADIR = "/mnt/cascade-data/TAINT_STATS/"
+MILESAN_DATADIR = "/mnt/cascade-data/TAINT_STATS/"
 EXEC_PLOTS_PATH = "/mnt/cascade-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/exec"
 #%%
 exec_traces = []
-for i,file in enumerate(glob.glob(CASCADE_DATADIR+ "**/taint_stats.json", recursive=True)):
+for i,file in enumerate(glob.glob(MILESAN_DATADIR+ "**/taint_stats.json", recursive=True)):
     with open(file, "r") as f:
         try:
             exec_traces += [json.load(f)]
@@ -288,9 +288,9 @@ ax.legend(fontsize=LEGENDSIZE)
 ###
 ## TAINT OVERAPPROX STATS
 ###
-CASCADE_DATADIR = "/mnt/cascade-data/kronos/"
+MILESAN_DATADIR = "/mnt/cascade-data/kronos/"
 traces = pd.DataFrame()
-for i,file in enumerate(glob.glob(CASCADE_DATADIR+ "**/*writeback.txt", recursive=True)):
+for i,file in enumerate(glob.glob(MILESAN_DATADIR+ "**/*writeback.txt", recursive=True)):
     with open(file, "r") as f:
         writeback = f.read()
     id = file.split("/")[-2]

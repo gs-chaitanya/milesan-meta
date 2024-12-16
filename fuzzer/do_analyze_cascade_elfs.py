@@ -12,12 +12,12 @@ from analyzeelfs.plot import plot_cascade_dependencies, plot_cascade_prevalences
 import os
 
 if __name__ == '__main__':
-    if "CASCADE_ENV_SOURCED" not in os.environ:
+    if "MILESAN_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
 
     NUM_ELFS = 500
 
-    num_cores_for_elf_generation = int(os.getenv('CASCADE_JOBS', 160))
+    num_cores_for_elf_generation = int(os.getenv('MILESAN_JOBS', 160))
 
     gen_many_elfs('rocket', num_cores_for_elf_generation, NUM_ELFS, os.path.join(PATH_TO_TMP, 'manyelfs'))
 

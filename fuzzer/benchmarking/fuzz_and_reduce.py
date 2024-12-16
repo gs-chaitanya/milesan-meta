@@ -20,7 +20,7 @@ def load_fuzzconfigs(path: str):
     return cfgs
 
 if __name__ == '__main__':
-    if "CASCADE_ENV_SOURCED" not in os.environ:
+    if "MILESAN_ENV_SOURCED" not in os.environ:
         raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
     
     if len(sys.argv) < 1:
@@ -42,8 +42,8 @@ if __name__ == '__main__':
         cfg_cpy.pop("DUTS")
         env = os.environ.copy()
         env.update(cfg_cpy)                
-        datadir = os.path.join(os.environ["CASCADE_DATADIR"],cfg["NAME"])
-        env["CASCADE_DATADIR"] = datadir
+        datadir = os.path.join(os.environ["MILESAN_DATADIR"],cfg["NAME"])
+        env["MILESAN_DATADIR"] = datadir
         os.makedirs(datadir, exist_ok=True)
         metadir = os.path.join(datadir,"meta")
         os.makedirs(metadir, exist_ok=True)

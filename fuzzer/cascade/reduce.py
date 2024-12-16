@@ -1152,7 +1152,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             if not quiet:
                 Path(target_dir).mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(rtl_elfpath_larger, os.path.join(target_dir, 'app_buggy.elf'))
-                subprocess.run(' '.join([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objdump", '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_buggy.elf'), '>', os.path.join(target_dir, 'app_buggy.elf.dump')]), shell=True)
+                subprocess.run(' '.join([f"riscv{os.environ['MILESAN_RISCV_BITWIDTH']}-unknown-elf-objdump", '-D', '--disassembler-options=numeric,no-aliases', os.path.join(target_dir, 'app_buggy.elf'), '>', os.path.join(target_dir, 'app_buggy.elf.dump')]), shell=True)
             ret_msg = f"Reduction failed for seed {randseed}:\n"
             ret_msg += f"\t Failed with only initial BB."
             fuzzerstate.log(ret_msg)

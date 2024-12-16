@@ -36,9 +36,9 @@ def gen_elf(inbytes: bytes, start_addr: int, section_addr: int, destination_path
     # Relocate the section
     if section_addr is not None:
         if is_64bit:
-            subprocess.run([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objcopy", '--change-section-address', f".text.init={hex(section_addr)}", '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path])
+            subprocess.run([f"riscv{os.environ['MILESAN_RISCV_BITWIDTH']}-unknown-elf-objcopy", '--change-section-address', f".text.init={hex(section_addr)}", '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path])
         else:
-            subprocess.run([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objcopy", '--change-section-address', f".text.init={hex(section_addr)}", destination_path])
+            subprocess.run([f"riscv{os.environ['MILESAN_RISCV_BITWIDTH']}-unknown-elf-objcopy", '--change-section-address', f".text.init={hex(section_addr)}", destination_path])
     else:
         if is_64bit:
-            subprocess.run([f"riscv{os.environ['CASCADE_RISCV_BITWIDTH']}-unknown-elf-objcopy", '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path])
+            subprocess.run([f"riscv{os.environ['MILESAN_RISCV_BITWIDTH']}-unknown-elf-objcopy", '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path])

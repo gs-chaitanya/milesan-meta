@@ -4,7 +4,7 @@ sys.path.append("../")
 %env  ASSERT_WRITEBACK_TRACE=0
 # %env NO_REMOVE_TMPFILES=1
 # %env PRINT_ENVIRONMENT=1
-%env CASCADE_DATADIR="pickletest-mod"
+%env MILESAN_DATADIR="pickletest-mod"
 import multiprocessing as mp
 from cascade.fuzzerstate import FuzzerState
 import pickle

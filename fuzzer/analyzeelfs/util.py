@@ -3,13 +3,13 @@ import subprocess
 import os
 import re
 
-CASCADE_NUM_INITIAL_INSTR = 5 + 64 # 64 instructions in the initial block + 5 instructions in the spike bootrom
-CASCADE_NUM_FINAL_INSTR = 105 # 105 instructions in the final block
+MILESAN_NUM_INITIAL_INSTR = 5 + 64 # 64 instructions in the initial block + 5 instructions in the spike bootrom
+MILESAN_NUM_FINAL_INSTR = 105 # 105 instructions in the final block
 
 def get_instance_elfpath(is_difuzzrtl: bool, design_name: str, instance_id: int):
     if is_difuzzrtl:
         assert design_name == 'rocket', "Only Rocket is supported for difuzz-rtl."
-        path_to_diffuzzrtl_elfs = os.environ['CASCADE_PATH_TO_DIFUZZRTL_ELFS']
+        path_to_diffuzzrtl_elfs = os.environ['MILESAN_PATH_TO_DIFUZZRTL_ELFS']
         return os.path.join(path_to_diffuzzrtl_elfs, f"id_{instance_id}.elf")
     else:
         elfdir_path = os.path.join(PATH_TO_TMP, 'elfsfordifuzzrtl')
@@ -65,8 +65,8 @@ def compute_prevalence(is_difuzzrtl: bool, spike_log: str, finaladdr: int):
     else:
         # Filter the lines that correspond to executed instructions
         num_executed_instrs = len(list(filter(lambda l: l.startswith('core   0: 0x'), spike_log.split('\n'))))
-        num_effective_instructions = num_executed_instrs - CASCADE_NUM_INITIAL_INSTR
-        num_overhead_instructions = CASCADE_NUM_FINAL_INSTR + CASCADE_NUM_INITIAL_INSTR
+        num_effective_instructions = num_executed_instrs - MILESAN_NUM_INITIAL_INSTR
+        num_overhead_instructions = MILESAN_NUM_FINAL_INSTR + MILESAN_NUM_INITIAL_INSTR
         return num_effective_instructions, num_overhead_instructions
 
 # @param only_cf: If True, only return the control-flow instructions. Else, only the non-control-flow.

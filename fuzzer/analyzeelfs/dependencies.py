@@ -1,4 +1,4 @@
-from analyzeelfs.util import CASCADE_NUM_INITIAL_INSTR
+from analyzeelfs.util import MILESAN_NUM_INITIAL_INSTR
 
 import re
 
@@ -43,7 +43,7 @@ def get_dependencies_per_instruction(spike_log: str, is_difuzzrtl: bool, instanc
 
     all_lines = list(spike_log.split('\n'))
     if not is_difuzzrtl:
-        all_lines = all_lines[CASCADE_NUM_INITIAL_INSTR:]
+        all_lines = all_lines[MILESAN_NUM_INITIAL_INSTR:]
 
     for line_id, line in enumerate(spike_log.split('\n')):
         if not line.startswith('core   0: 0x'):
