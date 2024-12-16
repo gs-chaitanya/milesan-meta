@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/mnt/cascade-meta/design-processing/common/python_scripts/analysis/venv"
+VIRTUAL_ENV="/mnt/milesan-meta/design-processing/common/python_scripts/analysis/venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
