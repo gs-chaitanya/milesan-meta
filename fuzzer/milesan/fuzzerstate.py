@@ -422,7 +422,7 @@ class FuzzerState:
             self.memview.alloc_mem_range(curr_paddr, curr_paddr+(2 if instr.iscompressed else 4))
         self.instr_objs_seq[-1].append(instr)
         instr.execute(is_spike_resolution = True)
-        if USE_MMU:
+        if USE_MMU and not self.design_has_no_mmu:
             self.n_instr_in_priv[instr.priv_level] += 1
             self.n_instr_in_layout[instr.va_layout] += 1
         if insert_regdump:
