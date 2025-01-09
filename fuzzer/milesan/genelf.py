@@ -127,7 +127,7 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
                     assert curr_byte_id < 2
                 curr_addr = instr_obj.paddr + curr_byte_id
                 if DO_ASSERT:
-                    assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {hex(curr_addr)}"
+                    assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {instr_obj.get_str()}"
                 addr_instrs[curr_addr] = curr_byte
         
 

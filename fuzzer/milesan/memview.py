@@ -406,8 +406,6 @@ class MemoryView:
                 if DO_ASSERT:
                     assert addr >= SPIKE_STARTADDR
                     assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
-                if addr in dumped_addresses:
-                    continue
                 n_bytes = 8 if self.fuzzerstate.is_design_64bit else 4
                 # Some weird behaviour in CVA6 requires an offset of 8 bytes, could be a verilator bug?
                 # See the signals dache_rd_shift_d(_t0) and dcache_rd_shift_q(_t0) in i_wt_dcache in CVA6, second
@@ -417,6 +415,8 @@ class MemoryView:
                 s = "0 {:x} {:x} ".format(addr, n_bytes)
                 is_zero = True
                 for i in range(n_bytes):
+                    if addr+i in dumped_addresses:
+                        continue
                     # Little endian.
                     b = self.data_t0[addr+i] if addr+i in self.data_t0 else 0
                     if b != 0:
