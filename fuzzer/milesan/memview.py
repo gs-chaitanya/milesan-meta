@@ -397,35 +397,17 @@ class MemoryView:
         self.data.clear()
         self.data_t0.clear()
 
+    # TODO: do this word-wise
     def dump_taint(self, path):
         # print(f"Dumping memview taints to {path}")
         # self.print()
-        dumped_addresses = []
         with open(path, "w") as f:
             for addr in self.data_t0.keys():
                 if DO_ASSERT:
                     assert addr >= SPIKE_STARTADDR
                     assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
-                n_bytes = 8 if self.fuzzerstate.is_design_64bit else 4
-                # Some weird behaviour in CVA6 requires an offset of 8 bytes, could be a verilator bug?
-                # See the signals dache_rd_shift_d(_t0) and dcache_rd_shift_q(_t0) in i_wt_dcache in CVA6, second
-                # 8 bytes of memory response not appended to frist 8 bytes to form 16 byte CL for taints, always first 
-                # 8 bytes used twice??
-                # f.write("0 {:x} {:x} ".format(addr + 8 * int("cva6" in self.fuzzerstate.design_name), n_bytes))
-                s = "0 {:x} {:x} ".format(addr, n_bytes)
-                is_zero = True
-                for i in range(n_bytes):
-                    if addr+i in dumped_addresses:
-                        continue
-                    # Little endian.
-                    b = self.data_t0[addr+i] if addr+i in self.data_t0 else 0
-                    if b != 0:
-                        is_zero = False
-                    s += "{:02x}".format(b)
-                    dumped_addresses += [addr+i]
-                if not is_zero:
-                    f.write(s + "\n")
-
+                if self.data_t0[addr]:
+                    f.write("0 {:x} {:x} {:02x}\n".format(addr, 1, self.data_t0[addr]))
 
     def print(self):
         row = ["ADDRESS","VALUE","VALUE_T0"]
