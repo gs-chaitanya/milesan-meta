@@ -397,17 +397,20 @@ class MemoryView:
         self.data.clear()
         self.data_t0.clear()
 
-    # TODO: do this word-wise
     def dump_taint(self, path):
-        # print(f"Dumping memview taints to {path}")
-        # self.print()
+        dumped_waddrs = []
+        wlen = 8 if self.fuzzerstate.is_design_64bit else 4
         with open(path, "w") as f:
             for addr in self.data_t0.keys():
                 if DO_ASSERT:
                     assert addr >= SPIKE_STARTADDR
                     assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize
                 if self.data_t0[addr]:
-                    f.write("0 {:x} {:x} {:02x}\n".format(addr, 1, self.data_t0[addr]))
+                    waddr = addr - addr % wlen
+                    if waddr not in dumped_waddrs:
+                        dumped_waddrs += [waddr]
+                        wordstring = "".join(["{:02x}".format(self.data_t0[waddr+i]) if waddr+i in self.data_t0 else "" for i in range(wlen)]) 
+                        f.write("0 {:x} {:x} ".format(waddr, wlen) + wordstring + "\n")
 
     def print(self):
         row = ["ADDRESS","VALUE","VALUE_T0"]
