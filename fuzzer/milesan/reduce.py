@@ -71,7 +71,7 @@ def gen_ctxt_finalbock(priv_level, layout_id, fuzzerstate, bb_id, instr_id):
 def _save_ctx_and_jump_to_pillar_specific_instr(fuzzerstate, index_first_bb_to_consider: int, index_first_instr_to_consider: int):
     print(f"Saving context and jumping to pillar-specific instruction {index_first_bb_to_consider}:{index_first_instr_to_consider}...")
     spikereduce_elfpath = gen_elf_from_bbs(fuzzerstate, False, "spikereduce_savectx", f"{fuzzerstate.instance_to_str()}_{index_first_bb_to_consider}_{index_first_instr_to_consider}", SPIKE_STARTADDR)
-    print(f"elf at {spikereduce_elfpath}")
+    # print(f"elf at {spikereduce_elfpath}")
 
     # tgt_addr_layout, tgt_addr_priv = get_last_bb_layout_and_priv(fuzzerstate, index_first_bb_to_consider, index_first_instr_to_consider, False)
     # tgt_pc = phys2virt((fuzzerstate.bb_start_addr_seq[index_first_bb_to_consider] + 4*index_first_instr_to_consider + SPIKE_STARTADDR), tgt_addr_priv, tgt_addr_layout, fuzzerstate, False)
@@ -482,8 +482,7 @@ def _reduce_taint(fuzzerstate,quiet:bool=False):
     right_bound = len(tainted_addresses)//2
     left_bound = 0
     while left_bound < right_bound: # Assumes we leak a single word.
-        print(f"Reduction interval: [{left_bound},{right_bound})], {len(tainted_addresses)}")
-        print(f"Reduction interval: [{left_bound},{right_bound}): [{hex(tainted_addresses[left_bound])},{hex(tainted_addresses[right_bound-1])}]")
+        print(f"Reduction interval: [{left_bound},{right_bound}): [{hex(tainted_addresses[left_bound])},{hex(tainted_addresses[right_bound-1])}], {right_bound-left_bound} out of {len(tainted_addresses)} tainted bytes remain")
         test_fuzzerstate = deepcopy(fuzzerstate)
         for i in range(0, left_bound):
             test_fuzzerstate.memview.data_t0[tainted_addresses[i]] = 0
@@ -502,8 +501,7 @@ def _reduce_taint(fuzzerstate,quiet:bool=False):
             right_bound =  left_bound + (delta+1)//2
             if right_bound>len(tainted_addresses)-1:
                 right_bound = len(tainted_addresses)-1
-        # print(f"-> [{left_bound}, {right_bound}): [{hex(tainted_addresses[left_bound])},{hex(tainted_addresses[right_bound])}]") # invariant: leaked data in [left_bound,right_bound)
-        # print(f"{len( [i for i,j in test_fuzzerstate.memview.data_t0.items() if j != 0])} addresses tainted.")
+
     assert left_bound == right_bound
     test_fuzzerstate = deepcopy(fuzzerstate)
     for addr_idx in range(0, len(tainted_addresses)): # start with right side so the left bound does not change
@@ -525,7 +523,8 @@ def _reduce_dead_code(fuzzerstate):
         return test_fuzzerstate
     right_bound = len(fuzzerstate.spec_instr_objs_seq)//2
     left_bound = 0
-    while left_bound < right_bound: # What if its not a single instruction?
+    GADGET_N_INSTR = 4
+    while left_bound < right_bound:
         print(f"Reduction interval: [{left_bound},{right_bound})")
         test_fuzzerstate = deepcopy(fuzzerstate)
         for _ in range(right_bound, len(test_fuzzerstate.spec_instr_objs_seq)): # start with right side so the left bound does not change
@@ -534,20 +533,24 @@ def _reduce_dead_code(fuzzerstate):
             del test_fuzzerstate.spec_instr_objs_seq[0]
         delta = right_bound - left_bound
         mismatch = is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1)
-        if mismatch: # gadget is between [left_bound, right_bound). Move left bound up
+        if mismatch: # gadget is between [left_bound, right_bound). Move right bound down -> right_bound = left_bound + delta//2
+            if delta < GADGET_N_INSTR+1:
+                break
             right_bound = left_bound + delta//2
-        else: # gadget is in [right_bound, right_bound+(left_bound-right_bound)/2)
+        else: # gadget is in [right_bound, right_bound+(left_bound-right_bound)), test lower half of interval i.e.  [right_bound, right_bound+(left_bound-right_bound+1)//2)
+            if delta < GADGET_N_INSTR+1:
+                left_bound = right_bound
+                right_bound = left_bound + delta
+                break
             left_bound = right_bound
             right_bound =  left_bound + (delta+1)//2
             if right_bound>len(fuzzerstate.spec_instr_objs_seq)-1:
                 right_bound = len(fuzzerstate.spec_instr_objs_seq)-1
-        print(f"[{left_bound},{right_bound})") # invariant: gadget in [left_bound,right_bound)
 
-    assert left_bound == right_bound
+    # assert left_bound + GADGET_N_INSTR == right_bound
     test_fuzzerstate = deepcopy(fuzzerstate)
-    test_fuzzerstate.spec_instr_objs_seq = [fuzzerstate.spec_instr_objs_seq[left_bound]]
-    is_success = is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1)
-    assert not is_success, f"Bound {left_bound} with instruction {fuzzerstate.spec_instr_objs_seq[right_bound].get_str()} wrong."
+    test_fuzzerstate.spec_instr_objs_seq = test_fuzzerstate.spec_instr_objs_seq[left_bound:right_bound]
+    assert is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1), f"Bounds [{left_bound},{right_bound}) with instructions\n{[i.get_str() for i in fuzzerstate.spec_instr_objs_seq[left_bound:right_bound]]} wrong."
     return test_fuzzerstate
     
 
@@ -1211,7 +1214,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             find_pillar_success = True
         except Exception as e:
             print(f"Failed finding pillar BB: {e}")
-            pillar_bb_id = 0
+            pillar_bb_id = 1
         time_pillar_bb_search = time.time()-start_pillar_bb
         ###
         # Cut the first instructions of the pillar bb.
@@ -1229,8 +1232,10 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
 
         if not CHECK_LEAKER_INVARIANCE: # When enabled, we check during pillar reduction
             if find_pillar_success and _leaker_changed(fuzzerstate,failing_bb_id,failing_instr_id,pillar_bb_id,quiet,fault_from_prev_bb):
-                print(f"Pillar reduction changed leaker instruction! Resetting pillar BB id to 0.")
-                pillar_bb_id = 0
+                print(f"Pillar reduction changed leaker instruction! Resetting pillar BB id to 1.")
+                pillar_bb_id = 1
+    else:
+        pillar_bb_id = 1
 
 
     ###
@@ -1238,7 +1243,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     ###
 
     nopize_success = False
-    if NOPIZE_SANDWICH_INSTRUCTIONS and FIND_PILLARS and pillar_bb_id > 0 and find_pillar_success:
+    if NOPIZE_SANDWICH_INSTRUCTIONS:
         # The advantage of doing this before the reduction of the ELF size is that we may successfully remove some load instructions targeting the instructions we will remove. The downside is that it is slower than cleaning up after the reduction.
         start_nopize_instr = time.time()
         try:
@@ -1351,6 +1356,9 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             final_fuzzerstate = test_fuzzerstate_larger
     else:
         final_fuzzerstate = test_fuzzerstate_larger
+    
+    final_fuzzerstate.reset_states()
+
 
 
     ###
@@ -1442,7 +1450,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_dict["success_find_pillar_bb"] = find_pillar_success
     if FIND_PILLAR_INSTRUCTION:
         ret_msg += f"\t Time to find pillar instr: {time_pillar_instr_search}s\n" 
-        ret_msg += f"\t Succes find pillar instr: {find_pillar_instr_success}\n" 
+        ret_msg += f"\t Success find pillar instr: {find_pillar_instr_success}\n" 
         ret_dict["time_to_find_pillar_instr"] = time_pillar_instr_search
         ret_dict["success_find_pillar_instr"] = find_pillar_instr_success
 
@@ -1469,8 +1477,8 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_dict["success_reduce_dead_code"] = time_reduce_dead_code
 
         if reduce_dead_code_success:
-            ret_msg += f"\t Dead code at {hex(final_fuzzerstate.spec_instr_objs_seq[0].paddr)}, {len(final_fuzzerstate.spec_instr_objs_seq)} dead instructions.\n"
-            ret_dict["dead_code"] = final_fuzzerstate.spec_instr_objs_seq[0].get_str()
+            ret_msg += f"\t {len(final_fuzzerstate.spec_instr_objs_seq)} speculative instructions:\n" + ''.join(["\t" + i.get_str() + "\n" for i in final_fuzzerstate.spec_instr_objs_seq])
+            ret_dict["dead_code"] = [i.get_str() for i in final_fuzzerstate.spec_instr_objs_seq]
 
 
     if not quiet:

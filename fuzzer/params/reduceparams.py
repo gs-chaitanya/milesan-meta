@@ -18,6 +18,7 @@ CHECK_LEAKER_INVARIANCE = get_env_bool("CHECK_LEAKER_INVARIANCE",CHECK_LEAKER_IN
 FAILING_BB_ID = get_env_int("FAILING_BB_ID",FAILING_BB_ID_DEFAULT)
 FAILING_INSTR_ID = get_env_int("FAILING_INSTR_ID",FAILING_INSTR_ID_DETAULT)
 PILLAR_BB_ID = get_env_int("PILLAR_BB_ID",PILLAR_BB_ID_DEFAULT)
+assert PILLAR_BB_ID > 0 or PILLAR_BB_ID==-1, f"PILLAR_BB_ID must be > 0!"
 PILLAR_INSTR_ID = get_env_int("PILLAR_INSTR_ID",PILLAR_INSTR_ID_DEFAULT)
 assert not (USE_COMPRESSED and FIND_PILLARS), f"Cannot find pillars with USE_COMPRESSED enabled, context setter not compatible yet."
 assert not (USE_COMPRESSED and FIND_PILLAR_INSTRUCTION), f"Cannot find pillar instructions with USE_COMPRESSED enabled, context setter not compatible yet."

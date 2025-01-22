@@ -409,7 +409,7 @@ class MemoryView:
                     waddr = addr - addr % wlen
                     if waddr not in dumped_waddrs:
                         dumped_waddrs += [waddr]
-                        wordstring = "".join(["{:02x}".format(self.data_t0[waddr+i]) if waddr+i in self.data_t0 else "" for i in range(wlen)]) 
+                        wordstring = "".join(["{:02x}".format(self.data_t0[waddr+i]) if waddr+i in self.data_t0 else "00" for i in range(wlen)]) 
                         f.write("0 {:x} {:x} ".format(waddr, wlen) + wordstring + "\n")
 
     def print(self):
