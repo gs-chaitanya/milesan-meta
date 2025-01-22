@@ -10,6 +10,7 @@
     "boom-medium": "../../milesan-designs/milesan-chipyard-medium-configs/milesan-boom",
     "boom-large": "../../milesan-designs/milesan-chipyard-large-configs/milesan-boom",
     "boom-rvc": "../../milesan-designs/milesan-chipyard-rvc/milesan-boom",
+    "secure-boom": "../../milesan-designs/chipyard/milesan-boom",
     "cva6": "../../milesan-designs/milesan-cva6/milesan",
     "cva6-test": "../../milesan-designs/cva6-test/milesan",
     "openc910":"../../milesan-designs/milesan-openc910/milesan"
