@@ -12,6 +12,7 @@ import pickle
 from milesan.fuzzsim import runtest_simulator
 from milesan.spikeresolution import SPIKE_STARTADDR
 from milesan.registers import ABI_INAMES
+#%% BOOM 275: transient page fault
 FUZZERSTATE_PATH = "/mnt/milesan-data/boom/729549_boom_275_73/rtlreduce_reducestart729549_boom_275_73_7_28_7_0.fuzzerstate.pickle"
 # %%
 with open(FUZZERSTATE_PATH, "rb") as f:
@@ -23,28 +24,28 @@ OFFSETS = range(-(2**11),2**11-1,1)
 # OFFSETS = [-1588,-1589]
 N_BYTES = 1
 n_bytes_to_instr = {
-    1: "lb",
+    # 1: "lb",
     # 2: "lh",
     # 4: "lw",
-    # 8: "ld"
+    8: "ld"
 }
 PAGE_ADDR = SPIKE_STARTADDR + 0x98800
 leak_success = {offset:{n_bytes:False for n_bytes in n_bytes_to_instr.keys() } for offset in OFFSETS}
 for offset in OFFSETS:
-    for n_bytes, instr in n_bytes_to_instr.items():
+    for n_bytes, instr_str in n_bytes_to_instr.items():
     # find speculative instr and change offset
         for i,spec_instr in enumerate(fuzzerstate.spec_instr_objs_seq):
             if spec_instr.paddr == 0x28e00:
                 spec_instr.instr.imm = offset
                 spec_instr.instr.instr_str = instr
                 spec_instr.print()
+            # elif spec_instr.paddr == 0x28e04:
+            #     instr = R12DInstruction_t0(fuzzerstate, "and",ABI_INAMES.index("sp"),ABI_INAMES.index("sp"), ABI_INAMES.index("t4"))
+            #     instr.paddr = spec_instr.paddr
+            #     fuzzerstate.spec_instr_objs_seq[i] = SpeculativeInstructionEncapsulator(fuzzerstate,instr)
+            #     fuzzerstate.spec_instr_objs_seq[i].print()
             elif spec_instr.paddr == 0x28e04:
-                instr = RegImmInstruction_t0(fuzzerstate, "addi",ABI_INAMES.index("sp"),ABI_INAMES.index("sp"),1)
-                instr.paddr = spec_instr.paddr
-                fuzzerstate.spec_instr_objs_seq[i] = SpeculativeInstructionEncapsulator(fuzzerstate,instr)
-                fuzzerstate.spec_instr_objs_seq[i].print()
-            elif spec_instr.paddr == 0x28e08:
-                instr = IntLoadInstruction_t0(fuzzerstate, "lb",ABI_INAMES.index("s1"),ABI_INAMES.index("sp"),0,-1)
+                instr = IntLoadInstruction_t0(fuzzerstate, instr_str,ABI_INAMES.index("s1"),ABI_INAMES.index("sp"),0,-1)
                 instr.paddr = spec_instr.paddr
                 fuzzerstate.spec_instr_objs_seq[i] = SpeculativeInstructionEncapsulator(fuzzerstate,instr)
                 fuzzerstate.spec_instr_objs_seq[i].print()
@@ -94,3 +95,5 @@ for offset in OFFSETS:
         leak_success[offset][n_bytes] = not is_success
     break
 
+
+# %%

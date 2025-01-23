@@ -21,7 +21,7 @@ def load_fuzzconfigs(path: str):
 
 if __name__ == '__main__':
     if "MILESAN_ENV_SOURCED" not in os.environ:
-        raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
+        raise Exception("The Milesan environment must be sourced prior to running the Python recipes.")
     
     if len(sys.argv) < 1:
         raise Exception("Usage: python3 fuzz_and_reduce.py <path_to_config_json> [--reduce=taint,value,timeout] [--reduce-only]")
