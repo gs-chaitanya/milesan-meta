@@ -751,7 +751,8 @@ def _find_pillar_bb(fuzzerstate, failing_bb_id: int, failing_instr_id: int, faul
     # print('A', is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, right_bound-2))
     # print('B', is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, right_bound-1))
     # print('C', is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, right_bound))
-
+    
+    assert right_bound>1, "Failed finding pillar BB." # When right_bound == 1, we could not identfy a pillar BB, i.e. need all preceeding BBs to trigger the leakage
     return right_bound-1
 
 # @param failing_bb_id is the index of the first bb that, when removed as well as the subsequent ones, makes the bug disappear.
@@ -1214,7 +1215,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             find_pillar_success = True
         except Exception as e:
             print(f"Failed finding pillar BB: {e}")
-            pillar_bb_id = 1
+            pillar_bb_id = 1 # We set the pillar_bb_id to 1 when we failed finding it s.t. we start df-reduction (i.e. nopizing) after the initial BB.
         time_pillar_bb_search = time.time()-start_pillar_bb
         ###
         # Cut the first instructions of the pillar bb.
