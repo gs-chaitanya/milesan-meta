@@ -629,6 +629,12 @@ class IntRegPickState:
             reg_id = self.pick_int_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
             self.set_regstate(reg_id, IntRegIndivState.FREE, force=True)
 
+
+    def free_relocusedregs(self):
+        while self.exists_reg_in_state(IntRegIndivState.RELOCUSED):
+            reg_id = self.pick_int_reg_in_state(IntRegIndivState.RELOCUSED)
+            self.set_regstate(reg_id, IntRegIndivState.FREE, force=True)
+            
 # Float registers are never forbidden, therefore this is simpler than integer registers.
 class FloatRegPickState:
     def __init__(self, fuzzerstate):

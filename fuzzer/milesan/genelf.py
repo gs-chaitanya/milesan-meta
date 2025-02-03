@@ -117,6 +117,7 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
 
     if not is_spike_resolution:
         for instr_obj in fuzzerstate.spec_instr_objs_seq:
+            # instr_obj.print()
             if instr_obj.iscompressed:
                 assert USE_COMPRESSED # Do we care if the instructions need to match the spec?
                 curr_bytecode = instr_obj.gen_bytecode_int(is_spike_resolution=is_spike_resolution).to_bytes(2, 'little')
@@ -125,7 +126,7 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
             for curr_byte_id, curr_byte in enumerate(curr_bytecode):
                 if instr_obj.iscompressed:
                     assert curr_byte_id < 2
-                curr_addr = instr_obj.paddr + curr_byte_id
+                curr_addr = instr_obj.paddr + curr_byte_id - SPIKE_STARTADDR
                 if DO_ASSERT:
                     assert curr_addr not in addr_instrs, f"Trying to write twice to the same address: {instr_obj.get_str()}"
                 addr_instrs[curr_addr] = curr_byte

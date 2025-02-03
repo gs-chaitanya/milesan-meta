@@ -8,10 +8,13 @@ from params.runparams import DO_ASSERT
 from params.fuzzparams import USE_COMPRESSED, COMPRESS_INSTRUCTION
 from milesan.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 from milesan.util import INSTRUCTIONS_BY_ISA_CLASS
-from milesan.randomize.pickisainstrclass import _get_isainstrclass_filtered_weights, _gen_next_isainstrclass_from_weights
+from milesan.randomize.pickisainstrclass import _gen_next_isainstrclass_from_weights
 from milesan.util_compressed import *
 from milesan.cfinstructionclasses import *
 from milesan.cfinstructionclasses_t0 import *
+from milesan.randomize.createcfinstr import is_tolerate_R12DInstruction
+from milesan.randomize.pickexceptionop import gen_ppfill_instrs, gen_exception_instr, gen_medeleg_instr
+from milesan.randomize.pickprivilegedescentop import gen_priv_descent_instr
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
 # This module creates an instruction from its instruction string, and some state which will condition which registers and immediates will be picked, and with which probability.
 
@@ -38,8 +41,13 @@ def gen_random_imm(instr_str: str, is_design_64bit: bool):
 
 
 def _create_R12DInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
-    rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
-    rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
+    # When this is executed transiently, don't pick tainted registers when in taint-source domain. In taint-sink domain, 
+    # no registers are (architecturally) tainted, so we don't need to explicitly check which domain we are in.
+    if not is_tolerate_R12DInstruction(instr_str, fuzzerstate) and not is_tolerate_transient_exec_str(fuzzerstate,instr_str):
+        rs1, rs2 = tuple(fuzzerstate.intregpickstate.pick_untainted_int_inputregs(2,force=True))
+    else:
+        rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
+        rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
     rd = fuzzerstate.intregpickstate.pick_untainted_int_outputreg_nonzero()
     if USE_COMPRESSED and instr_str in IS_COMPRESSABLE:
         instr_str_cmp, is_compressable = handle_R12D(rd, rs1, rs2, instr_str)
@@ -81,8 +89,14 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
 
 
 def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
-    rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
-    rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
+    # When we DISABLE_TAINT_SOURCE_GADGETS is enabled, tainted regs should not be chosen in the transient window.
+    if not is_tolerate_transient_exec_str(fuzzerstate, instr_str):
+        rs1 = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
+        rs2 = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
+    else:
+        rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
+        rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
+
     imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)    
     return BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, 0x0, None, iscompressed)
     
@@ -98,7 +112,10 @@ def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompre
     return JALInstruction_t0(fuzzerstate, instr_str, rd, imm, iscompressed)
 
 def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool, curr_addr: int = None): # curr_addr for compatibility in _create_spectre_gadget_instrobjs 
-    rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
+    if not is_tolerate_transient_exec_str(fuzzerstate, instr_str):
+        rs1 = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
+    else:
+        rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
     rd = fuzzerstate.intregpickstate.pick_int_inputreg()
     imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)    
     producer_id = None
@@ -110,7 +127,10 @@ def _create_SpecialInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     return SpecialInstruction_t0(fuzzerstate, instr_str, rd, rs1)
 
 def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
-    rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
+    if not is_tolerate_transient_exec_str(fuzzerstate, instr_str):
+        rs1 = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
+    else:
+        rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
     rd = fuzzerstate.intregpickstate.pick_int_outputreg()
     imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)    
 
@@ -124,7 +144,10 @@ def _create_IntLoadInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     return IntLoadInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, None, iscompressed)
 
 def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
-    rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
+    if not is_tolerate_transient_exec_str(fuzzerstate, instr_str):
+        rs1 = fuzzerstate.intregpickstate.pick_untainted_int_inputreg(force=True)
+    else:
+        rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
     rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
     imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)    
 
@@ -145,7 +168,6 @@ def _create_IntStoreInstruction(instr_str: str, fuzzerstate, iscompressed: bool)
 def _create_speculative_instr(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool = False):
     if DO_ASSERT:
         assert not iscompressed
-
     # Integer instructions
     if instr_str in R12DInstructions:
         return _create_R12DInstruction(instr_str, fuzzerstate, iscompressed)
@@ -169,22 +191,80 @@ def _create_speculative_instr(instr_str: str, fuzzerstate, curr_addr: int, iscom
     else:
         raise ValueError(f"Unexpected instruction string: `{instr_str}`")
 
-def create_speculative_instr(fuzzerstate, curr_addr: int):
-    weights = copy(fuzzerstate.isapickweights)
+
+
+def create_speculative_instrs(fuzzerstate, curr_addr: int, domain: tuple):
+    assert domain[0] in range(-1, fuzzerstate.num_layouts), f"Invalid layout {domain[0]}"
+    assert domain[1] in list(PrivilegeStateEnum), f"Invalid privilege {domain[1]}"
+
+    weights =  copy(fuzzerstate.isapickweights)
+    # # We don't try to speculatively mess with the FSMs for now
     weights[ISAInstrClass.MMU] = 0
     weights[ISAInstrClass.REGFSM] = 0
     weights[ISAInstrClass.CLEARTAINT] = 0
-    weights[ISAInstrClass.DESCEND_PRV] = 0
-    weights[ISAInstrClass.PPFSM] = 0
-    weights[ISAInstrClass.EXCEPTION] = 0
+    # weights[ISAInstrClass.DESCEND_PRV] = 0
+    # weights[ISAInstrClass.PPFSM] = 0
+    # weights[ISAInstrClass.EXCEPTION] = 0
     weights[ISAInstrClass.MEMFSM] = 0
     weights[ISAInstrClass.EPCFSM] = 0
     weights[ISAInstrClass.RANDOM_CSR] = 0
     weights[ISAInstrClass.TVECFSM] = 0
-    weights[ISAInstrClass.MEDELEG] = 0
+    # weights[ISAInstrClass.MEDELEG] = 0
+
+    # randomize
+    fuzzerstate.privilegestate.privstate = random.choice(list(PrivilegeStateEnum))
+    fuzzerstate.privilegestate.is_mepc_populated = True
+    fuzzerstate.privilegestate.is_mtvec_populated = True
+    fuzzerstate.privilegestate.is_sepc_populated = True
+    fuzzerstate.privilegestate.is_stvec_populated = True
+    fuzzerstate.privilegestate.curr_mstatus_mpp = random.choice(list(PrivilegeStateEnum))
+    fuzzerstate.privilegestate.curr_mstatus_spp = random.choice(list(PrivilegeStateEnum))
+    fuzzerstate.real_curr_layout = random.choice(range(-1,fuzzerstate.num_layouts))
+    fuzzerstate.effective_curr_layout = random.choice(range(-1,fuzzerstate.num_layouts))
+    # artificially set some register to consumed if we don't have one to enable more special instructions
+    if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED):
+        consumed_reg = random.choice(range(1,fuzzerstate.intregpickstate.num_pickable_regs))
+        fuzzerstate.intregpickstate.set_regstate(consumed_reg, IntRegIndivState.CONSUMED, force=True)
+
+
+    # allow any register
+    fuzzerstate.intregpickstate.free_relocusedregs()
 
     isa_class = _gen_next_isainstrclass_from_weights(weights)
-    instr_str = gen_next_instrstr_from_isaclass(isa_class, fuzzerstate)
-    instr = _create_speculative_instr(instr_str, fuzzerstate, curr_addr)
-    instr.paddr = curr_addr
-    return SpeculativeInstructionEncapsulator(fuzzerstate,instr)
+
+    if isa_class == ISAInstrClass.DESCEND_PRV:
+        fuzzerstate.privilegestate.privstate = random.choice([PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR])
+        instrs = gen_priv_descent_instr(fuzzerstate)
+    elif isa_class == ISAInstrClass.PPFSM:
+        # assert False, "not implemented"
+        fuzzerstate.privilegestate.privstate = PrivilegeStateEnum.MACHINE
+        instrs = gen_ppfill_instrs(fuzzerstate)
+    elif isa_class == ISAInstrClass.EXCEPTION:
+        instrs = gen_exception_instr(fuzzerstate)
+    elif isa_class == ISAInstrClass.MEDELEG:
+        fuzzerstate.privilegestate.privstate = PrivilegeStateEnum.MACHINE
+        instrs = [gen_medeleg_instr(fuzzerstate)]
+    else:
+        instr_str = gen_next_instrstr_from_isaclass(isa_class, fuzzerstate)
+        instrs = [_create_speculative_instr(instr_str, fuzzerstate, curr_addr)]
+    
+    paddr =  curr_addr|SPIKE_STARTADDR
+    for instr in instrs:
+        instr.paddr = paddr
+        instr.va_layout, instr.priv_level = domain
+        if not None in domain:
+            instr.vaddr = phys2virt(instr.paddr, instr.priv_level, instr.va_layout, fuzzerstate,absolute_addr=False)
+
+        if isinstance(instr, GenericCSRWriterInstruction_t0):
+            instr.csr_instr.paddr = instr.paddr
+            instr.csr_instr.vaddr = instr.vaddr
+            instr.csr_instr.priv_level = instr.priv_level
+        elif isinstance(instr, SimpleExceptionEncapsulator):
+            instr.instr.paddr = instr.paddr
+            instr.instr.vaddr = instr.vaddr
+            instr.instr.priv_level = instr.priv_level
+        
+        paddr += 2 if instr.iscompressed else 4
+
+        assert instr.va_layout != -1 or instr.priv_level == PrivilegeStateEnum.MACHINE, f"{instr.get_str()}"
+    return [SpeculativeInstructionEncapsulator(fuzzerstate,instr) for instr in instrs]

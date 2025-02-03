@@ -8,9 +8,9 @@ import multiprocessing as mp
 import time
 import threading
 import os
-
 LOG_EXCEPTIONS = True
 PRINT_THREAD_STATUS = False
+ONLY_PRINT_LEAKAGE = False
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 total_finished_tests = 0
@@ -44,7 +44,9 @@ def __check_isa_sim_worker(design_name, seed):
             print(f"No mismatch detected for {design_name} with seed {seed}")
         return None
     except Exception as e:
-        print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")
+        if not ONLY_PRINT_LEAKAGE or "Taint mismatch" in str(e):
+            print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")
+
         if not NO_REMOVE_TMPFILES and isinstance(e, FuzzerStateException):
             e.fuzzerstate.remove_tmp_files()
         if LOG_EXCEPTIONS:
@@ -61,7 +63,6 @@ def __check_isa_sim_worker(design_name, seed):
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.failed.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
-
                 return None
         elif not NO_REMOVE_TMPFILES and isinstance(e, FuzzerStateException):
             e.fuzzerstate.remove_tmp_dir()

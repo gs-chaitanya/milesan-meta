@@ -1,20 +1,56 @@
 from params.fuzzparams import TAINT_EN
 from milesan.randomize.pickbytecodetaints import OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS
 from milesan.cfinstructionclasses import *
-from milesan.util import ExceptionCauseVal, SimulatorEnum
+from milesan.util import ExceptionCauseVal
 from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from milesan.registers import ABI_INAMES
 from rv.csrids import CSR_ABI_NAMES
 from params.runparams import PRINT_CHECK_REGS_T0, PRINT_COLOR_TAINT, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT, PRINT_WRITEBACK_T0, PRINT_WRITEBACK, DUMP_WRITEBACK, DUMP_WRITEBACK_T0, ASSERT_WRITEBACK_TRACE
 from common.spike import SPIKE_STARTADDR
+from common.exceptions import TaintedBranchException, TaintedJalrException, TaintedDDELIException, TaintedMemLoadException, TaintedMemStoreException
 from milesan.registers import IntRegIndivState
 import numpy as np
 from rv.csrids import MPP_BIT, MIE_BIT, MPIE_BIT
 from rv.csrids import SIE_BIT, SPIE_BIT, SPP_BIT
 from rv.csrids import SIE_BIT, SPIE_BIT, SPP_BIT
+import subprocess
+class Colorcodes(object):
+    """
+        Provides ANSI terminal color codes which are gathered via the ``tput``
+        utility. That way, they are portable. If there occurs any error with
+        ``tput``, all codes are initialized as an empty string.
+        The provides fields are listed below.
+        Control:
+        - bold
+        - reset
+        Colors:
+        - blue
+        - green
+        - orange
+        - red
+        :license: MIT
+        """
+    def __init__(self):
+        try:
+            self.bold = subprocess.check_output("tput bold".split(),text=True)
+            self.reset = subprocess.check_output("tput sgr0".split(),text=True)
+            self.blue = subprocess.check_output("tput setaf 4".split(),text=True)
+            self.green = subprocess.check_output("tput setaf 2".split(),text=True)
+            self.orange = subprocess.check_output("tput setaf 3".split(),text=True)
+            self.red = subprocess.check_output("tput setaf 1".split(),text=True)
+        except subprocess.CalledProcessError as e:
+            
+            self.bold = ""
+            self.reset = ""
+            self.blue = ""
+            self.green = ""
+            self.orange = ""
+            self.red = ""
 
-CRED = '\033[91m'
-CEND = '\033[0m'
+_c = Colorcodes()
+
+CRED = _c.red
+CEND = _c.reset
 
 # Ensures that the register and its taint mask excludes some registers we don't want to get tainted
 def clean_reg_taint(reg, reg_t0, skip_regs):
@@ -28,63 +64,37 @@ def clean_reg_taint(reg, reg_t0, skip_regs):
                     break
     return reg_t0
 
-def filter_reg_t0_traceback(reg_id, addr, fuzzerstate, correct_val: int = None, is_spike_resolution: bool = False):
-    raise NotImplementedError("Depricated.")
-    last_instr = compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val)
-    dep_regs = set()
-    instr_stream = []
-    for bb_instrs in reversed(fuzzerstate.instr_objs_seq):
-        for instr_obj in reversed(bb_instrs):
-            if instr_obj.paddr == last_instr.paddr: # start collecting depending registers
-                instr_stream += [instr_obj]
-                if hasattr(instr_obj,"rs1"):
-                    dep_regs |= {instr_obj.rs1}
-                if hasattr(instr_obj,"rs2"):
-                    dep_regs |= {instr_obj.rs2}
-                if hasattr(instr_obj,"rdep"):
-                    dep_regs |= {instr_obj.rdep}
-                if hasattr(instr_obj,"rprod"):    
-                    dep_regs |= {instr_obj.rprod}
+def is_tolerate_transient_window(fuzzerstate, instr: BaseInstruction):
+    if "openc910" in fuzzerstate.design_name:
+        if isinstance(instr, BranchInstruction):
+            return TOLERATE_OPENC910_BRANCH_TRANSIENT_WINDOW
+        elif isinstance(instr, JALRInstruction):
+            return TOLERATE_OPENC910_JALR_TRANSIENT_WINDOW
+        elif isinstance(instr, ExceptionInstruction):
+            return TOLERATE_OPENC910_EXCEPTION_TRANSIENT_WINDOW
+    elif "cva6" in fuzzerstate.design_name:
+        if isinstance(instr, BranchInstruction):
+            return TOLERATE_CVA6_BRANCH_TRANSIENT_WINDOW
+        elif isinstance(instr, JALRInstruction):
+            return TOLERATE_CVA6_JALR_TRANSIENT_WINDOW
+        elif isinstance(instr, ExceptionInstruction):
+            return TOLERATE_CVA6_EXCEPTION_TRANSIENT_WINDOW
+    elif "boom" in fuzzerstate.design_name:
+        if isinstance(instr, BranchInstruction):
+            return TOLERATE_BOOM_BRANCH_TRANSIENT_WINDOW
+        elif isinstance(instr, JALRInstruction):
+            return TOLERATE_BOOM_JALR_TRANSIENT_WINDOW
+        elif isinstance(instr, ExceptionInstruction):
+            return TOLERATE_BOOM_EXCEPTION_TRANSIENT_WINDOW
+    elif "rocket" in fuzzerstate.design_name:
+        if isinstance(instr, BranchInstruction):
+            return TOLERATE_ROCKET_BRANCH_TRANSIENT_WINDOW
+        elif isinstance(instr, JALRInstruction):
+            return TOLERATE_ROCKET_JALR_TRANSIENT_WINDOW
+        elif isinstance(instr, ExceptionInstruction):
+            return TOLERATE_ROCKET_EXCEPTION_TRANSIENT_WINDOW
 
-            elif hasattr(instr_obj,"rd") and instr_obj.rd in dep_regs and instr_obj.paddr in fuzzerstate.intregpickstate.writeback_trace_final :
-                instr_stream += [instr_obj]
-                dep_regs.remove(instr_obj.rd)
-                if hasattr(instr_obj,"rs1"):
-                    dep_regs |= {instr_obj.rs1}
-                if hasattr(instr_obj,"rs2"):
-                    dep_regs |= {instr_obj.rs2}
-                if hasattr(instr_obj,"rdep"):
-                    dep_regs |= {instr_obj.rdep}
-                if hasattr(instr_obj,"rprod"):    
-                    dep_regs |= {instr_obj.rprod}
-            elif isinstance(instr_obj, PlaceholderPreConsumerInstr) and instr_obj.rdep in dep_regs and instr_obj.paddr in fuzzerstate.intregpickstate.writeback_trace_final:
-                instr_stream += [instr_obj]
-  
-    
-    if PRINT_FILTERED_REG_TRACEBACK:
-        print("*** FILTERED TAINT TRACEBACK ***")
-        for instr_obj in reversed(instr_stream):
-            if instr_obj.paddr not in fuzzerstate.intregpickstate.writeback_trace_in_situ:
-                assert instr_obj.paddr not in fuzzerstate.intregpickstate.writeback_trace_final
-                continue
-            rd_spike,val_t0_spike = fuzzerstate.intregpickstate.writeback_trace_in_situ[instr_obj.paddr]
-            rd_final,val_t0_final = fuzzerstate.intregpickstate.writeback_trace_final[instr_obj.paddr]
-            if rd_final != rd_spike or val_t0_final != val_t0_spike:
-                print("Mismatch between in-situ and final simulation:")
-                instr_obj.print(True)
-                print(f"{ABI_INAMES[rd_spike]}<-{hex(val_t0_spike)}")
-                instr_obj.print(False)
-                print(f"{ABI_INAMES[rd_final]}<-{hex(val_t0_final)}")
-
-        for (addr_spike,trace_spike),(addr_final, trace_final) in zip(fuzzerstate.intregpickstate.writeback_trace_in_situ.items(),fuzzerstate.intregpickstate.writeback_trace_final.items()):
-            assert addr_spike == addr_final
-            assert trace_spike[0] == trace_final[0]
-            if trace_spike[1] != trace_final[1]:
-                print(f"MISMATCH {hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}/{hex(trace_final[1])} (spike/final)")
-            # else:
-            #     print(f"{hex(addr_spike)}: {ABI_INAMES[trace_spike[0]]} <- {hex(trace_spike[1])}")
-
-    return last_instr
+         
 ###
 # Abstract classes with taint
 ###
@@ -144,7 +154,7 @@ class RDInstruction_t0(CFInstruction_t0):
             if self.fuzzerstate.intregpickstate.regs[self.rd].fsm_state !=  IntRegIndivState.FREE:
                 self.rd_unreliable = True
         if DO_ASSERT:
-            assert res_t0 == 0 or self.iscontext or (self.priv_level in self.fuzzerstate.taint_source_privs and self.va_layout in self.fuzzerstate.taint_source_layouts), f"{self.get_str()}: Taint detected in forbidden privelege or layout: allowed are {[p.name for p in self.fuzzerstate.taint_source_privs]} in layouts {self.fuzzerstate.taint_source_layouts}. Taint is {hex(res_t0)}"
+            assert res_t0 == 0 or self.isdead or self.iscontext or (self.priv_level in self.fuzzerstate.taint_source_privs and self.va_layout in self.fuzzerstate.taint_source_layouts), f"{self.get_str()}: Taint detected in forbidden privelege or layout: allowed are {[p.name for p in self.fuzzerstate.taint_source_privs]} in layouts {self.fuzzerstate.taint_source_layouts}. Taint is {hex(res_t0)}"
         self.writeback_trace["in-situ" if is_spike_resolution else "final"] = (res, res_t0)
         if not is_spike_resolution and ASSERT_WRITEBACK_TRACE:
             self.assert_writeback_trace()
@@ -223,7 +233,11 @@ class R12DInstruction_t0(R12DInstruction, RDInstruction_t0):
         rs2_val = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
         rs1_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
         rs2_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
-        assert is_tolerate_R12DInstruction(self.instr_str, self.fuzzerstate) or rs1_val_t0 == 0 and rs2_val_t0 == 0
+        if (rs1_val_t0 or rs2_val_t0) and not is_tolerate_R12DInstruction(self.instr_str, self.fuzzerstate):
+            raise TaintedDDELIException(
+                                        fuzzerstate=self.fuzzerstate,
+                                        reg_id = self.rs1 if rs1_val_t0 else self.rs2,
+                                        instr=self)
         # Compute the taint results of the operation.
         res_t0 = self.instr_func_t0(rs1_val, rs1_val_t0, rs2_val, rs2_val_t0, self.fuzzerstate.is_design_64bit)
         # Compute alternative results if other soruce registers had been choosen.
@@ -409,8 +423,6 @@ class RegImmInstruction_t0(RegImmInstruction, ImmInstruction_t0, RDInstruction_t
 
 
 
-
-
 class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, imm: int, iscompressed: bool = False):
         super().__init__(fuzzerstate, instr_str, rd, imm, iscompressed)
@@ -428,6 +440,11 @@ class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
                 self.fuzzerstate.curr_pc = self.vaddr + self.imm
             else:
                 self.fuzzerstate.curr_pc = self.paddr + self.imm
+        elif not is_tolerate_transient_window(self.fuzzerstate, self):
+            next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+            if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
+
         if USE_MMU:
             res = self.instr_func(self.vaddr, 0x0, self.fuzzerstate.is_design_64bit)
         else:
@@ -447,7 +464,12 @@ class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
 
     def execute_t0(self, res, is_spike_resolution: bool):
         assert TAINT_EN
-        assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"{self.get_str()}: source register is tainted. This is not allowed."
+        # assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"{self.get_str()}: source register is tainted. This is not allowed."
+        if self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0():
+            raise TaintedCFOperandException(
+                                        fuzzerstate=self.fuzzerstate,
+                                        reg_id=self.rs1,
+                                        instr=self)
         # We assume the PC does not get tainted, therefore the result of JAL is never either.
         self.writeback_t0(0x0, res, is_spike_resolution)
 
@@ -455,17 +477,25 @@ class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() + self.imm
+        elif not is_tolerate_transient_window(self.fuzzerstate, self):
+            # blacklist address after JALR, might be loaded into RSB
+            next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+            if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
+            # if len(self.fuzzerstate.instr_objs_seq) > 1:
+            #     last_instr = self.fuzzerstate.instr_objs_seq[-2][-1]
+            #     self.fuzzerstate.blacklist_gadget_addr(last_instr.paddr+(2 if last_instr.iscompressed else 4),self.va_layout, self.priv_level)
         if USE_MMU:
             res = self.instr_func(self.vaddr, 0x0, self.fuzzerstate.is_design_64bit)
         else:
             res = self.instr_func(self.paddr, 0x0, self.fuzzerstate.is_design_64bit)
         if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
+
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
-        if self.vaddr == 0x183c184674:
-            self.fuzzerstate.intregpickstate.print()
-            exit(0)
+
+ 
 
 
 ## Extended Placeholder Instructions ##
@@ -690,25 +720,33 @@ class IntLoadInstruction_t0(IntLoadInstruction, RDInstruction_t0):
 
         try:
             res = self.fuzzerstate.memview.read(addr,self.n_bytes, self.priv_level, self.va_layout)
-        except Exception as e:
-            print(f"{self.get_str()} failed to read from addr {hex(addr)}. {ABI_INAMES[self.rs1]}:{hex(rs1_val)}")
-            raise e
-        if TAINT_EN:
-            self.execute_t0(res, is_spike_resolution)
-        res = self.instr_func(res,self.fuzzerstate.is_design_64bit)
-        self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
-        self.fuzzerstate.advance_minstret()
+            if TAINT_EN:
+                self.execute_t0(res, is_spike_resolution)
+            res = self.instr_func(res,self.fuzzerstate.is_design_64bit)
+            self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
+            self.fuzzerstate.advance_minstret()
+        except AssertionError as e:
+                if not self.isdead: # transient instructions fail silently
+                    raise e
 
     def execute_t0(self, res, is_spike_resolution):
         assert TAINT_EN
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         rs1_val_t0 = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
-        assert rs1_val_t0 == 0, f"Source register {ABI_INAMES[self.rs1]} is tainted ({hex(rs1_val_t0)}), this is not allowed."
         assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
+        if rs1_val_t0:
+            raise TaintedMemLoadException(
+                                fuzzerstate=self.fuzzerstate,
+                                reg_id=self.rs1,
+                                instr=self
+                                )
         addr = INSTR_FUNCS["addi"](rs1_val, self.imm, self.fuzzerstate.is_design_64bit)
+
         res_t0 = self.fuzzerstate.memview.read_t0(addr,self.n_bytes, self.priv_level, self.va_layout)
+
         res_t0 = self.instr_func_t0(res_t0,self.fuzzerstate.is_design_64bit)
         self.writeback_t0(res_t0,res, is_spike_resolution) # We allow the rd field to be tainted, thus taint could be propagated to several destination registers.
+
 
 class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rs1: int, rs2: int, imm: int, producer_id: int, iscompressed: bool = False):
@@ -728,16 +766,28 @@ class IntStoreInstruction_t0(IntStoreInstruction, BaseInstruction_t0):
         res = self.fuzzerstate.intregpickstate.regs[self.rs2].get_val()
         if TAINT_EN:
             self.execute_t0(res, is_spike_resolution)
-        self.fuzzerstate.memview.write(addr, res&self.mask, self.n_bytes, self.priv_level, self.va_layout)
-        self.fuzzerstate.advance_minstret()
+        
+        try:
+            self.fuzzerstate.memview.write(addr, res&self.mask, 
+            self.n_bytes, self.priv_level, self.va_layout)
+            self.fuzzerstate.advance_minstret()
+        except AssertionError as e:
+            if not self.isdead:
+                raise e
 
 
     def execute_t0(self, res, is_spike_resolution):
         assert TAINT_EN
         rs1_val = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val()
         rs1_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0()
-        assert rs1_val_t0 == 0, f"Source register {ABI_INAMES[self.rs1]} is tainted ({hex(rs1_val_t0)}), this is not allowed."
         assert self.imm_t0 == 0, f"Immediate is tainted ({hex(self.imm)}), this is not allowed."
+        if rs1_val_t0:
+            raise TaintedMemStoreException(
+                                fuzzerstate=self.fuzzerstate,
+                                reg_id=self.rs1,
+                                instr=self
+                                )
+            
         addr = INSTR_FUNCS["addi"](rs1_val,self.imm, self.fuzzerstate.is_design_64bit)
         rs2_val_t0 =  self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0()
         self.fuzzerstate.memview.write_t0(addr,rs2_val_t0&self.mask, self.n_bytes, self.priv_level, self.va_layout) # We don't allow addresses to be tainted, thus we don't need a writeback here.
@@ -827,13 +877,36 @@ class BranchInstruction_t0(BranchInstruction, ImmInstruction_t0):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += self.imm if self.plan_taken else 4
+        elif not is_tolerate_transient_window(self.fuzzerstate, self):
+            if self.plan_taken:
+                next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+                if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+                    self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
+            else:
+                next_trans_paddr = self.paddr+self.imm
+                if next_trans_paddr < self.fuzzerstate.memsize + SPIKE_STARTADDR and next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+                    self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
+
         if TAINT_EN:
             self.execute_t0(None,is_spike_resolution)
         self.fuzzerstate.advance_minstret()
 
+
+
     def execute_t0(self,res,is_spike_resolution):
-        assert self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0() == 0, f"{self.get_str()}: source register is tainted. This is not allowed."
-        assert self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0() == 0, f"{self.get_str()}: source register is tainted. This is not allowed."
+        if self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0():
+            raise TaintedBranchException(
+                                        fuzzerstate=self.fuzzerstate,
+                                        reg_id=self.rs1,
+                                        instr=self
+                                        )
+
+        if self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0():
+            raise TaintedBranchException(
+                                        fuzzerstate=self.fuzzerstate,
+                                        reg_id=self.rs2,
+                                        instr=self
+                                        )
 
     def gen_bytecode_int_t0(self, is_spike_resolution: bool):
         assert TAINT_EN
@@ -856,10 +929,26 @@ class BranchInstruction_t0(BranchInstruction, ImmInstruction_t0):
 
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = PRINT_COLOR_TAINT):
-        if not color_taint or not self.imm_t0:
+        if not color_taint:
             return super().get_str()
 
-        return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rs1]}, {ABI_INAMES[self.rs2]}, " + CRED + f"{hex(self.imm)}" + CEND
+
+        if self.fuzzerstate.intregpickstate.regs[self.rs1].get_val_t0():
+            rs1_str = CRED + ABI_INAMES[self.rs1] + CEND
+        else:
+            rs1_str = ABI_INAMES[self.rs1]
+        if self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0():
+            rs2_str = CRED + ABI_INAMES[self.rs2] + CEND
+        else:
+            rs2_str = ABI_INAMES[self.rs2]
+        
+        if self.imm_t0:
+            imm_str = CRED + self.imm + CEND
+        else:
+            imm_str = self.imm
+
+
+        return f"{self.get_preamble()}: {self.instr_str} {rs1_str}, {rs2_str}, {imm_str}"
 
 class CSRRegInstruction_t0(CSRRegInstruction, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, csr_id: int, iscompressed: bool = False, is_satp_smode = (False, None), mpp_val = None):
@@ -973,11 +1062,16 @@ class GenericCSRWriterInstruction_t0(GenericCSRWriterInstruction, BaseInstructio
 class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstruction_t0):
     def execute(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         if is_spike_resolution:
+            if not is_tolerate_transient_window(self.fuzzerstate, self):
+                next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+                if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+                    self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
             return
         if self.is_mret:
             self.execute_mret()
         else:
             self.execute_sret()
+
 
     def execute_mret(self):
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].get_val()
@@ -993,6 +1087,11 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
     def execute(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         if not is_spike_resolution:
             self.assert_addr()
+        elif not is_tolerate_transient_window(self.fuzzerstate, self):
+            next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+            if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
+
         if self.is_mtvec:
             self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr if USE_MMU else self.paddr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
@@ -1002,10 +1101,17 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
 
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val() if self.is_mtvec else self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
 
+
+
 class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstruction_t0):
     def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
+        elif not is_tolerate_transient_window(self.fuzzerstate, self):
+            next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+            if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
+
         if self.is_mtvec:
             self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr if USE_MMU else self.paddr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
@@ -1018,6 +1124,11 @@ class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
     def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
+        elif not is_tolerate_transient_window(self.fuzzerstate, self):
+            next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+            if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
+
         if self.is_mtvec:
             self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr if USE_MMU else self.paddr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)

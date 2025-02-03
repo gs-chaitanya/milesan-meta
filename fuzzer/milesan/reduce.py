@@ -341,12 +341,13 @@ def gen_reduced_elf(fuzzerstate, max_bb_id_to_consider: int, max_instr_id_except
         # last_addr_layout, last_addr_priv = get_last_bb_layout_and_priv(test_fuzzerstate, max_bb_id_to_consider, -1, True)
         last_instr = test_fuzzerstate.instr_objs_seq[max_bb_id_to_consider][-1]
         new_jal = JALInstruction_t0(test_fuzzerstate, "jal", 0, test_fuzzerstate.final_bb_base_addr-last_instr.paddr+SPIKE_STARTADDR)
-        print(f"Replacig CF instruction {last_instr.get_str()} with {new_jal.get_str()}")
         new_jal.paddr = last_instr.paddr
         new_jal.priv_level = last_instr.priv_level
         if USE_MMU:
             new_jal.vaddr = last_instr.vaddr
             new_jal.va_layout = last_instr.va_layout
+
+        print(f"Replacig CF instruction {last_instr.get_str()} with {new_jal.get_str()}")
 
         last_addr_layout = last_instr.va_layout
         last_addr_priv = last_instr.priv_level
@@ -895,7 +896,7 @@ def _find_pillar_instr(fuzzerstate, failing_bb_id: int, failing_instr_id: int, p
     return right_bound-1
 
     
-
+# TODO: add invariant check
 # @param failing_bb_id is the index of the first bb that, when removed as well as the subsequent ones, makes the bug disappear.
 # @param failing_instr_id is the index of the first instruction in the bb `failing_bb_id` that causes trouble, in the sense that when it is removed (and all the following instructions and bbs), the test case does not fail anymore. It is None if the failing instruction is actually the last one in the previous bb.
 # Transforms unused instructions between the first pillar and the faulty instruction into nops.
@@ -1478,6 +1479,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_dict["success_reduce_dead_code"] = time_reduce_dead_code
 
         if reduce_dead_code_success:
+            # TODO: restore state of registers to before leaking instrucion
             ret_msg += f"\t {len(final_fuzzerstate.spec_instr_objs_seq)} speculative instructions:\n" + ''.join(["\t" + i.get_str() + "\n" for i in final_fuzzerstate.spec_instr_objs_seq])
             ret_dict["dead_code"] = [i.get_str() for i in final_fuzzerstate.spec_instr_objs_seq]
 

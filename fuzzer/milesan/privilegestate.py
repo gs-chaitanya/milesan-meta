@@ -80,14 +80,14 @@ class PrivilegeState:
         supported_exceptions_dict[ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT] = False
         supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT] = False
 
-        # Make sure there are consumed registers for some of the misaligned accesses
-        has_consumed_reg = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
-        if not has_consumed_reg:
-            supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_ACCESS_FAULT] = False      # Not yet sure whether we will need a consumed reg, but let's do it like this for now
-            supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT] = False # Not yet sure whether we will need a consumed reg, but let's do it like this for now
-            supported_exceptions_dict[ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT] = False # Not yet sure whether we will need a consumed reg, but let's do it like this for now
-            supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False        # Not yet sure whether we will need a consumed reg, but let's do it like this for now
-            supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT] = False   # Not yet sure whether we will need a consumed reg, but let's do it like this for now
+        # Make sure there are registers that hold page addresses for some of the misaligned accesses
+        has_page_reg = fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR) or fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
+        if not has_page_reg:
+            supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_ACCESS_FAULT] = False     
+            supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT] = False 
+            supported_exceptions_dict[ExceptionCauseVal.ID_INSTRUCTION_PAGE_FAULT] = False 
+            supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_PAGE_FAULT] = False        
+            supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT] = False  
             supported_exceptions_dict[ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED] = False
             supported_exceptions_dict[ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED] = False
 

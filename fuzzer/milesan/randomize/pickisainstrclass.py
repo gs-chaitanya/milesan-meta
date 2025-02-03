@@ -312,5 +312,4 @@ def gen_next_isainstrclass(fuzzerstate, curr_alloc_cursor, no_mmu_op: bool = Fal
     filtered_weights = _filter_privdescent(fuzzerstate, filtered_weights)
     if no_mmu_op:
         filtered_weights[ISAInstrClass.MMU] = 0
-
     return _gen_next_isainstrclass_from_weights(filtered_weights)

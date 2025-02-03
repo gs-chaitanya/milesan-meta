@@ -5,6 +5,7 @@
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, FPU_ENDIS_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, REGDUMP_REGISTER_ID, RDEP_MASK_REGISTER_ID_VIRT, RPROD_MASK_REGISTER_ID
 from params.fuzzparams import USE_MMU, USE_COMPRESSED, USE_SPIKE_INTERM_ELF, NONPICKABLE_REGISTERS, FENCE_CF_INSTR
 from params.runparams import DO_ASSERT, PRINT_CHECK_REGS, PRINT_REG_TRACEBACK, PRINT_FILTERED_REG_TRACEBACK, ASSERT_ADDR
+from params.toleratebugsparams import *
 from rv.csrids import CSR_IDS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
 from milesan.util import CFInstructionClass
@@ -27,13 +28,13 @@ from rv.rv32ic import *
 from rv.rv64ic import *
 from milesan.randomize.pickbytecodetaints import CFINSTRCLASS_TAINT_PROBS, RD_INT_TAINT_PROBS_MASK, RS_INT_TAINT_PROBS_MASK, RD_FLOAT_TAINT_PROBS_MASK, RS_FLOAT_TAINT_PROBS_MASK, CFINSTRCLASS_TAINT_ONLY_ONE, OPCODE_FIELD_MASKS, OPCODE_FIELD_BITS, DONT_TAINT_REGS, CFINSTRCLASS_INJECT_PROBS
 from common.spike import SPIKE_STARTADDR
+from common.exceptions import *
 from milesan.registers import ABI_INAMES, MAX_32b, MAX_64b, MAX_20b
 from milesan.util import ExceptionCauseVal
 from milesan.privilegestate import PrivilegeStateEnum
 from milesan.mmu_utils import PAGE_ALIGNMENT_MASK
 import random
 import numpy as np
-
 
 
 def compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val):
@@ -141,7 +142,6 @@ class BaseInstruction:
             else: # In case it's the first instruction of a block.
                 last_instr = self.fuzzerstate.instr_objs_seq[-2][-1] # We need the layout from the previous instruction
             self.va_layout, self.priv_level = get_current_layout(last_instr, last_instr.va_layout, last_instr.priv_level)
-
         if DO_ASSERT:
             assert self.priv_level is not None
             assert not (USE_MMU and self.va_layout is None)
@@ -153,6 +153,9 @@ class BaseInstruction:
         self.paddr = self.fuzzerstate.get_curr_paddr()
         if USE_MMU:
             self.vaddr = phys2virt(self.paddr, self.priv_level, self.va_layout,self.fuzzerstate,absolute_addr=False)
+            self.fuzzerstate.add_page_domain(self.paddr, self.va_layout, self.priv_level)
+
+
         else:
             self.vaddr = None
             self.va_layout = -1
@@ -163,17 +166,7 @@ class BaseInstruction:
         print(self.get_str(is_spike_resolution))
 
     def get_preamble(self):
-        if USE_MMU:
-            if self.priv_level is not None and self.va_layout is not None and self.paddr is not None and self.vaddr is not None:
-                return f"({self.priv_level.name[0]}/{self.va_layout}): {hex(self.paddr)}/{hex(self.vaddr)}"
-            else:
-                return "(Undetermined)"
-        else:
-            if self.priv_level is not None and self.paddr is not None:
-                return f"({self.priv_level.name[0]},{self.va_layout}): {hex(self.paddr)}"
-            else:
-                return "(Undetermined)"
-
+        return f"({self.priv_level.name[0] if self.priv_level is not None else '?'}/{self.va_layout if self.va_layout is not None else '?'}): {hex(self.paddr) if self.paddr is not None else '?'}/{hex(self.vaddr) if self.vaddr is not None else '?'}"
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str}"
@@ -1632,13 +1625,6 @@ class ExceptionInstruction(BaseInstruction):
         self.producer_id = producer_id
         self.va_layout_after_op = fuzzerstate.effective_curr_layout # The layout that is entered after the exception is raised.
         self.priv_level_after_op = fuzzerstate.privilegestate.privstate # The privstate has already been changed at this point.
-       # self.old_privilege = fuzzerstate.privilegestate.prev_privstate # The privstate before it was changed i.e. at which the exception is raised during execution.
-        # if len(self.fuzzerstate.instr_objs_seq[-1]):
-        #     self.old_privelege = self.fuzzerstate.instr_objs_seq[-1][-1].priv_level
-        # else: # In case its the first instruciton of a block.
-        #     self.old_privelege = self.fuzzerstate.instr_objs_seq[-2][-1].priv_level
-
-
 
 class SimpleIllegalInstruction(ExceptionInstruction):
     def __init__(self, fuzzerstate, is_mtvec):
@@ -1674,16 +1660,126 @@ class SimpleExceptionEncapsulator(ExceptionInstruction):
         self.instr.reset_addr()
         return super().reset_addr()
 
+def is_tolerate_transient_exec_str(fuzzerstate, instr_str: str):
+    if "openc910" in fuzzerstate.design_name:
+        if instr_str in IntLoadInstruction.authorized_instr_strs:
+            return TOLERATE_OPENC910_TRANSIENT_EXEC_TAINTED_ADDR_LOAD
+        elif instr_str in IntStoreInstruction.authorized_instr_strs:
+            return TOLERATE_OPENC910_TRANSIENT_EXEC_TAINTED_ADDR_STORE
+        elif instr_str in R12DInstruction.authorized_instr_strs:
+            return TOLERATE_OPENC910_TRANSIENT_EXEC_TAINTED_CT_VIOLATION
+        elif instr_str in JALRInstruction.authorized_instr_strs:
+            return TOLERATE_OPENC910_TRANSIENT_EXEC_TAINTED_JALR
+        elif instr_str in BranchInstruction.authorized_instr_strs:
+            return TOLERATE_OPENC910_TRANSIENT_EXEC_TAINTED_BRANCH
+        
+    elif "cva6" in fuzzerstate.design_name:
+        if instr_str in IntLoadInstruction.authorized_instr_strs:
+            return TOLERATE_CVA6_TRANSIENT_EXEC_TAINTED_ADDR_LOAD
+        elif instr_str in IntStoreInstruction.authorized_instr_strs:
+            return TOLERATE_CVA6_TRANSIENT_EXEC_TAINTED_ADDR_STORE
+        elif instr_str in R12DInstruction.authorized_instr_strs:
+            return TOLERATE_CVA6_TRANSIENT_EXEC_TAINTED_CT_VIOLATION
+        elif instr_str in JALRInstruction.authorized_instr_strs:
+            return TOLERATE_CVA6_TRANSIENT_EXEC_TAINTED_JALR
+        elif instr_str in BranchInstruction.authorized_instr_strs:
+            return TOLERATE_CVA6_TRANSIENT_EXEC_TAINTED_BRANCH
+
+    elif "boom" in fuzzerstate.design_name:
+        if instr_str in IntLoadInstruction.authorized_instr_strs:
+            return TOLERATE_BOOM_TRANSIENT_EXEC_TAINTED_ADDR_LOAD
+        elif instr_str in IntStoreInstruction.authorized_instr_strs:
+            return TOLERATE_BOOM_TRANSIENT_EXEC_TAINTED_ADDR_STORE
+        elif instr_str in R12DInstruction.authorized_instr_strs:
+            return TOLERATE_BOOM_TRANSIENT_EXEC_TAINTED_CT_VIOLATION
+        elif instr_str in JALRInstruction.authorized_instr_strs:
+            return TOLERATE_BOOM_TRANSIENT_EXEC_TAINTED_JALR
+        elif instr_str in BranchInstruction.authorized_instr_strs:
+            return TOLERATE_BOOM_TRANSIENT_EXEC_TAINTED_BRANCH
+
+    elif "rocket" in fuzzerstate.design_name:
+        if instr_str in IntLoadInstruction.authorized_instr_strs:
+            return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_ADDR_LOAD
+        elif instr_str in IntStoreInstruction.authorized_instr_strs:
+            return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_ADDR_STORE
+        elif instr_str in R12DInstruction.authorized_instr_strs:
+            return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_CT_VIOLATION
+        elif instr_str in JALRInstruction.authorized_instr_strs:
+            return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_JALR
+        elif instr_str in BranchInstruction.authorized_instr_strs:
+            return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_BRANCH
+
+    assert False # Should never reach this
+
+def is_tolerate_transient_exec(fuzzerstate, instr: BaseInstruction, exception: Exception):
+    if isinstance (exception,TaintedRegisterException): 
+        if "openc910" in fuzzerstate.design_name:
+            if isinstance(instr, IntLoadInstruction):
+                return TOLERATE_OPENC910_TRANSIENT_EXEC_TAINTED_ADDR_LOAD
+            elif isinstance(instr, IntStoreInstruction):
+                return TOLERATE_OPENC910_TRANSIENT_EXEC_TAINTED_ADDR_STORE
+            elif isinstance(instr, R12DInstruction):
+                return TOLERATE_OPENC910_TRANSIENT_EXEC_TAINTED_CT_VIOLATION
+            elif isinstance(instr, JALRInstruction):
+                return TOLERATE_OPENC910_TRANSIENT_EXEC_TAINTED_JALR
+            elif isinstance(instr, BranchInstruction):
+                return TOLERATE_OPENC910_TRANSIENT_EXEC_TAINTED_BRANCH
+
+        elif "cva6" in fuzzerstate.design_name:
+            if isinstance(instr, IntLoadInstruction):
+                return TOLERATE_CVA6_TRANSIENT_EXEC_TAINTED_ADDR_LOAD
+            elif isinstance(instr, IntStoreInstruction):
+                return TOLERATE_CVA6_TRANSIENT_EXEC_TAINTED_ADDR_STORE
+            elif isinstance(instr, R12DInstruction):
+                return TOLERATE_CVA6_TRANSIENT_EXEC_TAINTED_CT_VIOLATION
+            elif isinstance(instr, JALRInstruction):
+                return TOLERATE_CVA6_TRANSIENT_EXEC_TAINTED_JALR
+            elif isinstance(instr, BranchInstruction):
+                return TOLERATE_CVA6_TRANSIENT_EXEC_TAINTED_BRANCH
+
+        elif "boom" in fuzzerstate.design_name:
+            if isinstance(instr, IntLoadInstruction):
+                return TOLERATE_BOOM_TRANSIENT_EXEC_TAINTED_ADDR_LOAD
+            elif isinstance(instr, IntStoreInstruction):
+                return TOLERATE_BOOM_TRANSIENT_EXEC_TAINTED_ADDR_STORE
+            elif isinstance(instr, R12DInstruction):
+                return TOLERATE_BOOM_TRANSIENT_EXEC_TAINTED_CT_VIOLATION
+            elif isinstance(instr, JALRInstruction):
+                return TOLERATE_BOOM_TRANSIENT_EXEC_TAINTED_JALR
+            elif isinstance(instr, BranchInstruction):
+                return TOLERATE_BOOM_TRANSIENT_EXEC_TAINTED_BRANCH
+
+        elif "rocket" in fuzzerstate.design_name:
+            if isinstance(instr, IntLoadInstruction):
+                return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_ADDR_LOAD
+            elif isinstance(instr, IntStoreInstruction):
+                return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_ADDR_STORE
+            elif isinstance(instr, R12DInstruction):
+                return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_CT_VIOLATION
+            elif isinstance(instr, JALRInstruction):
+                return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_JALR
+            elif isinstance(instr, BranchInstruction):
+                return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_BRANCH
+        
+    assert False # Should never reach this
+
+
 # Wrapper for instructions that are only executed speculatively, so should not have any architectually visible effects.
 class SpeculativeInstructionEncapsulator(BaseInstruction):
     def __init__(self, fuzzerstate, instr):
         super().__init__(fuzzerstate, "SpeculativeInstructionEncapsulator")
         self.instr = instr
+        self.instr.isdead = True
         self.iscompressed = instr.iscompressed
-        self.paddr = instr.paddr&~SPIKE_STARTADDR # TODO we assume SPIKE_STARTADDR == design start address, not good...
+        
+        self.paddr = self.instr.paddr
+        self.vaddr = self.instr.vaddr
+        self.priv_level = self.instr.priv_level
+        self.va_layout = self.instr.va_layout
+        
 
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
-        return f"{hex(self.paddr)}: {self.instr.get_str(is_spike_resolution)} (SpeculativeInstructionEncapsulator)"
+        return f"{self.instr.get_str(is_spike_resolution)} (SpeculativeInstructionEncapsulator)"
 
     def reset_addr(self):
         self.instr.reset_addr()
@@ -1693,7 +1789,21 @@ class SpeculativeInstructionEncapsulator(BaseInstruction):
         return self.instr.gen_bytecode_int(is_spike_resolution)
 
     def execute(self, is_spike_resolution: bool = True):
-        return
+        # We try executing them. They may fail, which is ok since they only execute transiently. We only care
+        # to track legitimate control flows during the transient window for triaging.
+        try:
+            self.instr.execute(is_spike_resolution)
+        except Exception as e:
+            if isinstance(e, TaintedRegisterException) and is_tolerate_transient_exec(self.fuzzerstate, self.instr):
+                pass
+            # TODO do more specific triaging here
+            elif isinstance(e, TaintedCSRException):
+                pass
+            elif isinstance(e, MemException):
+                pass
+            else:
+                raise e
+
 
 
 # This is a wrapper class for a misaligned load or store.
@@ -1717,13 +1827,24 @@ class MisalignedMemInstruction(ExceptionInstruction):
 
         from milesan.randomize.pickreg import IntRegIndivState
         # First, choose a consumed register.
-        if DO_ASSERT:
-            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
-        rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.CONSUMED)
+        if self.priv_level in fuzzerstate.taint_sink_privs:
+            if DO_ASSERT:
+                assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR) or fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
+            if not fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR):
+                rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_ADDR_T0)
+            elif not  fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR_T0):
+                rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_ADDR)
+            else:
+                rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_ADDR if random.random()<0.5 else IntRegIndivState.PAGE_ADDR_T0)
+        else:
+            if DO_ASSERT:
+                assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
+            rs1 = fuzzerstate.intregpickstate.pick_int_reg_in_state(IntRegIndivState.PAGE_ADDR)
+
         # Here, in principle no need for "self." in producer_id because it is already known by the wrapped instance.
         # But it is practical to have it here to discriminate between exceptions that require a consumed register and those that do not.
         self.producer_id = fuzzerstate.intregpickstate.get_producer_id(rs1)
-        fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCUSED)
+        # fuzzerstate.intregpickstate.set_regstate(rs1, IntRegIndivState.RELOCUSED)
 
         # Second, choose a random memory instruction type that can be misaligned.
         meminstr_type_weights = [

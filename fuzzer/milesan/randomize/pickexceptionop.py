@@ -211,7 +211,8 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec, None, EcallEbreakInstruction(fuzzerstate,"ebreak"),exception_op_type)
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:
         if DO_ASSERT:
-            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
+            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR) or fuzzerstate.privilegestate.privstate in fuzzerstate.taint_sink_privs and fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
+            assert fuzzerstate.design_has_misaligned_data_support
         # Misaligned memory accesses trigger a page fault and a misaligned address exception. Their priority and order of 
         # handling is open to the platform, therefore we can't rely on the SEPC and SCAUSE values.
         if USE_MMU:
@@ -222,7 +223,7 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         raise NotImplementedError("ID_LOAD_ACCESS_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
         if DO_ASSERT:
-            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
+            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_ADDR) or fuzzerstate.privilegestate.privstate in fuzzerstate.taint_sink_privs and fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
         # Misaligned memory accesses trigger a page fault and a misaligned address exception. Their priority and order of 
         # handling is open to the platform, therefore we can't rely on the SEPC and SCAUSE values.
         if USE_MMU:
@@ -250,7 +251,6 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         raise NotImplementedError("ID_INSTRUCTION_PAGE_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_PAGE_FAULT:
         if DO_ASSERT:
-            assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.CONSUMED)
             assert fuzzerstate.intregpickstate.exists_reg_in_state(IntRegIndivState.PAGE_T0_ADDR)
             assert fuzzerstate.privilegestate.prev_privstate not in fuzzerstate.taint_source_privs or fuzzerstate.effective_prev_layout not in fuzzerstate.taint_source_layouts # we only do page faults to tainted pages
         instr_str = random.choice([i for i in IntLoadInstruction_t0.authorized_instr_strs if not i.startswith("c")])

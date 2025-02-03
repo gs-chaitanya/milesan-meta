@@ -3,7 +3,7 @@ import shutil
 import glob
 import json
 
-from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, NO_REMOVE_TMPFILES, DO_DOUBLECHECK_SIM, CHECK_MEM, COLLECT_PERF_STATS, COLLECT_EXCEPTION_STATS, COLLECT_TAINT_STATS, IGNORE_SPIKE_OFFSET_IN_REG_CHECK
+from params.runparams import CHECK_PC_SPIKE_AGAIN, PRINT_INSTRUCTION_EXECUTION_FINAL, INSERT_REGDUMPS, PRINT_REGISTER_VALIDATION, PRINT_MEMORY_VALIDATION, PRINT_SKIPPED_CHECKS, PRINT_AND_COMPARE, NO_REMOVE_TMPDIRS, NO_REMOVE_TMPFILES, DO_DOUBLECHECK_SIM, CHECK_MEM, COLLECT_PERF_STATS, COLLECT_EXCEPTION_STATS, COLLECT_TAINT_STATS, IGNORE_SPIKE_OFFSET_IN_REG_CHECK, SKIP_RTL
 from params.fuzzparams import IGNORE_RTL_TIMEOUT, IGNORE_SPIKE_TIMEOUT, IGNORE_TAINT_MISMATCH, IGNORE_VALUE_MISMATCH, IGNORE_SPIKE_MISMATCH
 from params.fuzzparams import USE_SPIKE_INTERM_ELF, TAINT_EN, ASSERT_EXEC_IN_TAINT_SINK_PRIV, ASSERT_EXEC_IN_TAINT_SRC_PRIV, ASSERT_EXEC_IN_TAINT_SRC_LAYOUT ,DUMP_MCYCLES
 from milesan.toleratebugs import  is_tolerate_cva6_mhpmcounter,  is_tolerate_cva6_mhpmevent31
@@ -15,9 +15,9 @@ from milesan.cfinstructionclasses_t0 import RegdumpInstruction_t0
 from milesan.fuzzsim import run_rtl_and_load_regstream
 from milesan.util import IntRegIndivState
 from common.spike import SPIKE_STARTADDR
+from common.exceptions import FuzzerStateException, MismatchError, FailTypeEnum
 from milesan.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
 from milesan.registers import ABI_INAMES,MAX_32b
-import enum
 import subprocess
 import time
 def is_tolerate(design_name: str, instr: BaseInstruction):
@@ -33,38 +33,8 @@ def is_tolerate(design_name: str, instr: BaseInstruction):
                 return is_tolerate_cva6_mhpmcounter()
             if instr.csr_id == CSR_IDS.MHPMEVENT31:
                 return is_tolerate_cva6_mhpmevent31()
-
     return True
 
-
-
-class FailTypeEnum(enum.IntEnum):
-    SPIKE_TIMEOUT = enum.auto()
-    RTL_TIMEOUT = enum.auto()
-    VALUE_MISMATCH = enum.auto()
-    TAINT_MISMATCH = enum.auto()
-    NO_FAILURE = enum.auto()
-
-class FuzzerStateException(Exception):
-    def __init__(self, *args: object, fuzzerstate, fail_type: FailTypeEnum, timestamp) -> None:
-        super().__init__(*args)
-        self.fuzzerstate = fuzzerstate
-        self.fail_type = fail_type
-        self.timestamp = timestamp
-        if COLLECT_EXCEPTION_STATS:
-            with open(os.path.join(fuzzerstate.tmp_dir, "exception.json"), "w") as f:
-                json.dump({
-                    "id": fuzzerstate.instance_to_str(),
-                    "dut": fuzzerstate.design_name,
-                    "t_total":timestamp,
-                    "fail_type": self.fail_type.name,
-                    "seed":fuzzerstate.randseed
-                }, f)
-
-class MismatchError(ValueError):
-    def __init__(self, *args: object, fail_type: FailTypeEnum) -> None:
-        super().__init__(*args)
-        self.fail_type = fail_type
 
 def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool = True, fuzzerstate = None):   
     start_time = time.time()
@@ -101,7 +71,9 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             json.dump(fuzzerstate.compute_taint_stats(),f)
     fuzzerstate.write_imm_t0_to_mem() # Write the immediate taints from the program code to the imem.
     fuzzerstate.dump_memview_t0()
-
+    if SKIP_RTL:
+        print("WARNING: Skipped RTL simulation.")
+        return fuzzerstate
     try:
         start_time_rtl = time.time()
         regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(fuzzerstate)
@@ -261,7 +233,7 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             if fuzzerstate.design_name == "kronos": # kronos does not have a cache so we can validate the memory
                 print("*** MEMORY CONTENT  ***")
                 fuzzerstate.memview.print_and_compare(final_sramdump_rtl)
-        print(f"Failed for seed {seed}")
+        # print(f"Failed for seed {seed}")
         if "There are less" in str(e) or "Computed program does not execute" in str(e):
             fuzzerstate.remove_tmp_dir()
         else:  # Delete at calling function level

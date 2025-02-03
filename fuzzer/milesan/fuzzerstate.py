@@ -2,10 +2,10 @@
 # Licensed under the General Public License, Version 3.0, see LICENSE for details.
 # SPDX-License-Identifier: GPL-3.0-only
 
-from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP,PATH_TO_MNT, PATH_TO_MNT_ENV_VAR, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, USE_MODELSIM, DEBUG_RVC, MODELSIM_TIMEOUT
+from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP,PATH_TO_MNT, PATH_TO_MNT_ENV_VAR, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, USE_MODELSIM, DEBUG_RVC, MODELSIM_TIMEOUT, PRINT_TRANSIENT_INSTRUCTIONS, PRINT_RESTORED_TRANSIENT_STATE
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS, NONPICKABLE_REGISTERS, FENCE_CF_INSTR
-from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, P_TAINT_IN_MACHINE, TAINT_SOURCE_PRIVS, TAINT_SINK_PRIVS, P_TWO_TAINT_SOURCE_PRIVS, P_TWO_TAINT_SINK_PRIVS
-from params.fuzzparams import MAX_N_TAINT_SOURCE_LAYOUTS, MIN_N_TAINT_SOURCE_LAYOUTS
+from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, TAINT_SOURCE_PRIVS, TAINT_SINK_PRIVS, P_TWO_TAINT_SOURCE_PRIVS, P_TWO_TAINT_SINK_PRIVS
+from params.fuzzparams import MAX_N_TAINT_SOURCE_LAYOUTS, MIN_N_TAINT_SOURCE_LAYOUTS, MAX_GADGET_N_INSTR, DEAD_CODE_ONLY_IN_CODE_PAGES
 from params.fuzzparams import reset_reg_settings
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_milesan_path, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48, get_design_boot_addr
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
@@ -22,7 +22,7 @@ from milesan.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from milesan.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
 from milesan.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0, RDInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0
 from milesan.cfinstructionclasses import JALRInstruction, BranchInstruction
-from milesan.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen
+from milesan.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen,PAGE_ALIGNMENT_MASK, PHYSICAL_PAGE_SIZE
 from rv.csrids import CSR_IDS, CSR_ABI_NAMES
 from milesan.registers import ABI_INAMES
 from milesan.perfmonitor import PerformanceMonitor
@@ -31,7 +31,7 @@ import os
 import itertools
 import shutil
 import glob
-from milesan.randomize.createspecinstr import create_speculative_instr
+from milesan.randomize.createspecinstr import create_speculative_instrs
 import pickle
 class FuzzerState:
     # @param randseed for identification purposes only.
@@ -57,6 +57,11 @@ class FuzzerState:
         self.design_has_pmp                    : bool = design_has_pmp(design_name)
         self.random_block_contents4by4bytes = []
         self.random_data_block_ranges = []
+
+        self.taint_source_transient_addrs_regs = {} # physical addresses of possibly speculatively executed code in taint source privileges and the register taints.
+        # The page domains of the code blocks. va_layout is only determined during program generation, thus
+        # we collect them in the BaseInstruction
+        self.page_domains = {} # dict of paddr : {'va_layouts': {va_layouts}, 'priv_level': priv_level}
 
         if TAINT_EN:
             self.random_data_block_has_taint = {} # Is true if the random data block at that page can have taint.
@@ -146,7 +151,6 @@ class FuzzerState:
         os.makedirs(self.tmp_dir,exist_ok=True)
 
         self.pmonitor = PerformanceMonitor(os.path.join(self.tmp_dir,'perf_stats.json'))
-
 
     # @brief return the MMU capabilities of the design 
     # @return [bool] : [sv32, sv39, sv48]
@@ -357,9 +361,9 @@ class FuzzerState:
             ExceptionCauseVal.ID_INSTR_ACCESS_FAULT:           (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_INSTR_ACCESS_FAULT],
             ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION:          (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION],
             ExceptionCauseVal.ID_BREAKPOINT:                   (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_BREAKPOINT],
-            ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:         (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED],
+            ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:         (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED] if self.design_has_misaligned_data_support else 0,
             ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:            (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_LOAD_ACCESS_FAULT],
-            ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:    (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED],
+            ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:    (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED] if self.design_has_misaligned_data_support else 0,
             ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:       (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT],
             ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE: (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE],
             ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE: (random.random() + 0.05) * EXCEPTION_OP_TYPE_INITIAL_BOOSTERS[ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE],
@@ -732,23 +736,130 @@ class FuzzerState:
     def get_curr_paddr(self, add_spike_offset: bool = True):
         return self.curr_bb_start_addr + sum([int(not i.iscompressed)*2+2 for i in self.instr_objs_seq[-1]]) + SPIKE_STARTADDR*int(add_spike_offset)
 
+    def add_page_domain(self, addr, va_layout, priv):
+        if addr&PAGE_ALIGNMENT_MASK not in self.page_domains:
+            self.page_domains[addr&PAGE_ALIGNMENT_MASK] = {'va_layouts' : {va_layout}, 'priv' : priv}
+        else:
+            assert self.page_domains[addr&PAGE_ALIGNMENT_MASK]['priv'] == priv, f"Privilege mismatch at {hex(addr)}: {self.page_domains[addr&PAGE_ALIGNMENT_MASK]['priv']} != {priv}"
+            self.page_domains[addr&PAGE_ALIGNMENT_MASK]['va_layouts'] |= {va_layout}
+
+    # Save register states for locations that could be executed transiently to triage gadgets executed from taint-source domain
+    def blacklist_gadget_addr(self, addr, va_layout, priv):
+        assert va_layout is not None
+        assert priv is not None
+
+        # Don't restrict transient execution in taint sink privileges
+        if priv in self.taint_sink_privs:
+            return
+        # print(f"Blacklisting {hex(addr)}")
+        # We allow blacklisting one instruction beyond last addr
+        assert addr > SPIKE_STARTADDR and addr <= SPIKE_STARTADDR+self.memsize, f"{hex(addr)} not in valid range [{hex(SPIKE_STARTADDR)},{hex(SPIKE_STARTADDR+self.memsize)}]."
+        
+        # records the domain of the arch. executed code in the page. Might execute from several layouts in a single page, but always only one privilege
+        self.add_page_domain(addr, va_layout, priv)
+        
+        # print(f"Blacklisting {hex(addr)} with domain {self.page_domains[addr&PAGE_ALIGNMENT_MASK]}")
+        # checkpoint of arch state
+        if addr not in self.taint_source_transient_addrs_regs:
+            self.taint_source_transient_addrs_regs[addr] = self.intregpickstate.save_curr_state()
+        # if there's already a checkpoint, merge them by ORing taints of existing
+        # and new checkpoint, and taint derived from XOR of concrete values to 
+        # account for superposition 
+        else:
+            curr_state = self.intregpickstate.save_curr_state()
+            for reg_id in range(self.intregpickstate.num_pickable_regs):
+                reg_taint = curr_state[-1][reg_id].get_val_t0() | self.taint_source_transient_addrs_regs[addr][-1][reg_id].get_val_t0()
+                # if the actual values differ, add the respective taint pattern to do superpositional simulation
+                reg_taint |= curr_state[-1][reg_id].get_val() ^ self.taint_source_transient_addrs_regs[addr][-1][reg_id].get_val()
+                self.taint_source_transient_addrs_regs[addr][-1][reg_id].set_val_t0(reg_taint) # or both taints
+
+
+
     def fill_mem_with_dead_code(self):
-        addr = 0
-        while addr < self.memsize:
-            if addr in self.bb_start_addr_seq:
-                bb_idx = self.bb_start_addr_seq.index(addr)
-                addr += sum([2+2*int(not i.iscompressed) for i in self.instr_objs_seq[bb_idx]])
-            if self.memview.is_mem_range_free(addr,addr+4):
-                next_instr = create_speculative_instr(self, addr+SPIKE_STARTADDR)
-                self.spec_instr_objs_seq += [next_instr]
-                # next_instr.print()
-                if next_instr.iscompressed:
-                    addr += 2
-                else:
-                    addr += 4
+        # Iterate over all allocated (physical) pages
+        for page_addr, page_privs in self.pagetablestate.ppn_leaf_to_priv_dict.items():
+            if DEAD_CODE_ONLY_IN_CODE_PAGES:
+                has_data_or_code = False
+                for bb_start_addr in self.bb_start_addr_seq:
+                    if (bb_start_addr+SPIKE_STARTADDR)&PAGE_ALIGNMENT_MASK == page_addr:
+                        has_data_or_code = True
+                    elif (bb_start_addr+SPIKE_STARTADDR +sum([2 if i.iscompressed else 4 for i in self.instr_objs_seq[self.bb_start_addr_seq.index(bb_start_addr)]]))&PAGE_ALIGNMENT_MASK == page_addr:
+                        has_data_or_code = True
+                if not has_data_or_code:
+                    continue
+            if page_privs == {}:
+                # No data or code allowed here. E.g. page tables page or inital BB.
+                continue
+            # If we blacklisted this region, we obtain the domain from the dict.
+            assert page_addr in self.page_domains, f"Page {hex(page_addr)} not in page_domains."
+            domain = self.page_domains[page_addr]
+            if domain['priv'] in self.taint_sink_privs:
+                assert page_addr not in self.taint_source_transient_addrs_regs
+                domain = (random.choice(list(self.page_domains[page_addr]['va_layouts'])), self.page_domains[page_addr]['priv'])
+                
+            # Otherwise we choose it randomly.
             else:
-                # print(f"Addr {hex(addr)} occupied.")
-                addr += 4
+                priv = random.choice(list(page_privs))
+                domain = (random.choice(range(0,self.num_layouts)) if  priv != PrivilegeStateEnum.MACHINE else -1, priv)
+
+            # Iterate over addresses in page.
+            addr = page_addr
+            n_restricted_instrs = 0
+            n_free_instrs = 0
+            while addr < page_addr + PHYSICAL_PAGE_SIZE:
+                if not self.memview.is_mem_range_free(addr-SPIKE_STARTADDR,addr-SPIKE_STARTADDR+4):
+                    # If a BB starts here, skip until end of BB
+                    if addr in self.bb_start_addr_seq:
+                        addr += sum([2 if i.iscompressed else 4 for i in self.instr_objs_seq[self.bb_start_addr_seq.index(addr)]])
+                        if addr >= page_addr + PHYSICAL_PAGE_SIZE:
+                            break
+                    else:
+                        addr += 4
+                    continue
+                elif addr-SPIKE_STARTADDR>self.memsize:
+                    break
+                # Addr in page is free
+                if addr in self.taint_source_transient_addrs_regs:
+                    # print(f"{hex(addr)} in dict, restoring state")
+                    self.intregpickstate.restore_state(self.taint_source_transient_addrs_regs[addr])
+                    if PRINT_RESTORED_TRANSIENT_STATE:
+                        print(f"Transient state at {hex(addr)}")
+                        self.intregpickstate.print()
+                    assert not None in domain, f"None in domain: {domain}"
+                    spec_instrs= create_speculative_instrs(self, addr, domain)
+                    for instr in spec_instrs:
+                        assert instr.paddr == addr, f"Addr mismatch: {instr.get_str()} at {hex(addr)}"
+                        if PRINT_TRANSIENT_INSTRUCTIONS:
+                            instr.print()    
+                        instr.execute(is_spike_resolution=True)
+                        self.memview.alloc_mem_range(addr-SPIKE_STARTADDR,addr-SPIKE_STARTADDR+(2 if instr.iscompressed else 4))
+                        self.spec_instr_objs_seq += [instr]
+                        n_restricted_instrs += 1
+
+
+                        addr += (2 if instr.iscompressed else 4)
+                        if addr&PAGE_ALIGNMENT_MASK != page_addr or not self.memview.is_mem_range_free(addr-SPIKE_STARTADDR, addr-SPIKE_STARTADDR+4) or addr-SPIKE_STARTADDR>self.memsize:
+                            # print(f"Reached page boundary at {hex(addr)}")
+                            break
+                        # TODO don't do this for every single instruction, just after a block of instructions
+                        self.blacklist_gadget_addr(addr, domain[0],domain[1]) # blacklist and checkpoint next address
+                else:
+                    spec_instrs= create_speculative_instrs(self, addr, domain)
+                    for instr in spec_instrs:
+                        assert instr.paddr == addr, f"Addr mismatch: {instr.get_str()} at {hex(addr)}"
+                        if PRINT_TRANSIENT_INSTRUCTIONS:
+                            instr.print()  
+                        self.memview.alloc_mem_range(addr-SPIKE_STARTADDR,addr-SPIKE_STARTADDR+(2 if instr.iscompressed else 4))
+                        self.spec_instr_objs_seq += [instr]
+                        n_free_instrs += 1
+                        addr += (2 if instr.iscompressed else 4)
+                        if addr&PAGE_ALIGNMENT_MASK != page_addr or not self.memview.is_mem_range_free(addr-SPIKE_STARTADDR, addr-SPIKE_STARTADDR+4) or addr-SPIKE_STARTADDR>self.memsize:
+                            # print(f"Reached page boundary at {hex(addr)}")
+                            break
+
+            # print(f"Page at {hex(page_addr)}, added {n_free_instrs} free and {n_restricted_instrs} restricted transient instructions.")
+        
+
 
     def pickle(self, prefixname, test_identifier):
         pickle_path = os.path.join(self.tmp_dir, f"{prefixname}{test_identifier}.fuzzerstate.pickle")
