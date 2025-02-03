@@ -73,16 +73,20 @@ class CSR(__Register):
         #     print(f"Setting {self.abi_name} to {hex(self.val)} ({hex(val)})")
 
     def set_val_t0(self, val_t0):
-        if not ALLOW_CSR_TAINT:
-            assert val_t0 == 0, "Taint propagation through CSRs is disabled!"
+        from common.exceptions import TaintedCSRException
+
+        if not ALLOW_CSR_TAINT and val_t0:
+            raise TaintedCSRException(self.id, self.abi_name)
         self.val_t0 = val_t0&self.mask
 
     def get_val(self):
         return self.val
 
     def get_val_t0(self):
-        if not ALLOW_CSR_TAINT:
-            assert self.val_t0 == 0, "Taint propagation through CSRs is disabled!"
+        from common.exceptions import TaintedCSRException
+
+        if not ALLOW_CSR_TAINT and self.val_t0:
+            raise TaintedCSRException(self.id, self.abi_name)
         return self.val_t0
 
     def reset(self):
