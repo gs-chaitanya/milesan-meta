@@ -61,8 +61,8 @@ if __name__ == '__main__':
                         "python",
                         "do_check_isa_sim.py",
                         design_name,
-                        str(cfg["N_THREADS"]),
-                        str(cfg["N_TESTS"]),
+                        str(cfg["N_THREADS"]) if "N_THREADS" in cfg else 40,
+                        str(cfg["N_TESTS"]) if "N_TESTS" in cfg else str(-1),
                         str(cfg["SEED_OFFSET"]) if "SEED_OFFSET" in cfg else str(0),
                     ]
                     if "TIMEOUT" in cfg:
@@ -88,7 +88,7 @@ if __name__ == '__main__':
                             "python",
                             "do_reducemany.py",
                             design_name,
-                            str(cfg["N_THREADS"]),
+                            str(cfg["N_THREADS"]) if "N_THREADS" in cfg else 40,
                             f"--log-file={log_file}"
                         ]
                         subprocess.run(cmd, env=env, cwd="/mnt/milesan-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
@@ -109,7 +109,7 @@ if __name__ == '__main__':
                             "python",
                             "do_reducemany.py",
                             design_name,
-                            str(cfg["N_THREADS"]),
+                            str(cfg["N_THREADS"]) if "N_THREADS" in cfg else 40,
                             f"--log-file={log_file}"
                         ]
                         subprocess.run(cmd, env=env, cwd="/mnt/milesan-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
@@ -130,7 +130,7 @@ if __name__ == '__main__':
                             "python",
                             "do_reducemany.py",
                             design_name,
-                            str(cfg["N_THREADS"]),
+                            str(cfg["N_THREADS"]) if "N_THREADS" in cfg else 40,
                             f"--log-file={log_file}"
                         ]
                         subprocess.run(cmd, env=env, cwd="/mnt/milesan-meta/fuzzer/", timeout=TIMEOUT_REDUCE)
