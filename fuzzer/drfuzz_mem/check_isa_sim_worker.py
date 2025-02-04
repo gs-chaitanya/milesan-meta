@@ -14,13 +14,27 @@ ONLY_PRINT_LEAKAGE = False
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 total_finished_tests = 0
-active_seeds = set()
+active_seeds = {}
 seed_to_fail_type_dict = {
     FailTypeEnum.TAINT_MISMATCH: [],
     FailTypeEnum.VALUE_MISMATCH: [],
     FailTypeEnum.RTL_TIMEOUT: [],
     FailTypeEnum.SPIKE_TIMEOUT: []
 }
+
+def log_active_threads():
+    global active_seeds
+    now = time.time()
+    seed_to_time = {seed:(lambda x:f"{int(x//60)}m{int(x%60)}s")(now-t) for seed, t in active_seeds.items()}
+    if seed_to_time:
+        max_key_len = max(len(str(seed)) for seed in seed_to_time.keys())
+        max_val_len = max(len(str(time)) for time in seed_to_time.values())
+        col_width = max(max_key_len, max_val_len) + 2
+        header = "".join(f"{seed:<{col_width}}" for seed in seed_to_time.keys())
+        values = "".join(f"{time:<{col_width}}" for time in seed_to_time.values())
+        with open(os.path.join(PATH_TO_TMP,"active_threads.log"), "w") as f:
+            f.write(header + "\n")
+            f.write(values + "\n")
 
 def test_done_callback(ret):
     global newly_finished_tests
@@ -31,11 +45,14 @@ def test_done_callback(ret):
     with callback_lock:
         newly_finished_tests += 1
         total_finished_tests += 1
-        if ret is not None:
+        if ret[0]:
             seed_to_fail_type_dict[ret[0]] += [ret[1]]
-            active_seeds -= {ret[1]}
+        total_time = time.time()-active_seeds[ret[1]]
+        del active_seeds[ret[1]]
         if PRINT_THREAD_STATUS:
-            print(f"Finished {total_finished_tests} threads. {len(active_seeds)} active threads remaining: {active_seeds}.")
+            print(f"Finished seed {ret[1]} after {int(total_time//60)}m{int(total_time%60)}s. {total_finished_tests} threads finished.")
+
+
 
 
 def __check_isa_sim_worker(design_name, seed):
@@ -45,7 +62,7 @@ def __check_isa_sim_worker(design_name, seed):
             fuzzerstate.remove_tmp_dir()
         if PRINT_THREAD_STATUS:
             print(f"No mismatch detected for {design_name} with seed {seed}")
-        return None
+        return (None, seed)
     except Exception as e:
         if not ONLY_PRINT_LEAKAGE or "Taint mismatch" in str(e):
             print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")
@@ -66,9 +83,10 @@ def __check_isa_sim_worker(design_name, seed):
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.failed.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
-                return None
         elif not NO_REMOVE_TMPFILES and isinstance(e, FuzzerStateException):
             e.fuzzerstate.remove_tmp_dir()
+        return (None,seed)
+
 
 
 
@@ -104,9 +122,9 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offs
     pool = mp.Pool(processes=num_workers)
     for _ in range(min(num_workers, total_tests) if total_tests != -1 else num_workers):
         if PRINT_THREAD_STATUS:
-            print(f"Starting thread {process_instance_id}" + f" for seed {seeds[process_instance_id]}." if seeds is not None else ".")
+            print(f"Starting thread {process_instance_id}" + (f" for seed {seeds[process_instance_id]}." if seeds is not None else "."))
         pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id if seeds is None else seeds[process_instance_id],),callback=test_done_callback)
-        active_seeds |= {process_instance_id}
+        active_seeds[process_instance_id] = time.time()
         process_instance_id += 1
 
     while True:
@@ -116,13 +134,14 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offs
             return seed_to_fail_type_dict
 
         time.sleep(2)
+        log_active_threads()
         with callback_lock:
             if newly_finished_tests > 0 and seeds is None or seeds is not None and process_instance_id < len(seeds):
                 for _ in range(newly_finished_tests):
                     if PRINT_THREAD_STATUS:
                         print(f"Starting thread {process_instance_id}.")
                     pool.apply_async(__check_isa_sim_worker, args=(design_name, process_instance_id if seeds is None else seeds[process_instance_id]),callback=test_done_callback)
-                    active_seeds |= {process_instance_id}
+                    active_seeds[process_instance_id] = time.time()
                     process_instance_id += 1
                     if seeds is not None and process_instance_id >= len(seeds):
                         print(f"Finished {total_finished_tests} threads covering all provided seeds. Exiting.")
