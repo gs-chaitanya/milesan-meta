@@ -29,7 +29,7 @@ from common.exceptions import MemReadException, MemWriteException
 
 DO_ASSERT = True
 
-MEMVIEW_ALLOC_MAX_ATTEMPTS = 1000
+MEMVIEW_ALLOC_MAX_ATTEMPTS = 100
 
 class MemoryView:
     # @param memsize should be at least 4, typically much higher. It is also typically a power of 2.
