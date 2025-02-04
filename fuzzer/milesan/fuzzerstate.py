@@ -773,7 +773,8 @@ class FuzzerState:
                 reg_taint |= curr_state[-1][reg_id].get_val() ^ self.taint_source_transient_addrs_regs[addr][-1][reg_id].get_val()
                 self.taint_source_transient_addrs_regs[addr][-1][reg_id].set_val_t0(reg_taint) # or both taints
 
-
+    def is_blacklisted(self, addr):
+        return addr in self.taint_source_transient_addrs_regs
 
     def fill_mem_with_dead_code(self):
         # Iterate over all allocated (physical) pages
@@ -830,7 +831,8 @@ class FuzzerState:
                     for instr in spec_instrs:
                         assert instr.paddr == addr, f"Addr mismatch: {instr.get_str()} at {hex(addr)}"
                         if PRINT_TRANSIENT_INSTRUCTIONS:
-                            instr.print()    
+                            instr.print() 
+                        # The execution of a cf-instruction will blacklist some region as well, thus triaging second-order speculation (i.e. blacklist the target of a transiently executed branch), which however is not complete since we do not know which regions are blacklisted by this mechanism a-prioi, thus there might already be some code there    
                         instr.execute(is_spike_resolution=True)
                         self.memview.alloc_mem_range(addr-SPIKE_STARTADDR,addr-SPIKE_STARTADDR+(2 if instr.iscompressed else 4))
                         self.spec_instr_objs_seq += [instr]
