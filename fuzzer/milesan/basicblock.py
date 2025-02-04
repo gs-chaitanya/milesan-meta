@@ -38,7 +38,7 @@ from milesan.gen_ctxt_final_block import *
 import numpy as np
 import random
 CURR_ALLOC_CURSOR_INC = 12 if INSERT_FENCE and INSERT_REGDUMPS else 8 if INSERT_REGDUMPS else 4
-
+MAX_N_TRIES_FOR_BB_ADDR = 500
 # Given the provided control flow instruction, finds a location for a new block, but does not allocate it.
 # @return False if could not find a next bb address
 def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
@@ -48,9 +48,12 @@ def gen_next_bb_addr(fuzzerstate, isa_class: ISAInstrClass, curr_addr: int):
     # It is selected before allocating the next cf-instruction, so we must ensure it is not placed right at the current PC or the PCs occupied by inserted helper instructions.
     next_bb_addr = None
     curr_paddr = fuzzerstate.get_curr_paddr(add_spike_offset=False)
+    n_tries = 0
     while next_bb_addr is None or curr_paddr in range(next_bb_addr,next_bb_addr+BASIC_BLOCK_MIN_SPACE):
         next_bb_addr = fuzzerstate.memview.gen_random_free_addr(4, BASIC_BLOCK_MIN_SPACE, curr_addr - (1 << range_bits_each_direction), curr_addr + (1 << range_bits_each_direction), priv = fuzzerstate.privilegestate.privstate)
-    
+        n_tries += 1
+        if n_tries > MAX_N_TRIES_FOR_BB_ADDR:
+            return False
     fuzzerstate.next_bb_addr = next_bb_addr
     # print(f"Next BB at {hex(fuzzerstate.next_bb_addr)}, checked free until {hex(fuzzerstate.next_bb_addr+BASIC_BLOCK_MIN_SPACE)} curr paddr at {hex(fuzzerstate.get_curr_paddr(add_spike_offset=False))}")
 
@@ -328,7 +331,7 @@ def gen_basicblock(fuzzerstate):
                 next_instr = create_instr('fence', fuzzerstate, curr_addr)
                 fuzzerstate.append_and_execute_instr(next_instr)
             fuzzerstate.curr_branch_taken = True
-            # The branch type does not batter because it will be re-determined once the operand values are known
+            # The branch type does not matter because it will be re-determined once the operand values are known
             # curr_addr = fuzzerstate.curr_bb_start_addr + 4*len(fuzzerstate.instr_objs_seq[-1])
             curr_addr = fuzzerstate.get_curr_paddr(add_spike_offset = False)
             next_instr = create_instr('bne', fuzzerstate, curr_addr)
