@@ -176,7 +176,7 @@ mkdir -p $MPLCONFIGDIR
 # Make configuration usable; prioritize our tools
 PATH=/mnt/cellift-yosys-pub:$PATH
 PATH=/mnt/verilator/bin:$PATH
-PATH=$PREFIX_MILESAN/miniconda/bin:$PATH
+# PATH=$PREFIX_MILESAN/miniconda/bin:$PATH
 PATH=$PREFIX_MILESAN/bin:$PATH
 PATH=$PREFIX_MILESAN/bin:$CARGO_HOME/bin:$PREFIX_MILESAN/python-venv/bin/:$PATH
 PATH=$RISCV/bin:$PATH
@@ -197,8 +197,8 @@ export MILESAN_PATH_TO_DIFUZZRTL_ELFS=/milesan-difuzzrtl/docker/shareddir/savedo
 
 export COVDUMP_DIR=$LOCAL_MNT/cov_dump
 
-# Generous timeouts. Shorter timeouts may be enfored from python runparams when using the modelsim server.
-export MODELSIM_TIMEOUT=12000
-export MODELSIM_TIMEOUT_TRACE_EN=12000
+# Generous timeouts. Shorter timeouts may be enforced from python runparams when using the modelsim server.
+export MODELSIM_TIMEOUT=600
+export MODELSIM_TIMEOUT_TRACE_EN=1200
 
 # cd $MILESAN_META_ROOT/fuzzer
