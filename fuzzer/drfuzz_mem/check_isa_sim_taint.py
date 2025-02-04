@@ -71,12 +71,12 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             json.dump(fuzzerstate.compute_taint_stats(),f)
     fuzzerstate.write_imm_t0_to_mem() # Write the immediate taints from the program code to the imem.
     fuzzerstate.dump_memview_t0()
-    if SKIP_RTL:
-        print("WARNING: Skipped RTL simulation.")
-        return fuzzerstate
     try:
         start_time_rtl = time.time()
-        regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(fuzzerstate)
+        if not SKIP_RTL:
+            regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(fuzzerstate)
+        else:
+            print("WARNING: Skipped RTL simulation.")
         time_seconds_spent_in_rtl = time.time() - start_time_rtl
 
         if COLLECT_PERF_STATS:
@@ -95,10 +95,12 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     # "fail_type": e.fail_type.name,
                     "seed":fuzzerstate.randseed
                 }, f)
-        if len(final_regvals_rtl[0]) < MAX_NUM_PICKABLE_REGS-1:
+        
+        if not SKIP_RTL and len(final_regvals_rtl[0]) < MAX_NUM_PICKABLE_REGS-1:
             raise FuzzerStateException(f"{fuzzerstate.instance_to_str()}: Modelsim timeout: Did not receive all register requests. ({len(final_regvals_rtl[0])}<{MAX_NUM_PICKABLE_REGS-1} register dumps found)",fuzzerstate=fuzzerstate, fail_type=FailTypeEnum.RTL_TIMEOUT, timestamp=time.time()-start_time)
 
-        regstream_rtl_val, regstream_rtl_val_t0 = regstream_rtl
+        if not SKIP_RTL:
+            regstream_rtl_val, regstream_rtl_val_t0 = regstream_rtl
 
         fuzzerstate.curr_pc = SPIKE_STARTADDR
         fuzzerstate.privilegestate.privstate = PrivilegeStateEnum.MACHINE
@@ -179,7 +181,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
             print("*** REGISTER VALIDATION ***:")
             fuzzerstate.intregpickstate.print_and_compare(final_regvals_rtl)
 
-
+        if SKIP_RTL:
+            return fuzzerstate
         final_regvals, final_regvals_t0 = final_regvals_rtl
         for id in range(1,fuzzerstate.num_pickable_regs):
             value = final_regvals[id]
