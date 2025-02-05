@@ -96,12 +96,14 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
     else:
         rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
         rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
-
+    
+    # TODO don't pick addresses where there's already code
     imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)    
     return BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, 0x0, None, iscompressed)
     
 def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
     rd = fuzzerstate.intregpickstate.pick_int_inputreg()
+    # TODO don't pick addresses where there's already code
     imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)    
     if USE_COMPRESSED and len(fuzzerstate.instr_objs_seq) > 1 and instr_str in IS_COMPRESSABLE: # no compressed in initial block
         instr_str_cmp, is_compressable = handle_JAL(rd, imm, instr_str, fuzzerstate.is_design_64bit)
@@ -117,7 +119,8 @@ def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool, cur
     else:
         rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
     rd = fuzzerstate.intregpickstate.pick_int_inputreg()
-    imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)    
+    # TODO don't pick addresses where there's already code
+    imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)
     producer_id = None
     return JALRInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
 
@@ -233,8 +236,7 @@ def create_speculative_instrs(fuzzerstate, curr_addr: int, domain: tuple):
     isa_class = _gen_next_isainstrclass_from_weights(weights)
 
     if isa_class == ISAInstrClass.DESCEND_PRV:
-        fuzzerstate.privilegestate.privstate = random.choice([PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR])
-        instrs = gen_priv_descent_instr(fuzzerstate)
+        instrs = [PrivilegeDescentInstruction_t0(fuzzerstate, is_mret=fuzzerstate.privilegestate.privstate==PrivilegeStateEnum.MACHINE)]
     elif isa_class == ISAInstrClass.PPFSM:
         # assert False, "not implemented"
         fuzzerstate.privilegestate.privstate = PrivilegeStateEnum.MACHINE
