@@ -236,6 +236,8 @@ def create_speculative_instrs(fuzzerstate, curr_addr: int, domain: tuple):
     isa_class = _gen_next_isainstrclass_from_weights(weights)
 
     if isa_class == ISAInstrClass.DESCEND_PRV:
+        # fuzzerstate.privilegestate.privstate = random.choice([PrivilegeStateEnum.MACHINE, PrivilegeStateEnum.SUPERVISOR])
+        # instrs = gen_priv_descent_instr(fuzzerstate)
         instrs = [PrivilegeDescentInstruction_t0(fuzzerstate, is_mret=fuzzerstate.privilegestate.privstate==PrivilegeStateEnum.MACHINE)]
     elif isa_class == ISAInstrClass.PPFSM:
         # assert False, "not implemented"
