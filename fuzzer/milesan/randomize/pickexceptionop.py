@@ -97,7 +97,7 @@ def pick_illegal_instruction(is_mtvec, fuzzerstate):
     else:
         corrected_simple_illegal_instruction_proba = SIMPLE_ILLEGAL_INSTRUCTION_PROBA
     if corrected_simple_illegal_instruction_proba < random.random():
-        return SimpleIllegalInstruction_t0(fuzzerstate, is_mtvec)
+        return SimpleExceptionEncapsulator_t0(fuzzerstate, is_mtvec, None, SimpleIllegalInstruction_t0(fuzzerstate, is_mtvec), ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
 
     if not fuzzerstate.design_has_fpu or not fuzzerstate.is_fpu_activated \
         and not ("vexriscv" in fuzzerstate.design_name and is_forbid_vexriscv_csrs()):
@@ -218,7 +218,7 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         if USE_MMU:
             fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
             fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
-        return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, True)
+        return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec,None,MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, True),exception_op_type)
     elif exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
         raise NotImplementedError("ID_LOAD_ACCESS_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
@@ -229,7 +229,7 @@ def gen_next_exception_instr_from_instroptype(fuzzerstate, exception_op_type: Ex
         if USE_MMU:
             fuzzerstate.csrfile.regs[CSR_IDS.SEPC].unreliable = True
             fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].unreliable = True
-        return MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, False)
+        return SimpleExceptionEncapsulator_t0(fuzzerstate,is_mtvec,None, MisalignedMemInstruction_t0(fuzzerstate, is_mtvec, False), exception_op_type)
     elif exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
         raise NotImplementedError("ID_STORE_AMO_ACCESS_FAULT not yet supported")
     elif exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE:
