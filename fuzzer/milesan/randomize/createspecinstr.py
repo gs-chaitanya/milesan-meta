@@ -5,7 +5,7 @@
 import random
 from copy import copy
 from params.runparams import DO_ASSERT
-from params.fuzzparams import USE_COMPRESSED, COMPRESS_INSTRUCTION
+from params.fuzzparams import USE_COMPRESSED, COMPRESS_INSTRUCTION, DISALLOW_NESTED_SPECULATION
 from milesan.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 from milesan.util import INSTRUCTIONS_BY_ISA_CLASS
 from milesan.randomize.pickisainstrclass import _gen_next_isainstrclass_from_weights
@@ -18,6 +18,7 @@ from milesan.randomize.pickprivilegedescentop import gen_priv_descent_instr
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
 # This module creates an instruction from its instruction string, and some state which will condition which registers and immediates will be picked, and with which probability.
 
+MAX_N_TRIES_IMM = 1000
 ###
 # Utility functions
 ###
@@ -40,6 +41,27 @@ def gen_random_imm(instr_str: str, is_design_64bit: bool):
     return rand_val
 
 
+def try_gen_random_free_imm(instr_str: str, fuzzerstate, curr_addr: int):
+    tries = 0
+    target_addr = None
+    while target_addr is None or not fuzzerstate.memview.is_mem_range_free(target_addr-SPIKE_STARTADDR, 4):
+        imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)    
+        target_addr = curr_addr + imm
+        if target_addr < SPIKE_STARTADDR or target_addr > SPIKE_STARTADDR + fuzzerstate.memview.memsize:
+            break
+        tries += 1
+        if tries > MAX_N_TRIES_IMM:
+            return False
+    return imm
+
+
+def gen_random_free_imm(instr_str: str, fuzzerstate, curr_addr: int):
+    imm = try_gen_random_free_imm(instr_str, fuzzerstate, curr_addr)
+    if not imm:
+        raise ValueError(f"Couldn't find a free address/immediate for instruction {instr_str} and addr {hex(curr_addr)}")
+    return imm
+
+    
 def _create_R12DInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     # When this is executed transiently, don't pick tainted registers when in taint-source domain. In taint-sink domain, 
     # no registers are (architecturally) tainted, so we don't need to explicitly check which domain we are in.
@@ -97,14 +119,14 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
         rs1 = fuzzerstate.intregpickstate.pick_int_inputreg()
         rs2 = fuzzerstate.intregpickstate.pick_int_inputreg()
     
-    # TODO don't pick addresses where there's already code
-    imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)    
+    imm = gen_random_free_imm(instr_str, fuzzerstate, curr_addr)
+
     return BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, 0x0, None, iscompressed)
     
 def _create_JALInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscompressed: bool):
     rd = fuzzerstate.intregpickstate.pick_int_inputreg()
     # TODO don't pick addresses where there's already code
-    imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)    
+    imm = gen_random_free_imm(instr_str,fuzzerstate,0x0)  
     if USE_COMPRESSED and len(fuzzerstate.instr_objs_seq) > 1 and instr_str in IS_COMPRESSABLE: # no compressed in initial block
         instr_str_cmp, is_compressable = handle_JAL(rd, imm, instr_str, fuzzerstate.is_design_64bit)
         if is_compressable and (random.random() < COMPRESS_INSTRUCTION):
@@ -121,6 +143,7 @@ def _create_JALRInstruction(instr_str: str, fuzzerstate, iscompressed: bool, cur
     rd = fuzzerstate.intregpickstate.pick_int_inputreg()
     # TODO don't pick addresses where there's already code
     imm = gen_random_imm(instr_str,fuzzerstate.is_design_64bit)
+
     producer_id = None
     return JALRInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, producer_id, iscompressed)
 
@@ -213,6 +236,13 @@ def create_speculative_instrs(fuzzerstate, curr_addr: int, domain: tuple):
     weights[ISAInstrClass.RANDOM_CSR] = 0
     weights[ISAInstrClass.TVECFSM] = 0
     # weights[ISAInstrClass.MEDELEG] = 0
+
+    # disallow nested speculation, can't reduce it properly yet...
+    # We would have to choose the immediates s.t. the target addresses don't have any code allocated yet.
+    if DISALLOW_NESTED_SPECULATION:
+        weights[ISAInstrClass.JALR] = 0
+        weights[ISAInstrClass.JAL] = 0
+        weights[ISAInstrClass.BRANCH] = 0
 
     # randomize
     fuzzerstate.privilegestate.privstate = random.choice(list(PrivilegeStateEnum))
