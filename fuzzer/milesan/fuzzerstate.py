@@ -20,8 +20,7 @@ from milesan.randomize.pickstoreaddr import MemStoreState
 from milesan.randomize.pickreg import IntRegPickState, FloatRegPickState
 from milesan.randomize.pickisainstrclass import ISAINSTRCLASS_INITIAL_BOOSTERS
 from milesan.randomize.pickexceptionop import EXCEPTION_OP_TYPE_INITIAL_BOOSTERS
-from milesan.cfinstructionclasses_t0 import RegdumpInstruction_t0, SpecialInstruction_t0, has_taint_trace, ImmRdInstruction_t0, RDInstruction_t0, RegImmInstruction_t0, BranchInstruction_t0
-from milesan.cfinstructionclasses import JALRInstruction, BranchInstruction
+from milesan.cfinstructionclasses_t0 import *
 from milesan.mmu_utils import MODES_PARAM_RV32, MODES_PARAMS_RV64, PageTablesGen,PAGE_ALIGNMENT_MASK, PHYSICAL_PAGE_SIZE
 from rv.csrids import CSR_IDS, CSR_ABI_NAMES
 from milesan.registers import ABI_INAMES
@@ -737,10 +736,13 @@ class FuzzerState:
         return self.curr_bb_start_addr + sum([int(not i.iscompressed)*2+2 for i in self.instr_objs_seq[-1]]) + SPIKE_STARTADDR*int(add_spike_offset)
 
     def add_page_domain(self, addr, va_layout, priv):
+        if addr&PAGE_ALIGNMENT_MASK  ==  self.final_bb_base_addr&PAGE_ALIGNMENT_MASK+SPIKE_STARTADDR:
+
+            return
         if addr&PAGE_ALIGNMENT_MASK not in self.page_domains:
             self.page_domains[addr&PAGE_ALIGNMENT_MASK] = {'va_layouts' : {va_layout}, 'priv' : priv}
         else:
-            assert self.page_domains[addr&PAGE_ALIGNMENT_MASK]['priv'] == priv, f"Privilege mismatch at {hex(addr)}: {self.page_domains[addr&PAGE_ALIGNMENT_MASK]['priv']} != {priv}"
+            assert self.page_domains[addr&PAGE_ALIGNMENT_MASK]['priv'] == priv, f"Privilege mismatch at {hex(addr)}: {self.page_domains[addr&PAGE_ALIGNMENT_MASK]['priv']} != {priv}. final bb at {hex(self.final_bb_base_addr+SPIKE_STARTADDR)}"
             self.page_domains[addr&PAGE_ALIGNMENT_MASK]['va_layouts'] |= {va_layout}
 
     # Save register states for locations that could be executed transiently to triage gadgets executed from taint-source domain
@@ -773,10 +775,13 @@ class FuzzerState:
                 reg_taint |= curr_state[-1][reg_id].get_val() ^ self.taint_source_transient_addrs_regs[addr][-1][reg_id].get_val()
                 self.taint_source_transient_addrs_regs[addr][-1][reg_id].set_val_t0(reg_taint) # or both taints
 
-    def is_blacklisted(self, addr):
-        return addr in self.taint_source_transient_addrs_regs
 
     def fill_mem_with_dead_code(self):
+        for bb_instrs in enumerate(self.instr_objs_seq):
+            for instr in bb_instrs:
+                if isinstance(instr,(BranchInstruction,PrivilegeDescentInstruction,JALInstruction,JALRInstruction,SimpleExceptionEncapsulator)) and not is_tolerate_transient_window(self, instr) and not instr.priv_level in self.taint_sink_privs:
+                    instr.blacklist_transient_window()
+
         # Iterate over all allocated (physical) pages
         for page_addr, page_privs in self.pagetablestate.ppn_leaf_to_priv_dict.items():
             if DEAD_CODE_ONLY_IN_CODE_PAGES:
@@ -867,3 +872,5 @@ class FuzzerState:
         pickle_path = os.path.join(self.tmp_dir, f"{prefixname}{test_identifier}.fuzzerstate.pickle")
         with open(pickle_path,"wb") as f:
             pickle.dump(self, f)
+
+
