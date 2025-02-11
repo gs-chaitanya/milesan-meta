@@ -6,6 +6,7 @@ from rv.asmutil import INSTR_FUNCS_T0, INSTR_FUNCS
 from milesan.registers import ABI_INAMES
 from rv.csrids import CSR_ABI_NAMES
 from params.runparams import PRINT_CHECK_REGS_T0, PRINT_COLOR_TAINT, PRINT_FILTERED_REG_TRACEBACK, DO_ASSERT, PRINT_WRITEBACK_T0, PRINT_WRITEBACK, DUMP_WRITEBACK, DUMP_WRITEBACK_T0, ASSERT_WRITEBACK_TRACE
+from params.toleratebugsparams import *
 from common.spike import SPIKE_STARTADDR
 from common.exceptions import TaintedBranchException, TaintedJalrException, TaintedDDELIException, TaintedMemLoadException, TaintedMemStoreException
 from milesan.registers import IntRegIndivState
@@ -70,30 +71,163 @@ def is_tolerate_transient_window(fuzzerstate, instr: BaseInstruction):
             return TOLERATE_OPENC910_BRANCH_TRANSIENT_WINDOW
         elif isinstance(instr, JALRInstruction):
             return TOLERATE_OPENC910_JALR_TRANSIENT_WINDOW
-        elif isinstance(instr, ExceptionInstruction):
-            return TOLERATE_OPENC910_EXCEPTION_TRANSIENT_WINDOW
+        elif isinstance(instr, JALInstruction):
+            return TOLERATE_OPENC910_JAL_TRANSIENT_WINDOW
+        elif isinstance(instr, PrivilegeDescentInstruction):
+            return TOLERATE_OPENC910_PRIVDESCENT_TRANSIENT_WINDOW
+        elif isinstance(instr, SimpleExceptionEncapsulator):
+            if instr.exception_op_type == ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED:
+                return TOLERATE_OPENC910_INSTR_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_INSTR_ACCESS_FAULT:
+                return TOLERATE_OPENC910_INSTR_ACCESS_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION:
+                return TOLERATE_OPENC910_ILLEGAL_INSTRUCTION_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_BREAKPOINT:
+                return TOLERATE_OPENC910_BREAKPOINT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:
+                return TOLERATE_OPENC910_LOAD_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
+                return TOLERATE_OPENC910_LOAD_ACCESS_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
+                return TOLERATE_OPENC910_STORE_AMO_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
+                return TOLERATE_OPENC910_STORE_AMO_ACCESS_FAULT_TRANSIENT_WINDOW    
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE:
+                return TOLERATE_OPENC910_ENV_CALL_FROM_U_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE:
+                return TOLERATE_OPENC910_ENV_CALL_FROM_S_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE:
+                return TOLERATE_OPENC910_ENV_CALL_FROM_M_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_PAGE_FAULT:
+                return TOLERATE_OPENC910_LOAD_PAGE_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT:
+                return TOLERATE_OPENC910_STORE_AMO_PAGE_FAULT_TRANSIENT_WINDOW
+            else:
+                assert False, f"{instr.get_str()} should not be used here"
+            
     elif "cva6" in fuzzerstate.design_name:
         if isinstance(instr, BranchInstruction):
             return TOLERATE_CVA6_BRANCH_TRANSIENT_WINDOW
         elif isinstance(instr, JALRInstruction):
             return TOLERATE_CVA6_JALR_TRANSIENT_WINDOW
-        elif isinstance(instr, ExceptionInstruction):
-            return TOLERATE_CVA6_EXCEPTION_TRANSIENT_WINDOW
+        elif isinstance(instr, JALInstruction):
+            return TOLERATE_CVA6_JAL_TRANSIENT_WINDOW
+        elif isinstance(instr, PrivilegeDescentInstruction):
+            return TOLERATE_CVA6_PRIVDESCENT_TRANSIENT_WINDOW
+        elif isinstance(instr, SimpleExceptionEncapsulator):
+            if instr.exception_op_type == ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED:
+                return TOLERATE_CVA6_INSTR_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_INSTR_ACCESS_FAULT:
+                return TOLERATE_CVA6_INSTR_ACCESS_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION:
+                return TOLERATE_CVA6_ILLEGAL_INSTRUCTION_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_BREAKPOINT:
+                return TOLERATE_CVA6_BREAKPOINT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:
+                return TOLERATE_CVA6_LOAD_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
+                return TOLERATE_CVA6_LOAD_ACCESS_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
+                return TOLERATE_CVA6_STORE_AMO_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
+                return TOLERATE_CVA6_STORE_AMO_ACCESS_FAULT_TRANSIENT_WINDOW    
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE:
+                return TOLERATE_CVA6_ENV_CALL_FROM_U_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE:
+                return TOLERATE_CVA6_ENV_CALL_FROM_S_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE:
+                return TOLERATE_CVA6_ENV_CALL_FROM_M_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_PAGE_FAULT:
+                return TOLERATE_CVA6_LOAD_PAGE_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT:
+                return TOLERATE_CVA6_STORE_AMO_PAGE_FAULT_TRANSIENT_WINDOW
+            else:
+                assert False, f"{instr.get_str()} should not be used here"
+            
+
+
     elif "boom" in fuzzerstate.design_name:
         if isinstance(instr, BranchInstruction):
             return TOLERATE_BOOM_BRANCH_TRANSIENT_WINDOW
         elif isinstance(instr, JALRInstruction):
             return TOLERATE_BOOM_JALR_TRANSIENT_WINDOW
-        elif isinstance(instr, ExceptionInstruction):
-            return TOLERATE_BOOM_EXCEPTION_TRANSIENT_WINDOW
+        elif isinstance(instr, JALInstruction):
+            return TOLERATE_BOOM_JAL_TRANSIENT_WINDOW
+        elif isinstance(instr, PrivilegeDescentInstruction):
+            return TOLERATE_BOOM_PRIVDESCENT_TRANSIENT_WINDOW
+        elif isinstance(instr, SimpleExceptionEncapsulator):
+            if instr.exception_op_type == ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED:
+                return TOLERATE_BOOM_INSTR_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_INSTR_ACCESS_FAULT:
+                return TOLERATE_BOOM_INSTR_ACCESS_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION:
+                return TOLERATE_BOOM_ILLEGAL_INSTRUCTION_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_BREAKPOINT:
+                return TOLERATE_BOOM_BREAKPOINT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:
+                return TOLERATE_BOOM_LOAD_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
+                return TOLERATE_BOOM_LOAD_ACCESS_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
+                return TOLERATE_BOOM_STORE_AMO_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
+                return TOLERATE_BOOM_STORE_AMO_ACCESS_FAULT_TRANSIENT_WINDOW    
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE:
+                return TOLERATE_BOOM_ENV_CALL_FROM_U_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE:
+                return TOLERATE_BOOM_ENV_CALL_FROM_S_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE:
+                return TOLERATE_BOOM_ENV_CALL_FROM_M_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_PAGE_FAULT:
+                return TOLERATE_BOOM_LOAD_PAGE_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT:
+                return TOLERATE_BOOM_STORE_AMO_PAGE_FAULT_TRANSIENT_WINDOW
+            else:
+                assert False, f"{instr.get_str()} should not be used here"
+            
+
     elif "rocket" in fuzzerstate.design_name:
         if isinstance(instr, BranchInstruction):
             return TOLERATE_ROCKET_BRANCH_TRANSIENT_WINDOW
         elif isinstance(instr, JALRInstruction):
             return TOLERATE_ROCKET_JALR_TRANSIENT_WINDOW
-        elif isinstance(instr, ExceptionInstruction):
-            return TOLERATE_ROCKET_EXCEPTION_TRANSIENT_WINDOW
+        elif isinstance(instr, JALInstruction):
+            return TOLERATE_ROCKET_JAL_TRANSIENT_WINDOW
+        elif isinstance(instr, PrivilegeDescentInstruction):
+            return TOLERATE_ROCKET_PRIVDESCENT_TRANSIENT_WINDOW
+        elif isinstance(instr, SimpleExceptionEncapsulator):
+            if instr.exception_op_type == ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED:
+                return TOLERATE_ROCKET_INSTR_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_INSTR_ACCESS_FAULT:
+                return TOLERATE_ROCKET_INSTR_ACCESS_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION:
+                return TOLERATE_ROCKET_ILLEGAL_INSTRUCTION_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_BREAKPOINT:
+                return TOLERATE_ROCKET_BREAKPOINT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:
+                return TOLERATE_ROCKET_LOAD_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
+                return TOLERATE_ROCKET_LOAD_ACCESS_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
+                return TOLERATE_ROCKET_STORE_AMO_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
+                return TOLERATE_ROCKET_STORE_AMO_ACCESS_FAULT_TRANSIENT_WINDOW    
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE:
+                return TOLERATE_ROCKET_ENV_CALL_FROM_U_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE:
+                return TOLERATE_ROCKET_ENV_CALL_FROM_S_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE:
+                return TOLERATE_ROCKET_ENV_CALL_FROM_M_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_PAGE_FAULT:
+                return TOLERATE_ROCKET_LOAD_PAGE_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT:
+                return TOLERATE_ROCKET_STORE_AMO_PAGE_FAULT_TRANSIENT_WINDOW
+            else:
+                assert False, f"{instr.get_str()} should not be used here"
+            
 
+        
+    assert False, f"{instr.get_str()} should not be used here"
          
 ###
 # Abstract classes with taint
@@ -440,11 +574,6 @@ class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
                 self.fuzzerstate.curr_pc = self.vaddr + self.imm
             else:
                 self.fuzzerstate.curr_pc = self.paddr + self.imm
-        elif not is_tolerate_transient_window(self.fuzzerstate, self):
-            next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
-            if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
-                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
-
         if USE_MMU:
             res = self.instr_func(self.vaddr, 0x0, self.fuzzerstate.is_design_64bit)
         else:
@@ -455,6 +584,10 @@ class JALInstruction_t0(JALInstruction, ImmInstruction_t0, RDInstruction_t0):
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
 
+    def blacklist_transient_window(self):
+        next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+        if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+            self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
 
 class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
     def __init__(self, fuzzerstate, instr_str: str, rd: int, rs1: int, imm: int, producer_id: int, to_new_layout: bool = False, iscompressed: bool = False):
@@ -477,14 +610,6 @@ class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc = self.fuzzerstate.intregpickstate.regs[self.rs1].get_val() + self.imm
-        elif not is_tolerate_transient_window(self.fuzzerstate, self):
-            # blacklist address after JALR, might be loaded into RSB
-            next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
-            if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
-                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
-            # if len(self.fuzzerstate.instr_objs_seq) > 1:
-            #     last_instr = self.fuzzerstate.instr_objs_seq[-2][-1]
-            #     self.fuzzerstate.blacklist_gadget_addr(last_instr.paddr+(2 if last_instr.iscompressed else 4),self.va_layout, self.priv_level)
         if USE_MMU:
             res = self.instr_func(self.vaddr, 0x0, self.fuzzerstate.is_design_64bit)
         else:
@@ -495,7 +620,11 @@ class JALRInstruction_t0(JALRInstruction, ImmInstruction_t0, RDInstruction_t0):
         self.fuzzerstate.intregpickstate.regs[self.rd].set_val(res)
         self.fuzzerstate.advance_minstret()
 
- 
+    def blacklist_transient_window(self):
+        next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+        if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+            self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
+
 
 
 ## Extended Placeholder Instructions ##
@@ -877,19 +1006,19 @@ class BranchInstruction_t0(BranchInstruction, ImmInstruction_t0):
         if not is_spike_resolution:
             self.assert_addr()
             self.fuzzerstate.curr_pc += self.imm if self.plan_taken else 4
-        elif not is_tolerate_transient_window(self.fuzzerstate, self):
-            if self.plan_taken:
-                next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
-                if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
-                    self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
-            else:
-                next_trans_paddr = self.paddr+self.imm
-                if next_trans_paddr < self.fuzzerstate.memsize + SPIKE_STARTADDR and next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
-                    self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
-
         if TAINT_EN:
             self.execute_t0(None,is_spike_resolution)
         self.fuzzerstate.advance_minstret()
+    
+    def blacklist_transient_window(self):
+        if self.plan_taken:
+            next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+            if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
+        else:
+            next_trans_paddr = self.paddr+self.imm
+            if next_trans_paddr < self.fuzzerstate.memsize + SPIKE_STARTADDR and next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
 
 
 
@@ -1061,16 +1190,15 @@ class GenericCSRWriterInstruction_t0(GenericCSRWriterInstruction, BaseInstructio
 
 class PrivilegeDescentInstruction_t0(PrivilegeDescentInstruction, BaseInstruction_t0):
     def execute(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
-        if is_spike_resolution:
-            if not is_tolerate_transient_window(self.fuzzerstate, self):
-                next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
-                if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
-                    self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
-            return
         if self.is_mret:
             self.execute_mret()
         else:
             self.execute_sret()
+
+    def blacklist_transient_window(self):
+        next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+        if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+            self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
 
 
     def execute_mret(self):
@@ -1087,11 +1215,6 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
     def execute(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF):
         if not is_spike_resolution:
             self.assert_addr()
-        elif not is_tolerate_transient_window(self.fuzzerstate, self):
-            next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
-            if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
-                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
-
         if self.is_mtvec:
             self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr if USE_MMU else self.paddr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION)
@@ -1101,17 +1224,17 @@ class SimpleIllegalInstruction_t0(SimpleIllegalInstruction, BaseInstruction_t0):
 
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val() if self.is_mtvec else self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
 
+    def blacklist_transient_window(self):
+        next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+        if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+            self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
+
 
 
 class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstruction_t0):
     def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-        elif not is_tolerate_transient_window(self.fuzzerstate, self):
-            next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
-            if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
-                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
-
         if self.is_mtvec:
             self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr if USE_MMU else self.paddr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exception_op_type)
@@ -1120,15 +1243,15 @@ class SimpleExceptionEncapsulator_t0(SimpleExceptionEncapsulator, BaseInstructio
             self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(self.exception_op_type)
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val() if self.is_mtvec else self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
 
+    def blacklist_transient_window(self):
+        next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+        if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+            self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
+
 class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
     def execute(self, is_spike_resolution: bool = True):
         if not is_spike_resolution:
             self.assert_addr()
-        elif not is_tolerate_transient_window(self.fuzzerstate, self):
-            next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
-            if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
-                self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
-
         if self.is_mtvec:
             self.fuzzerstate.csrfile.regs[CSR_IDS.MEPC].set_val(self.vaddr if USE_MMU else self.paddr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.MCAUSE].set_val(self.exceptioncause_val)
@@ -1136,6 +1259,11 @@ class MisalignedMemInstruction_t0(MisalignedMemInstruction, BaseInstruction_t0):
             self.fuzzerstate.csrfile.regs[CSR_IDS.SEPC].set_val(self.vaddr if USE_MMU else self.paddr)
             self.fuzzerstate.csrfile.regs[CSR_IDS.SCAUSE].set_val(self.exceptioncause_val)
         self.fuzzerstate.curr_pc = self.fuzzerstate.csrfile.regs[CSR_IDS.MTVEC].get_val() if self.is_mtvec else self.fuzzerstate.csrfile.regs[CSR_IDS.STVEC].get_val()
+
+    def blacklist_transient_window(self):
+        next_trans_paddr = self.paddr+4 if not self.iscompressed else self.paddr+2
+        if next_trans_paddr&PAGE_ALIGNMENT_MASK == self.paddr&PAGE_ALIGNMENT_MASK:
+            self.fuzzerstate.blacklist_gadget_addr(next_trans_paddr,self.va_layout, self.priv_level)
 
 class RawDataWord_t0(RawDataWord):
     def __init__(self, fuzzerstate, wordval: int, wordval_t0: int = 0, signed: bool = False):
