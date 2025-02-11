@@ -273,7 +273,7 @@ class MemoryView:
                 assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
                 assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS, f"{hex(addr)} exceeds memory range."
                 assert addr&PAGE_ALIGNMENT_MASK in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict or va_layout == -1, f"Memory at {hex(addr)} not mapped with layout {va_layout}"
-                assert priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have read permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
+                assert not USE_MMU or  priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have read permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
             except AssertionError as e:
                 raise MemReadException(self.fuzzerstate, addr, n_bytes)
         val = 0
@@ -294,7 +294,7 @@ class MemoryView:
                 assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
                 assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
                 assert addr&PAGE_ALIGNMENT_MASK in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict or va_layout == -1, f"Memory at {hex(addr)} not mapped with layout {va_layout}"
-                assert priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have read permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
+                assert not USE_MMU or priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have read permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
             except AssertionError as e:
                 raise MemReadException(self.fuzzerstate, addr, n_bytes)
         
@@ -319,7 +319,7 @@ class MemoryView:
                 assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
                 assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
                 assert addr&PAGE_ALIGNMENT_MASK in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict or va_layout == -1, f"Memory at {hex(addr)} not mapped with layout {va_layout}"
-                assert priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have read permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
+                assert not USE_MMU or priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have write permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
             except AssertionError as e:
                 raise MemWriteException(self.fuzzerstate, addr, n_bytes)
 
@@ -341,7 +341,7 @@ class MemoryView:
                 assert addr >= SPIKE_STARTADDR or INSERT_REGDUMPS
                 assert addr < SPIKE_STARTADDR + self.fuzzerstate.memsize or INSERT_REGDUMPS
                 assert addr&PAGE_ALIGNMENT_MASK in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict or va_layout == -1, f"Memory at {hex(addr)} not mapped with layout {va_layout}"
-                assert priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have read permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
+                assert not USE_MMU or priv_level == PrivilegeStateEnum.MACHINE or priv_level in self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK], f"{priv_level.name} does not have write permissions for page at {hex(addr&PAGE_ALIGNMENT_MASK)} in layout {va_layout}. Allowed ar {self.fuzzerstate.pagetablestate.ppn_leaf_to_priv_dict[addr&PAGE_ALIGNMENT_MASK]}"
             except AssertionError as e:
                 raise MemWriteException(self.fuzzerstate, addr, n_bytes)
 
