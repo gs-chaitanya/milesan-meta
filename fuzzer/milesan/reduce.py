@@ -482,6 +482,7 @@ def _reduce_taint(fuzzerstate,quiet:bool=False):
     tainted_addresses = [i for i,j in fuzzerstate.memview.data_t0.items() if j != 0]
     right_bound = len(tainted_addresses)//2
     left_bound = 0
+    bound_to_mismatch = {}
     while left_bound < right_bound: # Assumes we leak a single word.
         print(f"Reduction interval: [{left_bound},{right_bound}): [{hex(tainted_addresses[left_bound])},{hex(tainted_addresses[right_bound-1])}], {right_bound-left_bound} out of {len(tainted_addresses)} tainted bytes remain")
         test_fuzzerstate = deepcopy(fuzzerstate)
@@ -493,6 +494,7 @@ def _reduce_taint(fuzzerstate,quiet:bool=False):
         test_fuzzerstate.memview.set_as_initial_state() # Important since we reset to it later.
         delta = right_bound - left_bound
         mismatch = is_mismatch(test_fuzzerstate, len(test_fuzzerstate.instr_objs_seq)-1,quiet=quiet)
+        bound_to_mismatch[(left_bound, right_bound)] = mismatch
         if mismatch: # gadget is between [left_bound, right_bound). Move left bound up
             right_bound = left_bound + delta//2
             print(f"Mismatch between [{left_bound},{right_bound})")
@@ -753,7 +755,7 @@ def _find_pillar_bb(fuzzerstate, failing_bb_id: int, failing_instr_id: int, faul
     # print('B', is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, right_bound-1))
     # print('C', is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, right_bound))
     
-    assert right_bound>1, "Failed finding pillar BB." # When right_bound == 1, we could not identfy a pillar BB, i.e. need all preceeding BBs to trigger the leakage
+    assert right_bound>0, "Failed finding pillar BB." # When right_bound == 1, we could not identfy a pillar BB, i.e. need all preceeding BBs to trigger the leakage
     return right_bound-1
 
 # @param failing_bb_id is the index of the first bb that, when removed as well as the subsequent ones, makes the bug disappear.
@@ -903,11 +905,15 @@ def _find_pillar_instr(fuzzerstate, failing_bb_id: int, failing_instr_id: int, p
 def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, failing_instr_id: int, pillar_bb_id: int, pillar_instr_id: int, fault_from_prev_bb: bool, quiet: bool = False):
     assert not USE_COMPRESSED
     if DO_ASSERT:
-        assert pillar_bb_id <= failing_bb_id+1, f"{pillar_bb_id} <= {failing_bb_id+1} does not hold."
-        assert pillar_bb_id >= 1 and pillar_bb_id < len(fuzzerstate.instr_objs_seq), f"1 < {pillar_bb_id} < {len(fuzzerstate.instr_objs_seq)} does not hold."
-        assert failing_bb_id >= 1 and failing_bb_id < len(fuzzerstate.instr_objs_seq), f"1 < {failing_bb_id} < {len(fuzzerstate.instr_objs_seq)} does not hold."
-        assert is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id,quiet=quiet)
-        assert not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id-1, pillar_bb_id, pillar_instr_id, quiet=quiet)
+        # assert pillar_bb_id <= failing_bb_id+1, f"{pillar_bb_id} <= {failing_bb_id+1} does not hold."
+        # assert pillar_bb_id >= 1 and pillar_bb_id < len(fuzzerstate.instr_objs_seq), f"1 < {pillar_bb_id} < {len(fuzzerstate.instr_objs_seq)} does not hold."
+        # assert failing_bb_id >= 1 and failing_bb_id < len(fuzzerstate.instr_objs_seq), f"1 < {failing_bb_id} < {len(fuzzerstate.instr_objs_seq)} does not hold."
+        if fault_from_prev_bb:
+            assert is_mismatch(fuzzerstate, failing_bb_id+1, 0,pillar_bb_id,pillar_instr_id,quiet=quiet), f"Fault from previous bb but mismatch not triggered."
+            assert not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id,quiet=quiet), f"Fault from previous bb but mismatch triggered."
+        else:
+            assert is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id,quiet=quiet), f"Fault from current bb but mismatch not triggered."
+            assert not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id-1, pillar_bb_id, pillar_instr_id, quiet=quiet), f"Fault from current bb but mismatch triggered."
 
     if pillar_bb_id == failing_bb_id and failing_instr_id == pillar_instr_id:
         return fuzzerstate
@@ -926,7 +932,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
             # For debug printing
             curr_addr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id # NO_COMPRESSED
             try:
-                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id):
+                if is_mismatch(fuzzerstate, failing_bb_id+1*int(fault_from_prev_bb), 0 if fault_from_prev_bb else failing_instr_id, pillar_bb_id, pillar_instr_id):
                     print(f"(D) Addr {hex(curr_addr)}: Substituted with a nop.")
                 else:
                     # If this nop substitution killed the mismatch, then we must keep this instruction as normal.
@@ -939,43 +945,44 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
 
 
     else:
-        for instr_id in range(pillar_instr_id, len(fuzzerstate.instr_objs_seq[pillar_bb_id])-1):
-            saved_instr = copy(fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id]) # No deepcopy! Reference to fuzzerstate needs to be maintainted.
-            # If this is already a nop, then pass
-            nop_instr =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
-            nop_instr.paddr = saved_instr.paddr
-            nop_instr.vaddr = saved_instr.vaddr
-            nop_instr.va_layout = saved_instr.va_layout
-            nop_instr.priv_level = saved_instr.priv_level
-            if saved_instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF) == nop_instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF):
-                continue
-            elif is_placeholder(saved_instr):
-                continue
-            fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id] = nop_instr
-            if not quiet:
-                print(f"(A) Trying to replace {saved_instr.get_str()} with a nop.")
-            # For debug printing
-            curr_addr = fuzzerstate.bb_start_addr_seq[pillar_bb_id] + 4*instr_id # NO_COMPRESSED
-            assert curr_addr + SPIKE_STARTADDR == nop_instr.paddr, f"{saved_instr.get_str()} replaced with {nop_instr.get_str()} not placed at right addr {hex(curr_addr + SPIKE_STARTADDR)}"
-            try:
-                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, quiet=quiet):
-                    if not quiet:
-                        print(f"(A) {saved_instr.get_str()}: Substituted with a nop.")
-                    del saved_instr
+        if pillar_bb_id>0:
+            for instr_id in range(pillar_instr_id, len(fuzzerstate.instr_objs_seq[pillar_bb_id])-1):
+                saved_instr = copy(fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id]) # No deepcopy! Reference to fuzzerstate needs to be maintainted.
+                # If this is already a nop, then pass
+                nop_instr =  RegImmInstruction_t0(fuzzerstate,"addi", 0, 0, 0)
+                nop_instr.paddr = saved_instr.paddr
+                nop_instr.vaddr = saved_instr.vaddr
+                nop_instr.va_layout = saved_instr.va_layout
+                nop_instr.priv_level = saved_instr.priv_level
+                if saved_instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF) == nop_instr.gen_bytecode_int(USE_SPIKE_INTERM_ELF):
                     continue
-                else:
-                    # If this nop substitution killed the mismatch, then we must keep this instruction as normal.
-                    fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id] = saved_instr
-                    if not quiet:
-                        print(f"(A) {saved_instr.get_str()}: Not substituted instruction with a nop: Did not trigger bug.")
-            except Exception as e:
-                # Possibly, the substitution killed the spike or in-situ simulation, for example by changing a non-taken branch into a taken branch or tainting a source register for a cf-ambiguous instruction.
+                elif is_placeholder(saved_instr):
+                    continue
+                fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id] = nop_instr
                 if not quiet:
-                    print(f"(A) {saved_instr.get_str()}: Not substituted instruction with a nop ({str(e)}).")
-                fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id] = saved_instr
+                    print(f"(A) Trying to replace {saved_instr.get_str()} with a nop.")
+                # For debug printing
+                curr_addr = fuzzerstate.bb_start_addr_seq[pillar_bb_id] + 4*instr_id # NO_COMPRESSED
+                assert curr_addr + SPIKE_STARTADDR == nop_instr.paddr, f"{saved_instr.get_str()} replaced with {nop_instr.get_str()} not placed at right addr {hex(curr_addr + SPIKE_STARTADDR)}"
+                try:
+                    if is_mismatch(fuzzerstate, failing_bb_id+1*int(fault_from_prev_bb), 0 if fault_from_prev_bb else failing_instr_id, pillar_bb_id, pillar_instr_id):
+                        if not quiet:
+                            print(f"(A) {saved_instr.get_str()}: Substituted with a nop.")
+                        del saved_instr
+                        continue
+                    else:
+                        # If this nop substitution killed the mismatch, then we must keep this instruction as normal.
+                        fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id] = saved_instr
+                        if not quiet:
+                            print(f"(A) {saved_instr.get_str()}: Not substituted instruction with a nop: Did not trigger bug.")
+                except Exception as e:
+                    # Possibly, the substitution killed the spike or in-situ simulation, for example by changing a non-taken branch into a taken branch or tainting a source register for a cf-ambiguous instruction.
+                    if not quiet:
+                        print(f"(A) {saved_instr.get_str()}: Not substituted instruction with a nop ({str(e)}).")
+                    fuzzerstate.instr_objs_seq[pillar_bb_id][instr_id] = saved_instr
 
-
-        for bb_id in range(pillar_bb_id, failing_bb_id):
+        # don't try to replace in intial BB
+        for bb_id in range(max(pillar_bb_id,1), failing_bb_id):
             # For each intermediate bb, first start by turning all instructions into nops (except the last one)
             coarse_saved_instrs = [copy(fuzzerstate.instr_objs_seq[bb_id][instr_id]) for instr_id in range(len(fuzzerstate.instr_objs_seq[bb_id])-1)] # No deepcopy! Reference to fuzzerstate needs to be maintainted.
             if DO_ASSERT:
@@ -996,7 +1003,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
             if not quiet:
                 print(f"(B) Trying to replace instructions in BB at {hex(fuzzerstate.bb_start_addr_seq[bb_id])} with nops.")
             try:
-                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, quiet=quiet):
+                if is_mismatch(fuzzerstate, failing_bb_id+1*int(fault_from_prev_bb), 0 if fault_from_prev_bb else failing_instr_id, pillar_bb_id, pillar_instr_id):
                     if not quiet:
                         print(f"(B) BB {hex(fuzzerstate.bb_start_addr_seq[bb_id])}: Coarse grain nop substitution success.")
                     continue
@@ -1031,7 +1038,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
                 curr_addr = fuzzerstate.bb_start_addr_seq[bb_id] + 4*instr_id # NO_COMPRESSED
                 assert curr_addr + SPIKE_STARTADDR == nop_instr.paddr, f"{saved_instr.get_str()} replaced with {nop_instr.get_str()} not placed at right addr {hex(curr_addr + SPIKE_STARTADDR)}"
                 try:
-                    if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, quiet=quiet):
+                    if is_mismatch(fuzzerstate, failing_bb_id+1*int(fault_from_prev_bb), 0 if fault_from_prev_bb else failing_instr_id, pillar_bb_id, pillar_instr_id):
                         if not quiet:
                             print(f"(B) {saved_instr.get_str()}: Substituted with a nop.")
                     else:
@@ -1061,7 +1068,7 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
             # For debug printing
             curr_addr = fuzzerstate.bb_start_addr_seq[failing_bb_id] + 4*instr_id # NO_COMPRESSED
             try:
-                if is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id, quiet=quiet):
+                if is_mismatch(fuzzerstate, failing_bb_id+1*int(fault_from_prev_bb), 0 if fault_from_prev_bb else failing_instr_id, pillar_bb_id, pillar_instr_id):
                     if not quiet:
                         print(f"(C) {saved_instr.get_str()}: Substituted with a nop.")
                 else:
@@ -1076,8 +1083,12 @@ def _turn_sandwich_instructions_into_nops(fuzzerstate, failing_bb_id: int, faili
                     print(f"(C) {saved_instr.get_str()}: Not substituted instruction with a nop ({str(e)}).")
 
     if DO_ASSERT:
-        assert is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id,quiet=quiet)
-        assert not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id-1, pillar_bb_id, pillar_instr_id, quiet=quiet)
+        if fault_from_prev_bb:
+            assert is_mismatch(fuzzerstate, failing_bb_id+1, 0,pillar_bb_id,pillar_instr_id,quiet=quiet), f"Fault from previous bb but mismatch not triggered."
+            assert not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id,quiet=quiet), f"Fault from previous bb but mismatch triggered."
+        else:
+            assert is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id, pillar_bb_id, pillar_instr_id,quiet=quiet), f"Fault from current bb but mismatch not triggered."
+            assert not is_mismatch(fuzzerstate, failing_bb_id, failing_instr_id-1, pillar_bb_id, pillar_instr_id, quiet=quiet), f"Fault from current bb but mismatch triggered."
 
     return fuzzerstate
 
@@ -1216,7 +1227,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
             find_pillar_success = True
         except Exception as e:
             print(f"Failed finding pillar BB: {e}")
-            pillar_bb_id = 1 # We set the pillar_bb_id to 1 when we failed finding it s.t. we start df-reduction (i.e. nopizing) after the initial BB.
+            pillar_bb_id = 0 # We set the pillar_bb_id to 1 when we failed finding it s.t. we start df-reduction (i.e. nopizing) with the initial BB.
         time_pillar_bb_search = time.time()-start_pillar_bb
         ###
         # Cut the first instructions of the pillar bb.
@@ -1235,9 +1246,9 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         if not CHECK_LEAKER_INVARIANCE: # When enabled, we check during pillar reduction
             if find_pillar_success and _leaker_changed(fuzzerstate,failing_bb_id,failing_instr_id,pillar_bb_id,quiet,fault_from_prev_bb):
                 print(f"Pillar reduction changed leaker instruction! Resetting pillar BB id to 1.")
-                pillar_bb_id = 1
+                pillar_bb_id = 0
     else:
-        pillar_bb_id = 1
+        pillar_bb_id = 0
 
 
     ###
