@@ -431,7 +431,7 @@ class FuzzerState:
         if insert_regdump:
             if 'cva6' in self.design_name:
                 assert INSERT_FENCE, f"{self.design_name} needs INSERT_FENCE enabled when using register dumps!"
-            if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS:
+            if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS and not  instr.rd_unreliable:
                 store_instr = RegdumpInstruction_t0(self,"sd" if self.is_design_64bit else "sw", REGDUMP_REGISTER_ID, instr.rd,0,-1)
                 store_instr.reset_addr()
                 if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 

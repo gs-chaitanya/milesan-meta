@@ -11,7 +11,7 @@ from milesan.toleratebugs import is_tolerate_boom_minstret
 from milesan.toleratebugs import is_tolerate_rocket_minstret
 from milesan.fuzzfromdescriptor import gen_fuzzerstate_elf_expectedvals_interm, gen_fuzzerstate_elf_expectedvals, gen_new_test_instance
 from milesan.cfinstructionclasses import *
-from milesan.cfinstructionclasses_t0 import RegdumpInstruction_t0
+from milesan.cfinstructionclasses_t0 import RegdumpInstruction_t0, RDInstruction_t0
 from milesan.fuzzsim import run_rtl_and_load_regstream
 from milesan.util import IntRegIndivState
 from common.spike import SPIKE_STARTADDR
@@ -205,9 +205,10 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     pass
                 elif is_spike_design_addr_mismatch_instr(last_instr) and IGNORE_SPIKE_OFFSET_IN_REG_CHECK:
                     pass
+                elif isinstance(last_instr, RDInstruction_t0) and last_instr.rd_unreliable:
+                    pass
                 elif not IGNORE_VALUE_MISMATCH and is_tolerate(design_name, last_instr):
                     raise MismatchError(f"(RTL) Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}", fail_type=FailTypeEnum.VALUE_MISMATCH)
-
             if TAINT_EN:
                 mismatch = fuzzerstate.intregpickstate.regs[id].check_t0(value_t0)
                 if mismatch and not IGNORE_TAINT_MISMATCH:
