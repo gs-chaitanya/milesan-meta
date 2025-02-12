@@ -268,7 +268,6 @@ class RDInstruction_t0(CFInstruction_t0):
         super().__init__(fuzzerstate, instr_str)
         self.rd_t0 = 0
         self.writeback_trace = {"in-situ":(0,0), "final": (0,0)}
-        self.rd_unreliable = False
 
     # This function writes back the tainted value to the destination register. Since the fields for the source and destination registers
     # could also be tainted, the alternative values for those executions (i.e. where the registers were chosen differently according to their taints)
@@ -284,9 +283,6 @@ class RDInstruction_t0(CFInstruction_t0):
         self.add_writeback_trace(res, res_t0, is_spike_resolution)
 
     def add_writeback_trace(self, res, res_t0, is_spike_resolution: bool):
-        if is_spike_resolution:
-            if self.fuzzerstate.intregpickstate.regs[self.rd].fsm_state !=  IntRegIndivState.FREE:
-                self.rd_unreliable = True
         if DO_ASSERT:
             assert res_t0 == 0 or self.isdead or self.iscontext or (self.priv_level in self.fuzzerstate.taint_source_privs and self.va_layout in self.fuzzerstate.taint_source_layouts), f"{self.get_str()}: Taint detected in forbidden privelege or layout: allowed are {[p.name for p in self.fuzzerstate.taint_source_privs]} in layouts {self.fuzzerstate.taint_source_layouts}. Taint is {hex(res_t0)}"
         self.writeback_trace["in-situ" if is_spike_resolution else "final"] = (res, res_t0)
@@ -295,7 +291,7 @@ class RDInstruction_t0(CFInstruction_t0):
 
     def assert_writeback_trace(self): # This will fail when reducing.
         assert ASSERT_WRITEBACK_TRACE
-        if not is_placeholder(self) and self.rd >0 and not self.rd_unreliable: # The placeholders will result in different values by construction.
+        if not is_placeholder(self) and self.rd >0: # The placeholders will result in different values by construction.
             assert self.writeback_trace["in-situ"][0] == self.writeback_trace["final"][0], f"Writeback trace value mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'][0])} !=  {hex(self.writeback_trace['final'][0])}"
         assert self.writeback_trace["in-situ"][1] == self.writeback_trace["final"][1], f"Writeback trace taint mismatch between in-situ and final: {self.get_str()}: {hex(self.writeback_trace['in-situ'][1])} !=  {hex(self.writeback_trace['final'][1])}"
 
@@ -433,6 +429,7 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         super().__init__(fuzzerstate, instr_str, rd, imm, iscompressed, is_rd_nonpickable_ok)
         self.rd_t0 = 0       
         self.imm_t0 = imm_t0
+        assert not ("auipc" in self.instr_str and self.fuzzerstate.intregpickstate.regs[self.rd].fsm_state == IntRegIndivState.FREE), self.get_str()
 
     def gen_bytecode_int_t0(self, is_spike_resolution: bool):
         assert TAINT_EN
@@ -1144,7 +1141,7 @@ class CSRImmInstruction_t0(CSRImmInstruction, RDInstruction_t0):
 
 # Used to check if a register dump should be inserted after instruction in Fuzzerstate::appen_and_execute if enabled.
 def has_taint_trace(obj):
-    return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0, CSRImmInstruction_t0, CSRRegInstruction_t0, IntLoadInstruction_t0)) and not isinstance(obj, SpeculativeInstructionEncapsulator)
+    return isinstance(obj, (RegImmInstruction_t0, ImmRdInstruction_t0, R12DInstruction_t0, CSRImmInstruction_t0, CSRRegInstruction_t0, IntLoadInstruction_t0))
 
 class MstatusWriterInstruction_t0(MstatusWriterInstruction, BaseInstruction_t0):
     def __init__(self, rd: int, rs1: int, producer_id: int, instr_str: str, mstatus_mask: int, old_sum_mprv=...):

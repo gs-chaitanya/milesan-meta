@@ -205,8 +205,6 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     pass
                 elif is_spike_design_addr_mismatch_instr(last_instr) and IGNORE_SPIKE_OFFSET_IN_REG_CHECK:
                     pass
-                elif isinstance(last_instr, RDInstruction_t0) and last_instr.rd_unreliable:
-                    pass
                 elif not IGNORE_VALUE_MISMATCH and is_tolerate(design_name, last_instr):
                     raise MismatchError(f"(RTL) Value mismatch between in-situ and RTL for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {last_instr.get_str()}", fail_type=FailTypeEnum.VALUE_MISMATCH)
             if TAINT_EN:

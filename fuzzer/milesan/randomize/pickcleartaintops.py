@@ -8,6 +8,7 @@ from params.runparams import DO_ASSERT
 from params.fuzzparams import NUM_MIN_UNTAINTED_INTREGS
 from rv.util import INSTRUCTION_IDS, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64, PARAM_IS_SIGNED
 from milesan.util import ISAInstrClass, INSTRUCTIONS_BY_ISA_CLASS, IntRegIndivState
+from common.spike import SPIKE_STARTADDR
 from milesan.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
 import random
 def clear_taints_with_random_instructions(fuzzerstate, untaint_all: bool = False):
@@ -20,6 +21,8 @@ def clear_taints_with_random_instructions(fuzzerstate, untaint_all: bool = False
     # fuzzerstate.intregpickstate.print()
     for tainted_reg_id in tainted_reg_ids:
         instr_str = gen_next_instrstr_from_isaclass(ISAInstrClass.ALU, fuzzerstate)
+        if "auipc" in instr_str and SPIKE_STARTADDR != fuzzerstate.design_base_addr:
+            fuzzerstate.intregpickstate.set_regstate(tainted_reg_id, IntRegIndivState.RELOCUSED, force=True)
         assert instr_str in INSTRUCTIONS_BY_ISA_CLASS[ISAInstrClass.ALU]
         if fuzzerstate.is_design_64bit:
             curr_param_size = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1]
@@ -42,7 +45,8 @@ def clear_taints_with_random_instructions(fuzzerstate, untaint_all: bool = False
             instr_objs += [ImmRdInstruction_t0(fuzzerstate, instr_str, tainted_reg_id, imm)]
         else:
             assert False, f"{instr_str}"
-        untainted_reg_ids += [tainted_reg_id]
+        if not ("auipc" in instr_str and SPIKE_STARTADDR != fuzzerstate.design_base_addr):
+            untainted_reg_ids += [tainted_reg_id]
         if len(untainted_reg_ids) > NUM_MIN_UNTAINTED_INTREGS+1 and not untaint_all:
             # print([i.get_str() for i in instr_objs])
             return instr_objs

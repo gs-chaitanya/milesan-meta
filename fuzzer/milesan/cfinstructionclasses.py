@@ -46,13 +46,14 @@ def compute_reg_traceback(reg_id, addr, fuzzerstate, correct_val):
         for instr_obj in bb_instrs:
             if PRINT_REG_TRACEBACK:
                 instr_obj.print()
-            if (instr_obj.vaddr if USE_MMU else instr_obj.paddr) == addr: # reached this instruction
-                assert last_instr is not None, f"Traceback computation for instruction at {hex(addr)} failed: No previous instruction modifying register {ABI_INAMES[reg_id]} with mismatch {hex(fuzzerstate.intregpickstate.regs[reg_id].get_val())} =! {hex(correct_val)} found."
-                return last_instr # reached address of calling instruction
-            elif hasattr(instr_obj, "rd") and instr_obj.rd == reg_id:
+            if hasattr(instr_obj, "rd") and instr_obj.rd == reg_id:
                 last_instr = instr_obj
             elif isinstance(instr_obj, PlaceholderPreConsumerInstr) and instr_obj.rdep == reg_id:
                 last_instr = instr_obj
+            if (instr_obj.vaddr if USE_MMU else instr_obj.paddr) == addr: # reached this instruction
+                assert last_instr is not None, f"Traceback computation for instruction at {hex(addr)} failed: No previous instruction modifying register {ABI_INAMES[reg_id]} with mismatch {hex(fuzzerstate.intregpickstate.regs[reg_id].get_val())} =! {hex(correct_val)} found."
+                return last_instr # reached address of calling instruction
+
 
     assert False, f"Traceback computation for instruction at {hex(addr)} failed, this should not happen."
 
@@ -368,6 +369,7 @@ class ImmRdInstruction(ImmInstruction):
             assert rd >= 0
             assert is_rd_nonpickable_ok and rd in NONPICKABLE_REGISTERS or rd < MAX_NUM_PICKABLE_REGS, f"{rd} not in NONPICKABLE_REGISTERS " if is_rd_nonpickable_ok else f"{rd} > MAX_NUM_PICKABLE_REGS ({MAX_NUM_PICKABLE_REGS})"
         self.rd =  rd
+
     def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
         return f"{self.get_preamble()}: {self.instr_str} {ABI_INAMES[self.rd]}, {hex(self.imm)}"
 

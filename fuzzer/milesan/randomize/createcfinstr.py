@@ -170,9 +170,10 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
     else:
         imm_t0 = 0
         rd = fuzzerstate.intregpickstate.pick_int_outputreg_nonzero()
+    
     if rd > 0:
-        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE if SPIKE_STARTADDR == fuzzerstate.design_base_addr else IntRegIndivState.RELOCUSED, force=True)
-
+        fuzzerstate.intregpickstate.set_regstate(rd, IntRegIndivState.FREE if SPIKE_STARTADDR == fuzzerstate.design_base_addr or "auipc" not in instr_str else IntRegIndivState.RELOCUSED, force=True)
+    
     if USE_COMPRESSED and instr_str in IS_COMPRESSABLE:
         instr_str_cmp, is_compressable = handle_ImRd(rd, imm, instr_str)
         if is_compressable and (random.random() < COMPRESS_INSTRUCTION):

@@ -412,6 +412,7 @@ class FuzzerState:
 
     def append_and_execute_instr(self, instr, insert_regdump: bool = INSERT_REGDUMPS):            
         instr.reset_addr()
+        assert not (SPIKE_STARTADDR != self.design_base_addr and "auipc" in instr.instr_str and self.intregpickstate.regs[instr.rd].fsm_state == IntRegIndivState.FREE), f"SPIKE_STARTADDR: {hex(SPIKE_STARTADDR)}, design_base_addr: {hex(self.design_base_addr)}, instr: {instr.get_str()}, rd: {self.intregpickstate.regs[instr.rd].fsm_state.name}"
         if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
             instr.print(is_spike_resolution=True)
         if DEBUG_RVC and instr.iscompressed:
@@ -431,7 +432,7 @@ class FuzzerState:
         if insert_regdump:
             if 'cva6' in self.design_name:
                 assert INSERT_FENCE, f"{self.design_name} needs INSERT_FENCE enabled when using register dumps!"
-            if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS and not  instr.rd_unreliable:
+            if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS and self.intregpickstate.regs[instr.rd].fsm_state == IntRegIndivState.FREE:
                 store_instr = RegdumpInstruction_t0(self,"sd" if self.is_design_64bit else "sw", REGDUMP_REGISTER_ID, instr.rd,0,-1)
                 store_instr.reset_addr()
                 if PRINT_INSTRUCTION_EXECUTION_IN_SITU: 
