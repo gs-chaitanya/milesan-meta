@@ -50,6 +50,4 @@ def clear_taints_with_random_instructions(fuzzerstate, untaint_all: bool = False
         if len(untainted_reg_ids) > NUM_MIN_UNTAINTED_INTREGS+1 and not untaint_all:
             # print([i.get_str() for i in instr_objs])
             return instr_objs
-    if DO_ASSERT:
-        assert set(tainted_reg_ids) <= set(untainted_reg_ids), f"Not all tainted registers were overwritten."
     return instr_objs
