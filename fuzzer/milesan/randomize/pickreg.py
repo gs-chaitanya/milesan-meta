@@ -403,7 +403,7 @@ class IntRegPickState:
                 elif self.regs[reg_id].fsm_state == IntRegIndivState.PRODUCED0:
                     assert new_state == IntRegIndivState.PRODUCED1
                 elif self.regs[reg_id].fsm_state == IntRegIndivState.PRODUCED1:
-                    assert new_state in (IntRegIndivState.CONSUMED, IntRegIndivState.UNRELIABLE)
+                    assert new_state == IntRegIndivState.CONSUMED
                 elif self.regs[reg_id].fsm_state == IntRegIndivState.CONSUMED:
                     assert new_state == IntRegIndivState.RELOCUSED
                 elif self.regs[reg_id].fsm_state == IntRegIndivState.RELOCUSED:
@@ -417,9 +417,9 @@ class IntRegPickState:
                     assert self.__regs_in_state_onehot[self.regs[reg_id].fsm_state][reg_id]
         self.__regs_in_state_onehot[self.regs[reg_id].fsm_state][reg_id] = 0
         self.__regs_in_state_onehot[new_state][reg_id] = 1
-        self.regs[reg_id].fsm_state = new_state
         if PRINT_FSM_TRANSITIONS:
-            print(f"Setting {ABI_INAMES[reg_id]} to {new_state.name}")
+            print(f"Setting {ABI_INAMES[reg_id]}: {self.regs[reg_id].fsm_state.name} -> {new_state.name}")
+        self.regs[reg_id].fsm_state = new_state
     # Brings iteratively a register to the requested state, as fast as possible
     # @return nothing, but guarantees that a register will be in the target state
     def bring_some_reg_to_state(self, req_state: int, fuzzerstate):
