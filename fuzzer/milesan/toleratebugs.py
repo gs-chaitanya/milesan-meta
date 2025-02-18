@@ -147,7 +147,7 @@ if TOLERATE_ROCKET_VERILATOR_DIVW_CT_VIOLATION:
 def is_tolerate_rocket_verilator_div_ct_violation():
     return TOLERATE_ROCKET_VERILATOR_DIV_CT_VIOLATION
 if TOLERATE_ROCKET_VERILATOR_DIV_CT_VIOLATION:
-    print('WARNING: Tolerating one bug: TOLERATE_ROCKET_VERILATOR_DIVW_CT_VIOLATION')
+    print('WARNING: Tolerating one bug: TOLERATE_ROCKET_VERILATOR_DIV_CT_VIOLATION')
 
 
 def is_tolerate_rocket_verilator_divu_ct_violation():
