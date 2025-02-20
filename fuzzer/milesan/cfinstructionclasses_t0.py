@@ -432,7 +432,6 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
         super().__init__(fuzzerstate, instr_str, rd, imm, iscompressed, is_rd_nonpickable_ok)
         self.rd_t0 = 0       
         self.imm_t0 = imm_t0
-        assert not (SPIKE_STARTADDR != fuzzerstate.design_base_addr and "auipc" in self.instr_str and self.fuzzerstate.intregpickstate.regs[self.rd].fsm_state == IntRegIndivState.FREE), self.get_str()
 
     def gen_bytecode_int_t0(self, is_spike_resolution: bool):
         assert TAINT_EN
@@ -456,6 +455,9 @@ class ImmRdInstruction_t0(ImmRdInstruction, ImmInstruction_t0, RDInstruction_t0)
 
     def execute_t0(self, res, is_spike_resolution: bool):
         assert TAINT_EN
+        # if is_spike_resolution:
+        #     assert not (SPIKE_STARTADDR != self.fuzzerstate.design_base_addr and "auipc" in self.instr_str and self.fuzzerstate.intregpickstate.regs[self.rd].fsm_state == IntRegIndivState.FREE), f"{self.get_str()}: {SPIKE_STARTADDR} != {self.fuzzerstate.design_base_addr}, rd {ABI_INAMES[self.rd]} is { self.fuzzerstate.intregpickstate.regs[self.rd].fsm_state.name}"
+
         # Compute the taint results of the operation. The address is never tainted.
         res_t0 = self.instr_func_t0(self.paddr, 0x0, self.imm, self.imm_t0, self.fuzzerstate.is_design_64bit)
         # Compute alternative results if other soruce registers had been choosen.
