@@ -109,9 +109,17 @@ def check_isa_sims(design_name: str, num_cores: int, total_tests: int, seed_offs
     start_time = time.time()
     if num_workers == 1:
         print(f"Starting sequential ISA sim validation on `{design_name}` with {total_tests} total tests." + ("" if timeout is None else f" Timeout is {timeout}s."))
-        for _ in range(total_tests):
-            check_isa_sim_taint(design_name,process_instance_id if seeds is None else seeds[process_instance_id])
-            process_instance_id += 1
+        if total_tests > 0:
+            for _ in range(total_tests):
+                check_isa_sim_taint(design_name,process_instance_id if seeds is None else seeds[process_instance_id])
+                process_instance_id += 1
+        else:
+            while True:
+                try:
+                    check_isa_sim_taint(design_name,process_instance_id if seeds is None else seeds[process_instance_id])
+                except Exception as e:
+                    print(e)
+                process_instance_id += 1
         return seed_to_fail_type_dict
 
     if total_tests == -1:
