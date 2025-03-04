@@ -24,6 +24,8 @@ MODELSIM_TIMEOUT ?= 600
 MODELSIM_TIMEOUT_TRACE_EN ?= 6000
 MODELSIM_SV_VANILLA = generated/out/vanilla.sv dv/sv/tb_top.sv src/$(TOP_SOC).sv $(MILESAN_DESIGN_PROCESSING_ROOT)/common/src/sram_mem.sv
 MODELSIM_SV_DRFUZZ_MEM = generated/out/drfuzz_mem.sv dv/sv/tb_top_taints.sv src/$(TOP_SOC)_drfuzz_mem.sv $(MILESAN_DESIGN_PROCESSING_ROOT)/common/src/ift_sram_mem.sv
+MODELSIM_SV_DRFUZZ_MEM_MUXCOV = generated/out/drfuzz_mem_muxcov.sv dv/sv/tb_top_taints_muxcov.sv src/$(TOP_SOC)_drfuzz_mem_muxcov.sv $(MILESAN_DESIGN_PROCESSING_ROOT)/common/src/ift_sram_mem.sv
+
 MODELSIM_SV_PASSTHROUGH = generated/out/passthrough.sv dv/sv/tb_top.sv src/$(TOP_SOC).sv $(MILESAN_DESIGN_PROCESSING_ROOT)/common/src/sram_mem.sv
 
 MODELSIM_WORKDIR = $(MODELSIM_WORKROOT)/$(TOP_SOC)$(VARIANT_ID)_$(FUZZCOREID)
@@ -44,13 +46,19 @@ build_drfuzz_mem_trace_modelsim:         $(MODELSIM_PATH_TO_BUILD_TCL) $(MODELSI
 build_drfuzz_mem_notrace_modelsim:         $(MODELSIM_PATH_TO_BUILD_TCL) $(MODELSIM_SV_DRFUZZ_MEM)     | $(MODELSIM_WORKDIR) modelsim traces logs
 	cd $(MODELSIM_WORKDIR); MILESAN_DIR=$(MILESAN_DIR) TRACE=notrace     INSTRUMENTATION=drfuzz_mem MILESAN_META_COMMON=$(MILESAN_DESIGN_PROCESSING_ROOT)/common     MODELSIM_INCDIRSTR=$(MODELSIM_INCDIRSTR) MODELSIM_VLOG_COVERFLAG=$(MODELSIM_VLOG_COVERFLAG) TOP_SOC=$(TOP_SOC) VARIANT_ID=$(VARIANT_ID) SV_TOP=src/$(TOP_SOC)_drfuzz_mem.sv        SV_MEM=$(MILESAN_DESIGN_PROCESSING_ROOT)/common/src/ift_sram_mem.sv SV_TB=dv/sv/tb_top_taints.sv CURR_OPENTITAN_ROOT=$(CURR_OPENTITAN_ROOT) $(MODELSIM_VERSION) $(VSIM) -64 -c -do $<
 
+
+build_drfuzz_mem_muxcov_notrace_modelsim:         $(MODELSIM_PATH_TO_BUILD_TCL) $(MODELSIM_SV_DRFUZZ_MEM)     | $(MODELSIM_WORKDIR) modelsim traces logs
+	cd $(MODELSIM_WORKDIR); MILESAN_DIR=$(MILESAN_DIR) TRACE=notrace     INSTRUMENTATION=drfuzz_mem_muxcov MILESAN_META_COMMON=$(MILESAN_DESIGN_PROCESSING_ROOT)/common     MODELSIM_INCDIRSTR=$(MODELSIM_INCDIRSTR) MODELSIM_VLOG_COVERFLAG=$(MODELSIM_VLOG_COVERFLAG) TOP_SOC=$(TOP_SOC) VARIANT_ID=$(VARIANT_ID) SV_TOP=src/$(TOP_SOC)_drfuzz_mem_muxcov.sv        SV_MEM=$(MILESAN_DESIGN_PROCESSING_ROOT)/common/src/ift_sram_mem.sv SV_TB=dv/sv/tb_top_taints_muxcov.sv CURR_OPENTITAN_ROOT=$(CURR_OPENTITAN_ROOT) $(MODELSIM_VERSION) $(VSIM) -64 -c -do $<
+
+
 build_passthrough_notrace_modelsim:         $(MODELSIM_PATH_TO_BUILD_TCL) $(MODELSIM_SV_PASSTHROUGH)     | $(MODELSIM_WORKDIR) modelsim traces logs
 	cd $(MODELSIM_WORKDIR); MILESAN_DIR=$(MILESAN_DIR) TRACE=notrace     INSTRUMENTATION=passthrough MILESAN_META_COMMON=$(MILESAN_DESIGN_PROCESSING_ROOT)/common     MODELSIM_INCDIRSTR=$(MODELSIM_INCDIRSTR) MODELSIM_VLOG_COVERFLAG=$(MODELSIM_VLOG_COVERFLAG) TOP_SOC=$(TOP_SOC) VARIANT_ID=$(VARIANT_ID) SV_TOP=src/$(TOP_SOC).sv        SV_MEM=$(MILESAN_DESIGN_PROCESSING_ROOT)/common/src/sram_mem.sv SV_TB=dv/sv/tb_top.sv CURR_OPENTITAN_ROOT=$(CURR_OPENTITAN_ROOT) $(MODELSIM_VERSION) $(VSIM) -64 -c -do $<
 
 build_passthrough_trace_modelsim:         $(MODELSIM_PATH_TO_BUILD_TCL) $(MODELSIM_SV_PASSTHROUGH)     | $(MODELSIM_WORKDIR) modelsim traces logs
 	cd $(MODELSIM_WORKDIR); MILESAN_DIR=$(MILESAN_DIR) TRACE=trace     INSTRUMENTATION=passthrough MILESAN_META_COMMON=$(MILESAN_DESIGN_PROCESSING_ROOT)/common     MODELSIM_INCDIRSTR=$(MODELSIM_INCDIRSTR) MODELSIM_VLOG_COVERFLAG=$(MODELSIM_VLOG_COVERFLAG) TOP_SOC=$(TOP_SOC) VARIANT_ID=$(VARIANT_ID) SV_TOP=src/$(TOP_SOC).sv        SV_MEM=$(MILESAN_DESIGN_PROCESSING_ROOT)/common/src/sram_mem.sv SV_TB=dv/sv/tb_top.sv CURR_OPENTITAN_ROOT=$(CURR_OPENTITAN_ROOT) $(MODELSIM_VERSION) $(VSIM) -64 -c -do $<
 
-RERUN_MODELSIM_TARGETS_NOTRACE   = rerun_vanilla_notrace_modelsim rerun_drfuzz_mem_notrace_modelsim rerun_passthrough_notrace_modelsim
+
+RERUN_MODELSIM_TARGETS_NOTRACE   = rerun_vanilla_notrace_modelsim rerun_drfuzz_mem_notrace_modelsim rerun_drfuzz_mem_muxcov_notrace_modelsim rerun_passthrough_notrace_modelsim
 RERUN_MODELSIM_TARGETS_TRACE     = rerun_vanilla_trace_modelsim rerun_drfuzz_mem_trace_modelsim rerun_passthrough_trace_modelsim
 RERUN_MODELSIM_TARGETS_TRACE_FST = rerun_vanilla_trace_fst_modelsim
 $(RERUN_MODELSIM_TARGETS_NOTRACE):   rerun_%_notrace_modelsim:   $(MILESAN_DESIGN_PROCESSING_ROOT)/common/modelsim/modelsim_run.tcl | $(MODELSIM_WORKDIR) modelsim traces logs

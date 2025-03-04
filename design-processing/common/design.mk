@@ -30,4 +30,4 @@ wave_fst_vanilla: | traces
 
 .PHONY: clean
 clean:
-	rm -rf build generated traces logs statistics ../Bender.lock fusesoc.conf modelsim
+	rm -rf build generated traces logs statistics fusesoc.conf modelsim
