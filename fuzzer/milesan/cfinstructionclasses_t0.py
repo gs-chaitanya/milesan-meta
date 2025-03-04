@@ -959,7 +959,7 @@ class RegdumpInstruction_t0(IntStoreInstruction_t0):
     def check_regs_t0(self,val_t0):
         assert TAINT_EN
         if PRINT_CHECK_REGS_T0:
-            print(f"{hex(self.paddr)}: Checking register taint: {ABI_INAMES[self.rs2]}:{hex(val_t0)}")
+            print(f"{hex(self.paddr)}: Checking register taint: {ABI_INAMES[self.rs2]}: (sim) {hex( self.fuzzerstate.intregpickstate.regs[self.rs2].get_val_t0())} =?= (real) {hex(val_t0)}")
         mismatch = self.fuzzerstate.intregpickstate.regs[self.rs2].check_t0(val_t0)
         assert not mismatch, f"{hex(self.paddr)}: {self.instr_str}: (Regdump) Taint mismatch for {mismatch[0]}: {hex(mismatch[1])} != {hex(mismatch[2])}\n\t Traceback: {filter_reg_traceback(self.rs2,self.paddr,self.fuzzerstate,val_t0,False).get_str(False)}"
         if DUMP_WRITEBACK_T0:

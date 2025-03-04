@@ -498,6 +498,7 @@ class FuzzerState:
         regstream_path = os.path.join(self.tmp_dir, f"{preamble}.regstream.json")
         writeback_path = os.path.join(self.tmp_dir, f"{preamble}.writeback.txt")
         simsramtaint_path = os.path.join(self.tmp_dir, f"{preamble}.simsramtaint.txt")
+        cov_path = os.path.join(self.tmp_dir, f"{preamble}.cov")
         tracefile_path = os.path.join(self.tmp_dir, f"{preamble}.trace{'.fst' if TRACE_FST else '.vcd'}")
         num_instrs = len(list(itertools.chain.from_iterable(self.instr_objs_seq)))
         simlen = str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
@@ -515,6 +516,8 @@ class FuzzerState:
         env["TRACEFILE"] = tracefile_path
         env["WRITEBACK_PATH"] = writeback_path
         env["DESIGN_DIR"] = os.path.abspath(get_design_milesan_path(self.design_name))
+        env["COV_PATH"] = cov_path
+
         with open(env_path, "w") as f:
             f.write(f"export SIMSRAMELF={env['SIMSRAMELF'].replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
             f.write(f"export SIMSRAMELF_DUMP={env['SIMSRAMELF'].replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}.dump\n")
@@ -527,7 +530,8 @@ class FuzzerState:
             f.write(f"export SRAMDUMP_PATH={sramdump_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
             f.write(f"export TRACEFILE={tracefile_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
             f.write(f"export WRITEBACK_PATH={writeback_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
-            
+            f.write(f"export COV_PATH={cov_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
+
         if PRINT_ENVIRONMENT:
             print("*** ENVIRONMENT ***")
             print(f"source {env_path}")
