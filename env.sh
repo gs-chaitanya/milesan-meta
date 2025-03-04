@@ -24,13 +24,13 @@ echo "Running natively."
 export LOCAL_MNT=/scratch/tkovats/ssh_mnt
 export PATH=$PATH:/usr/local/questa-2022-03/questasim/bin
 export VSIM=/usr/local/questa-2023-04/questasim/linux_x86_64/vsim
-source $LOCAL_MNT/cellift-meta/env.sh
+# source $LOCAL_MNT/cellift-meta/env.sh
 else
 echo "Running inside container."
 export LOCAL_MNT=/mnt
 export LM_LICENSE_FILE=8161@lic-mentor.ethz.ch
 export PATH_FROM_MODELSIM_TO_MNT=/scratch/tkovats/ssh_mnt
-source $LOCAL_MNT/cellift-meta/env.sh
+# source $LOCAL_MNT/cellift-meta/env.sh
 fi
 
 export MODELSIM_REQ_DIR=$LOCAL_MNT/modelsim_req
@@ -174,7 +174,6 @@ mkdir -p $MPLCONFIGDIR
 
 
 # Make configuration usable; prioritize our tools
-PATH=/mnt/cellift-yosys-pub:$PATH
 PATH=/mnt/verilator/bin:$PATH
 # PATH=$PREFIX_MILESAN/miniconda/bin:$PATH
 PATH=$PREFIX_MILESAN/bin:$PATH
