@@ -34,7 +34,7 @@ def _parse_logfile(path, design_name):
 
 if __name__ == '__main__':
     if "MILESAN_ENV_SOURCED" not in os.environ:
-        raise Exception("The Cascade environment must be sourced prior to running the Python recipes.")
+        raise Exception("The Milesan environment must be sourced prior to running the Python recipes.")
 
     if len(sys.argv) < 2:
         raise Exception("Usage: python3 do_check_isa_sims.py <design_name> [<num_cores> <n_total_tests> <seed_offset> <timeout> <log-file>]")
