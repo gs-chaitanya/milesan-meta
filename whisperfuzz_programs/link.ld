@@ -6,8 +6,9 @@ SECTIONS
   . = 0x80000000;
   .text.init : { *(.text.init) }
   . = ALIGN(0x1000);
-  .intdata0 = .;
-  . += 100;
-  . = ALIGN(0x4000);
-  .trap_handler = 0x80004000;
+  . = 0x80004000;
+  .data.init : { *(.data.init) }
+  . = ALIGN(0x1000);
+
 }
+
