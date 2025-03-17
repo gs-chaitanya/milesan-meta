@@ -76,16 +76,17 @@ class TaintedCSRException(Exception):
         self.csr_abi_name = csr_abi_name
 
 class MemException(Exception):
-    def __init__(self, fuzzerstate, addr: int, n_bytes: int) -> None:
-        super().__init__(f"Invalid memory request at {hex(addr)} for {n_bytes} bytes")
+    def __init__(self, fuzzerstate, addr: int, n_bytes: int, e: AssertionError) -> None:
+        super().__init__(f"Invalid memory request at {hex(addr)} for {n_bytes} bytes: {e}")
         self.fuzzerstate = fuzzerstate
         self.addr = addr
         self.n_bytes = n_bytes
+        self.e = e
 
 class MemReadException(MemException):
-    def __init__(self, fuzzerstate, addr: int, n_bytes: int) -> None:
-        super().__init__(fuzzerstate=fuzzerstate, addr=addr, n_bytes=n_bytes)
+    def __init__(self, fuzzerstate, addr: int, n_bytes: int, e: AssertionError) -> None:
+        super().__init__(fuzzerstate=fuzzerstate, addr=addr, n_bytes=n_bytes, e=e)
 
 class MemWriteException(MemException):
-    def __init__(self, fuzzerstate, addr: int, n_bytes: int) -> None:
-        super().__init__(fuzzerstate=fuzzerstate, addr=addr, n_bytes=n_bytes)
+    def __init__(self, fuzzerstate, addr: int, n_bytes: int, e: AssertionError) -> None:
+        super().__init__(fuzzerstate=fuzzerstate, addr=addr, n_bytes=n_bytes,e=e)
