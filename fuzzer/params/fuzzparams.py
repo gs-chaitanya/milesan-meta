@@ -236,7 +236,7 @@ if USE_MMU:
 else:
     PROBA_AUTHORIZE_PRIVILEGES = 0.5
 # Environment setup
-MAX_CYCLES_PER_INSTR = 30
+MAX_CYCLES_PER_INSTR = 300
 SETUP_CYCLES = 10000 # Without this, we had issues with BOOM with very short programs (typically <20 instructions) not being able to finish in time.
 
 USE_SPIKE_INTERM_ELF = False # When both this and INSERT_REGDUMPS are enabled, the nops from the regdumps are part of the elf, which might be unintended.
