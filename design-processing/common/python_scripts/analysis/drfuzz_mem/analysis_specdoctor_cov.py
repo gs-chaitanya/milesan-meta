@@ -4,86 +4,87 @@ import pandas as pd
 import glob
 import matplotlib.pyplot as plt
 import seaborn as sns
+import json
 #%%
 N_COV_PTS_SPECDOC = 6555
 N_COV_PTS_MILESAN = 7282
 SPECDOC_COVERAGE_PATH = "/mnt//specdoctor-programs/coverage/"
+MILESAN_COVERAGE_PATH = "/mnt/milesan-data-cov/**/*"
 #%%
-seed_to_coverage_df = pd.DataFrame()
-#%%
-seed_to_coverage = []
+timestamp_to_coverage = {}
 for i,file in enumerate(glob.glob(SPECDOC_COVERAGE_PATH+ ".*cov", recursive=True)):
     with open(file, "r") as f:
         cov_map = f.read()
-    # timestamp = file.split("/")[-1].split(".")[-2].split("_")[-1]
-    # seconds = timestamp.split(":")[-1]
-    # minutes = timestamp.split(":")[-2]
+    timestamp = file.split("/")[-1].split(".")[-2].split("_")[-1]
+    seconds = timestamp.split(":")[-1]
+    minutes = timestamp.split(":")[-2]
 
-    # hours = timestamp.split(":")[-3]
-    # time_to_cov[int(hours)*3600 + int(minutes)*60 + int(seconds)] = int(cov_map,16)
-    seed_to_coverage += [int(cov_map,16)]
-# %%
-acc_cov = []
-acc_cov_rel = []
-for i,cov in enumerate(seed_to_coverage):
-    c = 0
-    for prior_cov in acc_cov:
-        c |= prior_cov
-    acc_cov += [c | cov]
-    acc_cov_rel += [acc_cov[i].bit_count()/N_COV_PTS_SPECDOC]
-    seed_to_coverage_df = pd.concat([seed_to_coverage_df, 
-                                  pd.DataFrame(
-                                      [
-                                          {"seed": i, 
-                                           "coverage": acc_cov_rel[i], 
-                                           "fuzzer": "specdoc"
-                                           }
-                                        ]
-                                        )
-                                        ])
-
-# %%
-
-MILESAN_COVERAGE_PATH = "/mnt/milesan-data-cov/**/*"
+    hours = timestamp.split(":")[-3]
+    timestamp = int(hours)*3600 + int(minutes)*60 + int(seconds)
+    coverage = int(cov_map,16)
+    timestamp_to_coverage[timestamp] = coverage
+    
 #%%
-seed_to_coverage = []
+coverage_df = pd.DataFrame()
+acc_coverage = 0
+start = min(timestamp_to_coverage.keys())
+for timestamp in sorted(timestamp_to_coverage):
+    acc_coverage |= timestamp_to_coverage[timestamp]
+    coverage_df = pd.concat([coverage_df,
+                             pd.DataFrame(
+                                 [
+                                     {"time": timestamp-start, 
+                                      "acc_coverage": acc_coverage.bit_count()/N_COV_PTS_SPECDOC,
+                                      "fuzzer": "specdoctor"
+                                      }
+                                 ]
+                             )
+                            ])
+
+#%%
+seed_to_timestamp = {}
+for i,file in enumerate(glob.glob(MILESAN_COVERAGE_PATH+ "perfstats.json", recursive=True)):
+    with open(file, "r") as f:
+        perfstats = json.load(f)
+    seed_to_timestamp[perfstats["seed"]] = perfstats["t_total"]
+#%%
+acc_time = 0
+seed_to_acc_time = {}
+for seed in sorted(seed_to_timestamp):
+    acc_time += seed_to_timestamp[seed]
+    seed_to_acc_time[seed] = acc_time
+
+#%%
+seed_to_coverage = {}
 for i,file in enumerate(glob.glob(MILESAN_COVERAGE_PATH+ ".*cov", recursive=True)):
     with open(file, "r") as f:
         cov_map = f.read()
         if len(cov_map) == 0:
             continue
-    # timestamp = file.split("/")[-1].split(".")[-2].split("_")[-1]
-    # seconds = timestamp.split(":")[-1]
-    # minutes = timestamp.split(":")[-2]
+    coverage = int(cov_map.replace("X","0"),16)
+    perfstats = "/".join(file.split("/")[:-1])+"/perfstats.json"
 
-    # hours = timestamp.split(":")[-3]
-    # time_to_cov[int(hours)*3600 + int(minutes)*60 + int(seconds)] = int(cov_map,16)
-    seed_to_coverage += [int(cov_map.replace("X","0"),16)]
-
-# %%
-acc_cov = []
-acc_cov_rel = []
-for i,cov in enumerate(seed_to_coverage):
-    c = 0
-    for prior_cov in acc_cov:
-        c |= prior_cov
-    acc_cov += [c | cov]
-    acc_cov_rel += [acc_cov[i].bit_count()/N_COV_PTS_MILESAN]
-    seed_to_coverage_df = pd.concat([seed_to_coverage_df, 
-                                  pd.DataFrame(
-                                      [
-                                          {"seed": i, 
-                                           "coverage": acc_cov_rel[i], 
-                                           "fuzzer": "cirrina"
-                                           }
-                                        ]
-                                        )
-                                        ])
-
+    with open(perfstats, "r") as f:
+        perfstats = json.load(f)
+    seed_to_coverage[perfstats["seed"]] = coverage
+#%%
+acc_coverage = 0
+for seed in sorted(seed_to_coverage):
+    acc_coverage |= seed_to_coverage[seed]
+    coverage_df = pd.concat([coverage_df,
+                            pd.DataFrame(
+                                [
+                                    {"time": seed_to_acc_time[seed], 
+                                    "acc_coverage": acc_coverage.bit_count()/N_COV_PTS_MILESAN,
+                                    "fuzzer": "cirrina"
+                                    }
+                                ]
+                            )
+                        ])
 
 # %%
 fig, ax = plt.subplots()
 sns.lineplot(data=seed_to_coverage_df, x="seed", y="coverage", hue="fuzzer",ax=ax)
 ax.set_xlim([0,100])
-ax.set_ylim([0.75,])
+ax.set_ylim([0,1])
 # %%
