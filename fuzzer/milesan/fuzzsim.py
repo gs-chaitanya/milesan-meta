@@ -5,7 +5,7 @@
 # This script is responsible for running the RTL simulations from the fuzzer.
 
 from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA, MAX_CYCLES_PER_INSTR, SETUP_CYCLES
-from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_FST, TRACE_EN, CHECK_MEM, PATH_TO_MNT, MODELSIM_REQ_DIR, PATH_FROM_MODELSIM_TO_MNT, INSERT_REGDUMPS, USE_MODELSIM
+from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_FST, TRACE_EN, CHECK_MEM, PATH_TO_MNT, MODELSIM_REQ_DIR, PATH_FROM_MODELSIM_TO_MNT, INSERT_REGDUMPS, USE_MODELSIM, COV_EN
 from milesan.util import IntRegIndivState, SimulatorEnum
 from common.sim.modelsim import get_next_worker_id
 from common.sim.commonsim import setup_sim_env
@@ -257,13 +257,13 @@ def runtest_modelsim_forcoverage(fuzzerstate, elfpath: str, coveragepath: str):
         raise Exception(f"Timeout during modelsim testing of design `{fuzzerstate.design_name}` for tuple ({fuzzerstate.memsize}, design_name, {fuzzerstate.randseed}, {fuzzerstate.nmax_bbs}).")
 
 
-def run_rtl_and_load_regstream(fuzzerstate, use_vanilla: bool = False, trace_en: bool = False, trace_fst: bool = False):
-    if DO_ASSERT:
-        assert not (USE_VANILLA and not use_vanilla)
+def run_rtl_and_load_regstream(fuzzerstate):
     design_name = fuzzerstate.design_name
     if fuzzerstate.simulator == SimulatorEnum.MODELSIM:
-        return wait_and_load_regstream(fuzzerstate, use_vanilla, trace_en, trace_fst)
-    cmd = ["make",f"rerun_{'drfuzz_mem' if not use_vanilla else 'vanilla'}_{'notrace' if not trace_en else 'trace' if not trace_fst else 'trace_fst'}"]
+        return wait_and_load_regstream(fuzzerstate)
+    
+    assert not COV_EN, f"Coverage only in modelsim right now."
+    cmd = ["make",f"rerun_{'drfuzz_mem' if not USE_VANILLA else 'vanilla'}_{'notrace' if not TRACE_EN else 'trace' if not TRACE_FST else 'trace_fst'}"]
     milesandir = designcfgs.get_design_milesan_path(design_name)
     env = os.environ
     env.update(fuzzerstate.env)
@@ -303,11 +303,12 @@ def clean_xX(r: str):
     return r[:2] + r[2:].replace("x","0").replace("X","0")
     
 # Use this when fuzzing with modelsim as we can't start it from the container. Need second script to run natively in parallel and a shared mount.
-def wait_and_load_regstream(fuzzerstate, use_vanilla: bool = False, trace_en: bool = False, trace_fst: bool = False):
+def wait_and_load_regstream(fuzzerstate, use_vanilla: bool = False):
     req_dict = {key: value.replace(PATH_TO_MNT, PATH_FROM_MODELSIM_TO_MNT) if isinstance(value,str) else value for key,value in fuzzerstate.env.items()}
     req_dict["USE_VANILLA"] = use_vanilla
-    req_dict["TRACE_EN"] = trace_en
-    req_dict["TRACE_FST"] = trace_fst
+    req_dict["TRACE_EN"] = TRACE_EN
+    req_dict["COV_EN"] = COV_EN
+    req_dict["TRACE_FST"] = TRACE_FST
 
     rtl_name = fuzzerstate.env['SIMSRAMELF'].split('/')[-1].split(".")[0]
     timestring=strftime("%a_%d_%b_%Y_%H:%M:%S", gmtime())

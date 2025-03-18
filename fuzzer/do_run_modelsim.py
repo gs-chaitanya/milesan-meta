@@ -60,6 +60,7 @@ def modelsim_worker(new_req_path):
     assert "REGDUMP_PATH" in req_env, "REGDUMP_PATH not found in req!"
     assert "REGSTREAM_PATH" in req_env, "REGSTREAM_PATH not found in req!"
     assert "TRACE_EN" in req_env, "TRACE_EN not found in req!"
+    assert "COV_EN" in req_env, "COV_EN not found in req!"
     assert "TRACE_FST" in req_env, "TRACE_FST not found in req!"
     assert "TRACEFILE" in req_env, "TRACEFILE not found in req!"
     assert "SIMLEN" in req_env, "SIMLEN not found in req!"
@@ -70,9 +71,11 @@ def modelsim_worker(new_req_path):
     design_dir = req_env["DESIGN_DIR"]
     msim_timeout = int(req_env["MODELSIM_TIMEOUT"])
     trace_en = req_env["TRACE_EN"]
+    cov_en = req_env["COV_EN"]
     trace_fst = req_env["TRACE_FST"]
     del req_env["TRACE_EN"]
     del req_env["TRACE_FST"]
+    del req_env["COV_EN"]
     del req_env["USE_VANILLA"]
     assert not trace_fst, f"FST tracing not implemented in modelsim yet."
     while(not os.path.exists(simsramelf)):
@@ -91,7 +94,7 @@ def modelsim_worker(new_req_path):
     env.update(req_env)
     cmd = [
         "make",
-        "rerun_drfuzz_mem_notrace_modelsim" if not trace_en else "rerun_drfuzz_mem_trace_modelsim"
+        "rerun_drfuzz_mem_notrace_modelsim" if not cov_en else "rerun_drfuzz_mem_muxcov_notrace_modelsim"
     ]
     start_time = time.time()
 
