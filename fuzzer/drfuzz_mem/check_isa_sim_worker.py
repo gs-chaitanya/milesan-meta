@@ -10,7 +10,7 @@ import threading
 import os
 LOG_EXCEPTIONS = True
 PRINT_THREAD_STATUS = False
-ONLY_PRINT_LEAKAGE = False
+ONLY_PRINT_LEAKAGE = True
 callback_lock = threading.Lock()
 newly_finished_tests = 0
 total_finished_tests = 0
@@ -58,8 +58,10 @@ def test_done_callback(ret):
 def __check_isa_sim_worker(design_name, seed):
     try:
         fuzzerstate = check_isa_sim_taint(design_name,seed)
-        if not NO_REMOVE_TMPFILES:
+        if not NO_REMOVE_TMPDIRS:
             fuzzerstate.remove_tmp_dir()
+        elif not NO_REMOVE_TMPFILES:
+            fuzzerstate.remove_tmp_files()
         if PRINT_THREAD_STATUS:
             print(f"No mismatch detected for {design_name} with seed {seed}")
         return (None, seed)
@@ -67,8 +69,12 @@ def __check_isa_sim_worker(design_name, seed):
         if not ONLY_PRINT_LEAKAGE or "Taint mismatch" in str(e):
             print(f"check_isa_sim_worker failed for {design_name} with seed {seed}: {str(e)}")
 
-        if not NO_REMOVE_TMPFILES and isinstance(e, FuzzerStateException):
-            e.fuzzerstate.remove_tmp_files()
+        if isinstance(e, FuzzerStateException):
+            if not NO_REMOVE_TMPDIRS:
+                e.fuzzerstate.remove_tmp_dir()
+            elif not NO_REMOVE_TMPFILES:
+                e.fuzzerstate.remove_tmp_files()
+                
         if LOG_EXCEPTIONS:
             if isinstance(e, FuzzerStateException):
                 logdir = os.path.join(PATH_TO_TMP, "logs")
@@ -83,8 +89,6 @@ def __check_isa_sim_worker(design_name, seed):
                 os.makedirs(logdir, exist_ok=True)
                 with open(f"{logdir}/{design_name}.failed.log", "a") as f:
                     f.write(f"seed {seed}: {str(e)}\n")
-        elif not NO_REMOVE_TMPFILES and isinstance(e, FuzzerStateException):
-            e.fuzzerstate.remove_tmp_dir()
         return (None,seed)
 
 
