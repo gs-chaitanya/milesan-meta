@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 extern "C" {
   const char *Get_SRAM_ELF_object_filename(void);
@@ -14,6 +15,7 @@ extern "C" {
   const char *Get_BootROM_TaintsPath(void);
   const char *milesan_getenv(char *varname);
   const char *Get_SRAM_DumpPath(void);
+  const char *Get_TimeStamp(void);
 }
 
 extern "C" const char *Get_SRAM_ELF_object_filename(void)
@@ -75,4 +77,10 @@ extern "C" const char *Get_SRAM_DumpPath(void)
     const char* taint_env = std::getenv("SRAMDUMP_PATH");
     if(taint_env == NULL) return "/milesan_data/sramdump.json";
     return taint_env;
+}
+
+extern "C" const char *Get_TimeStamp(void)
+{
+    time_t t = time(NULL);
+    return ctime(&t);
 }
