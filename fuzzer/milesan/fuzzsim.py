@@ -4,7 +4,7 @@
 
 # This script is responsible for running the RTL simulations from the fuzzer.
 
-from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA, MAX_CYCLES_PER_INSTR, SETUP_CYCLES
+from params.fuzzparams import MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS,USE_VANILLA, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, STOP_AT_PC_TAINT
 from params.runparams import DO_ASSERT, PATH_TO_TMP, NO_REMOVE_TMPFILES, NO_REMOVE_TMPDIRS, TRACE_FST, TRACE_EN, CHECK_MEM, PATH_TO_MNT, MODELSIM_REQ_DIR, PATH_FROM_MODELSIM_TO_MNT, INSERT_REGDUMPS, USE_MODELSIM, COV_EN
 from milesan.util import IntRegIndivState, SimulatorEnum
 from common.sim.modelsim import get_next_worker_id
@@ -296,7 +296,7 @@ def run_rtl_and_load_regstream(fuzzerstate):
                 sramdump_rtl[addr] = {}
                 sramdump_rtl[addr]["val"] = int(d["value"],16)
                 sramdump_rtl[addr]["val_t0"] = int(d["value_t0"],16)
-    return (regstream_rtl_val, regstream_rtl_val_t0), (regdump_rtl_val, regdump_rtl_val_t0), sramdump_rtl
+    return (regstream_rtl_val, regstream_rtl_val_t0), (regdump_rtl_val, regdump_rtl_val_t0), sramdump_rtl, None
 
 
 def clean_xX(r: str):
@@ -317,6 +317,10 @@ def wait_and_load_regstream(fuzzerstate, use_vanilla: bool = False):
 
     assert "REGDUMP_PATH" in fuzzerstate.env
     regdump_path = fuzzerstate.env["REGDUMP_PATH"]
+
+    assert "PCDUMP_PATH" in fuzzerstate.env
+    pcdump_path = fuzzerstate.env["PCDUMP_PATH"]
+
 
     # If there's an old register dump from a previous run, delete it. 
     # Otherwise we get aliasing with other simuations, especially Verilator.
@@ -339,22 +343,37 @@ def wait_and_load_regstream(fuzzerstate, use_vanilla: bool = False):
     if PRINT_THREAD_STATUS:
         print(f"Dumped request to {req_path}")
     start = time.time()
-    while(not os.path.exists(regdump_path)):
+    while(1):
         time.sleep(2)
         if PRINT_THREAD_STATUS:
             print(f"Waiting for modelsim results at {regdump_path}...")
+        if(os.path.exists(regdump_path)):
+           break
+        if STOP_AT_PC_TAINT:
+            if(os.path.exists(pcdump_path)):
+               break
     
     if PRINT_THREAD_STATUS:
         print(f"Modelsim results are ready. Loading...")
+
     while(1):
         try:
+            if STOP_AT_PC_TAINT:
+                with open(pcdump_path, "r") as f:
+                    pcdump = int(f.read(),16)
+                    if pcdump:
+                        return (None, None), (None, None), None, pcdump
+                    
             with open(regdump_path, "rb") as f:
                 regdumps_rtl = json.load(f)
                 if PRINT_THREAD_STATUS:
                     print(f"Modelsim results loaded succesfully from {regdump_path}.")
                 break
-        except json.JSONDecodeError:
-            time.sleep(1)
+        except Exception as e:
+            if isinstance(e, ValueError) or isinstance(e, json.decoder.JSONDecodeError):
+                time.sleep(1)
+            else:
+                raise e
 
     if len(regdumps_rtl) == 1 and "timeout" in regdumps_rtl[0]:
         assert False, f"Modelsim instance timed out after {time.time-start}s. ({regdumps_rtl[0]['timeout']}s modelsim runtime)."
@@ -373,4 +392,4 @@ def wait_and_load_regstream(fuzzerstate, use_vanilla: bool = False):
         regstream_rtl_val = {int(r["id"],16): int(r["value"],16) for r in regstream_rtl}
 
     sramdump_rtl = {} # For compatibility with kronos. Not used for other cores.
-    return (regstream_rtl_val, regstream_rtl_val_t0), (regdump_rtl_val, regdump_rtl_val_t0), sramdump_rtl
+    return (regstream_rtl_val, regstream_rtl_val_t0), (regdump_rtl_val, regdump_rtl_val_t0), sramdump_rtl, pcdump if STOP_AT_PC_TAINT else None

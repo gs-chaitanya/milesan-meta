@@ -5,7 +5,7 @@
 from params.runparams import DO_ASSERT, PRINT_INSTRUCTION_EXECUTION_IN_SITU, PRINT_INSTRUCTION_EXECUTION_REGDUMP_REQS, PATH_TO_TMP,PATH_TO_MNT, PATH_TO_MNT_ENV_VAR, INSERT_REGDUMPS, INSERT_FENCE, PRINT_ENVIRONMENT, GET_DATA, DEBUG_PRINT, PRINT_PRIV_STATS, TRACE_FST, USE_MODELSIM, DEBUG_RVC, MODELSIM_TIMEOUT, PRINT_TRANSIENT_INSTRUCTIONS, PRINT_RESTORED_TRANSIENT_STATE
 from params.fuzzparams import RELOCATOR_REGISTER_ID, RDEP_MASK_REGISTER_ID, REGDUMP_REGISTER_ID, FPU_ENDIS_REGISTER_ID, MIN_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_REGS, MIN_NUM_PICKABLE_FLOATING_REGS, MAX_NUM_PICKABLE_FLOATING_REGS, MPP_BOTH_ENDIS_REGISTER_ID, MPP_TOP_ENDIS_REGISTER_ID, SPP_ENDIS_REGISTER_ID, MAX_NUM_STORE_LOCATIONS, NONPICKABLE_REGISTERS, FENCE_CF_INSTR
 from params.fuzzparams import TAINT_EN, MAX_CYCLES_PER_INSTR, SETUP_CYCLES, USE_SPIKE_INTERM_ELF, USE_MMU, MAX_NUM_LAYOUTS, TAINT_SOURCE_PRIVS, TAINT_SINK_PRIVS, P_TWO_TAINT_SOURCE_PRIVS, P_TWO_TAINT_SINK_PRIVS
-from params.fuzzparams import MAX_N_TAINT_SOURCE_LAYOUTS, MIN_N_TAINT_SOURCE_LAYOUTS, MAX_GADGET_N_INSTR, DEAD_CODE_ONLY_IN_CODE_PAGES
+from params.fuzzparams import MAX_N_TAINT_SOURCE_LAYOUTS, MIN_N_TAINT_SOURCE_LAYOUTS, MAX_GADGET_N_INSTR, DEAD_CODE_ONLY_IN_CODE_PAGES, STOP_AT_PC_TAINT
 from params.fuzzparams import reset_reg_settings
 from common.designcfgs import is_design_32bit, design_has_float_support, design_has_double_support, design_has_muldiv_support, design_has_atop_support, design_has_misaligned_data_support, get_design_milesan_path, design_has_supervisor_mode, design_has_user_mode, design_has_compressed_support, design_has_pmp, design_has_only_bare, design_has_sv32, design_has_sv39, design_has_sv48, get_design_boot_addr
 from common.spike import SPIKE_STARTADDR, FPREG_ABINAMES
@@ -494,11 +494,13 @@ class FuzzerState:
         os.makedirs(self.tmp_dir,exist_ok=True)
         env_path = os.path.join(self.tmp_dir,f'{preamble}.env.sh')
         regdump_path = os.path.join(self.tmp_dir, f"{preamble}.regdump.json")
+        pcdump_path = os.path.join(self.tmp_dir, f"{preamble}.pcdump.txt")
         sramdump_path = os.path.join(self.tmp_dir, f"{preamble}.sramdump.json")
         regstream_path = os.path.join(self.tmp_dir, f"{preamble}.regstream.json")
         writeback_path = os.path.join(self.tmp_dir, f"{preamble}.writeback.txt")
         simsramtaint_path = os.path.join(self.tmp_dir, f"{preamble}.simsramtaint.txt")
         cov_path = os.path.join(self.tmp_dir, f"{preamble}.cov")
+        timestamp_path = os.path.join(self.tmp_dir, f"{preamble}.timestamp.txt")
         tracefile_path = os.path.join(self.tmp_dir, f"{preamble}.trace{'.fst' if TRACE_FST else '.vcd'}")
         num_instrs = len(list(itertools.chain.from_iterable(self.instr_objs_seq)))
         simlen = str(num_instrs*MAX_CYCLES_PER_INSTR + SETUP_CYCLES)
@@ -512,11 +514,14 @@ class FuzzerState:
         env["REGDUMP_PATH"] = regdump_path
         env["REGSTREAM_PATH"] = regstream_path
         env["SRAMDUMP_PATH"] = sramdump_path
+        env["PCDUMP_PATH"] = pcdump_path
+        env["STOP_AT_PC_TAINT"] = "1" if STOP_AT_PC_TAINT else "0"
         env["SIMSRAMTAINT"] = simsramtaint_path
         env["TRACEFILE"] = tracefile_path
         env["WRITEBACK_PATH"] = writeback_path
         env["DESIGN_DIR"] = os.path.abspath(get_design_milesan_path(self.design_name))
         env["COV_PATH"] = cov_path
+        env["TIMESTAMP_PATH"] = timestamp_path
 
         with open(env_path, "w") as f:
             f.write(f"export SIMSRAMELF={env['SIMSRAMELF'].replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
@@ -531,7 +536,8 @@ class FuzzerState:
             f.write(f"export TRACEFILE={tracefile_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
             f.write(f"export WRITEBACK_PATH={writeback_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
             f.write(f"export COV_PATH={cov_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
-
+            f.write(f"export PCDUMP_PATH={pcdump_path.replace(PATH_TO_MNT, f'${PATH_TO_MNT_ENV_VAR}')}\n")
+            f.write(f"export STOP_AT_PC_TAINT={env['STOP_AT_PC_TAINT']}\n")
         if PRINT_ENVIRONMENT:
             print("*** ENVIRONMENT ***")
             print(f"source {env_path}")
@@ -540,10 +546,12 @@ class FuzzerState:
 
         return env
 
+    ## remove the whole temporary directory
     def remove_tmp_dir(self):
         if os.path.isdir(self.tmp_dir):
             shutil.rmtree(self.tmp_dir)
 
+    ## only remove tmp files
     def remove_tmp_files(self):
         if os.path.isdir(self.tmp_dir):
             for file in glob.glob(f"{self.tmp_dir}/*"):
