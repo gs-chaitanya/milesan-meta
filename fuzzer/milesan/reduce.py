@@ -1421,6 +1421,15 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     ret_msg += f"\t Failing instr id: {failing_instr_id}/{len(fuzzerstate.instr_objs_seq[failing_bb_id])}\n"
     ret_msg += f"\t Failing instr: {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()}\n"
     ret_msg += f"\t Total #instr: {sum([len(i) for i in fuzzerstate.instr_objs_seq[1:]])}\n"
+
+    ret_dict["seed"] = fuzzerstate.randseed
+    ret_dict["id"] = fuzzerstate.instance_to_str()
+    
+    ret_dict["failing_bb_id"] = failing_bb_id
+    ret_dict["failing_instr_id"] = failing_instr_id
+    ret_dict["failing_instr"] = fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].get_str()
+    ret_dict["total_n_instr"] =  sum([len(i) for i in fuzzerstate.instr_objs_seq[1:]])
+
     if FIND_PILLARS:
         ret_msg += f"\t Total number of bbs: {failing_bb_id-pillar_bb_id+1}\n"
         n_nops, n_non_nop_instrs  =  _count_instructions(fuzzerstate,failing_bb_id,failing_instr_id, pillar_bb_id, pillar_instr_id)
@@ -1487,7 +1496,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         ret_msg += f"\t Time to reduce dead code: {time_reduce_dead_code}s\n"
         ret_msg += f"\t Dead code reduction success: {reduce_dead_code_success}\n"
         ret_dict["time_reduce_dead_code"] = time_reduce_dead_code
-        ret_dict["success_reduce_dead_code"] = time_reduce_dead_code
+        ret_dict["success_reduce_dead_code"] = reduce_dead_code_success
 
         if reduce_dead_code_success:
             # TODO: restore state of registers to before leaking instrucion
@@ -1502,10 +1511,10 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     with open(f"{fuzzerstate.tmp_dir}/reduce.log","w") as f:
         json.dump(ret_dict,f)
 
-    if not NO_REMOVE_TMPFILES and not cross_privilege and not cross_layout:
-        fuzzerstate.remove_tmp_files()
-        if not NO_REMOVE_TMPDIRS:
-            fuzzerstate.remove_tmp_dir()
+    # if not NO_REMOVE_TMPFILES and not cross_privilege and not cross_layout:
+    #     fuzzerstate.remove_tmp_files()
+    #     if not NO_REMOVE_TMPDIRS:
+    #         fuzzerstate.remove_tmp_dir()
 
     return ret_msg
 
