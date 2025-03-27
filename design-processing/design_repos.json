@@ -11,6 +11,7 @@
     "boom-large": "../../milesan-designs/milesan-chipyard-large-configs/milesan-boom",
     "boom-rvc": "../../milesan-designs/milesan-chipyard-rvc/milesan-boom",
     "secure-boom": "../../milesan-designs/chipyard/milesan-boom",
+    "pt-boom": "../../milesan-designs/phantomtrails-chipyard/milesan-boom",
     "cva6": "../../milesan-designs/milesan-cva6/milesan",
     "cva6-ctfix": "../../milesan-designs/milesan-cva6-ctfix/milesan",
     "cva6-test": "../../milesan-designs/cva6-test/milesan",

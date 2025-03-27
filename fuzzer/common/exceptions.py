@@ -90,3 +90,9 @@ class MemReadException(MemException):
 class MemWriteException(MemException):
     def __init__(self, fuzzerstate, addr: int, n_bytes: int, e: AssertionError) -> None:
         super().__init__(fuzzerstate=fuzzerstate, addr=addr, n_bytes=n_bytes,e=e)
+
+class InvalidProgramException(Exception):
+    def __init__(self, fuzzerstate, msg) -> None:
+        super().__init__(f"Invalid program: {msg}")
+        self.fuzzerstate = fuzzerstate
+        self.msg = msg
