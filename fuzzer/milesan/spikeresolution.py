@@ -13,6 +13,7 @@ from milesan.util import IntRegIndivState
 
 from milesan.mmu_utils import phys2virt
 from milesan.privilegestate import PrivilegeStateEnum
+from common.exceptions import InvalidProgramException
 
 import os
 import random
@@ -440,9 +441,10 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False, return_int
                 for reg_id in range(fuzzerstate.num_pickable_floating_regs):
                     assert finalfpuregvals_spikeresol[reg_id] == finalfpuregvals_spikecheck[reg_id], f"Mismatch in f{reg_id} value. Resolution: `{hex(finalfpuregvals_spikeresol[reg_id])}`, check: `{hex(finalintregvals_spikecheck[reg_id])}`."
         except:
-            print("There was a register mismatch between the spike resolution and the final program. It is most likly due to to a program with many \
+            InvalidProgramException(fuzzerstate,"There was a register mismatch between the spike resolution and the final program. It is most likly due to to a program with many \
                 instructions. We have to add some instructions to the debug commands beacuse the page fault exceptions do not immediatly go to the next instruction \
                 if we pop some blocks, we might end up with too many r 1 commands in the doublecheck")
+            
 
     return (finalintregvals_spikeresol[1:], finalfpuregvals_spikeresol, rd_regdump_reqs, rd_regvals), spike_resolution_elfpath
 
