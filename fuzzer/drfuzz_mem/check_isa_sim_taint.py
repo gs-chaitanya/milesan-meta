@@ -15,7 +15,7 @@ from milesan.cfinstructionclasses_t0 import RegdumpInstruction_t0, RDInstruction
 from milesan.fuzzsim import run_rtl_and_load_regstream
 from milesan.util import IntRegIndivState
 from common.spike import SPIKE_STARTADDR
-from common.exceptions import FuzzerStateException, MismatchError, FailTypeEnum
+from common.exceptions import FuzzerStateException, MismatchError, FailTypeEnum, InvalidProgramException
 from milesan.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
 from milesan.registers import ABI_INAMES,MAX_32b
 import subprocess
@@ -42,11 +42,30 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         assert fuzzerstate is None, "fuzzerstate needs to be None when generate_fuzzerstate is enabled."
         fuzzerstate, rtl_elfpath, interm_elfpath, expected_regvals,time_seconds_spent_in_gen_bbs, time_seconds_spent_in_spike_resol, time_seconds_spent_in_gen_elf  = gen_fuzzerstate_elf_expectedvals(*gen_new_test_instance(design_name, seed, True), CHECK_PC_SPIKE_AGAIN) # can only do doublecheck if INSERT_REGDUMPS disabled since spike does not support them
         if USE_MMU:
-            exec_taint_source_priv = sum([fuzzerstate.n_instr_in_priv[priv] for priv in fuzzerstate.taint_source_privs]) > 0
-            exec_taint_sink_priv = sum([fuzzerstate.n_instr_in_priv[priv] for priv in fuzzerstate.taint_sink_privs]) > 0
-            exec_in_taint_source_layout = sum([fuzzerstate.n_instr_in_layout[layout] for layout in fuzzerstate.taint_source_layouts]) > 0
-            assert (not ASSERT_EXEC_IN_TAINT_SINK_PRIV or exec_taint_sink_priv) and (not ASSERT_EXEC_IN_TAINT_SRC_PRIV or exec_taint_source_priv), f"Computed program does not execute in all required privilege(s):\n\tSource privs ({[p.name for p in fuzzerstate.taint_source_privs]}): {exec_taint_source_priv}.\n\tSink privs  ({[p.name for p in fuzzerstate.taint_sink_privs]}): {exec_taint_sink_priv}.\n\t{fuzzerstate.n_instr_in_priv}"
-            assert (not ASSERT_EXEC_IN_TAINT_SRC_LAYOUT or exec_in_taint_source_layout), f"Computed program does not execute in taint-source layouts:\n\tExecuted in {fuzzerstate.n_instr_in_layout}. Taint-source layouts are {fuzzerstate.taint_source_layouts}"
+            try:
+                exec_taint_source_priv = sum([fuzzerstate.n_instr_in_priv[priv] for priv in fuzzerstate.taint_source_privs]) > 0
+                exec_taint_sink_priv = sum([fuzzerstate.n_instr_in_priv[priv] for priv in fuzzerstate.taint_sink_privs]) > 0
+                exec_in_taint_source_layout = sum([fuzzerstate.n_instr_in_layout[layout] for layout in fuzzerstate.taint_source_layouts]) > 0
+                assert (not ASSERT_EXEC_IN_TAINT_SINK_PRIV or exec_taint_sink_priv) and (not ASSERT_EXEC_IN_TAINT_SRC_PRIV or exec_taint_source_priv), f"Computed program does not execute in all required privilege(s):\n\tSource privs ({[p.name for p in fuzzerstate.taint_source_privs]}): {exec_taint_source_priv}.\n\tSink privs  ({[p.name for p in fuzzerstate.taint_sink_privs]}): {exec_taint_sink_priv}.\n\t{fuzzerstate.n_instr_in_priv}"
+                assert (not ASSERT_EXEC_IN_TAINT_SRC_LAYOUT or exec_in_taint_source_layout), f"Computed program does not execute in taint-source layouts:\n\tExecuted in {fuzzerstate.n_instr_in_layout}. Taint-source layouts are {fuzzerstate.taint_source_layouts}"
+            except AssertionError as e:
+                if COLLECT_PERF_STATS:
+                # print(f'dumping to {os.path.join(fuzzerstate.tmp_dir, "perfstats.json")}')
+                    with open(os.path.join(fuzzerstate.tmp_dir, "perfstats.json"), "w") as f:
+                        json.dump({
+                            "id": fuzzerstate.instance_to_str(),
+                            "dut": fuzzerstate.design_name,
+                            "t_gen_bbs": time_seconds_spent_in_gen_bbs,
+                            "t_spike_resol": time_seconds_spent_in_spike_resol,
+                            "t_gen_elf": time_seconds_spent_in_gen_elf,
+                            "t_rtl" : 0,
+                            "n_bbs": len(fuzzerstate.instr_objs_seq),
+                            "n_instrs": sum([len(i) for i in fuzzerstate.instr_objs_seq]) + len(fuzzerstate.final_bb),
+                            "t_total":time.time() - start_time,
+                            # "fail_type": e.fail_type.name,
+                            "seed":fuzzerstate.randseed
+                        }, f)
+                raise InvalidProgramException(fuzzerstate,e)
         fuzzerstate.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         fuzzerstate.memview.restore(0) # Restore contents before anything was executed.
         fuzzerstate.csrfile.reset() # Reset all CSRs to zero.
@@ -74,12 +93,15 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
     try:
         start_time_rtl = time.time()
         if not SKIP_RTL:
-            regstream_rtl, final_regvals_rtl, final_sramdump_rtl = run_rtl_and_load_regstream(fuzzerstate)
+            regstream_rtl, final_regvals_rtl, final_sramdump_rtl, pcdump = run_rtl_and_load_regstream(fuzzerstate)
+            if pcdump:
+                raise MismatchError(f"(RTL) Taint mismatch between in-situ and RTL: PC got tainted.", fail_type=FailTypeEnum.TAINT_MISMATCH)
+
         else:
             print("WARNING: Skipped RTL simulation.")
         time_seconds_spent_in_rtl = time.time() - start_time_rtl
 
-        if COLLECT_PERF_STATS:
+        if generate_fuzzerstate and COLLECT_PERF_STATS:
             # print(f'dumping to {os.path.join(fuzzerstate.tmp_dir, "perfstats.json")}')
             with open(os.path.join(fuzzerstate.tmp_dir, "perfstats.json"), "w") as f:
                 json.dump({
