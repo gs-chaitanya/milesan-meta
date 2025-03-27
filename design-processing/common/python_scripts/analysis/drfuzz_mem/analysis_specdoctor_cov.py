@@ -63,9 +63,11 @@ for i,file in enumerate(glob.glob(MILESAN_COVERAGE_PATH+ ".*cov", recursive=True
             continue
     coverage = int(cov_map.replace("X","0"),16)
     perfstats = "/".join(file.split("/")[:-1])+"/perfstats.json"
-
-    with open(perfstats, "r") as f:
-        perfstats = json.load(f)
+    try:
+        with open(perfstats, "r") as f:
+            perfstats = json.load(f)
+    except:
+        continue
     seed_to_coverage[perfstats["seed"]] = coverage
 #%%
 acc_coverage = 0
@@ -84,7 +86,6 @@ for seed in sorted(seed_to_coverage):
 
 # %%
 fig, ax = plt.subplots()
-sns.lineplot(data=seed_to_coverage_df, x="seed", y="coverage", hue="fuzzer",ax=ax)
-ax.set_xlim([0,100])
-ax.set_ylim([0,1])
+sns.lineplot(data=coverage_df, x="time", y="acc_coverage", hue="fuzzer",ax=ax)
+ax.set_xlim([0,10000])
 # %%
