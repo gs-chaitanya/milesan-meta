@@ -28,7 +28,7 @@ all: $(BIN) $(DUMP)
 
 dump: $(DUMP)
 bin: $(BIN)
-EXTRA_FLAGS := -DEXTRA_PTES
+EXTRA_FLAGS := -DEXTRA_PTES -DLEAK_FROM_U
 # EXTRA_FLAGS := $(EXTRA_FLAGS) -DUSE_SFENCE
 # Build executable
 $(BIN): $(PROGRAM).c

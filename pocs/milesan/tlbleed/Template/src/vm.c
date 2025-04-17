@@ -23,10 +23,17 @@
 //          l1  l2_pt  data_l3 secret_l3
 #define NPT 1 + 1+     1 +     1
 
+#ifndef LEAK_FROM_U
 #define code_flag                               \
     PTE_V | PTE_R | PTE_X | PTE_A | PTE_D
 #define data_flag                               \
     PTE_V | PTE_R | PTE_W | PTE_A | PTE_D
+#else
+#define code_flag                               \
+    PTE_V | PTE_R | PTE_X | PTE_A | PTE_D | PTE_U
+#define data_flag                              \
+    PTE_V | PTE_R | PTE_W | PTE_A | PTE_D | PTE_U
+#endif
 
 
 extern uint8_t data0[];
@@ -72,14 +79,21 @@ void vm_boot()
 
     // [.data.secret] 0x80800000
     l2pt[L2_PT_IDX(secret)] = PPN(secret_l3pt) | PTE_V;
+    #ifdef LEAK_FROM_U
+    secret_l3pt[0] = PPN(secret) | data_flag ^ PTE_U;
+    #else
     secret_l3pt[0] = PPN(secret) | data_flag;
+    #endif
 
     /**********************************************/
 
     data_l3pt[L3_PT_IDX(data0)] = PPN(data0) | PTE_V | data_flag;
     data_l3pt[L3_PT_IDX(data1)] = PPN(data1) | PTE_V | data_flag;
+    #ifdef LEAK_FROM_U
+    data_l3pt[L3_PT_IDX(data2)] = PPN(data2) | PTE_V | data_flag;
+    #else
     data_l3pt[L3_PT_IDX(data2)] = PPN(data2) | PTE_V;
-
+    #endif
     #ifdef EXTRA_PTES
     data_l3pt[L3_PT_IDX(data3)] = PPN(data3) | PTE_V | data_flag;
     data_l3pt[L3_PT_IDX(data4)] = PPN(data4) | PTE_V | data_flag;
@@ -96,6 +110,7 @@ void vm_boot()
                           | (vm_choice * (SATP_MODE & ~(SATP_MODE<<1)));
 
     write_csr(satp, satp_value);
+    #ifndef LEAK_FROM_U
     write_csr(medeleg,
               (1 << CAUSE_USER_ECALL) |
               (1 << CAUSE_MISALIGNED_FETCH) |
@@ -106,7 +121,7 @@ void vm_boot()
               (1 << CAUSE_FETCH_PAGE_FAULT) |
               (1 << CAUSE_LOAD_PAGE_FAULT) |
               (1 << CAUSE_STORE_PAGE_FAULT));
-
+    #endif
     asm volatile("sfence.vma zero, zero");
 
     return;

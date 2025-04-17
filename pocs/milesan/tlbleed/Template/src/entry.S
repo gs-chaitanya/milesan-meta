@@ -42,6 +42,7 @@ mtvec_handler:
 stvec_handler:
     beqz gp, 1f
     csrw sepc, gp
+
     sret
 1:  li gp, PASS
     la a0, tohost
@@ -128,6 +129,16 @@ handle_reset:
     csrw mtvec, t0
     la t0, stvec_handler
     csrw stvec, t0
+
+    #ifdef LEAK_FROM_U
+    li t0, 1
+    csrs mcounteren, t0 # enable cycle CSR for U-mode
+    csrs scounteren, t0 # enable cycle CSR for U-mode
+    la t0, stvec_handler
+    csrw mtvec, t0
+    # slli t0, t0, 13
+    # csrc medeleg, t0 # delegate page fault to M-mode
+    #endif
 
     la sp, STACK_TOP
     la tp, THREAD_TOP

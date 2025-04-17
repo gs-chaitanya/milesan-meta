@@ -21,12 +21,13 @@ void pmp_boot() {
                  "1: csrw mtvec, t0"
                  : : "r" (pmpc), "r" (pmpa) : "t0", "a0");
 
+    #ifdef USE_PMP
     /* Set highest pmp to protect secret */
     pmpc = PMP_NAPOT;
     pmpa = ((uintptr_t) secret | (((uintptr_t)1 << 11) - 1)) >> 2;
     asm volatile("csrw pmpaddr0, %1\n\t"
                  "csrs pmpcfg0, %0\n\t"
                  : : "r" (pmpc), "r" (pmpa));
-
+    #endif
     return;
 }
