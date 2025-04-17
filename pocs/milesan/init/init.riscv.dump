@@ -1,0 +1,132 @@
+
+init.riscv:     file format elf64-littleriscv
+
+
+Disassembly of section .keep_text:
+
+0000000080000000 <init_trap_vector>:
+    80000000:	00000297          	auipc	t0,0x0
+    80000004:	05028293          	add	t0,t0,80 # 80000050 <trap_handler>
+    80000008:	30529073          	csrw	mtvec,t0
+
+000000008000000c <change_to_S>:
+    8000000c:	001004b7          	lui	s1,0x100
+    80000010:	3004b073          	csrc	mstatus,s1
+    80000014:	000014b7          	lui	s1,0x1
+    80000018:	3004b073          	csrc	mstatus,s1
+    8000001c:	000014b7          	lui	s1,0x1
+    80000020:	8004849b          	addw	s1,s1,-2048 # 800 <init_trap_vector-0x7ffff800>
+    80000024:	3004a073          	csrs	mstatus,s1
+    80000028:	fff00513          	li	a0,-1
+    8000002c:	3b051073          	csrw	pmpaddr0,a0
+    80000030:	01f00513          	li	a0,31
+    80000034:	3a051073          	csrw	pmpcfg0,a0
+    80000038:	00000917          	auipc	s2,0x0
+    8000003c:	02890913          	add	s2,s2,40 # 80000060 <s_code>
+    80000040:	34191073          	csrw	mepc,s2
+    80000044:	30200073          	mret
+    80000048:	00000013          	nop
+    8000004c:	00000013          	nop
+
+0000000080000050 <trap_handler>:
+    80000050:	c0001073          	unimp
+    80000054:	00000013          	nop
+    80000058:	00000013          	nop
+    8000005c:	00000013          	nop
+
+0000000080000060 <s_code>:
+    80000060:	fffe0437          	lui	s0,0xfffe0
+    80000064:	0014041b          	addw	s0,s0,1 # fffffffffffe0001 <_end+0xffffffff7ffd8001>
+    80000068:	01b41413          	sll	s0,s0,0x1b
+    8000006c:	00140413          	add	s0,s0,1
+    80000070:	01341413          	sll	s0,s0,0x13
+    80000074:	00240413          	add	s0,s0,2
+    80000078:	18041073          	csrw	satp,s0
+
+000000008000007c <init_cache>:
+    8000007c:	00001417          	auipc	s0,0x1
+    80000080:	f8440413          	add	s0,s0,-124 # 80001000 <s_mem>
+    80000084:	00840413          	add	s0,s0,8
+    80000088:	00043403          	ld	s0,0(s0)
+
+000000008000008c <prepare_change_to_U>:
+    8000008c:	10000493          	li	s1,256
+    80000090:	1004b073          	csrc	sstatus,s1
+    80000094:	00008917          	auipc	s2,0x8
+    80000098:	f6c90913          	add	s2,s2,-148 # 80008000 <_end>
+    8000009c:	14191073          	csrw	sepc,s2
+
+00000000800000a0 <init_regs>:
+    800000a0:	000100b7          	lui	ra,0x10
+    800000a4:	0010809b          	addw	ra,ra,1 # 10001 <init_trap_vector-0x7ffeffff>
+    800000a8:	00f09093          	sll	ra,ra,0xf
+    800000ac:	00010137          	lui	sp,0x10
+    800000b0:	0011011b          	addw	sp,sp,1 # 10001 <init_trap_vector-0x7ffeffff>
+    800000b4:	00f11113          	sll	sp,sp,0xf
+    800000b8:	000101b7          	lui	gp,0x10
+    800000bc:	0011819b          	addw	gp,gp,1 # 10001 <init_trap_vector-0x7ffeffff>
+    800000c0:	00f19193          	sll	gp,gp,0xf
+    800000c4:	00010237          	lui	tp,0x10
+    800000c8:	0012021b          	addw	tp,tp,1 # 10001 <init_trap_vector-0x7ffeffff>
+    800000cc:	00f21213          	sll	tp,tp,0xf
+    800000d0:	000802b7          	lui	t0,0x80
+    800000d4:	0092829b          	addw	t0,t0,9 # 80009 <init_trap_vector-0x7ff7fff7>
+    800000d8:	00c29293          	sll	t0,t0,0xc
+    800000dc:	00080337          	lui	t1,0x80
+    800000e0:	0093031b          	addw	t1,t1,9 # 80009 <init_trap_vector-0x7ff7fff7>
+    800000e4:	00c31313          	sll	t1,t1,0xc
+    800000e8:	000803b7          	lui	t2,0x80
+    800000ec:	0093839b          	addw	t2,t2,9 # 80009 <init_trap_vector-0x7ff7fff7>
+    800000f0:	00c39393          	sll	t2,t2,0xc
+    800000f4:	00080437          	lui	s0,0x80
+    800000f8:	0094041b          	addw	s0,s0,9 # 80009 <init_trap_vector-0x7ff7fff7>
+    800000fc:	00c41413          	sll	s0,s0,0xc
+    80000100:	000804b7          	lui	s1,0x80
+    80000104:	0014849b          	addw	s1,s1,1 # 80001 <init_trap_vector-0x7ff7ffff>
+    80000108:	00c49493          	sll	s1,s1,0xc
+    8000010c:	00080537          	lui	a0,0x80
+    80000110:	0015051b          	addw	a0,a0,1 # 80001 <init_trap_vector-0x7ff7ffff>
+    80000114:	00c51513          	sll	a0,a0,0xc
+    80000118:	000805b7          	lui	a1,0x80
+    8000011c:	0015859b          	addw	a1,a1,1 # 80001 <init_trap_vector-0x7ff7ffff>
+    80000120:	00c59593          	sll	a1,a1,0xc
+    80000124:	00080637          	lui	a2,0x80
+    80000128:	0016061b          	addw	a2,a2,1 # 80001 <init_trap_vector-0x7ff7ffff>
+    8000012c:	00c61613          	sll	a2,a2,0xc
+    80000130:	000406b7          	lui	a3,0x40
+    80000134:	0056869b          	addw	a3,a3,5 # 40005 <init_trap_vector-0x7ffbfffb>
+    80000138:	00d69693          	sll	a3,a3,0xd
+    8000013c:	000407b7          	lui	a5,0x40
+    80000140:	0057879b          	addw	a5,a5,5 # 40005 <init_trap_vector-0x7ffbfffb>
+    80000144:	00d79793          	sll	a5,a5,0xd
+    80000148:	000407b7          	lui	a5,0x40
+    8000014c:	0057879b          	addw	a5,a5,5 # 40005 <init_trap_vector-0x7ffbfffb>
+    80000150:	00d79793          	sll	a5,a5,0xd
+    80000154:	00040837          	lui	a6,0x40
+    80000158:	0058081b          	addw	a6,a6,5 # 40005 <init_trap_vector-0x7ffbfffb>
+    8000015c:	00d81813          	sll	a6,a6,0xd
+    80000160:	000808b7          	lui	a7,0x80
+    80000164:	00b8889b          	addw	a7,a7,11 # 8000b <init_trap_vector-0x7ff7fff5>
+    80000168:	00c89893          	sll	a7,a7,0xc
+    8000016c:	00080937          	lui	s2,0x80
+    80000170:	00b9091b          	addw	s2,s2,11 # 8000b <init_trap_vector-0x7ff7fff5>
+    80000174:	00c91913          	sll	s2,s2,0xc
+    80000178:	000809b7          	lui	s3,0x80
+    8000017c:	00b9899b          	addw	s3,s3,11 # 8000b <init_trap_vector-0x7ff7fff5>
+    80000180:	00c99993          	sll	s3,s3,0xc
+    80000184:	00080a37          	lui	s4,0x80
+    80000188:	00ba0a1b          	addw	s4,s4,11 # 8000b <init_trap_vector-0x7ff7fff5>
+    8000018c:	00ca1a13          	sll	s4,s4,0xc
+    80000190:	00800a93          	li	s5,8
+    80000194:	01000b13          	li	s6,16
+    80000198:	02000b93          	li	s7,32
+    8000019c:	04000c13          	li	s8,64
+
+00000000800001a0 <change_to_u>:
+    800001a0:	10200073          	sret
+	...
+
+Disassembly of section .keep_empty:
+
+0000000080007000 <empty>:
+	...
