@@ -8,6 +8,7 @@ import glob
 import pandas as pd
 import os
 FIGSIZE_FLAT = (8,2)
+FIGSIZE_QUADRATIC = (8,4)
 FIGSIZE_RECTANGLE = (8,4)
 FIGSIZE_QUADRATIC = (8,8)
 LABELSIZE = 15
@@ -59,14 +60,14 @@ for dut in set(perf_df["dut"]):
         ])
 
 # %%
-palette = ['r', 'g', 'b', 'c', 'y', 'm', 'k']
-patterns = [ "/" , "*", "o", ".", "+","0"]
+palette = ['royalblue', 'mediumorchid', 'lightcoral', 'm', 'k']
+patterns = [ "//" , "--", "", ".", "+","0"]
 duts = ["kronos","rocket","cva6","boom","openc910"]
-pretty_names = ["Kronos","Rocket","CVA6","Boom","OpenC910"]
+pretty_names = ["Kronos","Rocket","CVA6","BOOM","OpenC910"]
 pretty_names_t = ["Program Generation","ELF Compilation","RTL Simulation"]
 perf_t = ["t_gen_bbs","t_gen_elf","t_rtl"]
 w = 0.6
-fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
+fig, ax = plt.subplots(figsize=(6,2))
 for i,dut in enumerate(duts):
     bottom = 0
     t_sum =  perf_means[perf_means["dut"] == dut]["t_sum"].values[0]
@@ -80,12 +81,12 @@ for i,dut in enumerate(duts):
 ax.set_xticks(np.arange(5),labels=pretty_names,fontsize=TICKSIZE)
 ax.set_yticks([0,25,50,75,100],labels=[0,25,50,75,100],fontsize=TICKSIZE)
 ax.set_ylim([0,100])
-ax.set_xlabel("DUT", fontsize=LABELSIZE)
+# ax.set_xlabel("DUT", fontsize=LABELSIZE)
 ax.set_ylabel("Time per step [%]", fontsize=LABELSIZE)
 
 ax.grid(axis="y")
 ax.legend(fontsize=LEGENDSIZE)
-plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot.svg"))
+# plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot.svg"))
 
 
 
@@ -306,7 +307,7 @@ BINWIDTH = 1000
 duts = ["kronos","rocket","cva6","boom","openc910"]
 pretty_names = ["Kronos","Rocket","CVA6","Boom","OpenC910"]
 colors = ["red","peru","greenyellow","forestgreen","black"]
-fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
+fig, ax = plt.subplots(figsize=(6,2))
 for i,dut in enumerate(duts):
     sns.scatterplot(perf_df[perf_df["dut"] == dut],x='n_instrs',y='throughput', ax=ax,label=PRETTY_DUT_NAMES_DICT[dut],color=colors[i])
 # ax.legend(pretty_names)
@@ -314,7 +315,7 @@ ax.set_yscale("log")
 ax.set_xlim([0,16000])
 ax.set_ylim([0,10**3])
 ax.set_xticklabels([f"{i//1000}k" for i in range(0,16000,1000)],fontsize=TICKSIZE)
-ax.set_ylabel("throughput [#instr/s]",fontsize=LABELSIZE)
+ax.set_ylabel("Throughput [#instr/s]",fontsize=LABELSIZE)
 ax.set_xlabel("#instr",fontsize=LABELSIZE)
 ax.legend(fontsize=LEGENDSIZE)
 ax.yaxis.set_tick_params(labelsize=TICKSIZE)
