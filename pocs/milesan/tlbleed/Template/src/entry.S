@@ -42,8 +42,8 @@ mtvec_handler:
 stvec_handler:
     beqz gp, 1f
     csrw sepc, gp
-
     sret
+    
 1:  li gp, PASS
     la a0, tohost
 1:  STORE gp, 0(a0)

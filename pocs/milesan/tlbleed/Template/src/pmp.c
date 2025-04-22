@@ -21,7 +21,7 @@ void pmp_boot() {
                  "1: csrw mtvec, t0"
                  : : "r" (pmpc), "r" (pmpa) : "t0", "a0");
 
-    #ifdef USE_PMP
+    #ifndef NO_PMP
     /* Set highest pmp to protect secret */
     pmpc = PMP_NAPOT;
     pmpa = ((uintptr_t) secret | (((uintptr_t)1 << 11) - 1)) >> 2;

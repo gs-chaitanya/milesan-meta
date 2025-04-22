@@ -21,14 +21,14 @@ PROGRAM ?= ${PWD}/tlb-exploit
 BIN=$(addsuffix .riscv,$(PROGRAM))
 DUMP=$(addsuffix .dump,$(PROGRAM))
 
-TRIAL ?= 5
+TRIAL ?= 3
 ENTROPY ?= 16727741082765321210
 
 all: $(BIN) $(DUMP)
 
 dump: $(DUMP)
 bin: $(BIN)
-EXTRA_FLAGS := -DEXTRA_PTES -DLEAK_FROM_U
+EXTRA_FLAGS := -DEXTRA_PTES -DLEAK_FROM_U -DNO_PMP
 # EXTRA_FLAGS := $(EXTRA_FLAGS) -DUSE_SFENCE
 # Build executable
 $(BIN): $(PROGRAM).c
