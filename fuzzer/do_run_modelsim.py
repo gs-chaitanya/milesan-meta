@@ -65,6 +65,8 @@ def modelsim_worker(new_req_path):
     assert "TRACEFILE" in req_env, "TRACEFILE not found in req!"
     assert "SIMLEN" in req_env, "SIMLEN not found in req!"
     assert "MODELSIM_TIMEOUT" in req_env, "MODELSIM_TIMEOUT not found in req!"
+    assert "PCDUMP_PATH" in req_env, "PCDUMP_PATH not found in req!"
+    assert "STOP_AT_PC_TAINT" in req_env, "STOP_AT_PC_TAIN not found in req!"
 
     simsramelf = req_env["SIMSRAMELF"]
     simsramtaint = req_env["SIMSRAMTAINT"]

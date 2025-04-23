@@ -9,7 +9,7 @@ import argparse
 import git
 
 SHA = git.Repo(search_parent_directories=True).head.object.hexsha
-TIMEOUT_REDUCE=3600*6 # 6h
+TIMEOUT_REDUCE=3600*24 # 24h
 FUZZ = True
 REDUCE_TAINT_MISMATCH = False
 REDUCE_RTL_TIMEOUT = False
