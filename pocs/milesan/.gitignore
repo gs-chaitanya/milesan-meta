@@ -1,4 +1,4 @@
-build
-*.hex
-*.crash.json
-*.bin.bin
+
+*.riscv
+*.elf
+*.dump
