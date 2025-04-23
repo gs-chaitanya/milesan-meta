@@ -27,8 +27,8 @@ def _parse_logfile(path, design_name):
     seeds = []
     for line in logs.split("\n"):
         fuzz_id = re.findall(f"[0-9]+_{design_name}_[0-9]+_[0-9]+",line)
-        if len(fuzz_id):
-            assert len(fuzz_id) == 1
+        if len(fuzz_id) == 1:
+            assert len(fuzz_id) == 1, f"Multiple fuzz ids found in line: {line}"
             seeds += [int(fuzz_id[0].split("_")[2])]
     return seeds
 
