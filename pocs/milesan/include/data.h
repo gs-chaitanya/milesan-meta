@@ -7,8 +7,8 @@
 // this is the data section for user data
 .section .data , "adw"
 data:
-  .dword 0xcacacafedeadbeef
-  .dword 0xcacacafedeadbeef
+  .dword 0xffffffffffffffff
+  .dword 0x0000000000000001
   .dword 0xcacacafedeadbeef
   .dword 0xcacacafedeadbeef
   .dword 0xcacacafedeadbeef
