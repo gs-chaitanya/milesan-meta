@@ -1,3 +1,23 @@
+#ifdef OPENC910
 #define SDATA 0x00001000
 #define UCODE 0x00000000
 #define UDATA 0x00009000
+#define REGDUMP_ADDR 0x10
+#define STOPSIG_ADDR 0x8
+#endif
+
+#ifdef CHIPYARD
+#define SDATA 0x80001000
+#define UCODE 0x80000000
+#define UDATA 0x80009000
+#define REGDUMP_ADDR 0x60000010
+#define STOPSIG_ADDR 0x60000000
+#endif
+
+#ifdef CVA6
+#define SDATA 0x80001000
+#define UCODE 0x80000000
+#define UDATA 0x80009000
+#define REGDUMP_ADDR 0x10
+#define STOPSIG_ADDR 0x0
+#endif
