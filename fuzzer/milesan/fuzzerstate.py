@@ -430,7 +430,7 @@ class FuzzerState:
             self.n_instr_in_priv[instr.priv_level] += 1
             self.n_instr_in_layout[instr.va_layout] += 1
         if insert_regdump:
-            if 'cva6' in self.design_name:
+            if 'cva6' in self.design_name or "openc910" in self.design_name:
                 assert INSERT_FENCE, f"{self.design_name} needs INSERT_FENCE enabled when using register dumps!"
             if has_taint_trace(instr) and instr.rd < MAX_NUM_PICKABLE_REGS and self.intregpickstate.regs[instr.rd].fsm_state == IntRegIndivState.FREE:
                 store_instr = RegdumpInstruction_t0(self,"sd" if self.is_design_64bit else "sw", REGDUMP_REGISTER_ID, instr.rd,0,-1)
