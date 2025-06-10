@@ -221,11 +221,12 @@ fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
 for i,dut in enumerate(duts):
     bottom = 0
     t_sum =  perf_means[perf_means["dut"] == dut]["t_sum"].values[0]
-    print(f"{dut}: {t_sum}")
+    print(f"{dut}: {t_sum//60}")
     for j,t in enumerate(perf_t):
         r =  perf_means[perf_means["dut"] == dut][t].values[0]/t_sum*100
         ax.bar(i,r,color=palette[j], hatch=patterns[j], width=w, bottom=bottom, label= None if i != 0 else pretty_names_t[j])
         bottom += r
+        print(f"{t}: {dut}: {r}")
         # if t == perf_t[-2]:
         #     ax.text(i-w/4, bottom+0.5, '{0:.1f}%'.format(bottom),size=LEGENDSIZE)
 
@@ -237,5 +238,5 @@ ax.set_ylabel("Time per step [%]", fontsize=LABELSIZE)
 
 ax.grid(axis="y")
 ax.legend(fontsize=LEGENDSIZE)
-plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot_relative.svg"))
+# plt.savefig(os.path.join(PERFORMANCE_PLOTS_PATH,"timesplot_relative.svg"))
 # %%

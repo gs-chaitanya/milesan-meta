@@ -61,6 +61,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                             "t_rtl" : 0,
                             "n_bbs": len(fuzzerstate.instr_objs_seq),
                             "n_instrs": sum([len(i) for i in fuzzerstate.instr_objs_seq]) + len(fuzzerstate.final_bb),
+                            "n_instr_boot": len(fuzzerstate.instr_objs_seq[0]),
+                            "n_instr_term": len(fuzzerstate.final_bb),
                             "t_total":time.time() - start_time,
                             # "fail_type": e.fail_type.name,
                             "seed":fuzzerstate.randseed
@@ -113,6 +115,8 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
                     "t_rtl" : time_seconds_spent_in_rtl,
                     "n_bbs": len(fuzzerstate.instr_objs_seq),
                     "n_instrs": sum([len(i) for i in fuzzerstate.instr_objs_seq]) + len(fuzzerstate.final_bb),
+                    "n_instr_boot": len(fuzzerstate.instr_objs_seq[0]),
+                    "n_instr_term": len(fuzzerstate.final_bb),
                     "t_total":time.time() - start_time,
                     # "fail_type": e.fail_type.name,
                     "seed":fuzzerstate.randseed

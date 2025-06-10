@@ -8,6 +8,7 @@ import json
 import subprocess
 import numpy as np
 import re
+import pickle
 #%%
 FIGSIZE_FLAT = (8,2)
 FIGSIZE_RECT = (16,6)
@@ -227,6 +228,9 @@ def leaker_identifier_f(row):
 #%%
 merged["vuln"] = merged.apply(leaker_identifier_f, axis=1)
 
+#%%
+with open(TTES_PICKLE_PATH,"rb") as f:
+    ttes = pickle.load(f)
 #%%
 ttes = pd.DataFrame()
 for vuln in set(merged["vuln"]):

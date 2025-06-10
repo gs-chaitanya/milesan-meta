@@ -19,7 +19,7 @@ import os
 import sys
 import re
 
-MAX_N_THREADS = 60
+MAX_N_THREADS = 100
 
 def _parse_logfile(path, design_name):
     with open(path, "r") as f:
