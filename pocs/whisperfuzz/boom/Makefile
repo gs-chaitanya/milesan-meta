@@ -1,5 +1,5 @@
 RISCV_PREFIX = riscv64-unknown-elf
-RV_ARCH_FLAGS ?= -march=rv64g -mabi=lp64
+RV_ARCH_FLAGS ?= -march=rv64gc -mabi=lp64
 RISCV_GCC_OPTS ?= $(RV_ARCH_FLAGS) -DPREALLOCATE=1 -mcmodel=medany -static -std=gnu99 -O0 -ffast-math -fno-common -fno-builtin-printf -fno-tree-loop-distribute-patterns -gdwarf-2
 LDFLAGS = -Tlink.ld -static -nostdlib -nostartfiles -lm -lgcc
 RISCV_OBJDUMP ?= $(RISCV_PREFIX)-objdump -d
