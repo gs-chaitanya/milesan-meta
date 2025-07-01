@@ -6,9 +6,10 @@
 
 # sys.argv[1]: design name
 # sys.argv[2]: num of cores allocated to fuzzing
-# sys.argv[3]: offset for seed (to avoid running the fuzzing on the same instances over again)
-# sys.argv[4]: number of total tests that should be completed successfully
-# sys.argv[5]: authorize privileges (by default 1)
+# sys.argv[3]: number of total tests that should be completed successfully
+# sys.argv[4]: offset for seed (to avoid running the fuzzing on the same instances over again)
+# sys.argv[5]: timeout
+# sys.argv[6]: logfile for seeds
 
 from drfuzz_mem.check_isa_sim_worker import check_isa_sims
 from common.spike import calibrate_spikespeed
