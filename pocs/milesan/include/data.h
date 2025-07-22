@@ -8,7 +8,7 @@
 .section .data , "adw"
 data:
   .dword 0xffffffffffffffff
-  .dword 0x0000000000000001
+  .dword 0x000000000fffffff
   .dword 0xcacacafedeadbeef
   .dword 0xcacacafedeadbeef
   .dword 0xcacacafedeadbeef

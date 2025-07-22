@@ -5,7 +5,7 @@
     li a2, UDATA
     ld a1, 0(a2)
     ld a0, 8(a2)
-    div ra, a1, a0
+    mulh ra, a1, a0
 
     # li a1, 0xff
     # rem t0, a1, a1
