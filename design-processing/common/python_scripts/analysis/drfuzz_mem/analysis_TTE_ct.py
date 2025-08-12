@@ -61,11 +61,11 @@ seed_data['tte_h'] = seed_data['tte'] / 3600
 seed_data['tte_m'] = seed_data['tte'] / 60
 # %%
 fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
-sns.violinplot(seed_data[seed_data["dut"] == "openc910"], y="tte_m",x="leaker",saturation=1,order=["div","divu","divw","divuw","rem","remu","remw","remuw"],palette=["b"])
+sns.violinplot(seed_data[seed_data["dut"] == "cva6"], y="tte_m",x="leaker",saturation=1,order=["div","divu","divw","divuw","rem","remu","remw","remuw"],palette=["b"])
 ax.set_ylim([0,30])
 ax.set_yticks([i*5 for i in range(0,7,1)])
 ax.set_yticklabels([i*5 for i in range(0,7,1)],fontsize=TICKSIZE)
-ax.set_ylabel("TTE [CPUm]",fontsize=LABELSIZE)
+ax.set_ylabel("TTE [core-m]",fontsize=LABELSIZE)
 ax.set_xlabel("")
 ax.grid()
 ax.set_xticklabels(["div","divu","divw","divuw","rem","remu","remw","remuw"], size=TICKSIZE)
@@ -79,7 +79,7 @@ sns.violinplot(seed_data[seed_data["dut"] == "openc910"], y="tte_m",x="leaker",s
 ax.set_ylim([0,60])
 ax.set_yticks([i*10 for i in range(0,7,1)])
 ax.set_yticklabels([i*10 for i in range(0,7,1)],fontsize=TICKSIZE)
-ax.set_ylabel("TTE [CPUm]",fontsize=LABELSIZE)
+ax.set_ylabel("TTE [core-m]",fontsize=LABELSIZE)
 ax.set_xlabel("")
 ax.grid()
 ax.set_xticklabels(["div","divu","divw","divuw","rem","remu","remw","remuw"], size=TICKSIZE)
