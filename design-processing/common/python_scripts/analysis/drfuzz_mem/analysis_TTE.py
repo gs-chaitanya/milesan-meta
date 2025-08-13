@@ -286,26 +286,27 @@ for i,taint_source_priv in enumerate(TAINT_SOURCE_PRIVS):
             ax[i,j].legend("")
 plt.tight_layout()    
 # ax.legend(title="",fontsize=LEGENDSIZE)
-# %%
+
 # %%
 
 hueorder = ["Spectre-V1","Spectre-V2","Spectre-RSB","Meltdown","Trans. Meltdown","cp-Spectre-V2","MDS*"]
 fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
-filtered_ttes = ttes[(ttes["pretty_name_dut"] == "BOOM") & (ttes["vuln"] != "Spectre-V4") & (ttes["vuln"] != "cp-Spectre-RSB")] 
-sns.violinplot(filtered_ttes, y="tte_h",x="vuln",ax=ax,scale="width",order=hueorder,hue="cross-priv",palette=["b","r"])
+filtered_ttes = ttes[(ttes["pretty_name_dut"] == "BOOM") & (ttes["vuln"] != "Spectre-V4") & (ttes["vuln"] != "cp-Spectre-RSB")].sort_values('leakage-type',ascending=False)
+
+sns.violinplot(filtered_ttes, y="tte_h",x="vuln",ax=ax,scale="width",order=hueorder,hue="leakage-type",palette=["b","r"])
 ax.set_ylim([0,25])
 yticks = [0,5,10,15,20,25]
 yticklabels = yticks
 ax.set_yticks(yticks,labels=yticklabels,fontsize=TICKSIZE)
-x_tick_labels = ["Spec-V1","Spec-V2","Spec-RSB","MD","Trans-MD","cp-SpecV2","MDS*"]
+x_tick_labels = ["Spec-V1","Spec-V2","Spec-RSB","MD","Trans-MD","Spec-V2","MDS*"]
 ax.set_xticks(hueorder,labels=x_tick_labels,fontsize=TICKSIZE)
 ax.grid()
 ax.set_ylabel("TTE [CPUh]",fontsize=LABELSIZE)
 ax.set_xlabel("")
-ax.legend(title="Cross-Privilege",fontsize=LEGENDSIZE,title_fontsize=LEGENDSIZE)
+ax.legend(title="",fontsize=LEGENDSIZE,title_fontsize=LEGENDSIZE)
 # plt.tight_layout() 
 
-# plt.savefig(PLOT_PATH+"/tte_transient.svg")
+plt.savefig(PLOT_PATH+"/tte_transient.svg")
 #%%
 
 fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
@@ -356,7 +357,6 @@ def compute_stddev_tte(x):
     return np.std(x["tte"])
 
 #%%
-#%%
 def compute_min_tte(x):
     return np.std(x["tte"])
 #%%
@@ -394,6 +394,7 @@ def compute_specdoc_max_speedup(x):
 
 #%%
 table_data_boom = table_data[(table_data["dut"] == "boom") | (table_data["dut"] == "pt-boom") & (table_data["vuln"] == "MDS*")]
+table_data_boom = table_data_boom[table_data_boom["vuln"] != "Spectre-V4"]
 table_data_boom["pretty_name_dut"] = "BOOM"
 
 # Define the custom order for the "vuln" column
@@ -401,7 +402,7 @@ vuln_order = [
     "Spectre-V1", 
     "Spectre-V2", 
     "Spectre-RSB", 
-    "Spectre-V4", 
+    # "Spectre-V4", 
     "Meltdown", 
     "Trans. Meltdown", 
     "cp-Spectre-V2", 
@@ -415,7 +416,7 @@ table_data_boom["specdoc-max-speedup"] = table_data_boom.apply(compute_specdoc_m
 
 # Sort the rows by the custom order of "vuln"
 table_data_boom = table_data_boom.sort_values(by="vuln")
-table_data_boom.to_csv(TABLE_PATH + "/tte_transient.csv")
+# table_data_boom.to_csv(TABLE_PATH + "/tte_transient.csv")
 # table_data.to_csv(TABLE_PATH + "/tte_transient.csv")
 
 #%%
