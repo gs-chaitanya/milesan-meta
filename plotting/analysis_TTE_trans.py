@@ -7,275 +7,251 @@ import seaborn as sns
 import json
 import subprocess
 import numpy as np
-#%%
-FIGSIZE_FLAT = (8,2)
-LABELSIZE = 15
-TICKSIZE = 12
-LEGENDSIZE = 12
-CCS_PATH = "/mnt/milesan-data-ccs"
-TTE_PATH = "/mnt/milesan-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/plots/tte"
-TABLE_PATH = "/mnt/milesan-meta/design-processing/common/python_scripts/analysis/drfuzz_mem/tables"
-PRETTY_NAMES_DUT = {
-    "openc910":"OpenC910",
-    "cva6":"CVA6",
-    "boom":"BOOM"
-}
-TTE_SPECDOC = {
-    "Spectre-V1": 26.9,
-    "Spectre-V2": 30.6,
-    "MD":34.7,
-    "Trans. MD": 26.9 
-}
-VULNS = ["MD","Trans. MD","cp-Spec-V2","Spec-V1","Spec-RSB","Spec-V2","MDS"]
+import re
+import pickle
+import sys
+from cfg import *
+# %% leakage identification
+def is_branch(instr):
+    return "beq" in instr or "bne" in instr or "bge" in instr or "blt" in instr
 
-#%%
+def is_jalr(instr):
+    return "jalr" in instr
 
-class Colorcodes(object):
-    """
-        Provides ANSI terminal color codes which are gathered via the ``tput``
-        utility. That way, they are portable. If there occurs any error with
-        ``tput``, all codes are initialized as an empty string.
-        The provides fields are listed below.
-        Control:
-        - bold
-        - reset
-        Colors:
-        - blue
-        - green
-        - orange
-        - red
-        :license: MIT
-        """
-    def __init__(self):
-        try:
-            self.bold = subprocess.check_output("tput bold".split(),text=True)
-            self.reset = subprocess.check_output("tput sgr0".split(),text=True)
-            self.blue = subprocess.check_output("tput setaf 4".split(),text=True)
-            self.green = subprocess.check_output("tput setaf 2".split(),text=True)
-            self.orange = subprocess.check_output("tput setaf 3".split(),text=True)
-            self.red = subprocess.check_output("tput setaf 1".split(),text=True)
-        except subprocess.CalledProcessError as e:
-            
-            self.bold = ""
-            self.reset = ""
-            self.blue = ""
-            self.green = ""
-            self.orange = ""
-            self.red = ""
+def is_ret(instr):
+    return is_jalr(instr) and "ra" in instr.split(",")[-2]
 
-_c = Colorcodes()
+def is_except(instr):
+    return "Exception" in instr
 
-CRED = _c.red
-CEND = _c.reset
+def is_load(instr): 
+    return "lh" in instr or "lb" in instr or "lw" in instr or "ld" in instr 
 
-#%%
-seed_to_time = pd.DataFrame()
-for i,file in enumerate(glob.glob(CCS_PATH+ "/S_to_U/boom/**/perfstats.json", recursive=True)):
-    try:
+def leaker_identifier_f(row, reduce_log):
+    cross_priv = row["taint_source_priv"] != row["leaker_priv"]
+    leaker = row["leaker"]
+    if is_ret(leaker):
+        if cross_priv:
+            return "cp-Spectre-RSB"
+        else:
+            return "Spectre-RSB"
+    elif is_branch(leaker):
+        if cross_priv:
+            return "Trans. Meltdown"
+        else:
+            return "Spectre-V1"
+    elif is_jalr(leaker):
+        if cross_priv:
+            return "cp-Spectre-V2"
+        else:
+            return "Spectre-V2"
+    elif is_except(leaker) and is_load(leaker):
+        if row["dut"] == "pt-boom" and row["id"] not in reduce_log[reduce_log["dut"] == "boom"]["id"]:
+            return "MDS*"
+        return "Meltdown"
+    elif is_load(leaker):
+        if cross_priv:
+            return "cp-Spectre-V4"
+        else:
+            return "Spectre-V4"
+
+def leakage_type(x):
+    return "cross-privilege" if x["cross-priv"] else "intra-privilege"
+
+def get_ttes(load_pickle):
+    if load_pickle:
+        with open(TTES_PICKLE_PATH,"rb") as f:
+            return pickle.load(f)
+
+    perfstats = pd.DataFrame()
+    for i,file in enumerate(glob.glob(CCS_PATH+ "/**/perfstats.json", recursive=True)):
+        if "to" not in file:
+            continue
         with open(file, "r") as f:
             p = json.load(f)
-        p["pretty_name_dut"] = PRETTY_NAMES_DUT[p["dut"]]
-
-        seed_to_time = pd.concat([seed_to_time, pd.DataFrame([p])])
-    except:
-        pass
-#%%
-mds_ids = set()
-for i,file in enumerate(glob.glob(CCS_PATH+ "/MDS/S_to_U/pt-boom/**/perfstats.json", recursive=True)):
-
-    with open(file, "r") as f:
-        p = json.load(f)
-    if p["id"] in seed_to_time["id"]:
-        continue
-    mds_ids |= {p["id"]}
-    seed_to_time = pd.concat([seed_to_time, pd.DataFrame([p])])
-
-#%%
-N_RUNS = 50
-#%%
-seed_to_time["run"] = seed_to_time["seed"]%N_RUNS
-#%%
-seed_to_time = seed_to_time.sort_values("dut").sort_values(by='seed')  # Sort by 'seed' for proper calculation
-
-#%%
-seed_to_time["t_acc"] = seed_to_time.apply(
-        lambda row: seed_to_time[(seed_to_time['seed'] <= row['seed']) & (seed_to_time["run"] == row["run"])  & (seed_to_time["dut"] == row["dut"])]['t_total'].sum(), axis=1
-    )
-# %%
-seed_to_time['t_acc_h'] = seed_to_time['t_acc'] / 3600
-
-#%%
-seed_to_leaker = pd.DataFrame()
-with open(CCS_PATH + "/S_to_U/logs/boom.reduce.log") as f:
-    for line in f.read().split("\n"):
-        if "seed" in line:
-            seed = int(line.split(":")[0].split(" ")[1])
-        if "Failing instr:" in line:
-            leaker = line.split(":")[-1].replace(CRED,"").replace(CEND,"").strip(" ")
-            seed_to_leaker = pd.concat([seed_to_leaker, pd.DataFrame([{"seed": seed, "leaker": leaker}])])
-
-with open(CCS_PATH + "/MDS/S_to_U/logs/pt-boom.reduce.log") as f:
-    for line in f.read().split("\n"):
-        if "seed" in line:
-            seed = int(line.split(":")[0].split(" ")[1])
-        if "Failing instr:" in line:
-            leaker = line.split(":")[-1].replace(CRED,"").replace(CEND,"").strip(" ")
-            if seed in seed_to_leaker["seed"]:
-                continue
-
-            seed_to_leaker = pd.concat([seed_to_leaker, pd.DataFrame([{"seed": seed, "leaker": leaker}])])
-            
-
-#%%
-seed_to_reduce = pd.DataFrame()
-for i,file in enumerate(glob.glob(CCS_PATH+ "/S_to_U/boom/**/reduce.log", recursive=True)):
-    with open(file, "r") as f:
-        p = json.load(f)
-    p["seed"] = int(file.split("/")[-2].split("_")[-2])
-    seed_to_reduce = pd.concat([seed_to_reduce, pd.DataFrame([p])])
-
-for i,file in enumerate(glob.glob(CCS_PATH+ "/MDS/S_to_U/boom/**/reduce.log", recursive=True)):
-    with open(file, "r") as f:
-        p = json.load(f)
-    p["seed"] = int(file.split("/")[-2].split("_")[-2])
-    if p["seed"] in seed_to_reduce:
-        continue
-    seed_to_reduce = pd.concat([seed_to_reduce, pd.DataFrame([p])])
-#%%
-seed_data = seed_to_reduce.merge(seed_to_leaker, "left").merge(seed_to_time,"left")
-#%%
-def leaker_identifier_f(row):
-    if row["id"] in mds_ids:
-        return "cp-MDS" if row["cross-priv"] else "M"
-    if row["cross-priv"]:
-        if "Exception" in row["leaker"]:
-            return "MD"
-        elif row["leaker"].startswith("b"):
-            return "Trans. MD"
-        elif row["leaker"].startswith("jalr"):
-            return "cp-Spec-V2"
-    else:
-        if row["leaker"].startswith("b"):
-            return "Spec-V1"
-        elif row["leaker"].startswith("jalr"):
-            return "Spec-RSB" if "ra" in row["leaker"].split(",")[-2] else "Spec-V2"
-    
-        # else:
-        #     return "div[u][w]/rem[u][w]"
-        # # elif row["leaker"].startswith("l"):
-        # #     return "Spec-V4"
-#%%
-seed_data["vuln"] = seed_data.apply(leaker_identifier_f, axis=1)
-#%%
-seed_data["domain-boundary"] = seed_data.apply(lambda x: "S->U" if x["cross-priv"] else "S->S",axis=1)
-#%%
-def get_tte(x):
-    t_accs = seed_data[(seed_data["vuln"] == x["vuln"]) & (seed_data["run"] == x["run"])]["t_acc"]
-    return None if not len(t_accs) else min(t_accs)
-
-#%%
-ttes = pd.DataFrame()
-for vuln in VULNS:
-    for run in range(0,N_RUNS):
-        t =  seed_data[(seed_data["vuln"] == vuln) & (seed_data["run"] == run)]
-        if not len(t):
+        context = re.findall("[SUM]_to_[SUM]",file)[0]
+        p["taint_source_priv"] = context[0]
+        p["taint_sink_priv"] = context[-1]
+        p["context"] = context
+        perfstats = pd.concat([perfstats, pd.DataFrame([p])])
+    reduce_log = pd.DataFrame()
+    for i,file in enumerate(glob.glob(CCS_PATH+ "/**/reduce.log.json", recursive=True)):
+        if "to" not in file:
             continue
-        tte = min(t["t_acc"])
-        ttes = pd.concat([
-            ttes,
-            pd.DataFrame(
-                [ {
-                    "tte" : tte,
-                    "run" : run,
-                    "vuln" :vuln,
-                    "domain-boundary":t["domain-boundary"].values[0]
-                }
-                ]
-            )
-        ])
-# %%
-ttes['tte_h'] = ttes['tte'] / 3600
-ttes['tte_m'] = ttes['tte'] / 60
+        with open(file, "r") as f:
+            p = json.load(f)
+        context = re.findall("[SUM]_to_[SUM]",file)[0]
+        p["taint_source_priv"] = context[0]
+        p["taint_sink_priv"] = context[-1]
+        p["context"] = context
+        reduce_log = pd.concat([reduce_log, pd.DataFrame([p])])
+    N_RUNS = 50
+    # bin the collected seeds into random sets.
+    perfstats["run"] = perfstats["seed"]%N_RUNS
+    # compute the accumulated core hours within the respective sets.
+    perfstats["t_acc"] = perfstats.apply( \
+            lambda row: \
+                perfstats[ \
+                    (perfstats['seed'] <= row['seed']) & \
+                (perfstats["run"] == row["run"])  & \
+                    (perfstats["dut"] == row["dut"])  & \
+                    (perfstats["context"] == row["context"])  \
+                    ] \
+                    ['t_total'].sum(), axis=1)
+    # compute the core hours from the core seconds.
+    perfstats['t_acc_h'] = perfstats['t_acc'] / 3600
+    # merge meta info from reduction log into performance stats.
+    merged = pd.merge(reduce_log, perfstats,on = ["id","context"],how="left")
 
-# %%
-fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
-sns.violinplot(ttes, y="tte_h",x="vuln",ax=ax,palette=["r","b"],hue="domain-boundary",order=["Spec-V1","Spec-V2","MD","cp-MDS","Trans. MD","cp-Spec-V2","MDS"])
-ax.set_xlabel("") 
-yticks = [0,5,10,15,20,25]
-yticklabels = yticks
-ax.set_yticks(yticks,labels=yticklabels,fontsize=TICKSIZE)
-ax.set_ylim([0,25])
-ax.grid()
-ax.set_ylabel("TTE [CPUh]",fontsize=LABELSIZE)
-ax.legend(title="",fontsize=LEGENDSIZE)
-# plt.savefig(TTE_PATH+"/tte_transient.svg")
+    for col in merged.columns:
+        if col.endswith("_x"):
+            if set(merged[col] == merged[col[:-2]+"_y"]) == {True}:
+                merged[col[:-2]] = merged[col]
+    
+    merged["vuln"] = merged.apply(leaker_identifier_f, axis=1)
+    ttes = pd.DataFrame()
+    for vuln in set(merged["vuln"]):
+        for run in range(0,N_RUNS):
+            for dut in set(merged["dut"]):
+                    for taint_source_priv in set(merged["taint_source_priv"]):
+                        for leaker_priv in set(merged["leaker_priv"]):
+                            t = merged[
+                                (merged["vuln"] == vuln) &  \
+                                (merged["run"] == run) & \
+                                (merged["dut"] == dut) & \
+                                (merged["taint_source_priv"] == taint_source_priv) & \
+                                (merged["leaker_priv"] == leaker_priv) \
+                                ]
+                            if not len(t):
+                                continue
+                            tte = min(t["t_acc"])
+                            id = t[t["t_acc"] == tte]["id"]
+                            ttes = pd.concat([
+                                ttes,
+                                pd.DataFrame(
+                                    [ {
+                                        "tte" : tte,
+                                        "run" : run,
+                                        "vuln" :vuln,
+                                        "dut":dut,
+                                        "pretty_name_dut" : PRETTY_NAMES_DUT[dut],
+                                        "taint_source_priv": taint_source_priv,
+                                        "leaker_priv": leaker_priv,
+                                        "id" : id.values[0],
+                                        "cross-priv": taint_source_priv != leaker_priv
+                                    }
+                                    ]
+                                )
+                            ])
+    ttes['tte_h'] = ttes['tte'] / 3600
+    ttes['tte_m'] = ttes['tte'] / 60
+    return ttes
+
+
 
 #%%
+
 def s_to_cpuh(s):
     return f"{int(s//3600)}h{int((s%3600)//60)}m"
 #%%
 def compute_min_tte(x):
-    min_tte = min(x["tte"])
-    return s_to_cpuh(min_tte)
+    return  min(x["tte"])
 
 #%%
 def compute_median_tte(x):
-    median_tte = np.median(x["tte"])
-    return s_to_cpuh(median_tte)
+    return np.median(x["tte"])
 
 #%%
 def compute_mean_tte(x):
-    mean_tte = np.mean(x["tte"])
-    return s_to_cpuh(mean_tte)
-
+    return np.mean(x["tte"])
 #%%
 def compute_stddev_tte(x):
-    stddev = np.std(x["tte"])
-    return s_to_cpuh(stddev)
+    return np.std(x["tte"])
 
 #%%
-def compute_min_seed(x):
-    return np.min(x["seed"])
-#%%
-def compute_median_seed(x):
-    return np.median(ttes[ttes["run"] == x["run"]]["seed"])
+def compute_min_tte(x):
+    return np.std(x["tte"])
 
 #%%
-def compute_mean_seed(x):
-    return np.mean(ttes[ttes["run"] == x["run"]]["seed"])
+def compute_specdoc_mean_speedup(x):
+    if x["vuln"] in TTE_SPECDOC.keys():
+        return TTE_SPECDOC[x["vuln"]]/x["mean"]
+def compute_specdoc_max_speedup(x):
+    if x["vuln"] in TTE_SPECDOC.keys():
+        return TTE_SPECDOC[x["vuln"]]/x["min"]
+#%%
+def get_tables(ttes):
+    medians = ttes.groupby(["dut", "vuln"]).apply(compute_median_tte)
+    means = ttes.groupby(["dut", "vuln"]).apply(compute_mean_tte)
+    stds = ttes.groupby(["dut", "vuln"]).apply(compute_stddev_tte)
+    mins = ttes.groupby(["dut", "vuln"]).apply(compute_min_tte)
+
+    medians_df = pd.DataFrame(medians.reset_index())
+    medians_df = medians_df.rename({0:"median"},axis=1)
+    means_df = pd.DataFrame(means.reset_index())
+    means_df = means_df.rename({0:"mean"},axis=1)
+    stds_df = pd.DataFrame(stds.reset_index())
+    stds_df = stds_df.rename({0:"stddev"},axis=1)
+    mins_df = pd.DataFrame(mins.reset_index())
+    mins_df = mins_df.rename({0:"min"},axis=1)
+    table_data = pd.merge(medians_df,means_df,on=["vuln","dut"])
+    table_data = pd.merge(table_data, stds_df, on = ["vuln","dut"])
+    table_data = pd.merge(table_data, mins_df, on = ["vuln","dut"])
+    table_data["mean_cpuh"] = table_data["mean"].apply(s_to_cpuh)
+    table_data["median_cpuh"] = table_data["median"].apply(s_to_cpuh)
+    table_data["stddev_cpuh"] = table_data["stddev"].apply(s_to_cpuh)
+    table_data["min_cpuh"] = table_data["min"].apply(s_to_cpuh)
+
+    table_data_boom = table_data[(table_data["dut"] == "boom") | (table_data["dut"] == "pt-boom") & (table_data["vuln"] == "MDS*")]
+    table_data_boom = table_data_boom[table_data_boom["vuln"] != "Spectre-V4"]
+    table_data_boom["pretty_name_dut"] = "BOOM"
+
+    # Define the custom order for the "vuln" column
+    vuln_order = [
+        "Spectre-V1", 
+        "Spectre-V2", 
+        "Spectre-RSB", 
+        # "Spectre-V4", 
+        "Meltdown", 
+        "Trans. Meltdown", 
+        "cp-Spectre-V2", 
+        "MDS*"
+    ]
+
+    # Convert "vuln" column to a categorical type with the specified order
+    table_data_boom["vuln"] = pd.Categorical(table_data_boom["vuln"], categories=vuln_order, ordered=True)
+    table_data_boom["specdoc-mean-speedup"] = table_data_boom.apply(compute_specdoc_mean_speedup,axis=1)
+    table_data_boom["specdoc-max-speedup"] = table_data_boom.apply(compute_specdoc_max_speedup,axis=1)
+
+    # Sort the rows by the custom order of "vuln"
+    table_data_boom = table_data_boom.sort_values(by="vuln")
+    return table_data_boom
+
+def plot_ttes(ttes):
+    ttes["leakage-type"] = ttes.apply(leakage_type,axis=1)
+    hueorder = ["Spectre-V1","Spectre-V2","Spectre-RSB","Meltdown","Trans. Meltdown","cp-Spectre-V2","MDS*"]
+    fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
+    filtered_ttes = ttes[(ttes["pretty_name_dut"] == "BOOM") & (ttes["vuln"] != "Spectre-V4") & (ttes["vuln"] != "cp-Spectre-RSB")].sort_values('leakage-type',ascending=False)
+
+    sns.violinplot(filtered_ttes, y="tte_h",x="vuln",ax=ax,scale="width",order=hueorder,hue="leakage-type",palette=["b","r"])
+    ax.set_ylim([0,25])
+    yticks = [0,5,10,15,20,25]
+    yticklabels = yticks
+    ax.set_yticks(yticks,labels=yticklabels,fontsize=TICKSIZE)
+    x_tick_labels = ["Spec-V1","Spec-V2","Spec-RSB","MD","Trans-MD","Spec-V2","MDS*"]
+    ax.set_xticks(hueorder,labels=x_tick_labels,fontsize=TICKSIZE)
+    ax.grid()
+    ax.set_ylabel("TTE [CPUh]",fontsize=LABELSIZE)
+    ax.set_xlabel("")
+    ax.legend(title="",fontsize=LEGENDSIZE,title_fontsize=LEGENDSIZE)
+    plt.savefig(PLOT_PATH+"/tte_transient.png")
 
 #%%
-def compute_stddv_seed(x):
-    return np.std(ttes[ttes["run"] == x["run"]]["seed"])
-# %%
+if __name__ == "__main__":
+    ttes = get_ttes("--use-pickle" in sys.argv)
+    plot_ttes(ttes)
+    table_data_boom = get_tables(ttes)
+    table_data_boom.to_csv(TABLE_PATH + "/tte_transient.csv")
 
-mins = ttes.groupby("vuln").apply(compute_min_tte)
-# %%
-means = ttes.groupby("vuln").apply(compute_mean_tte)
-# %%
-medians = ttes.groupby("vuln").apply(compute_median_tte)
-# %%
-stds= ttes.groupby("vuln").apply(compute_stddev_tte)
-#%%
-table_data = pd.DataFrame()
-table_data["mean"] = means
-table_data["median"] = medians
-table_data["stddev"] = stds
-table_data = table_data.reindex(["Spec-V1","Spec-V2","MD","Trans. MD","cp-Spec-V2"])
-table_data.to_csv(TABLE_PATH + "/tte_transient.csv")
-print(table_data)
-#%%
 
-ttes.groupby("vuln").apply(compute_median_seed)
-# %%
-ttes.groupby("vuln").apply(compute_mean_seed)
-# %%
-ttes.groupby("vuln").apply(compute_stddv_seed)
-# %%
-vulns = ["MD","Trans. MD","cp-Spec-V2","Spec-V1","Spec-RSB","Spec-V2"]
-for vuln in vulns:
-    median = np.median(ttes[ttes["vuln"] == vuln]["seed"])//N_RUNS
-    mean = np.mean(ttes[ttes["vuln"] == vuln]["seed"])//N_RUNS
-    std = np.std(ttes[ttes["vuln"] == vuln]["seed"])//N_RUNS
-    print(f'Vuln: {vuln}: {median}, {mean}, {std}')
 # %%
