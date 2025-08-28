@@ -8,7 +8,7 @@ cwd = os.getcwd()
 ELFS_PATH = cwd + "/build/elfs/pocs"
 NOMMUELFS_PATH = cwd + "/build/nommuelfs/pocs"
 TAINT_PATH = cwd + "/taint/"
-REGDUMP_PATH =  "/scratch/tkovats/ssh_mnt/milesan-data/regdump.json"
+REGDUMP_PATH =  cwd + "/regdump.json"
 elfs = glob.glob(ELFS_PATH + "/*.riscv")
 
 

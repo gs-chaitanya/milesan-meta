@@ -4,7 +4,7 @@ RISCV_GCC_OPTS ?= $(RV_ARCH_FLAGS) -DPREALLOCATE=1 -mcmodel=medany -static -std=
 LDFLAGS = -Tlink.ld -static -nostdlib -nostartfiles -lm -lgcc
 RISCV_OBJDUMP ?= $(RISCV_PREFIX)-objdump -d
 CC = $(RISCV_PREFIX)-gcc
-
+GEN_SRC_PY=generate_programs_cva6.py
 S_SRCS=$(wildcard src/*.S)
 C_SRCS=$(wildcard src/*.c)
 TARGETS=$(patsubst src%, build%, $(patsubst %.S,%.elf,$(S_SRCS))) $(patsubst src%, build%, $(patsubst %.c,%.elf,$(C_SRCS)))
@@ -12,7 +12,7 @@ TARGETS=$(patsubst src%, build%, $(patsubst %.S,%.elf,$(S_SRCS))) $(patsubst src
 
 all: $(TARGETS)
 
-build/%.elf: src/%.S link.ld | build
+build/%.elf: src/%.S link.ld | build 
 	$(CC) $(RISCV_GCC_OPTS) $< -o $@ $(LDFLAGS)
 	$(RISCV_OBJDUMP) -M no-aliases $@ > $@.dump
 
@@ -27,5 +27,7 @@ run_$(CPU)_$(POC): all
 	cd /mnt/milesan-designs/$(CPU)/milesan && SIMSRAMELF=$(POC) make rerun_drfuzz_mem_notrace
 
 .PHONY: clean all
+
 clean:
 	rm -rf build
+	rm -rf src

@@ -1,28 +1,18 @@
-#%%
-import sys
-sys.path.append("../")
+
 import os
-import re
-import pandas as pd
-import subprocess
-import seaborn as sns
-import matplotlib.pyplot as plt
-from fuzzer.common.designcfgs import get_design_stop_sig_addr, get_design_reg_dump_addr, get_design_milesan_path
 #%%%
-os.environ["MILESAN_DESIGN_PROCESSING_ROOT"] = "/mnt/milesan-meta/design-processing/"
 DUTS = ["cva6"]
 SECTION_STR = ".section \".text.init\",\"ax\",@progbits\n\t.globl _start\n\t.align 2\n_start:\n"
 INSTR_STRS = ["mv","add","and","or","xor","sub","addw","subw"]
 
 INSTR_STRS += [f"c.{inst}" for inst in INSTR_STRS] 
 INSTR_STRS += ["divuw","remu"]
-#  CINSTR_STR= [] 
-# IMMS = [0] + [1<<i for i in range(20)]
 IMMS = [2047]
-CWD =  "/mnt/milesan-meta/pocs/whisperfuzz"
-SRCDIR = CWD + '/src'
-BUILDIR = CWD + '/build'
-TAINT_ADDR = 0x80004000
+cwd = os.getcwd()
+SRCDIR = cwd + '/src'
+BUILDIR = cwd + '/build'
+STOPSIG_ADDR = 0x0
+REGDUMP_ADDR = 0x10
 #%%
 def generate_program(inst_str: str, imm: int, stopsig_addr: int, regdump_addr: int):
     prog_str = SECTION_STR
@@ -40,18 +30,14 @@ def generate_program(inst_str: str, imm: int, stopsig_addr: int, regdump_addr: i
     prog_str += f"li t0, {stopsig_addr}\n"
     prog_str += f"sd t0, 0(t0)\n"
     return prog_str
-#%%
 
-os.makedirs(SRCDIR,exist_ok=True)
-targets = []
-instr_strs = []
-
-for dut in DUTS:
-    stopsig_addr = get_design_stop_sig_addr(dut)
-    regdump_addr = get_design_reg_dump_addr(dut)
+if __name__ == "__main__":
+    os.makedirs(SRCDIR,exist_ok=True)
+    targets = []
+    instr_strs = []
     for instr_str in INSTR_STRS:
         for imm in IMMS:
-                prog = generate_program(instr_str, imm, stopsig_addr, regdump_addr)
+                prog = generate_program(instr_str, imm, STOPSIG_ADDR, REGDUMP_ADDR)
                 with open(f"{SRCDIR}/{instr_str}.S", "w") as f:
                     f.write(prog)
                 targets += [f"build/{instr_str}.elf"]

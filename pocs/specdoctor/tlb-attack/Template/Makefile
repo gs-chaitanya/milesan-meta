@@ -21,7 +21,7 @@ PROGRAM ?= ${PWD}/tlb-exploit
 BIN=$(addsuffix .riscv,$(PROGRAM))
 DUMP=$(addsuffix .dump,$(PROGRAM))
 
-TRIAL ?= 5
+TRIAL ?= 1 ## just need a single access to taint the PC
 ENTROPY ?= 16727741082765321210
 
 all: $(BIN) $(DUMP)

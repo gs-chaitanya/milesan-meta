@@ -260,7 +260,7 @@ int main(void) {
     uint8_t bits[S_WORD] = {0,};
     uint8_t votes[S_WORD] = {0,};
 
-    printf("[*] New transient execution attack on BOOM\n");
+    // printf("[*] New transient execution attack on BOOM\n");
 
     volatile uint64_t random = ENTROPY;
     for (int idx = S_WORD - 1; idx >= 0; idx--) {
@@ -288,7 +288,7 @@ int main(void) {
             //   else          , secret = 0
             cycles[t] = run_bim_cycle();
 
-            printf("%ld ", cycles[t]);
+            // printf("%ld ", cycles[t]);
         }
 
         int sum = 0;
@@ -301,15 +301,23 @@ int main(void) {
         bits[idx] = (sum >= TRIAL/2)? 1:0;
         votes[idx] = (sum >= TRIAL/2)? sum:TRIAL - sum;
 
-        printf(" --> %d (%d/%d)\n", bits[idx], votes[idx], TRIAL);
+        // printf(" --> %d (%d/%d)\n", bits[idx], votes[idx], TRIAL);
     }
 
-    printf("[*] Secret: 0x");
-    for (int idx = S_WORD - 4; idx >= 0; idx-=4) {
-        uint16_t hex = bits[idx+3] << 3 | bits[idx+2] << 2 | bits[idx+1] << 1 | bits[idx];
-        printf("%x", hex);
-    }
-    printf("\n");
+    // printf("[*] Secret: 0x");
+    // for (int idx = S_WORD - 4; idx >= 0; idx-=4) {
+    //     uint16_t hex = bits[idx+3] << 3 | bits[idx+2] << 2 | bits[idx+1] << 1 | bits[idx];
+    //     printf("%x", hex);
+    // }
+    // printf("\n");
+
+    uint8_t *stopsig_addr = 0x60000000;
+    uint8_t *regdump_addr = 0x60000010;
+    uint8_t test = 0;
+    *regdump_addr = test;
+    asm volatile("fence\n");
+    *stopsig_addr = 0x0;
+
 
     return 0;
 }

@@ -21,7 +21,7 @@ PROGRAM ?= ${PWD}/boombard
 BIN=$(addsuffix .riscv,$(PROGRAM))
 DUMP=$(addsuffix .dump,$(PROGRAM))
 
-TRIAL ?= 5
+TRIAL ?= 1
 ENTROPY ?= 16727741082765321210
 
 all: $(BIN) $(DUMP)
