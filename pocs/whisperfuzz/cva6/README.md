@@ -31,7 +31,7 @@ make rerun_drfuzz_mem_notrace[_modelsim]
 in the *milesan/* directory of CVA6 to test the PoC using verilator or modelsim. Note that when using modelsim, you will need to run the command from the host system in respective mounted directory and set the environment variables accordinly.
 
 #### Interpreting the outputs
-Each executable terminates with a the values and taints of a register printed to the console. A PoC that triggers a constant-time violation taints the PC and causes a taint explosion, which taints all elements in the CPU within a few cycles. Thus, we can detect whether a constant-time violation occured by checking the taint pattern of the dumped register.
+The authors of the original paper measure the latency of each instruction by substracting the value of MCYCLES CSR after the instruction was executed with the one before. Each executable thus terminates with a the values and taints of the register that contains the diff printed to the console. A PoC that triggers a constant-time violation should this taint the MCYCLES CSR and the register holding the diff. Thus, we can detect whether a constant-time violation occured by checking the taint pattern of the dumped register.
 E.g., the PoC below triggers a constant-time violation:
 ```
 export SIMSRAMELF=/scratch/tkovats/ssh_mnt/milesan-meta/pocs/whisperfuzz/cva6/build/remu.elf
