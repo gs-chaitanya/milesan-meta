@@ -1443,7 +1443,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
     ret_msg += f"\t Reduced ELF: {final_fuzzerstate.rtl_elfpath}\n"
 
     cross_privilege = False
-    if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level in fuzzerstate.taint_sink_privs:
+    if fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level not in fuzzerstate.taint_source_privs:
         ret_msg += f"\t Detected leakage from {[p.name for p in fuzzerstate.taint_source_privs]} -> {fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level.name}\n"
         cross_privilege = True
     cross_layout = False
@@ -1452,6 +1452,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         cross_layout = True
 
     ret_dict["cross-priv"] = cross_privilege
+    ret_dict["leaker-priv"] = fuzzerstate.instr_objs_seq[failing_bb_id][failing_instr_id].priv_level
     ret_dict["cross-layout"] = cross_layout
 
     if is_success_larger:
@@ -1508,7 +1509,7 @@ def reduce_program(memsize: int, design_name: str, randseed: int, nmax_bbs: int,
         print(ret_msg)
     fuzzerstate.log(ret_msg)
     
-    with open(f"{fuzzerstate.tmp_dir}/reduce.log","w") as f:
+    with open(f"{fuzzerstate.tmp_dir}/reducelog.json","w") as f:
         json.dump(ret_dict,f)
 
     # if not NO_REMOVE_TMPFILES and not cross_privilege and not cross_layout:
