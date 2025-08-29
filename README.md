@@ -89,4 +89,7 @@ Afterwards, in the *plotting/* directory, run
 ```
 to plot the data. Note that the obtained data and plots might deviate from the original paper due to smaller sample size and system variations.
 
+## Testing PoCs
+To test PoCs from prior work, look at the README in the *pocs/* directory for further instructions.
+
 
