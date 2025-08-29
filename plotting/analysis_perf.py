@@ -6,12 +6,17 @@ from seaborn.objects import Stack
 import json
 import glob
 import pandas as pd
+import pickle
 import os
 import sys
 sys.path.append("/mnt/milesan-meta/plotting")
 from cfg import *
 #%%
-def get_perf_df():
+def get_perf_df(use_cached: bool = True):
+    if(use_cached):
+        with open(PERF_PICKLE_PATH,"rb") as f:
+            return pickle.load(f)
+
     perf_df = pd.DataFrame()
     for file in glob.glob(PERF_PATH+ "**/perfstats.json", recursive=True):
         with open(file, "r") as f:
@@ -103,7 +108,7 @@ def plot_throughput(perf_df):
 
 #%%
 if __name__ == "__main__":
-    perf_df = get_perf_df()
+    perf_df = get_perf_df(use_cached = "--cached" in sys.argv)
     perf_means = compute_perf_means(perf_df)
     plot_proggen(perf_means)
     plot_throughput(perf_df)

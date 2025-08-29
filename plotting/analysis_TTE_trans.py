@@ -10,6 +10,7 @@ import numpy as np
 import re
 import pickle
 import sys
+sys.path.append("/mnt/milesan-meta/plotting")
 from cfg import *
 # %% leakage identification
 def is_branch(instr):
@@ -27,44 +28,12 @@ def is_except(instr):
 def is_load(instr): 
     return "lh" in instr or "lb" in instr or "lw" in instr or "ld" in instr 
 
-def leaker_identifier_f(row, reduce_log):
-    cross_priv = row["taint_source_priv"] != row["leaker_priv"]
-    leaker = row["leaker"]
-    if is_ret(leaker):
-        if cross_priv:
-            return "cp-Spectre-RSB"
-        else:
-            return "Spectre-RSB"
-    elif is_branch(leaker):
-        if cross_priv:
-            return "Trans. Meltdown"
-        else:
-            return "Spectre-V1"
-    elif is_jalr(leaker):
-        if cross_priv:
-            return "cp-Spectre-V2"
-        else:
-            return "Spectre-V2"
-    elif is_except(leaker) and is_load(leaker):
-        if row["dut"] == "pt-boom" and row["id"] not in reduce_log[reduce_log["dut"] == "boom"]["id"]:
-            return "MDS*"
-        return "Meltdown"
-    elif is_load(leaker):
-        if cross_priv:
-            return "cp-Spectre-V4"
-        else:
-            return "Spectre-V4"
-
 def leakage_type(x):
     return "cross-privilege" if x["cross-priv"] else "intra-privilege"
 
-def get_ttes(load_pickle):
-    if load_pickle:
-        with open(TTES_PICKLE_PATH,"rb") as f:
-            return pickle.load(f)
-
+def get_perfstats(base_path = CCS_PATH, n_runs = 50):
     perfstats = pd.DataFrame()
-    for i,file in enumerate(glob.glob(CCS_PATH+ "/**/perfstats.json", recursive=True)):
+    for i,file in enumerate(glob.glob(base_path+ "/**/perfstats.json", recursive=True)):
         if "to" not in file:
             continue
         with open(file, "r") as f:
@@ -74,20 +43,9 @@ def get_ttes(load_pickle):
         p["taint_sink_priv"] = context[-1]
         p["context"] = context
         perfstats = pd.concat([perfstats, pd.DataFrame([p])])
-    reduce_log = pd.DataFrame()
-    for i,file in enumerate(glob.glob(CCS_PATH+ "/**/reduce.log.json", recursive=True)):
-        if "to" not in file:
-            continue
-        with open(file, "r") as f:
-            p = json.load(f)
-        context = re.findall("[SUM]_to_[SUM]",file)[0]
-        p["taint_source_priv"] = context[0]
-        p["taint_sink_priv"] = context[-1]
-        p["context"] = context
-        reduce_log = pd.concat([reduce_log, pd.DataFrame([p])])
-    N_RUNS = 50
+
     # bin the collected seeds into random sets.
-    perfstats["run"] = perfstats["seed"]%N_RUNS
+    perfstats["run"] = perfstats["seed"]%n_runs
     # compute the accumulated core hours within the respective sets.
     perfstats["t_acc"] = perfstats.apply( \
             lambda row: \
@@ -100,27 +58,81 @@ def get_ttes(load_pickle):
                     ['t_total'].sum(), axis=1)
     # compute the core hours from the core seconds.
     perfstats['t_acc_h'] = perfstats['t_acc'] / 3600
-    # merge meta info from reduction log into performance stats.
-    merged = pd.merge(reduce_log, perfstats,on = ["id","context"],how="left")
+    return perfstats
 
+def get_reducelogs(base_path = CCS_PATH):
+    reduce_log = pd.DataFrame()
+    for i,file in enumerate(glob.glob(CCS_PATH+ "/**/reducelog.json", recursive=True)):
+        if "to" not in file:
+            continue
+        with open(file, "r") as f:
+            p = json.load(f)
+        context = re.findall("[SUM]_to_[SUM]",file)[0]
+        p["taint_source_priv"] = context[0]
+        p["taint_sink_priv"] = context[-1]
+        p["context"] = context
+        reduce_log = pd.concat([reduce_log, pd.DataFrame([p])])
+    return reduce_log
+
+def merge_perf_and_reduce(perfstats, reduce_log):
+    def leaker_identifier_f(row):
+        cross_priv = row["cross-priv"]
+        leaker = row["failing_instr"]
+        if is_ret(leaker):
+            if cross_priv:
+                return "cp-Spectre-RSB"
+            else:
+                return "Spectre-RSB"
+        elif is_branch(leaker):
+            if cross_priv:
+                return "Trans. Meltdown"
+            else:
+                return "Spectre-V1"
+        elif is_jalr(leaker):
+            if cross_priv:
+                return "cp-Spectre-V2"
+            else:
+                return "Spectre-V2"
+        elif is_except(leaker) and is_load(leaker):
+            if row["dut"] == "pt-boom" and row["id"] not in reduce_log[reduce_log["dut"] == "boom"]["id"]:
+                return "MDS*"
+            return "Meltdown"
+        elif is_load(leaker):
+            if cross_priv:
+                return "cp-Spectre-V4"
+            else:
+                return "Spectre-V4"
+    merged = pd.merge(reduce_log, perfstats,on = ["id","context"],how="left")
     for col in merged.columns:
         if col.endswith("_x"):
             if set(merged[col] == merged[col[:-2]+"_y"]) == {True}:
                 merged[col[:-2]] = merged[col]
     
     merged["vuln"] = merged.apply(leaker_identifier_f, axis=1)
+    return merged
+
+def get_ttes(base_path = CCS_PATH, use_cached: bool = False, n_runs = N_RUNS):
+    if use_cached:
+        with open(TRANS_TTES_PICKLE_PATH,"rb") as f:
+            return pickle.load(f)
+
+    perfstats = get_perfstats(base_path,n_runs)
+    reduce_log = get_reducelogs(base_path)
+    merged = merge_perf_and_reduce(perfstats, reduce_log)
+
+    # merge meta info from reduction log into performance stats.
     ttes = pd.DataFrame()
     for vuln in set(merged["vuln"]):
-        for run in range(0,N_RUNS):
+        for run in range(0,n_runs):
             for dut in set(merged["dut"]):
                     for taint_source_priv in set(merged["taint_source_priv"]):
-                        for leaker_priv in set(merged["leaker_priv"]):
+                        for leaker_priv in set(merged["leaker-priv"]):
                             t = merged[
                                 (merged["vuln"] == vuln) &  \
                                 (merged["run"] == run) & \
                                 (merged["dut"] == dut) & \
                                 (merged["taint_source_priv"] == taint_source_priv) & \
-                                (merged["leaker_priv"] == leaker_priv) \
+                                (merged["leaker-priv"] == leaker_priv) \
                                 ]
                             if not len(t):
                                 continue
@@ -136,7 +148,7 @@ def get_ttes(load_pickle):
                                         "dut":dut,
                                         "pretty_name_dut" : PRETTY_NAMES_DUT[dut],
                                         "taint_source_priv": taint_source_priv,
-                                        "leaker_priv": leaker_priv,
+                                        "leaker-priv": leaker_priv,
                                         "id" : id.values[0],
                                         "cross-priv": taint_source_priv != leaker_priv
                                     }
@@ -148,38 +160,29 @@ def get_ttes(load_pickle):
     return ttes
 
 
-
-#%%
-
 def s_to_cpuh(s):
     return f"{int(s//3600)}h{int((s%3600)//60)}m"
-#%%
 def compute_min_tte(x):
     return  min(x["tte"])
 
-#%%
 def compute_median_tte(x):
     return np.median(x["tte"])
 
-#%%
 def compute_mean_tte(x):
     return np.mean(x["tte"])
-#%%
+
 def compute_stddev_tte(x):
     return np.std(x["tte"])
 
-#%%
 def compute_min_tte(x):
     return np.std(x["tte"])
 
-#%%
 def compute_specdoc_mean_speedup(x):
     if x["vuln"] in TTE_SPECDOC.keys():
         return TTE_SPECDOC[x["vuln"]]/x["mean"]
 def compute_specdoc_max_speedup(x):
     if x["vuln"] in TTE_SPECDOC.keys():
         return TTE_SPECDOC[x["vuln"]]/x["min"]
-#%%
 def get_tables(ttes):
     medians = ttes.groupby(["dut", "vuln"]).apply(compute_median_tte)
     means = ttes.groupby(["dut", "vuln"]).apply(compute_mean_tte)
@@ -211,7 +214,7 @@ def get_tables(ttes):
         "Spectre-V1", 
         "Spectre-V2", 
         "Spectre-RSB", 
-        # "Spectre-V4", 
+        # "Spectre-V4", since programs are random, we rarely trigger it
         "Meltdown", 
         "Trans. Meltdown", 
         "cp-Spectre-V2", 
@@ -248,7 +251,7 @@ def plot_ttes(ttes):
 
 #%%
 if __name__ == "__main__":
-    ttes = get_ttes("--use-pickle" in sys.argv)
+    ttes = get_ttes(base_path = CCS_PATH, use_cached="--cached" in sys.argv)
     plot_ttes(ttes)
     table_data_boom = get_tables(ttes)
     table_data_boom.to_csv(TABLE_PATH + "/tte_transient.csv")

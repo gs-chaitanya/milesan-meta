@@ -5,11 +5,15 @@ import seaborn as sns
 import json
 import glob
 import pandas as pd
+import pickle
 import sys
 sys.path.append("/mnt/milesan-meta/plotting")
 from cfg import *
 
-def get_ttes():
+def get_ttes(use_cached: bool = True):
+    if(use_cached):
+        with open(CT_TTES_PICKLE_PATH,"rb") as f:
+            return pickle.load(f)
     seed_to_time = pd.DataFrame()
     for file in glob.glob(CT_VIOLATIONS_PATH+ "**/perfstats.json", recursive=True):
         with open(file, "r") as f:
@@ -118,7 +122,7 @@ def get_tables(seed_data):
 
 #%%
 if __name__ == "__main__":
-    ttes = get_ttes()
+    ttes = get_ttes(use_cached="--cached" in sys.argv)
     plot_cva6(ttes)
     plot_openc910(ttes)
     get_tables(ttes)
