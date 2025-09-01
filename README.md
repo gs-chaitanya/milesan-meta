@@ -5,15 +5,14 @@ To setup the environment variables run
 ```
 source env.sh
 ```
-Note that you can skip this step when using the provided [docker image](https://github.com/comsec-group/milesan-docker).
 
-### Using modelsim or verilator
-Since the setup is meant to be used from a docker container and modelsim is usually not avaiable, we provide a modelsim server that runs on the host system and interfaces with the docker container through a mounted directory. For this purpose, run:
+### Using ModelSim or Verilator
+Since the setup is meant to be used from a docker container and ModelSim is usually not avaiable, we provide a ModelSim server that runs on the host system and interfaces with the docker container through a mounted directory. For this purpose, run:
 ```
 cd fuzzer
 python do_run_modelsim.py
 ```
-which starts the modelsim server which waits for requests in the MODELSIM_REQ_DIR directory, as set from *env.sh*.
+which starts the ModelSim server which waits for requests in the MODELSIM_REQ_DIR directory, as set from *env.sh*.
 ### Fuzzing
 First, cd into the *fuzzer/* directory
 ```
@@ -23,15 +22,15 @@ To fuzz a core, run the following
 ```
 python do_check_isa_sim.py [DUT] [N_CORES] [N_SEEDS] [SEED_OFFSET]
 ```
-e.g., to test the Rocket core with a simple program, run
+e.g., to test the Rocket core with a single RandOS program, run
 ```
 python do_check_isa_sim.py rocket 1 1 0
 ```
 This will generate a RandOS program according to the standard configuration in *fuzzer/params/fuzzparams_default.py*. You can use environment variables to change these parameters, e.g.,
 ```
-USE_MMU=0 USE_MODELSIM=0 TAINT_SOURCE_PRIVS=S TAINT_SINK_PRIVSU python do_check_isa_sim.py rocket 1 1 0
+USE_MODELSIM=0 TAINT_SOURCE_PRIVS=S TAINT_SINK_PRIVS=U python do_check_isa_sim.py rocket 1 1 0
 ```
-to generate an executable where taint is only allowed in S-mode (i.e., S-mode is the taint-source privilege), and run it using verilator, instead of modelsim.
+to generate an executable where taint is only allowed in S-mode (i.e., S-mode is the taint-source privilege), and run it using Verilator, instead of ModelSim.
 
 ### Reduction
 To reduce a test case, run
@@ -81,7 +80,7 @@ to run the benchmarking as required. This will perform fuzzing campaigns for
 3) the reduction performance breakdown (Figure 8) and
 4) the fuzzing throughput (Figure 9).
 
-CAUTION: Performing all these experiments might take up considerable computing resources and take a few days to complete.
+**CAUTION:** Performing all these experiments might consume considerable computing resources and take a few days to complete.
 
 Afterwards, in the *plotting/* directory, run
 ```
@@ -90,6 +89,4 @@ Afterwards, in the *plotting/* directory, run
 to plot the data. Note that the obtained data and plots might deviate from the original paper due to smaller sample size and system variations.
 
 ## Testing PoCs
-To test PoCs from prior work, look at the README in the *pocs/* directory for further instructions.
-
-
+To test PoCs from this and prior work, look at the README in the *pocs/* directory for further instructions.
