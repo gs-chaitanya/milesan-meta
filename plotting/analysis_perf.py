@@ -12,13 +12,13 @@ import sys
 sys.path.append("/mnt/milesan-meta/plotting")
 from cfg import *
 #%%
-def get_perf_df(use_cached: bool = True):
+def get_perf_df(basedir = BASEDIR, use_cached: bool = False):
     if(use_cached):
-        with open(PERF_PICKLE_PATH,"rb") as f:
+        with open(basedir + PERF_PICKLE_PATH,"rb") as f:
             return pickle.load(f)
 
     perf_df = pd.DataFrame()
-    for file in glob.glob(PERF_PATH+ "**/perfstats.json", recursive=True):
+    for file in glob.glob(basedir + PERF_PATH+ "**/perfstats.json", recursive=True):
         with open(file, "r") as f:
             perf_df = pd.concat([perf_df,
                 pd.DataFrame([

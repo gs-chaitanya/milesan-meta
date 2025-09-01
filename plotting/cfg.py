@@ -9,14 +9,14 @@ N_RUNS = 50
 BASEDIR = os.getenv("MILESAN_DATADIR")
 # BASEDIR = "/mnt/milesan-data-ccs-test"
 
-TRANS_TTES_PICKLE_PATH = BASEDIR + "/trans-ttes.pickle"
-CT_TTES_PICKLE_PATH = BASEDIR + "/ct-ttes.pickle"
-PERF_PICKLE_PATH = BASEDIR + "/perf.pickle"
+TRANS_TTES_PICKLE_PATH = "/trans-ttes.pickle"
+CT_TTES_PICKLE_PATH = "/ct-ttes.pickle"
+PERF_PICKLE_PATH = "/perf.pickle"
 
-CT_VIOLATIONS_PATH = BASEDIR+ "/CT-VIOLATIONS-TTE/"
-TRANS_PATH = BASEDIR+ "/TRANS-TTE/"
-PERF_PATH =  BASEDIR + "/PERF/"
-REDUCE_PATH =  BASEDIR + "/REDUCE/"
+CT_VIOLATIONS_PATH = "CT-VIOLATIONS-TTE/"
+TRANS_PATH = "TRANS-TTE/"
+PERF_PATH =  "PERF/"
+REDUCE_PATH =  "REDUCE/"
 PLOT_PATH = "/mnt/milesan-meta/plotting/plots"
 TABLE_PATH = "/mnt/milesan-meta/plotting/tables"
 PRETTY_NAMES_DUT = {

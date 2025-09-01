@@ -10,12 +10,12 @@ import sys
 sys.path.append("/mnt/milesan-meta/plotting")
 from cfg import *
 
-def get_ttes(use_cached: bool = True):
+def get_ttes(basedir= BASEDIR, use_cached: bool = False):
     if(use_cached):
-        with open(CT_TTES_PICKLE_PATH,"rb") as f:
+        with open(basedir+CT_TTES_PICKLE_PATH,"rb") as f:
             return pickle.load(f)
     seed_to_time = pd.DataFrame()
-    for file in glob.glob(CT_VIOLATIONS_PATH+ "**/perfstats.json", recursive=True):
+    for file in glob.glob(basedir + CT_VIOLATIONS_PATH+ "**/perfstats.json", recursive=True):
         with open(file, "r") as f:
             d = json.load(f)
         d["pretty_name_dut"] = PRETTY_NAMES_DUT[d["dut"]]
@@ -27,7 +27,7 @@ def get_ttes(use_cached: bool = True):
         ])
 
     seed_to_reduce = pd.DataFrame()
-    for i,file in enumerate(glob.glob(CT_VIOLATIONS_PATH + "**/reduce.log", recursive=True)):
+    for i,file in enumerate(glob.glob(basedir + CT_VIOLATIONS_PATH + "**/reducelog.json", recursive=True)):
         with open(file, "r") as f:
             p = json.load(f)
             p["leaker"] = p["failing_instr"].split(":")[2].strip(" ").split(" ")[0]
@@ -58,9 +58,9 @@ def get_ttes(use_cached: bool = True):
 def plot_cva6(seed_data):
     fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
     sns.violinplot(seed_data[seed_data["dut"] == "cva6"], y="tte_m",x="leaker",saturation=1,order=["div","divu","divw","divuw","rem","remu","remw","remuw"],palette=["b"])
-    ax.set_ylim([0,30])
-    ax.set_yticks([i*5 for i in range(0,7,1)])
-    ax.set_yticklabels([i*5 for i in range(0,7,1)],fontsize=TICKSIZE)
+    # ax.set_ylim([0,30])
+    # ax.set_yticks([i*5 for i in range(0,7,1)])
+    # ax.set_yticklabels([i*5 for i in range(0,7,1)],fontsize=TICKSIZE)
     ax.set_ylabel("TTE [core-m]",fontsize=LABELSIZE)
     ax.set_xlabel("")
     ax.grid()
@@ -71,9 +71,9 @@ def plot_cva6(seed_data):
 def plot_openc910(seed_data):
     fig, ax = plt.subplots(figsize=FIGSIZE_FLAT)
     sns.violinplot(seed_data[seed_data["dut"] == "openc910"], y="tte_m",x="leaker",saturation=1,order=["div","divu","divw","divuw","rem","remu","remw","remuw"],palette=["b"])
-    ax.set_ylim([0,60])
-    ax.set_yticks([i*10 for i in range(0,7,1)])
-    ax.set_yticklabels([i*10 for i in range(0,7,1)],fontsize=TICKSIZE)
+    # ax.set_ylim([0,60])
+    # ax.set_yticks([i*10 for i in range(0,7,1)])
+    # ax.set_yticklabels([i*10 for i in range(0,7,1)],fontsize=TICKSIZE)
     ax.set_ylabel("TTE [core-m]",fontsize=LABELSIZE)
     ax.set_xlabel("")
     ax.grid()
@@ -104,7 +104,7 @@ def compute_stddev_acc(x):
     stddev = np.std(x["tte"])
     return s_to_cpuh(stddev)
 
-def get_tables(seed_data):
+def get_tables(seed_data, basedir = BASEDIR):
     for dut in ["cva6","openc910"]:
         mins = seed_data[seed_data["dut"] == dut].groupby("leaker").apply(compute_min_tte)
         means =  seed_data[seed_data["dut"] == dut].groupby("leaker").apply(compute_mean_tte)
