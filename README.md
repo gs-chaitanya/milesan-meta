@@ -15,6 +15,8 @@ To setup the environment variables run
 ```
 source env.sh
 ```
+NOTE: When using natively, the username and environment variables (LOCAL_MNT, VSIM) in *env.sh* need to be adjusted accordingly beforehand.
+
 
 ### Using ModelSim or Verilator
 Since the setup is meant to be used from a docker container and ModelSim is usually not avaiable, we provide a ModelSim server that runs on the host system and interfaces with the docker container through a mounted directory. For this purpose, run:
@@ -23,10 +25,20 @@ cd fuzzer
 python do_run_modelsim.py
 ```
 which starts the ModelSim server which waits for requests in the MODELSIM_REQ_DIR directory, as set from *env.sh*.
+### Compiling the DUTs
+You can compile the designs ([milesan-kronos](https://github.com/comsec-group/milesan-kronos), [milesan-chipyard](https://github.com/comsec-group/milesan-chipyard), [milesan-cva6]() and [milesan-openc910](https://github.com/comsec-group/milesan-openc910)) individually in their respective *milesan/* directories by running
+```
+make run_vanilla_notrace && make run_drfuzz_mem_notrace
+```
+When using ModelSim, additionally navigate to the mounted design directory on the host system and run
+```
+make run_drfuzz_mem_notrace_modelsim
+```
+
 ### Fuzzing
 First, cd into the *fuzzer/* directory
 ```
-cd fuzzer
+cd /mnt/fuzzer
 ```
 To fuzz a core, run the following
 ```
@@ -59,7 +71,7 @@ REDUCE_TAINT=0 python do_reduce_single.py boom 2499
 
 ## Evaluation
 ### Benchmarking
-To perform benchmarking, cd into the *fuzzer/benchmarking* directory.
+To perform benchmarking, cd into the */mnt/milesan-meta/fuzzer/benchmarking* directory.
 The *fuzz_and_reduce.py* script allows fuzzing a set of DUTs with various configurations and subsequently reducing the leaking programs while collecting performance stats etc.
 To perform benchmarking of the transient vulnerabilities discovered on BOOM, run
 ```
