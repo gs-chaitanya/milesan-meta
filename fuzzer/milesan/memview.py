@@ -17,7 +17,7 @@ import random
 from copy import deepcopy
 import numpy as np
 # from params.runparams import DO_ASSERT
-from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS, P_UNTAINT_BIT, USE_MMU
+from params.fuzzparams import P_TAINT_REG, TAINT_EN, MAX_NUM_INIT_TAINTED_REGS, P_UNTAINT_BIT, USE_MMU, FORCE_TAINT_VALUE
 from params.runparams import CHECK_MEM_T0_PRECISE, PRINT_MEM_STORES, PRINT_MEM_STORES_T0, PRINT_MEM_LOADS, PRINT_MEM_LOADS_T0, INSERT_REGDUMPS
 from milesan.mmu_utils import PAGE_ALIGNMENT_MASK, PAGE_ALIGNMENT_BITS, PHYSICAL_PAGE_SIZE
 from milesan.spikeresolution import SPIKE_STARTADDR
@@ -364,6 +364,17 @@ class MemoryView:
             if TAINT_EN and n_tainted_regs < MAX_NUM_INIT_TAINTED_REGS:
                 if random.random() < P_TAINT_REG:
                     rand_val = random.randint(1,MAX_64b if fuzzerstate.is_design_64bit else MAX_32b)
+                    #gs - taint mod
+                    ################################################
+                    # Force tainted data bits to 0 or 1 if requested
+                    if FORCE_TAINT_VALUE is not None:
+                        max_val = MAX_64b if fuzzerstate.is_design_64bit else MAX_32b
+                        if FORCE_TAINT_VALUE == 0:
+                            modified_data = reg_data_content & (~rand_val & max_val)
+                        else:
+                            modified_data = reg_data_content | rand_val
+                        self.write(addr, modified_data & max_val, n_bytes)
+                    ################################################
                     n_tainted_regs += 1
                     self.write_t0(addr, rand_val, n_bytes)
             else:

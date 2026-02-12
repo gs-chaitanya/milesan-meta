@@ -7,7 +7,7 @@ import numpy as np
 
 from params.runparams import DO_ASSERT, PRINT_FSM_TRANSITIONS
 
-from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED, NUM_MAX_PRODUCED0_REGS, NUM_MAX_PRODUCED1_REGS, TAINT_NONTAKEN_BRANCH_IMM, TAINT_IMMRD_IMM, P_LOAD_TAINT, DISABLE_COMPUTATION_ON_TAINT
+from params.fuzzparams import NUM_MIN_FREE_INTREGS, NUM_MIN_UNTAINTED_INTREGS, REG_FSM_WEIGHTS, NONTAKEN_BRANCH_INTO_RANDOM_DATA_PROBA, PROBA_NEW_SATP_NOT_USED, NUM_MAX_PRODUCED0_REGS, NUM_MAX_PRODUCED1_REGS, TAINT_NONTAKEN_BRANCH_IMM, TAINT_IMMRD_IMM, P_LOAD_TAINT, DISABLE_COMPUTATION_ON_TAINT, FORCE_TAINT_VALUE
 from params.fuzzparams import USE_COMPRESSED, COMPRESS_INSTRUCTION
 from params.runparams import GET_DATA
 from milesan.util import IntRegIndivState, SimulatorEnum
@@ -50,6 +50,24 @@ def gen_random_imm(instr_str: str, is_design_64bit: bool):
     rand_val = random.randrange(left_bound, right_bound)
     # print(f"{PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1]}, {INSTRUCTION_IDS[instr_str]}, {instr_str}")
     return rand_val
+
+#gs - taint mod
+################################################ - very hacky - TODO: need to revisit this again to confirm
+def _force_tainted_bits(val, mask, imm_width, is_signed):
+    """Force the data bits under the taint mask to 0 or 1 per FORCE_TAINT_VALUE.
+    Works in the immediate's native bit-width to handle signed values correctly."""
+    full_mask = (1 << imm_width) - 1
+    uval = val & full_mask
+    umask = mask & full_mask
+    if FORCE_TAINT_VALUE == 0:
+        uval = uval & (~umask & full_mask)  # clear tainted bits
+    else:  # FORCE_TAINT_VALUE == 1
+        uval = uval | umask                 # set tainted bits
+    uval = uval & full_mask
+    if is_signed and (uval >> (imm_width - 1)) & 1:
+        uval -= (1 << imm_width)  # re-sign
+    return uval
+################################################
 
 def gen_random_imm_t0(instr_str: str, fuzzerstate):
     n_free_untainted_regs = fuzzerstate.intregpickstate.get_num_untainted_regs_in_state(IntRegIndivState.FREE)
@@ -183,6 +201,15 @@ def _create_ImmRdInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
             # print(f"compressed {instr_str} into {instr_str_cmp}") #DEBUG
             instr_str = instr_str_cmp
 
+    #gs - taint mod
+    ################################################
+    # Force tainted data bits in immediate to 0 or 1 if requested
+    if FORCE_TAINT_VALUE is not None and imm_t0:
+        _w = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1] if fuzzerstate.is_design_64bit else PARAM_SIZES_BITS_32[INSTRUCTION_IDS[instr_str]][-1]
+        _s = PARAM_IS_SIGNED[INSTRUCTION_IDS[instr_str]][-1]
+        imm = _force_tainted_bits(imm, imm_t0, _w, _s)
+    ################################################
+
     return ImmRdInstruction_t0(fuzzerstate,instr_str, rd, imm, imm_t0, iscompressed)
 
 def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
@@ -219,6 +246,15 @@ def _create_RegImmInstruction(instr_str: str, fuzzerstate, iscompressed: bool):
             iscompressed = True
             # print(f"compressed {instr_str}, {ABI_INAMES[rd]}, {ABI_INAMES[rs1]}, {hex(imm)}, into {instr_str_cmp}") #DEBUG
             instr_str = instr_str_cmp
+
+    #gs - taint mod
+    ################################################
+    # Force tainted data bits in immediate to 0 or 1 if requested
+    if FORCE_TAINT_VALUE is not None and imm_t0:
+        _w = PARAM_SIZES_BITS_64[INSTRUCTION_IDS[instr_str]][-1] if fuzzerstate.is_design_64bit else PARAM_SIZES_BITS_32[INSTRUCTION_IDS[instr_str]][-1]
+        _s = PARAM_IS_SIGNED[INSTRUCTION_IDS[instr_str]][-1]
+        imm = _force_tainted_bits(imm, imm_t0, _w, _s)
+    ################################################
 
     return RegImmInstruction_t0(fuzzerstate, instr_str, rd, rs1, imm, imm_t0, iscompressed)
 
@@ -277,6 +313,13 @@ def _create_BranchInstruction(instr_str: str, fuzzerstate, curr_addr: int, iscom
             # print(f"compressed {instr_str} into {instr_str_cmp}") #DEBUG
             instr_str = instr_str_cmp
 
+
+    #gs - taint mod
+    ################################################
+    # Force tainted data bits in immediate to 0 or 1 if requested
+    if FORCE_TAINT_VALUE is not None and imm_t0:
+        imm = _force_tainted_bits(imm, imm_t0, curr_param_size, True)
+    ################################################
 
     return BranchInstruction_t0(fuzzerstate, instr_str, rs1, rs2, imm, imm_t0, plan_taken, iscompressed)
     

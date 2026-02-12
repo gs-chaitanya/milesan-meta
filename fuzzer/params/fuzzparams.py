@@ -246,6 +246,15 @@ USE_SPIKE_INTERM_ELF = False # When both this and INSERT_REGDUMPS are enabled, t
 
 TAINT_EN = True
 
+#gs - taint mod
+################################################
+# Controls the DATA VALUE at tainted bit positions. Taint masks remain random.
+# None  = default (random data under taint)
+# 0     = force all tainted bits in data to 0:  data = data & ~taint_mask
+# 1     = force all tainted bits in data to 1:  data = data | taint_mask
+FORCE_TAINT_VALUE = None
+################################################
+
 P_TAINT_REG = 0 # Probability that an initial register value is tainted. If non-zero, might be loaded into icache as the register values are stored right after the instruction code. TODO: use loads from (non-)tainted page instead
 if USE_MMU: # not used if TAINT_SOURCE_PRIVS fixed.
         P_TAINT_IN_MACHINE = 0.5

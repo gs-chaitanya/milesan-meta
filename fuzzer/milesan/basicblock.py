@@ -8,7 +8,7 @@ from params.runparams import DO_ASSERT
 from common.spike import SPIKE_STARTADDR
 from rv.csrids import CSR_IDS
 from params.fuzzparams import BRANCH_TAKEN_PROBA, LIMIT_MEM_SATURATION_RATIO, RANDOM_DATA_BLOCK_MIN_SIZE_BYTES, RANDOM_DATA_BLOCK_MAX_SIZE_BYTES, FENCE_CF_INSTR
-from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS, ALLOW_JALR_IN_NEUTRAL_PRIVS, ALLOW_BRANCH_IN_NEUTRAL_PRIVS
+from params.fuzzparams import USE_MMU, P_RANDOM_DATA_TAINTED, MIN_N_RANDOM_DATA_BLOCKS, MAX_N_RANDOM_DATA_BLOCKS, P_PAGE_HAS_TAINT, TAINT_EN, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SOURCE_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_TAINT_SINK_PRIVS, ALLOW_NONTAKEN_BRANCHES_IN_NEUTRAL_PRIVS, ALLOW_JALR_IN_NEUTRAL_PRIVS, ALLOW_BRANCH_IN_NEUTRAL_PRIVS, FORCE_TAINT_VALUE
 from params.fuzzparams import FILL_MEM_WITH_DEAD_CODE, NUM_MAX_N_INSTRS
 from params.runparams import INSERT_REGDUMPS, INSERT_FENCE, GET_DATA, DEBUG_PRINT
 from milesan.randomize.createcfinstr import create_instr, create_regfsm_instrobjs, create_memfsm_instrobjs
@@ -406,6 +406,20 @@ def gen_random_data_block(fuzzerstate, page_has_taint = False):
         fuzzerstate.memview.write(addr+SPIKE_STARTADDR, rand_val, 4)
         if TAINT_EN and page_has_taint and random.random() < P_RANDOM_DATA_TAINTED:
             rand_val_t0 = rng.randint(0, 2**32)
+            #gs - taint mod
+            ################################################
+            # Force tainted data bits to 0 or 1 if requested
+            if FORCE_TAINT_VALUE is not None:
+                if FORCE_TAINT_VALUE == 0:
+                    rand_val = rand_val & (~rand_val_t0 & 0xFFFFFFFF)  # clear tainted bits
+                else:
+                    rand_val = rand_val | rand_val_t0                  # set tainted bits
+                rand_val = rand_val & 0xFFFFFFFF
+                # Re-write modified data value and update stored content
+                fuzzerstate.memview.write(addr+SPIKE_STARTADDR, rand_val, 4)
+                random_block_content4by4bytes[-1] = rand_val
+            ################################################
+
             fuzzerstate.memview.write_t0(addr+SPIKE_STARTADDR, rand_val_t0, 4)
     fuzzerstate.random_block_contents4by4bytes.append(random_block_content4by4bytes)
 

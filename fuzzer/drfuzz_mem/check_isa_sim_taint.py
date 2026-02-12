@@ -20,6 +20,10 @@ from milesan.randomize.pickbytecodetaints import CFINSTRCLASS_INJECT_PROBS
 from milesan.registers import ABI_INAMES,MAX_32b
 import subprocess
 import time
+
+# Set to True to quit after ELF generation (after MMU validation) (gs changed this)
+QUIT_AFTER_ELF_GEN = True
+
 def is_tolerate(design_name: str, instr: BaseInstruction):
     if isinstance(instr, (CSRInstruction, EPCWriterInstruction, GenericCSRWriterInstruction)):
         if "boom" in design_name:
@@ -71,6 +75,16 @@ def check_isa_sim_taint(design_name: str,seed: int, generate_fuzzerstate: bool =
         fuzzerstate.intregpickstate.setup_registers() # Restore registers to before anything was executed.
         fuzzerstate.memview.restore(0) # Restore contents before anything was executed.
         fuzzerstate.csrfile.reset() # Reset all CSRs to zero.
+        
+        # Exit cleanly after ELF generation and validation if requested (gs changed this)
+        if QUIT_AFTER_ELF_GEN:
+            print(f"ELF generated successfully: {rtl_elfpath}")
+            print(f"Intermediate ELF: {interm_elfpath}")
+            print(f"Fuzzer state saved in: {fuzzerstate.tmp_dir}")
+            if USE_MMU:
+                print(f"MMU validation passed")
+            print(f"Quitting after ELF generation")
+            return fuzzerstate
     else:
         assert fuzzerstate is not None, "fuzzerstate needs to be provided when generate_fuzzerstate is disabled."
         expected_regvals = fuzzerstate.expected_regvals

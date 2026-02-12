@@ -15,6 +15,7 @@ from collections import defaultdict
 from copy import copy
 import os
 import pickle
+import time
 
 if USE_COMPRESSED:
     from rv.rv32ic import rv32ic_addi
@@ -140,9 +141,13 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
 
 
     fuzzerstate.gen_tmp_dir()
-    elfpath = os.path.join(fuzzerstate.tmp_dir, f"{prefixname}{test_identifier}.elf")
+    # generate a timestampt for the elf : gs
+    timestamp = time.strftime("%d_%m_%H%M")
+    elfpath = os.path.join(fuzzerstate.tmp_dir, f"{timestamp}_{prefixname}{test_identifier}.elf")
 
     # Generate the ELF object
+    # print(type(addr_instrs))
+    # print(addr_instrs)
     gen_elf(curr_bytes, start_addr=fuzzerstate.bb_start_addr_seq[0], section_addr=start_addr, destination_path=elfpath, is_64bit=fuzzerstate.is_design_64bit)
     
     if PICKLE_FUZZERSTATE:
