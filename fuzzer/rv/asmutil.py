@@ -102,6 +102,55 @@ def put_random_value_into_floating_double_reg(val_section_id: int, tgt_reg_id: i
         f"{load_opcode} f{tgt_reg_id}, (x{interm_reg})"
     ]
 
+# Build an address top-down using slli+addi with 11-bit unsigned chunks.
+# Standard lui+addi sign-extends bit 31 on RV64, corrupting addresses >= 0x80000000.
+# This decomposes the value from MSB to LSB using only:
+#   - addi with up to 11-bit chunks (0-2047, positive in signed 12-bit imm)
+#   - slli to shift accumulated bits left (inserts clean zeros, no sign issues)
+# Trailing zero chunks are folded into a single slli.
+# @return list of (opcode: str, value: int) tuples.
+#   First tuple is always ('addi', chunk) with implied rs1=x0.
+#   Subsequent tuples are ('slli', shift) and ('addi', chunk) pairs.
+def li_top_down_ops(addr: int):
+    CHUNK_BITS = 11  # Max bits per addi chunk (0..2047 stays positive in signed 12-bit)
+
+    if addr == 0:
+        return [('addi', 0)]
+
+    if DO_ASSERT:
+        assert addr > 0, f"Address must be positive, got {addr}"
+
+    nbits = addr.bit_length()
+    first_nbits = nbits % CHUNK_BITS or CHUNK_BITS
+
+    # Extract 11-bit chunks from MSB to LSB
+    chunks = []
+    pos = nbits
+    is_first = True
+    while pos > 0:
+        n = first_nbits if is_first else min(CHUNK_BITS, pos)
+        is_first = False
+        pos -= n
+        chunks.append((n, (addr >> pos) & ((1 << n) - 1)))
+
+    # First chunk: addi rd, x0, val
+    ops = [('addi', chunks[0][1])]
+    pending_shift = 0
+
+    for n, val in chunks[1:]:
+        pending_shift += n
+        if val != 0:
+            ops.append(('slli', pending_shift))
+            ops.append(('addi', val))
+            pending_shift = 0
+
+    # Emit remaining shift for trailing zeros
+    if pending_shift > 0:
+        ops.append(('slli', pending_shift))
+
+    return ops
+
+
 # This function sets the value of the given register using an lui+addi sequence.
 # @param do_check_bounds if True, will check that the value is not too big to fit in 31 bits (i.e., in 32 bits but without being sign-extended to 64 bits). DO_ASSERT must be True for it to be effective.
 # @return pair (lui_imm: int, addi_imm: int)
@@ -109,7 +158,7 @@ def li_into_reg(val_unsigned: int, do_check_bounds: bool = True):
     if DO_ASSERT:
         assert val_unsigned >= 0
         if do_check_bounds:
-            assert val_unsigned < 0x80000000, f"For the destination address `{hex(val_unsigned)}`, we will need to manage sign extension, which is not yet implemented here."
+            assert val_unsigned < 0x100000000, f"For the destination address `{hex(val_unsigned)}`, we will need to manage sign extension, which is not yet implemented here."
 
     # Check whether the MSB of the addi would be 1. In this case, we will add 1 to the lui
     is_sign_extend_ones = (val_unsigned >> 11) & 1

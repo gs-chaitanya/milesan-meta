@@ -7,6 +7,7 @@
 from params.runparams import DO_ASSERT, PATH_TO_TMP, PICKLE_FUZZERSTATE
 from params.fuzzparams import USE_MMU, USE_COMPRESSED, FILL_MEM_WITH_DEAD_CODE
 from common.bytestoelf import gen_elf
+from common.designcfgs import get_design_stop_sig_addr
 from common.spike import SPIKE_STARTADDR
 from milesan.finalblock import finalblock_spike_resolution
 from milesan.randomize.pickinstrtype import gen_next_instrstr_from_isaclass
@@ -16,6 +17,7 @@ from copy import copy
 import os
 import pickle
 import time
+from datetime import datetime, timedelta, timezone
 
 if USE_COMPRESSED:
     from rv.rv32ic import rv32ic_addi
@@ -141,14 +143,24 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
 
 
     fuzzerstate.gen_tmp_dir()
-    # generate a timestampt for the elf : gs
-    timestamp = time.strftime("%d_%m_%H%M")
+
+    offset = timezone(timedelta(hours=8))
+    now = datetime.now(offset)
+
+    # Format it exactly like your original snippet
+    timestamp = now.strftime("%d_%m_%H_%M_")
     elfpath = os.path.join(fuzzerstate.tmp_dir, f"{timestamp}_{prefixname}{test_identifier}.elf")
 
     # Generate the ELF object
-    # print(type(addr_instrs))
-    # print(addr_instrs)
-    gen_elf(curr_bytes, start_addr=fuzzerstate.bb_start_addr_seq[0], section_addr=start_addr, destination_path=elfpath, is_64bit=fuzzerstate.is_design_64bit)
+    # Only add tohost/fromhost symbols for RTL ELFs (not spike resolution
+    # or any ELF that will be run on spike).  Spike uses HTIF internally;
+    # adding these symbols causes spike to exit early when the finalblock
+    # writes to tohost, corrupting the debug trace.
+    if not is_spike_resolution:
+        stopsig_addr = get_design_stop_sig_addr(fuzzerstate.design_name)
+    else:
+        stopsig_addr = None
+    gen_elf(curr_bytes, start_addr=fuzzerstate.bb_start_addr_seq[0], section_addr=start_addr, destination_path=elfpath, is_64bit=fuzzerstate.is_design_64bit, tohost_addr=stopsig_addr)
     
     if PICKLE_FUZZERSTATE:
         fuzzerstate.rtl_elfpath = elfpath

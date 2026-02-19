@@ -576,13 +576,16 @@ class PageTablesGen:
             assert ppn_leaf_stopsig + self.page_size_per_layout[layout_id] > self.stopsig_addr
 
             # Make supervisor regdump and stopsig
-            curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf_stopsig, True, is_user=False)
-            if DEBUG_PRINT:
-                print(f"stopsig pte: {hex(curr_pte_supervisor)}: {hex(ppn_leaf_stopsig)} at {hex(self.stopsig_addr)}")
-            final_block_addr_ptes.append(curr_pte_supervisor)
+            # NOTE: append order must match the VA index order in gen_mmu_dependencies:
+            #   regdump_vaddr uses index (n_entries*2),     stopsig_vaddr uses (n_entries*2)+1
+            # So regdump PTE is appended first, then stopsig PTE.
             curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf_regdump, True, is_user=False)
             if DEBUG_PRINT:
                 print(f"regdump pte: {hex(curr_pte_supervisor)}: {hex(ppn_leaf_regdump)} at {hex(self.regdump_addr)}")
+            final_block_addr_ptes.append(curr_pte_supervisor)
+            curr_pte_supervisor = self.gen_page_table_entry(ppn_leaf_stopsig, True, is_user=False)
+            if DEBUG_PRINT:
+                print(f"stopsig pte: {hex(curr_pte_supervisor)}: {hex(ppn_leaf_stopsig)} at {hex(self.stopsig_addr)}")
             final_block_addr_ptes.append(curr_pte_supervisor)
             self.all_pt_entries[layout_id][-1] += final_block_addr_ptes
 

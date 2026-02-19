@@ -20,9 +20,9 @@ if __name__ == "__main__":
 
     # Find registers and initialize them with zero. This is necessary to avoid ambiguity between Verilator and Modelsim traces.
     for line in content.split("\n"):
-        if len(re.findall("reg\s\[[0-9]+:0\][^\[^\]]+;", line)):
-            if re.findall("\[[0-9]+:0\]",line):
-                bitwidth = int(re.findall("\[[0-9]+:0\]",line)[0][1:-2].split(":")[0])+1
+        if len(re.findall(r"reg\s\[[0-9]+:0\][^\[^\]]+;", line)):
+            if re.findall(r"\[[0-9]+:0\]",line):
+                bitwidth = int(re.findall(r"\[[0-9]+:0\]",line)[0][1:-2].split(":")[0])+1
                 new_line = f"{line[:-1]} = {bitwidth}'h0;"
             else:
                 new_line = f"{line[:-1]} = 1'h0;"

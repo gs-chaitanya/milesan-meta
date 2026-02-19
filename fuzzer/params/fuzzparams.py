@@ -252,7 +252,7 @@ TAINT_EN = True
 # None  = default (random data under taint)
 # 0     = force all tainted bits in data to 0:  data = data & ~taint_mask
 # 1     = force all tainted bits in data to 1:  data = data | taint_mask
-FORCE_TAINT_VALUE = None
+FORCE_TAINT_VALUE = 1
 ################################################
 
 P_TAINT_REG = 0 # Probability that an initial register value is tainted. If non-zero, might be loaded into icache as the register values are stored right after the instruction code. TODO: use loads from (non-)tainted page instead
