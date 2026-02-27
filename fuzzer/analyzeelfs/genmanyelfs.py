@@ -15,30 +15,38 @@ import shutil
 from tqdm import tqdm
 
 
-# @param in_tuple: instance_id: int, memsize: int, design_name: str, check_pc_spike_again: bool, randseed: int, nmax_bbs: int, authorize_privileges: bool, outdir_path: str
+# @param in_tuple: instance_id: int, memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, check_pc_spike_again: bool, outdir_path: str, force_taint_value: int|None
 def __gen_elf_worker(in_tuple):
-    instance_id, memsize, design_name, randseed, nmax_bbs, authorize_privileges, check_pc_spike_again, outdir_path = in_tuple
-    fuzzerstate, elfpath, _, _, _, _ = gen_fuzzerstate_elf_expectedvals(memsize, design_name, randseed, nmax_bbs, authorize_privileges, check_pc_spike_again)
-    # Move the file from elfpath to outdir_path, and name it after the design name and instance id.
-    shutil.move(elfpath, os.path.join(outdir_path, f"{design_name}_{instance_id}.elf"))
+    instance_id, memsize, design_name, randseed, nmax_bbs, authorize_privileges, check_pc_spike_again, outdir_path, force_taint_value = in_tuple
+    fuzzerstate, elfpath, interm_elfpath, _, _, _, _ = gen_fuzzerstate_elf_expectedvals(memsize, design_name, randseed, nmax_bbs, authorize_privileges, check_pc_spike_again)
+
+    force_taint_str = str(force_taint_value) if force_taint_value is not None else "none"
+    basename = f"{force_taint_str}_{design_name}_{randseed}"
+
+    # Move the RTL ELF from elfpath to outdir_path.
+    shutil.move(elfpath, os.path.join(outdir_path, f"{basename}.elf"))
 
     # Write the end address (where spike will fail), for further analysis.
-    with open(os.path.join(outdir_path, f"{design_name}_{instance_id}_finaladdr.txt"), "w") as f:
+    with open(os.path.join(outdir_path, f"{basename}_finaladdr.txt"), "w") as f:
         f.write(hex(fuzzerstate.final_bb_base_addr))
 
     # Count the instructions
     num_instrs = len(fuzzerstate.final_bb)
     for bb in fuzzerstate.instr_objs_seq:
         num_instrs += len(bb)
-    with open(os.path.join(outdir_path, f"{design_name}_{instance_id}_numinstrs.txt"), "w") as f:
+    with open(os.path.join(outdir_path, f"{basename}_numinstrs.txt"), "w") as f:
         f.write(hex(num_instrs))
 
     # Save the tuple for debug purposes
-    with open(os.path.join(outdir_path, f"{design_name}_{instance_id}_tuple.txt"), "w") as f:
+    with open(os.path.join(outdir_path, f"{basename}_tuple.txt"), "w") as f:
         f.write('(' + ', '.join(map(str, [memsize, design_name, randseed, nmax_bbs, authorize_privileges])) + ')')
 
+    # Clean up the tmp dir (removes spike ELF and any other intermediates).
+    if fuzzerstate.tmp_dir and os.path.isdir(fuzzerstate.tmp_dir):
+        shutil.rmtree(fuzzerstate.tmp_dir)
 
-def gen_many_elfs(design_name: str, num_cores: int, num_elfs: int, outdir_path, verbose: bool = True):
+
+def gen_many_elfs(design_name: str, num_cores: int, num_elfs: int, outdir_path, force_taint_value=None, verbose: bool = True):
     random.seed(0)
 
     # Ensure that the output directory exists.
@@ -46,10 +54,13 @@ def gen_many_elfs(design_name: str, num_cores: int, num_elfs: int, outdir_path, 
 
     # Gen the program descriptors.
     memsizes, _, randseeds, num_bbss, authorize_privilegess = tuple(zip(*[gen_new_test_instance(design_name, i, True) for i in range(num_elfs)]))
-    workloads = [(i, memsizes[i], design_name, randseeds[i], num_bbss[i], authorize_privilegess[i], False, outdir_path) for i in range(num_elfs)]
+    workloads = [(i, memsizes[i], design_name, randseeds[i], num_bbss[i], authorize_privilegess[i], False, outdir_path, force_taint_value) for i in range(num_elfs)]
 
     calibrate_spikespeed()
-    profile_get_medeleg_mask(design_name)
+    # profile_get_medeleg_mask(design_name)
+    from common.profiledesign import PROFILED_MEDELEG_MASK
+    if PROFILED_MEDELEG_MASK is None:
+        profile_get_medeleg_mask(design_name)
 
     print(f"Starting ELF generation on {num_cores} processes.")
     progress_bar = tqdm(total=num_elfs)
