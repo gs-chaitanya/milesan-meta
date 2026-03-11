@@ -26,14 +26,14 @@ if __name__ == '__main__':
     import milesan.memview
     import milesan.randomize.createcfinstr
 
-    for force_taint_value in [None, 0, 1]:
+    for force_taint_value in [0, 1]:
         # Patch before forking so all worker processes inherit the correct value.
         params.fuzzparams.FORCE_TAINT_VALUE = force_taint_value
         milesan.basicblock.FORCE_TAINT_VALUE = force_taint_value
         milesan.memview.FORCE_TAINT_VALUE = force_taint_value
         milesan.randomize.createcfinstr.FORCE_TAINT_VALUE = force_taint_value
 
-        gen_many_elfs(DESIGN_NAME, 10, 10, os.path.join(PATH_TO_TMP, 'manyelfs'), force_taint_value=force_taint_value)
+        gen_many_elfs(DESIGN_NAME, 10, 1000, os.path.join(PATH_TO_TMP, 'manyelfs'), force_taint_value=force_taint_value)
 
 else:
     raise Exception("This module must be at the toplevel.")

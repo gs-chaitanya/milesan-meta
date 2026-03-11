@@ -18,7 +18,11 @@ from tqdm import tqdm
 # @param in_tuple: instance_id: int, memsize: int, design_name: str, randseed: int, nmax_bbs: int, authorize_privileges: bool, check_pc_spike_again: bool, outdir_path: str, force_taint_value: int|None
 def __gen_elf_worker(in_tuple):
     instance_id, memsize, design_name, randseed, nmax_bbs, authorize_privileges, check_pc_spike_again, outdir_path, force_taint_value = in_tuple
-    fuzzerstate, elfpath, interm_elfpath, _, _, _, _ = gen_fuzzerstate_elf_expectedvals(memsize, design_name, randseed, nmax_bbs, authorize_privileges, check_pc_spike_again)
+    try:
+        fuzzerstate, elfpath, interm_elfpath, _, _, _, _ = gen_fuzzerstate_elf_expectedvals(memsize, design_name, randseed, nmax_bbs, authorize_privileges, check_pc_spike_again)
+    except Exception as e:
+        print(f"Skipping seed {randseed} (taint={force_taint_value}): {e}")
+        return
 
     force_taint_str = str(force_taint_value) if force_taint_value is not None else "none"
     basename = f"{force_taint_str}_{design_name}_{randseed}"
