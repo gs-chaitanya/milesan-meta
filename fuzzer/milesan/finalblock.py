@@ -16,8 +16,7 @@ def get_finalblock_max_size():
     # tohost-only exit: load addr (max 7 instrs on RV64) + load val 1 + store + fence + jal
     return 15 * 4
 
-# We must instantiate it in the end because we must know whether we have the privileges to turn on the FPU.
-# Returns the instruction objects of the tail basic block
+# Returns the instruction objects of the tail basic block (tohost exit sequence)
 def finalblock(fuzzerstate, design_name: str):
     try:
         stopsig_addr = get_design_stop_sig_addr(design_name)
