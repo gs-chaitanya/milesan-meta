@@ -6,7 +6,7 @@
 
 from params.runparams import DO_ASSERT, DEBUG_PRINT
 from params.fuzzparams import USE_MMU
-from common.designcfgs import is_design_32bit, get_design_stop_sig_addr
+from common.designcfgs import get_design_stop_sig_addr
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, RPROD_MASK_REGISTER_ID
 from milesan.privilegestate import PrivilegeStateEnum
 from rv.asmutil import li_into_reg
