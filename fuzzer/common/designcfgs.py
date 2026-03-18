@@ -221,6 +221,8 @@ def get_stop_instructions(design_name, rd_id: int):
     if rd_id < 0 or rd_id > 32:
         raise ValueError(f"Unexpected destination register value: {rd_id}")
     if design_name in ('rocket', 'boom'):
-        return f"la t0, 0x60000000\n sw x{rd_id}, (t0)"
+        stopsig_addr = get_design_stop_sig_addr(design_name)
+        store_instr = "sw" if is_design_32bit(design_name) else "sd"
+        return f"li t0, {hex(stopsig_addr)}\n li t1, 1\n {store_instr} t1, (t0)"
     else:
         return f"sw x{rd_id}, (x0)"
