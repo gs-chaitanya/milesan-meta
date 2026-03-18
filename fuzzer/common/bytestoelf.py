@@ -14,7 +14,7 @@ import tempfile
 # @param inbytes the bytes to put into the ELF file. Be careful that they must be in little endian format already.
 # @param section_addr may be None
 # @return None
-def gen_elf(inbytes: bytes, start_addr: int, section_addr: int, destination_path: str, is_64bit: bool) -> None:
+def gen_elf(inbytes: bytes, start_addr: int, section_addr: int, destination_path: str, is_64bit: bool, add_tohost: bool = True) -> None:
     if DO_ASSERT:
         assert destination_path
 
@@ -48,20 +48,22 @@ def gen_elf(inbytes: bytes, start_addr: int, section_addr: int, destination_path
     # Add .tohost section with tohost/fromhost symbols for HTIF (fesvr) communication.
     # fesvr looks up "tohost" and "fromhost" ELF symbols by name (htif.cc:179-181).
     # Address 0x80200000 is 2MB after boot (0x80000000), well clear of max 1MB program.
-    TOHOST_ADDR = 0x80200000
-    fd, tohost_zero_file = tempfile.mkstemp(suffix='.bin', dir=os.path.dirname(destination_path))
-    try:
-        os.write(fd, b'\x00' * 128)
-        os.close(fd)
-        objcopy = f"riscv{os.environ['MILESAN_RISCV_BITWIDTH']}-unknown-elf-objcopy"
-        subprocess.run([
-            objcopy,
-            '--add-section', f'.tohost={tohost_zero_file}',
-            '--set-section-flags', '.tohost=alloc,contents,load,data',
-            '--change-section-address', f'.tohost={hex(TOHOST_ADDR)}',
-            '--add-symbol', f'tohost=.tohost:0,global,object',
-            '--add-symbol', f'fromhost=.tohost:64,global,object',
-            destination_path
-        ], check=True)
-    finally:
-        os.remove(tohost_zero_file)
+    # Skip for spike resolution ELFs — spike monitors tohost and exits early if it sees a write.
+    if add_tohost:
+        TOHOST_ADDR = 0x80200000
+        fd, tohost_zero_file = tempfile.mkstemp(suffix='.bin', dir=os.path.dirname(destination_path))
+        try:
+            os.write(fd, b'\x00' * 128)
+            os.close(fd)
+            objcopy = f"riscv{os.environ['MILESAN_RISCV_BITWIDTH']}-unknown-elf-objcopy"
+            subprocess.run([
+                objcopy,
+                '--add-section', f'.tohost={tohost_zero_file}',
+                '--set-section-flags', '.tohost=alloc,contents,load,data',
+                '--change-section-address', f'.tohost={hex(TOHOST_ADDR)}',
+                '--add-symbol', f'tohost=.tohost:0,global,object',
+                '--add-symbol', f'fromhost=.tohost:64,global,object',
+                destination_path
+            ], check=True)
+        finally:
+            os.remove(tohost_zero_file)

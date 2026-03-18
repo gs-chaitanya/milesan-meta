@@ -423,7 +423,7 @@ def spike_resolution(fuzzerstate, check_pc_spike_again: bool = False, return_int
     # Use spike to check the rtl elf if requested
     if check_pc_spike_again:
         # Generate the RTL ELF, but located for spike at SPIKE_STARTADDR
-        rtl_spike_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'spikedoublecheck', fuzzerstate.instance_to_str(), SPIKE_STARTADDR)
+        rtl_spike_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'spikedoublecheck', fuzzerstate.instance_to_str(), SPIKE_STARTADDR, for_spike=True)
         rtl_spike_pc_seq, (finalintregvals_spikecheck, finalfpuregvals_spikecheck) = run_trace_all_pcs(fuzzerstate.instance_to_str(), rtl_spike_elfpath, march_flags, len(flat_instr_objs), SPIKE_STARTADDR, True,  fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud, fuzzerstate)
         if not NO_REMOVE_TMPFILES:
             os.remove(rtl_spike_elfpath)
@@ -474,7 +474,7 @@ def spike_resolution_return_interm(fuzzerstate, check_pc_spike_again: bool = Fal
     # Use spike to check the rtl elf if requested
     if check_pc_spike_again:
         # Generate the RTL ELF, but located for spike at SPIKE_STARTADDR
-        rtl_spike_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'spikedoublecheck', fuzzerstate.instance_to_str(), SPIKE_STARTADDR)
+        rtl_spike_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'spikedoublecheck', fuzzerstate.instance_to_str(), SPIKE_STARTADDR, for_spike=True)
         # if NO_REMOVE_TMPFILES:
         #     print('rtl_spike_elfpath:', rtl_spike_elfpath)
         rtl_spike_pc_seq, (finalintregvals_spikecheck, finalfpuregvals_spikecheck) = run_trace_all_pcs(fuzzerstate.instance_to_str(), rtl_spike_elfpath, get_design_march_flags(design_name), len(flat_instr_objs)+1, SPIKE_STARTADDR, True,  fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0, fuzzerstate.design_has_fpud, fuzzerstate)

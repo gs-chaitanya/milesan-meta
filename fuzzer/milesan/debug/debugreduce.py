@@ -369,7 +369,7 @@ def spike_resolution_debug(fuzzerstate, check_pc_spike_again: bool, start_bb: in
     assert check_pc_spike_again
     if check_pc_spike_again:
         # Generate the RTL ELF, but located for spike at SPIKE_STARTADDR
-        rtl_spike_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'spikedoublecheck', fuzzerstate.instance_to_str(), SPIKE_STARTADDR)
+        rtl_spike_elfpath = gen_elf_from_bbs(fuzzerstate, False, 'spikedoublecheck', fuzzerstate.instance_to_str(), SPIKE_STARTADDR, for_spike=True)
         # if NO_REMOVE_TMPFILES:
         #     print('rtl_spike_elfpath:', rtl_spike_elfpath)
         

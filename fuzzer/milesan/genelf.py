@@ -25,7 +25,7 @@ if USE_COMPRESSED:
 # @param instr_objs an iterable (one per basic block) of iterables of CFInstructions or placeholders
 # @param test_identifier typically the random seed, mem size, design name, max number of bbs
 # @return the generated elf path
-def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_identifier: str, start_addr: int):
+def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_identifier: str, start_addr: int, for_spike: bool = None):
     if DO_ASSERT:
         assert len(fuzzerstate.instr_objs_seq) == len(fuzzerstate.bb_start_addr_seq)
 
@@ -148,7 +148,10 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
     # Generate the ELF object
     # print(type(addr_instrs))
     # print(addr_instrs)
-    gen_elf(curr_bytes, start_addr=fuzzerstate.bb_start_addr_seq[0], section_addr=start_addr, destination_path=elfpath, is_64bit=fuzzerstate.is_design_64bit)
+    # Skip tohost symbols for ELFs that will run on spike (spike monitors tohost and exits early).
+    # Default: add tohost unless for_spike is explicitly True or is_spike_resolution is True.
+    _for_spike = for_spike if for_spike is not None else is_spike_resolution
+    gen_elf(curr_bytes, start_addr=fuzzerstate.bb_start_addr_seq[0], section_addr=start_addr, destination_path=elfpath, is_64bit=fuzzerstate.is_design_64bit, add_tohost=not _for_spike)
     
     if PICKLE_FUZZERSTATE:
         fuzzerstate.rtl_elfpath = elfpath

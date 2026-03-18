@@ -276,7 +276,7 @@ def calibrate_spikespeed(numinstrs:int = 10000) -> list:
 
     # Second, generate a dummy ELF file containing an infinite loop
     elfpath = os.path.join(PATH_TO_TMP, 'spikespeedcalibration.elf')
-    gen_elf(rv32i_jal(0, 0).to_bytes(4, 'little'), SPIKE_STARTADDR, SPIKE_STARTADDR, elfpath, False)
+    gen_elf(rv32i_jal(0, 0).to_bytes(4, 'little'), SPIKE_STARTADDR, SPIKE_STARTADDR, elfpath, False, add_tohost=False)
 
     # Run the Spike command
     spike_shell_command = (
