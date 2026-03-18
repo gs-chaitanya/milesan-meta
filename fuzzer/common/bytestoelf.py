@@ -35,15 +35,16 @@ def gen_elf(inbytes: bytes, start_addr: int, section_addr: int, destination_path
     with open(destination_path, 'wb') as f:
         f.write(elf_bytes)
 
-    # Relocate the section
+    # Relocate the section and fix entry point for stock Chipyard (fesvr uses e_entry for boot address)
+    objcopy = f"riscv{os.environ['MILESAN_RISCV_BITWIDTH']}-unknown-elf-objcopy"
     if section_addr is not None:
         if is_64bit:
-            subprocess.run([f"riscv{os.environ['MILESAN_RISCV_BITWIDTH']}-unknown-elf-objcopy", '--change-section-address', f".text.init={hex(section_addr)}", '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path], check=True)
+            subprocess.run([objcopy, '--change-section-address', f".text.init={hex(section_addr)}", '--set-start', hex(section_addr), '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path], check=True)
         else:
-            subprocess.run([f"riscv{os.environ['MILESAN_RISCV_BITWIDTH']}-unknown-elf-objcopy", '--change-section-address', f".text.init={hex(section_addr)}", destination_path], check=True)
+            subprocess.run([objcopy, '--change-section-address', f".text.init={hex(section_addr)}", '--set-start', hex(section_addr), destination_path], check=True)
     else:
         if is_64bit:
-            subprocess.run([f"riscv{os.environ['MILESAN_RISCV_BITWIDTH']}-unknown-elf-objcopy", '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path], check=True)
+            subprocess.run([objcopy, '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path], check=True)
 
     # Add .tohost section with tohost/fromhost symbols for HTIF (fesvr) communication.
     # fesvr looks up "tohost" and "fromhost" ELF symbols by name (htif.cc:179-181).
@@ -55,7 +56,6 @@ def gen_elf(inbytes: bytes, start_addr: int, section_addr: int, destination_path
         try:
             os.write(fd, b'\x00' * 128)
             os.close(fd)
-            objcopy = f"riscv{os.environ['MILESAN_RISCV_BITWIDTH']}-unknown-elf-objcopy"
             subprocess.run([
                 objcopy,
                 '--add-section', f'.tohost={tohost_zero_file}',
