@@ -11,3 +11,4 @@ whisperfuzz_programs/build/
 **/build/
 venv
 *.svg
+docs
