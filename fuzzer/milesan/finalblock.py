@@ -5,7 +5,7 @@
 # This module defines the final block.
 
 from params.runparams import DO_ASSERT, DEBUG_PRINT
-from params.fuzzparams import USE_MMU
+from params.fuzzparams import USE_MMU, MAX_NUM_PICKABLE_REGS, MAX_NUM_PICKABLE_FLOATING_REGS
 from common.designcfgs import get_design_stop_sig_addr
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, RPROD_MASK_REGISTER_ID
 from milesan.privilegestate import PrivilegeStateEnum
@@ -13,8 +13,9 @@ from rv.asmutil import li_into_reg
 from milesan.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, IntStoreInstruction, JALInstruction, SpecialInstruction, R12DInstruction
 
 def get_finalblock_max_size():
-    # tohost-only exit: load addr (max 7 instrs on RV64) + load val 1 + store + fence + jal
-    return 15 * 4
+    # Keep original size to preserve PRNG sequence in alloc_final_basic_block (basicblock.py:428).
+    # The actual final block is smaller now (tohost-only), but this only over-reserves space.
+    return (10 + 2*MAX_NUM_PICKABLE_REGS + 2*MAX_NUM_PICKABLE_FLOATING_REGS - 1) * 4 + 10*4
 
 # Returns the instruction objects of the tail basic block (tohost exit sequence)
 def finalblock(fuzzerstate, design_name: str):
