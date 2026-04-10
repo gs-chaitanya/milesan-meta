@@ -12,3 +12,5 @@ whisperfuzz_programs/build/
 venv
 *.svg
 docs
+fuzzer/onezero/DIAGNOSTIC_CONTEXT_PLAN.md
+fuzzer/onezero/plans/

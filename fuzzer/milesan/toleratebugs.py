@@ -113,6 +113,18 @@ if TOLERATE_BOOM_VERILATOR_REMUW_CT_VIOLATION:
     print('WARNING: Tolerating one bug: TOLERATE_BOOM_VERILATOR_REMUW_CT_VIOLATION')
 
 
+def is_tolerate_boom_verilator_mul_ct_violation():
+    return TOLERATE_BOOM_VERILATOR_MUL_CT_VIOLATION
+if TOLERATE_BOOM_VERILATOR_MUL_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: TOLERATE_BOOM_VERILATOR_MUL_CT_VIOLATION')
+
+
+def is_tolerate_boom_verilator_mulw_ct_violation():
+    return TOLERATE_BOOM_VERILATOR_MULW_CT_VIOLATION
+if TOLERATE_BOOM_VERILATOR_MULW_CT_VIOLATION:
+    print('WARNING: Tolerating one bug: TOLERATE_BOOM_VERILATOR_MULW_CT_VIOLATION')
+
+
 ###
 # Rocket
 ###
