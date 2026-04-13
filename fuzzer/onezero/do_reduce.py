@@ -7,9 +7,9 @@
 # between FORCE_TAINT_VALUE=0 and =1 program variants on VpcPrint BOOM.
 #
 # Usage:
-#   python do_reduce_onezero.py <design_name> <seed> [--hint-left N] [--hint-right N]
-#                                                     [--timeout SECS] [--workdir DIR]
-#                                                     [--phase bb|instr|all]
+#   python onezero/do_reduce.py <design_name> <seed> [--hint-left N] [--hint-right N]
+#                                                    [--timeout SECS] [--workdir DIR]
+#                                                    [--phase bb|instr|all]
 
 import argparse
 import json

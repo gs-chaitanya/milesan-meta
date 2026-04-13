@@ -349,6 +349,41 @@ if TOLERATE_OPENC910_REMUW_CT_VIOLATION:
 
 
 ###
+# XiangShan
+###
+
+def is_tolerate_xiangshan_div_ct_violation():
+    return TOLERATE_XIANGSHAN_DIV_CT_VIOLATION
+
+def is_tolerate_xiangshan_divu_ct_violation():
+    return TOLERATE_XIANGSHAN_DIVU_CT_VIOLATION
+
+def is_tolerate_xiangshan_divw_ct_violation():
+    return TOLERATE_XIANGSHAN_DIVW_CT_VIOLATION
+
+def is_tolerate_xiangshan_divuw_ct_violation():
+    return TOLERATE_XIANGSHAN_DIVUW_CT_VIOLATION
+
+def is_tolerate_xiangshan_rem_ct_violation():
+    return TOLERATE_XIANGSHAN_REM_CT_VIOLATION
+
+def is_tolerate_xiangshan_remu_ct_violation():
+    return TOLERATE_XIANGSHAN_REMU_CT_VIOLATION
+
+def is_tolerate_xiangshan_remw_ct_violation():
+    return TOLERATE_XIANGSHAN_REMW_CT_VIOLATION
+
+def is_tolerate_xiangshan_remuw_ct_violation():
+    return TOLERATE_XIANGSHAN_REMUW_CT_VIOLATION
+
+def is_tolerate_xiangshan_mul_ct_violation():
+    return TOLERATE_XIANGSHAN_MUL_CT_VIOLATION
+
+def is_tolerate_xiangshan_mulw_ct_violation():
+    return TOLERATE_XIANGSHAN_MULW_CT_VIOLATION
+
+
+###
 # Kronos
 ###
 

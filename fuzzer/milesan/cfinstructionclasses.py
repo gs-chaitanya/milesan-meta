@@ -1711,6 +1711,18 @@ def is_tolerate_transient_exec_str(fuzzerstate, instr_str: str):
         elif instr_str in BranchInstruction.authorized_instr_strs:
             return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_BRANCH
 
+    elif "xiangshan" in fuzzerstate.design_name:
+        if instr_str in IntLoadInstruction.authorized_instr_strs:
+            return TOLERATE_XIANGSHAN_TRANSIENT_EXEC_TAINTED_ADDR_LOAD
+        elif instr_str in IntStoreInstruction.authorized_instr_strs:
+            return TOLERATE_XIANGSHAN_TRANSIENT_EXEC_TAINTED_ADDR_STORE
+        elif instr_str in R12DInstruction.authorized_instr_strs:
+            return TOLERATE_XIANGSHAN_TRANSIENT_EXEC_TAINTED_CT_VIOLATION
+        elif instr_str in JALRInstruction.authorized_instr_strs:
+            return TOLERATE_XIANGSHAN_TRANSIENT_EXEC_TAINTED_JALR
+        elif instr_str in BranchInstruction.authorized_instr_strs:
+            return TOLERATE_XIANGSHAN_TRANSIENT_EXEC_TAINTED_BRANCH
+
     assert False # Should never reach this
 
 def is_tolerate_transient_exec(fuzzerstate, instr: BaseInstruction, exception: Exception):
@@ -1762,7 +1774,19 @@ def is_tolerate_transient_exec(fuzzerstate, instr: BaseInstruction, exception: E
                 return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_JALR
             elif isinstance(instr, BranchInstruction):
                 return TOLERATE_ROCKET_TRANSIENT_EXEC_TAINTED_BRANCH
-        
+
+        elif "xiangshan" in fuzzerstate.design_name:
+            if isinstance(instr, IntLoadInstruction):
+                return TOLERATE_XIANGSHAN_TRANSIENT_EXEC_TAINTED_ADDR_LOAD
+            elif isinstance(instr, IntStoreInstruction):
+                return TOLERATE_XIANGSHAN_TRANSIENT_EXEC_TAINTED_ADDR_STORE
+            elif isinstance(instr, R12DInstruction):
+                return TOLERATE_XIANGSHAN_TRANSIENT_EXEC_TAINTED_CT_VIOLATION
+            elif isinstance(instr, JALRInstruction):
+                return TOLERATE_XIANGSHAN_TRANSIENT_EXEC_TAINTED_JALR
+            elif isinstance(instr, BranchInstruction):
+                return TOLERATE_XIANGSHAN_TRANSIENT_EXEC_TAINTED_BRANCH
+
     assert False # Should never reach this
 
 

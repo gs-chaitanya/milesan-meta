@@ -15,5 +15,6 @@
     "cva6": "../../milesan-designs/milesan-cva6/milesan",
     "cva6-ctfix": "../../milesan-designs/milesan-cva6-ctfix/milesan",
     "cva6-test": "../../milesan-designs/cva6-test/milesan",
-    "openc910":"../../milesan-designs/milesan-openc910/milesan"
+    "openc910":"../../milesan-designs/milesan-openc910/milesan",
+    "xiangshan": "../../milesan-designs/milesan-xiangshan/milesan"
 }

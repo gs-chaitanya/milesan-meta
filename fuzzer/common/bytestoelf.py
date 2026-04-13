@@ -64,6 +64,6 @@ def gen_elf(inbytes: bytes, start_addr: int, section_addr: int, destination_path
                 '--add-symbol', f'tohost=.tohost:0,global,object',
                 '--add-symbol', f'fromhost=.tohost:64,global,object',
                 destination_path
-            ], check=True)
+            ], check=True, stderr=subprocess.DEVNULL)
         finally:
             os.remove(tohost_zero_file)

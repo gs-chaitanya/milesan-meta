@@ -24,6 +24,9 @@ from milesan.toleratebugs import is_tolerate_cva6_div_ct_violation, is_tolerate_
 from milesan.toleratebugs import is_tolerate_cva6_rem_ct_violation, is_tolerate_cva6_remu_ct_violation, is_tolerate_cva6_remuw_ct_violation, is_tolerate_cva6_remw_ct_violation
 from milesan.toleratebugs import is_tolerate_openc910_div_ct_violation, is_tolerate_openc910_divu_ct_violation, is_tolerate_openc910_divuw_ct_violation, is_tolerate_openc910_divw_ct_violation
 from milesan.toleratebugs import is_tolerate_openc910_rem_ct_violation, is_tolerate_openc910_remu_ct_violation, is_tolerate_openc910_remuw_ct_violation, is_tolerate_openc910_remw_ct_violation
+from milesan.toleratebugs import is_tolerate_xiangshan_div_ct_violation, is_tolerate_xiangshan_divu_ct_violation, is_tolerate_xiangshan_divuw_ct_violation, is_tolerate_xiangshan_divw_ct_violation
+from milesan.toleratebugs import is_tolerate_xiangshan_rem_ct_violation, is_tolerate_xiangshan_remu_ct_violation, is_tolerate_xiangshan_remuw_ct_violation, is_tolerate_xiangshan_remw_ct_violation
+from milesan.toleratebugs import is_tolerate_xiangshan_mul_ct_violation, is_tolerate_xiangshan_mulw_ct_violation
 
 from milesan.mmu_utils import li_doubleword, virt2phys, PHYSICAL_PAGE_SIZE, PAGE_ALIGNMENT_SHIFT, PAGE_ALIGNMENT_BITS, PAGE_ALIGNMENT_MASK
 from rv.util import PARAM_REGTYPE, PARAM_SIZES_BITS_32, PARAM_SIZES_BITS_64
@@ -145,9 +148,20 @@ def is_tolerate_R12DInstruction(instr_str, fuzzerstate):
         or not is_tolerate_openc910_remuw_ct_violation() and instr_str == "remuw" \
         or not is_tolerate_openc910_remw_ct_violation() and instr_str == "remw" \
         or not is_tolerate_openc910_rem_ct_violation() and instr_str == "rem" \
-        or not is_tolerate_openc910_remu_ct_violation() and instr_str == "remu"):
+        or not is_tolerate_openc910_remu_ct_violation() and instr_str == "remu") \
+    or "xiangshan" in fuzzerstate.design_name and \
+        (not is_tolerate_xiangshan_divuw_ct_violation() and instr_str == "divuw" \
+        or not is_tolerate_xiangshan_divw_ct_violation() and instr_str == "divw" \
+        or not is_tolerate_xiangshan_div_ct_violation() and instr_str == "div" \
+        or not is_tolerate_xiangshan_divu_ct_violation() and instr_str == "divu" \
+        or not is_tolerate_xiangshan_mul_ct_violation() and instr_str == "mul" \
+        or not is_tolerate_xiangshan_mulw_ct_violation() and instr_str == "mulw" \
+        or not is_tolerate_xiangshan_remuw_ct_violation() and instr_str == "remuw" \
+        or not is_tolerate_xiangshan_remw_ct_violation() and instr_str == "remw" \
+        or not is_tolerate_xiangshan_rem_ct_violation() and instr_str == "rem" \
+        or not is_tolerate_xiangshan_remu_ct_violation() and instr_str == "remu"):
             return False
-            
+
     return True
 
 

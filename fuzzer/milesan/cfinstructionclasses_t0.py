@@ -211,7 +211,7 @@ def is_tolerate_transient_window(fuzzerstate, instr: BaseInstruction):
             elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
                 return TOLERATE_ROCKET_STORE_AMO_ADDR_MISALIGNED_TRANSIENT_WINDOW
             elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
-                return TOLERATE_ROCKET_STORE_AMO_ACCESS_FAULT_TRANSIENT_WINDOW    
+                return TOLERATE_ROCKET_STORE_AMO_ACCESS_FAULT_TRANSIENT_WINDOW
             elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE:
                 return TOLERATE_ROCKET_ENV_CALL_FROM_U_MODE_TRANSIENT_WINDOW
             elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE:
@@ -224,9 +224,46 @@ def is_tolerate_transient_window(fuzzerstate, instr: BaseInstruction):
                 return TOLERATE_ROCKET_STORE_AMO_PAGE_FAULT_TRANSIENT_WINDOW
             else:
                 assert False, f"{instr.get_str()} should not be used here"
-            
 
-        
+    elif "xiangshan" in fuzzerstate.design_name:
+        if isinstance(instr, BranchInstruction):
+            return TOLERATE_XIANGSHAN_BRANCH_TRANSIENT_WINDOW
+        elif isinstance(instr, JALRInstruction):
+            return TOLERATE_XIANGSHAN_JALR_TRANSIENT_WINDOW
+        elif isinstance(instr, JALInstruction):
+            return TOLERATE_XIANGSHAN_JAL_TRANSIENT_WINDOW
+        elif isinstance(instr, PrivilegeDescentInstruction):
+            return TOLERATE_XIANGSHAN_PRIVDESCENT_TRANSIENT_WINDOW
+        elif isinstance(instr, SimpleExceptionEncapsulator):
+            if instr.exception_op_type == ExceptionCauseVal.ID_INSTR_ADDR_MISALIGNED:
+                return TOLERATE_XIANGSHAN_INSTR_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_INSTR_ACCESS_FAULT:
+                return TOLERATE_XIANGSHAN_INSTR_ACCESS_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ILLEGAL_INSTRUCTION:
+                return TOLERATE_XIANGSHAN_ILLEGAL_INSTRUCTION_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_BREAKPOINT:
+                return TOLERATE_XIANGSHAN_BREAKPOINT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_ADDR_MISALIGNED:
+                return TOLERATE_XIANGSHAN_LOAD_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_ACCESS_FAULT:
+                return TOLERATE_XIANGSHAN_LOAD_ACCESS_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ADDR_MISALIGNED:
+                return TOLERATE_XIANGSHAN_STORE_AMO_ADDR_MISALIGNED_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_ACCESS_FAULT:
+                return TOLERATE_XIANGSHAN_STORE_AMO_ACCESS_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_U_MODE:
+                return TOLERATE_XIANGSHAN_ENV_CALL_FROM_U_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_S_MODE:
+                return TOLERATE_XIANGSHAN_ENV_CALL_FROM_S_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_ENVIRONMENT_CALL_FROM_M_MODE:
+                return TOLERATE_XIANGSHAN_ENV_CALL_FROM_M_MODE_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_LOAD_PAGE_FAULT:
+                return TOLERATE_XIANGSHAN_LOAD_PAGE_FAULT_TRANSIENT_WINDOW
+            elif instr.exception_op_type == ExceptionCauseVal.ID_STORE_AMO_PAGE_FAULT:
+                return TOLERATE_XIANGSHAN_STORE_AMO_PAGE_FAULT_TRANSIENT_WINDOW
+            else:
+                assert False, f"{instr.get_str()} should not be used here"
+
     assert False, f"{instr.get_str()} should not be used here"
          
 ###
