@@ -19,19 +19,50 @@ This is called the "one-zero" approach because the only difference between the t
 
 ## Implemented Phases
 
-Three reduction phases are implemented:
+Four reduction phases plus a forensic report layer are implemented:
 
 | Phase | Name | Purpose | Typical time |
 |-------|------|---------|-------------|
 | 1 | Find Failing BB | Binary search for the first BB whose inclusion causes VPC divergence | ~2-5 min |
 | 2 | Find Failing Instruction | Binary search within the failing BB for the exact instruction | ~2-3 min |
 | 3 | Find Pillar BB | Binary search from the front for the first "primer" BB required for the leak | ~1-3 min |
+| 4 | NOPize gadget | Greedily replace non-essential span instructions with canonical NOPs until only the irreducible gadget remains | ~30-90 min (capped) |
+| — | Forensic | Build `forensic.json` + `forensic_report.md` (10 sections) over the minimized gadget | <1 min |
 
-After all three phases, a **diagnostic context** is assembled with leaker details, divergence info, exploit-class flags, and reduced ELF artifacts.
+After Phase 3, a **diagnostic context** is assembled. After Phase 4, a **minimal gadget** (`minimal_t0.elf` / `minimal_t1.elf`) is produced. The forensic step emits the final per-seed artifacts.
 
-Future phases (to be added incrementally):
-- Phase 4: NOPize sandwich instructions (plan exists: `plans/phase4_nopize.md`)
-- Phase 5-9: Reduce dead code, reduce taint, etc.
+### Phase 4: NOPize gadget minimization
+
+Iterates the leaker↔pillar span front-to-back and, for each non-protected instruction, tries replacing it with the canonical RISC-V NOP (`addi x0,x0,0` / `c.nop`). The VPC oracle judges: if both variants still diverge, the substitution is kept; otherwise it's rolled back. Structural safeguards (not a post-hoc PC-invariance check) prevent reducing into a different bug:
+
+- **Never NOPized:** the leaker itself, any control-flow instruction (branches, jumps, returns, indirect jumps), CSR writes, fences, atomics, SRET/MRET/ECALL/EBREAK, any instruction whose destination register has a live consumer later in the *same BB* (unless that consumer is itself already NOPized).
+- **Oracle:** VPC logs still diverge between the two variants. No strict divergence-PC/cycle invariance (NOP insertion legitimately shifts BOOM's fetch timing).
+- **Post-Phase-4 sanity check:** the leaker paddr must still appear in the minimal gadget's objdump, and the oracle must still observe divergence over `minimal_t{0,1}.elf`. On failure the Phase-3 artifacts remain the canonical result and `sanity_check_ok: false` is recorded.
+- **Hard caps per seed:** `--max-nopize-attempts` (default 60) and `--early-stop-after-k-failures` (default 10). Algorithm is greedy single-pass; not claimed to be globally minimal.
+- **`fault_from_prev_bb=True`:** span covers pillar_bb → failing_bb inclusive; the failing-BB's own instruction is skipped when the fault comes from the predecessor's CF slot.
+
+Recorded quality metrics: `n_nops_added`, `gadget_size`, `cap_hit`, `sanity_check_ok`, `reason`.
+
+### Forensic Report Layer
+
+`onezero/forensic.py` + `onezero/forensic_render.py` consume the workdir (preferring `minimal_t{0,1}.elf` when present, falling back to `reduced_t{0,1}.elf`) and emit:
+
+- `forensic.json` — structured data for downstream tooling
+- `forensic_report.md` — 10-section markdown report for human classification
+
+Sections (in order): (1) executive summary, (2) minimal gadget listing with per-instruction tags (LEAKER / BRANCH / FAULT-TRIGGER / TRANSMIT / SETUP / PRIMER / CF / NOP), (3) leaker instruction annotated with operand last-writers, (4) VPC divergence point + ±10-line window, (5) architectural state diff via spike replay with **trichotomy verdict** (arch-visible / microarch-only / spike-identical), (6) backward dataflow slice from the leaker, (7) control-flow timeline BB-by-BB, (8) exception/fault events, (9) memory access log, (10) taint-source consumers by privilege.
+
+Single-seed re-run (useful for iterating on the report format without redoing reduction):
+
+```bash
+python onezero/do_forensic.py <workdir>
+python onezero/do_forensic.py <workdir> --with-nopize  # run Phase 4 first if missing
+```
+
+Future phases (out of this plan):
+- Microarch signal extension (branch-resolve, RoB flush, commit PC via VpcPrint)
+- Auto-classifier (rule-based Spectre-V1 / Meltdown / LVI labeler reading `forensic.json`)
+- Phase 5-9: taint-byte localization, etc.
 
 ## Files
 
@@ -655,12 +686,10 @@ Same as above, but also truncates within the BB at `max_instr_id`. Instruction a
 
 ## Open Issues / TODO
 
-1. **Phase 4: NOPize sandwich instructions.** Plan exists at `plans/phase4_nopize.md`. Greedily replaces non-essential instructions between the pillar and leaker with NOPs. Expected to be the most time-consuming phase (~30s per instruction × hundreds of instructions = hours). The plan exists but implementation has not started.
+1. **Phase 5-9: Future reduction phases.** Reduce dead code, reduce taint, etc. These mirror the remaining phases in `milesan/reduce.py` but use the VPC divergence oracle.
 
-2. **Phase 5-9: Future reduction phases.** Reduce dead code, reduce taint, etc. These mirror the remaining phases in `milesan/reduce.py` but use the VPC divergence oracle.
+2. **`TIMEOUT_CYCLES` override.** Currently the 10M-cycle Chipyard default is used. For HPC batch runs, consider reducing to 2M-3M cycles to cut sim time from ~27 min to ~5-8 min per sim. This requires either editing `variables.mk` or passing `TIMEOUT_CYCLES=2000000` in the make command (would need a code change to `run_vpc_sim()`).
 
-3. **`TIMEOUT_CYCLES` override.** Currently the 10M-cycle Chipyard default is used. For HPC batch runs, consider reducing to 2M-3M cycles to cut sim time from ~27 min to ~5-8 min per sim. This requires either editing `variables.mk` or passing `TIMEOUT_CYCLES=2000000` in the make command (would need a code change to `run_vpc_sim()`).
+3. **Determinism validation.** The VPC oracle should be deterministic (same ELF → same VPC trace). Verify this holds under HPC conditions (different nodes, different `/tmp` filesystems, etc.).
 
-4. **Determinism validation.** The VPC oracle should be deterministic (same ELF → same VPC trace). Verify this holds under HPC conditions (different nodes, different `/tmp` filesystems, etc.).
-
-5. **Bulk screening script.** A dedicated script to screen many seeds for VPC divergence (Phase 1 only, short timeout) and produce a list of diverging seeds for full reduction.
+4. **Bulk screening script.** A dedicated script to screen many seeds for VPC divergence (Phase 1 only, short timeout) and produce a list of diverging seeds for full reduction.

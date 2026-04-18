@@ -21,6 +21,7 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 ENTRY_POINT = os.path.join(THIS_DIR, "do_reduce.py")
@@ -111,8 +112,12 @@ if __name__ == "__main__":
         help="Per-simulation timeout in seconds (default: 300)",
     )
     parser.add_argument(
-        "--phase", choices=["bb", "instr", "pillar", "all"], default="all",
+        "--phase", choices=["bb", "instr", "pillar", "nopize", "all"], default="all",
         help="Reduction phases (default: all)",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None,
+        help="Process only the first N diverging seeds (applied before sharding).",
     )
     parser.add_argument(
         "--workdir-base", type=str, default=DEFAULT_WORKDIR_BASE,
@@ -134,6 +139,10 @@ if __name__ == "__main__":
     else:
         all_seeds = sorted(int(s.strip()) for s in args.seeds.split(",") if s.strip())
 
+    # ── Apply --limit (before sharding, so shards slice the limited set) ─────
+    if args.limit is not None and args.limit > 0:
+        all_seeds = all_seeds[: args.limit]
+
     # ── Apply sharding ───────────────────────────────────────────────────────
     if args.shard is not None:
         shard_idx, n_shards = (int(x) for x in args.shard.split("/"))
@@ -143,8 +152,25 @@ if __name__ == "__main__":
         seeds = all_seeds
         shard_label = ""
 
+    # ── Resume mode: skip seeds whose result.json already exists ─────────────
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
+
+    pre_seeds = list(seeds)
+    skipped_seeds = []
+    todo_seeds = []
+    for s in pre_seeds:
+        rj = os.path.join(args.workdir_base, f"{args.design_name}_{s}", "result.json")
+        if os.path.isfile(rj):
+            skipped_seeds.append(s)
+        else:
+            todo_seeds.append(s)
+    seeds = todo_seeds
+
     if not seeds:
-        print(f"No seeds to reduce{shard_label}. Exiting.")
+        print(f"No seeds to reduce{shard_label} (all {len(skipped_seeds)} already done). Exiting.")
         sys.exit(0)
 
     n_seeds = len(seeds)
@@ -153,7 +179,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print(f" One-zero parallel reduction{shard_label}")
     print(f" Design:   {args.design_name}")
-    print(f" Seeds:    {n_seeds} (of {len(all_seeds)} total diverging)")
+    print(f" Seeds:    {n_seeds} to reduce, {len(skipped_seeds)} already done (of {len(all_seeds)} total diverging)")
     print(f" Workers:  {n_workers}")
     print(f" Phase:    {args.phase}")
     print(f" Timeout:  {args.timeout}s per sim")
@@ -164,46 +190,98 @@ if __name__ == "__main__":
 
     t_wall = time.time()
     all_results = {}
-    n_ok = 0
-    n_fail = 0
 
-    with ProcessPoolExecutor(max_workers=n_workers) as executor:
-        futures = {}
-        for seed in seeds:
-            workdir = os.path.join(args.workdir_base, f"{args.design_name}_{seed}")
-            fut = executor.submit(
-                _reduce_one_seed,
-                args.design_name, seed, args.phase, args.timeout, workdir,
-                args.full_context,
-            )
-            futures[fut] = seed
+    # Remaining seeds that never produced a final result (tracked so we can
+    # detect silent kills: e.g. BrokenProcessPool).  Initially every seed is
+    # "pending"; we remove each one when it either succeeds, fails cleanly, or
+    # raises in fut.result().
+    pending = set(seeds)
+    n_broken_retries = 0
+    MAX_BROKEN_RETRIES = 3
 
-        for fut in as_completed(futures):
-            seed_id = futures[fut]
-            try:
-                seed_out, exit_code, elapsed_s, result = fut.result()
-            except Exception as e:
-                print(f"  seed {seed_id:5d}:  ERROR   {e}")
-                all_results[seed_id] = {"exit_code": -1, "error": str(e)}
-                n_fail += 1
-                continue
+    # Use 1-element lists as mutable counters (nonlocal/global would require
+    # module-level scope; cleaner to just pass by reference via list).
+    counters = {"ok": 0, "fail": 0}
 
-            if exit_code == 0 and result is not None:
-                fb = result.get("failing_bb_id", "?")
-                fi = result.get("failing_instr_id", "?")
-                pb = result.get("pillar_bb_id", "?")
-                print(f"  seed {seed_out:5d}:  OK      {elapsed_s:6.1f}s  bb={fb} instr={fi} pillar={pb}")
-                n_ok += 1
-            else:
-                print(f"  seed {seed_out:5d}:  FAILED  {elapsed_s:6.1f}s  exit={exit_code}")
-                n_fail += 1
+    def _drain(executor, futures):
+        """Drain a pool, tolerating BrokenProcessPool.  Returns True if pool broke."""
+        try:
+            for fut in as_completed(futures):
+                seed_id = futures[fut]
+                try:
+                    seed_out, exit_code, elapsed_s, result = fut.result()
+                except BrokenProcessPool as e:
+                    print(f"  seed {seed_id:5d}:  POOL-BROKEN ({e})", flush=True)
+                    return True
+                except Exception as e:
+                    print(f"  seed {seed_id:5d}:  ERROR   {e}", flush=True)
+                    all_results[seed_id] = {"exit_code": -1, "error": str(e)}
+                    counters["fail"] += 1
+                    pending.discard(seed_id)
+                    continue
 
-            all_results[seed_out] = {
-                "exit_code": exit_code,
-                "elapsed_s": elapsed_s,
-                "result": result,
-            }
+                if exit_code == 0 and result is not None:
+                    fb = result.get("failing_bb_id", "?")
+                    fi = result.get("failing_instr_id", "?")
+                    pb = result.get("pillar_bb_id", "?")
+                    print(f"  seed {seed_out:5d}:  OK      {elapsed_s:6.1f}s  bb={fb} instr={fi} pillar={pb}", flush=True)
+                    counters["ok"] += 1
+                else:
+                    print(f"  seed {seed_out:5d}:  FAILED  {elapsed_s:6.1f}s  exit={exit_code}", flush=True)
+                    counters["fail"] += 1
 
+                all_results[seed_out] = {
+                    "exit_code": exit_code,
+                    "elapsed_s": elapsed_s,
+                    "result": result,
+                }
+                pending.discard(seed_out)
+        except BrokenProcessPool as e:
+            print(f"  POOL-BROKEN during drain: {e}", flush=True)
+            return True
+        return False
+
+    while pending and n_broken_retries <= MAX_BROKEN_RETRIES:
+        submit_seeds = list(pending)
+        print(f"  Submitting {len(submit_seeds)} seed(s) to pool (retry {n_broken_retries})", flush=True)
+        try:
+            with ProcessPoolExecutor(max_workers=min(n_workers, len(submit_seeds))) as executor:
+                futures = {}
+                for seed in submit_seeds:
+                    workdir = os.path.join(args.workdir_base, f"{args.design_name}_{seed}")
+                    # Resume safety: if a prior retry finished this seed, skip
+                    rj = os.path.join(workdir, "result.json")
+                    if os.path.isfile(rj):
+                        pending.discard(seed)
+                        continue
+                    fut = executor.submit(
+                        _reduce_one_seed,
+                        args.design_name, seed, args.phase, args.timeout, workdir,
+                        args.full_context,
+                    )
+                    futures[fut] = seed
+
+                broke = _drain(executor, futures)
+        except BrokenProcessPool as e:
+            print(f"  POOL-BROKEN at shutdown: {e}", flush=True)
+            broke = True
+        except Exception as e:
+            print(f"  UNEXPECTED pool exception: {type(e).__name__}: {e}", flush=True)
+            broke = True
+
+        if not broke:
+            break
+        n_broken_retries += 1
+        print(f"  Pool broke; retry {n_broken_retries}/{MAX_BROKEN_RETRIES}, {len(pending)} seed(s) still pending", flush=True)
+
+    # Any seeds still in `pending` after all retries: record as unfinished
+    for s in pending:
+        all_results[s] = {"exit_code": -2, "error": "unfinished after broken-pool retries"}
+        counters["fail"] += 1
+        print(f"  seed {s:5d}:  UNFINISHED", flush=True)
+
+    n_ok = counters["ok"]
+    n_fail = counters["fail"]
     wall_elapsed = time.time() - t_wall
 
     print()

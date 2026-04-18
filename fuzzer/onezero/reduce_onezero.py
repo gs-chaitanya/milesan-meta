@@ -20,7 +20,7 @@ import milesan.randomize.createcfinstr
 from common.designcfgs import get_design_boot_addr, get_design_march_flags, get_design_march_flags_nocompressed
 from common.spike import SPIKE_STARTADDR
 from milesan.basicblock import gen_basicblocks
-from milesan.cfinstructionclasses import IntStoreInstruction
+from milesan.cfinstructionclasses import IntStoreInstruction, is_placeholder
 from milesan.cfinstructionclasses_t0 import JALInstruction_t0
 from milesan.contextreplay import SavedContext, gen_context_setter
 from milesan.finalblock import finalblock
@@ -34,6 +34,9 @@ from params.runparams import DO_ASSERT, NO_REMOVE_TMPFILES
 
 CHIPYARD_DIR = "/mnt/chipyard"
 CONFIG = "VpcPrintMediumBoomV3Config"
+SIM_BIN = f"{CHIPYARD_DIR}/sims/verilator/simulator-chipyard.harness-{CONFIG}"
+DRAMSIM_INI = f"{CHIPYARD_DIR}/generators/testchipip/src/main/resources/dramsim2_ini"
+SIM_MAX_CYCLES = 10_000_000
 FULL_PROGRAM_SENTINEL = 999999
 
 
@@ -231,36 +234,51 @@ def _gen_full_elf(fuzzerstate, elf_path):
 
 
 def run_vpc_sim(elf_path, vpc_log_path, sim_log_path, timeout):
-    """Run one ELF on VpcPrint BOOM simulator via make run-binary.
+    """Run one ELF on VpcPrint BOOM simulator.
 
-    Returns True if a non-empty VPC log was produced, regardless of how the sim
-    ended (clean exit, max-cycles $stop, watchdog hang, or timeout).  We only
-    need VPC traces to compare — partial traces are fine for divergence detection.
+    Returns (vpc_ok, clean_exit) where:
+      vpc_ok     — VPC log is non-empty (some VPC activity was recorded)
+      clean_exit — simulator reached Verilog $finish naturally (tohost write
+                   detected), i.e. was NOT killed by wall-clock timeout.
+    Phase 1-3 oracles only need vpc_ok.  Phase 4 oracle additionally requires
+    clean_exit — a timed-out NOPized program has broken control flow and must
+    be rejected, mirroring milesan's try/except revert on spike crash.
     """
     cmd = [
-        "make", "-C", f"{CHIPYARD_DIR}/sims/verilator",
-        "run-binary",
-        f"CONFIG={CONFIG}",
-        f"BINARY={elf_path}",
-        "VERILATOR_THREADS=1",
-        "LOADMEM=1",
-        f"EXTRA_SIM_FLAGS=+vpcfile={vpc_log_path}",
+        SIM_BIN,
+        "+permissive",
+        "+dramsim",
+        f"+dramsim_ini_dir={DRAMSIM_INI}",
+        f"+max-cycles={SIM_MAX_CYCLES}",
+        f"+loadmem={elf_path}",
+        f"+vpcfile={vpc_log_path}",
+        "+permissive-off",
+        elf_path,
     ]
 
+    timed_out = False
     with open(sim_log_path, "w") as log_f:
-        proc = subprocess.Popen(cmd, stdout=log_f, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
+                                stdout=log_f, stderr=subprocess.STDOUT)
         try:
             proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
+            timed_out = True
             proc.kill()
-            proc.wait()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
             print(f"  TIMEOUT after {timeout}s: {elf_path}")
 
-    # Success if we got a non-empty VPC log
+    vpc_ok = False
     try:
-        return os.path.getsize(vpc_log_path) > 0
+        vpc_ok = os.path.getsize(vpc_log_path) > 0
     except OSError:
-        return False
+        pass
+
+    clean_exit = (not timed_out)
+    return vpc_ok, clean_exit
 
 
 def vpc_logs_diverge(vpc_log_0, vpc_log_1):
@@ -315,8 +333,8 @@ def is_mismatch_onezero(fs0, fs1, max_bb_id, timeout, workdir,
     with ThreadPoolExecutor(max_workers=2) as pool:
         fut_0 = pool.submit(run_vpc_sim, elf_0, vpc_0, log_0, timeout)
         fut_1 = pool.submit(run_vpc_sim, elf_1, vpc_1, log_1, timeout)
-        ok_0 = fut_0.result()
-        ok_1 = fut_1.result()
+        ok_0, _ = fut_0.result()
+        ok_1, _ = fut_1.result()
 
     if not ok_0 or not ok_1:
         print(f"  WARNING: Simulation failed for {bb_label} (ok_0={ok_0}, ok_1={ok_1})")
@@ -572,7 +590,7 @@ def find_failing_instr(fs0, fs1, failing_bb_id, timeout, workdir,
 
 
 def find_pillar_bb(fs0, fs1, failing_bb_id, failing_instr_id, timeout, workdir,
-                   hint_left=None, hint_right=None):
+                   fault_from_prev_bb=False, hint_left=None, hint_right=None):
     """Binary search for the pillar (primer) BB — the first BB that must be present
     for the VPC-divergence leak to occur.
 
@@ -593,6 +611,13 @@ def find_pillar_bb(fs0, fs1, failing_bb_id, failing_instr_id, timeout, workdir,
     left_bound  = hint_left  if hint_left  is not None else 0
     right_bound = hint_right if hint_right is not None else failing_bb_id + 1
 
+    # Leaker invariance: instr index to check whether leaker shifted (mirrors reduce.py:685-688).
+    # fault_from_prev_bb: the actual leaker is the last real instr of failing_bb; check second-to-last.
+    if fault_from_prev_bb:
+        _leaker_check_instr = len(fs0.instr_objs_seq[failing_bb_id]) - 2
+    else:
+        _leaker_check_instr = failing_instr_id - 1
+
     print("### SEARCHING FOR PILLAR BB ###")
     print(f"Initial bounds: [{left_bound}, {right_bound})")
 
@@ -610,6 +635,15 @@ def find_pillar_bb(fs0, fs1, failing_bb_id, failing_instr_id, timeout, workdir,
         elapsed = time.time() - t_start
 
         if diverges:
+            # Leaker invariance check: if removing the last failing instr *still* diverges,
+            # the leaker shifted to an earlier instruction → reject this candidate (mirrors
+            # CHECK_LEAKER_INVARIANCE / _leaker_changed() in reduce.py:731-736).
+            if _leaker_check_instr >= 0 and is_mismatch_onezero(
+                    fs0, fs1, failing_bb_id, timeout, workdir,
+                    max_instr_id=_leaker_check_instr, first_bb=candidate):
+                print(f"DIVERGES  ({elapsed:.1f}s)  leaker shifted → right={candidate}")
+                right_bound = candidate
+                continue
             print(f"DIVERGES  ({elapsed:.1f}s)  left={candidate}")
             left_bound = candidate
         else:
@@ -684,3 +718,395 @@ def find_failing_bb(design_name, seed, authorize_privileges, memsize, nmax_bbs,
     print(f"\nFailing BB: {right_bound} (out of {total_bbs})")
 
     return right_bound, total_bbs, fs0, fs1
+
+
+# ===========================================================================
+# Phase 4 — Dead-code NOPization (gadget minimization)
+# ===========================================================================
+
+# Canonical RISC-V NOP bytecodes
+_NOP_BYTECODE_32 = 0x00000013  # addi x0, x0, 0
+_NOP_BYTECODE_16 = 0x0001      # c.nop (= c.addi x0, 0)
+
+
+class _NopSubstitute:
+    """Drop-in replacement for an instruction object during Phase-4 NOPization.
+
+    Preserves paddr / vaddr / priv_level / va_layout / iscompressed of the
+    original so that gen_elf_from_bbs() lays it out at the correct address.
+    Emits a canonical RISC-V NOP (addi x0,x0,0 or c.nop).  execute() is a no-op
+    (we never run verify_program() on a Phase-4 fuzzerstate).
+    """
+    __slots__ = ("fuzzerstate", "paddr", "vaddr", "priv_level", "va_layout",
+                 "iscompressed", "instr_str", "isdead", "iscontext",
+                 "_orig_paddr", "_orig_mnemonic")
+
+    def __init__(self, orig):
+        self.fuzzerstate = getattr(orig, "fuzzerstate", None)
+        self.paddr       = orig.paddr
+        self.vaddr       = getattr(orig, "vaddr", None)
+        self.priv_level  = orig.priv_level
+        self.va_layout   = getattr(orig, "va_layout", None)
+        self.iscompressed = getattr(orig, "iscompressed", False)
+        self.instr_str    = "c.nop" if self.iscompressed else "addi"
+        self.isdead       = True
+        self.iscontext    = False
+        # Kept for diagnostics
+        self._orig_paddr    = orig.paddr
+        self._orig_mnemonic = getattr(orig, "instr_str", type(orig).__name__)
+
+    def gen_bytecode_int(self, is_spike_resolution: bool):
+        return _NOP_BYTECODE_16 if self.iscompressed else _NOP_BYTECODE_32
+
+    def execute(self, is_spike_resolution: bool = True):
+        return  # addi x0,x0,0 has no architectural effect
+
+    def get_str(self, is_spike_resolution: bool = True, color_taint: bool = False):
+        priv = self.priv_level.name[0] if self.priv_level is not None else "?"
+        return (f"({priv}/{self.va_layout}): {hex(self.paddr) if self.paddr is not None else '?'}"
+                f": NOP  [was {self._orig_mnemonic}]")
+
+
+def _can_nopize(instr) -> bool:
+    """Milesan-exact safety check: skip only placeholders and already-NOPs."""
+    if isinstance(instr, _NopSubstitute):
+        return False
+    if is_placeholder(instr):
+        return False
+    return True
+
+
+def _build_phase4_baseline(fuzzerstate, max_bb_id, max_instr_id, first_bb):
+    """Build the Phase-3-equivalent trimmed fuzzerstate for Phase 4 NOPization.
+
+    Same prefix as gen_truncated_elf_pillar() up to (but NOT including) verify_program.
+    We skip verify_program because NOP substitutions break architectural execution
+    equivalence with the original snapshotted state (registers/CSRs would diverge
+    from what simulate_execution expects).
+
+    Returns the trimmed fuzzerstate ready for in-place NOP mutations.
+    """
+    fs = deepcopy(fuzzerstate)
+    fs.restore_states(max_bb_id)
+
+    last_instr = fs.instr_objs_seq[max_bb_id][max_instr_id + 1]
+    new_jal = JALInstruction_t0(
+        fs, "jal", 0,
+        fs.final_bb_base_addr - last_instr.paddr + SPIKE_STARTADDR
+    )
+    new_jal.paddr = last_instr.paddr
+    new_jal.priv_level = last_instr.priv_level
+    if USE_MMU:
+        new_jal.vaddr = last_instr.vaddr
+        new_jal.va_layout = last_instr.va_layout
+
+    last_addr_layout, last_addr_priv = get_priv_and_layout_after_instruction(last_instr)
+    _regen_final_block(last_addr_priv, last_addr_layout, fs, max_bb_id, max_instr_id)
+
+    fs.instr_objs_seq[max_bb_id][max_instr_id + 1] = new_jal
+    fs.instr_objs_seq = fs.instr_objs_seq[:max_bb_id + 1]
+    fs.instr_objs_seq[max_bb_id] = fs.instr_objs_seq[max_bb_id][:max_instr_id + 2]
+    fs.bb_start_addr_seq = fs.bb_start_addr_seq[:max_bb_id + 1]
+
+    if first_bb > 1:
+        fs, _, _ = _save_ctx_and_jump_to_pillar_specific_instr_oz(fs, first_bb, 0)
+        del fs.instr_objs_seq[1:first_bb]
+        del fs.bb_start_addr_seq[1:first_bb]
+
+    fs.reset_states()
+    return fs
+
+
+def _gen_phase4_elf(fs, label, elf_path):
+    """Generate an ELF from a Phase-4 (possibly NOP-substituted) fuzzerstate.
+
+    Skips verify_program() — callers must have built `fs` via _build_phase4_baseline()
+    and mutated only via _NopSubstitute swaps.
+    """
+    fs.reset_states()
+    tmp_dir = os.path.dirname(elf_path)
+    fs.tmp_dir = tmp_dir
+    actual_path = gen_elf_from_bbs(
+        fs, False, "onezero_nopize", label,
+        fs.design_base_addr, for_spike=False
+    )
+    if actual_path != elf_path:
+        if os.path.exists(elf_path):
+            os.remove(elf_path)
+        os.rename(actual_path, elf_path)
+    return elf_path
+
+
+_SPIKE_SANITY_TIMEOUT = 10  # seconds; Spike runs at ~100M inst/s so 10s is generous
+
+
+def _spike_sanity_check(elf_path, march, label):
+    """Fast Spike validation: can the ELF reach tohost without crashing?
+
+    Mirrors the Spike pre-check inside milesan gen_reduced_elf (reduce.py:374-399).
+    Raises RuntimeError on spike crash or timeout so callers can treat it as a
+    revert signal — same role as the bare `except:` in milesan reduce.py:941-944.
+    """
+    try:
+        r = subprocess.run(
+            ["spike", f"--isa={march}", f"--pc={hex(SPIKE_STARTADDR)}", elf_path],
+            capture_output=True, timeout=_SPIKE_SANITY_TIMEOUT
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"spike sanity timeout: {label}")
+    if r.returncode != 0:
+        raise RuntimeError(f"spike sanity rc={r.returncode}: {label}")
+
+
+def _phase4_oracle(fs0_phase4, fs1_phase4, label, workdir, timeout):
+    """Run the VPC-divergence oracle on a Phase-4 fuzzerstate pair."""
+    from concurrent.futures import ThreadPoolExecutor
+    elf_0 = os.path.join(workdir, f"{label}_t0.elf")
+    elf_1 = os.path.join(workdir, f"{label}_t1.elf")
+    vpc_0 = os.path.join(workdir, f"{label}_t0_vpc.txt")
+    vpc_1 = os.path.join(workdir, f"{label}_t1_vpc.txt")
+    log_0 = os.path.join(workdir, f"{label}_t0_sim.log")
+    log_1 = os.path.join(workdir, f"{label}_t1_sim.log")
+
+    _gen_phase4_elf(fs0_phase4, label + "_t0", elf_0)
+    _gen_phase4_elf(fs1_phase4, label + "_t1", elf_1)
+
+    # Spike pre-check: fast-fail broken programs before invoking BOOM.
+    # Mirrors milesan gen_reduced_elf's run_trace_regs_at_pc_locs (reduce.py:397) which
+    # throws on spike crash; the except: branch in reduce.py:941 reverts the NOP.
+    march = (get_design_march_flags(fs0_phase4.design_name) if USE_COMPRESSED
+             else get_design_march_flags_nocompressed(fs0_phase4.design_name))
+    try:
+        _spike_sanity_check(elf_0, march, label + "_t0")
+        _spike_sanity_check(elf_1, march, label + "_t1")
+    except Exception:
+        return False  # NOP broke architectural control flow — reject immediately
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fut0 = pool.submit(run_vpc_sim, elf_0, vpc_0, log_0, timeout)
+        fut1 = pool.submit(run_vpc_sim, elf_1, vpc_1, log_1, timeout)
+        ok0, clean0 = fut0.result()
+        ok1, clean1 = fut1.result()
+
+    if not ok0 or not ok1:
+        return False
+    if not clean0 or not clean1:
+        # Simulation timed out: microarch hang not caught by Spike — reject
+        return False
+    return vpc_logs_diverge(vpc_0, vpc_1)
+
+
+def _fine_grain_nopize_bb(base_fs0, base_fs1, bb_idx, instr_range,
+                           leaker_paddr, oracle_fn, n_nops, n_attempts, label_prefix):
+    """Fine-grain NOPize: try each instruction in instr_range individually.
+
+    Mirrors milesan reduce.py sections (A), (C), and (B) fine-grain fallback.
+    Returns updated (n_nops, n_attempts).
+    """
+    for instr_idx in instr_range:
+        orig0 = base_fs0.instr_objs_seq[bb_idx][instr_idx]
+        orig1 = base_fs1.instr_objs_seq[bb_idx][instr_idx]
+
+        if orig0.paddr == leaker_paddr:
+            continue
+        if not _can_nopize(orig0):
+            continue
+
+        n_attempts += 1
+        label = f"{label_prefix}_bb{bb_idx}i{instr_idx}_a{n_attempts}"
+        t_a = time.time()
+
+        base_fs0.instr_objs_seq[bb_idx][instr_idx] = _NopSubstitute(orig0)
+        base_fs1.instr_objs_seq[bb_idx][instr_idx] = _NopSubstitute(orig1)
+
+        try:
+            diverges = oracle_fn(base_fs0, base_fs1, label)
+        except Exception as e:
+            diverges = False
+            print(f"  [{n_attempts:3d}]  bb{bb_idx:3d}.{instr_idx:3d}  "
+                  f"spike/sim error, revert: {e}")
+        dt = time.time() - t_a
+
+        if diverges:
+            n_nops += 1
+            print(f"  [{n_attempts:3d}]  bb{bb_idx:3d}.{instr_idx:3d}  "
+                  f"NOP ({dt:.1f}s)  [was {getattr(orig0, 'instr_str', '?')}]")
+        else:
+            base_fs0.instr_objs_seq[bb_idx][instr_idx] = orig0
+            base_fs1.instr_objs_seq[bb_idx][instr_idx] = orig1
+            print(f"  [{n_attempts:3d}]  bb{bb_idx:3d}.{instr_idx:3d}  "
+                  f"keep ({dt:.1f}s)  [{getattr(orig0, 'instr_str', '?')}]")
+    return n_nops, n_attempts
+
+
+def nopize_gadget(fs0, fs1, pillar_bb, failing_bb, failing_instr, fault_from_prev_bb,
+                  timeout, workdir):
+    """Phase 4 — greedy single-pass NOPization of the leaker↔pillar span.
+
+    Exact port of milesan _turn_sandwich_instructions_into_nops, adapted to the
+    VPC-divergence oracle. Sections A/B/C with coarse-grain + fine-grain fallback.
+
+    Returns (n_nops_added, gadget_size, cap_hit, minimal_t0_path, minimal_t1_path,
+             sanity_check_ok, reason).
+    `gadget_size` = number of non-NOP non-context instructions in the span.
+    """
+    print()
+    print("### PHASE 4: NOPize (gadget minimization) ###")
+    t_start = time.time()
+
+    # Oracle end-truncation point (same as Phase 3)
+    if fault_from_prev_bb:
+        p3_bb, p3_instr = failing_bb, 0
+        # Leaker is the CF terminator of the previous BB (last instr of that BB)
+        leaker_paddr = fs0.instr_objs_seq[failing_bb - 1][-1].paddr
+    else:
+        p3_bb, p3_instr = failing_bb, failing_instr
+        leaker_paddr = fs0.instr_objs_seq[failing_bb][failing_instr].paddr
+
+    print(f"  Building Phase-4 baselines (trimmed: bbs {pillar_bb}..{failing_bb})")
+    base_fs0 = _build_phase4_baseline(fs0, p3_bb, p3_instr, pillar_bb)
+    base_fs1 = _build_phase4_baseline(fs1, p3_bb, p3_instr, pillar_bb)
+
+    # Sanity: templates must diverge before any NOP is applied
+    print(f"  Verifying pre-NOP baseline diverges...", end=" ", flush=True)
+    if not _phase4_oracle(base_fs0, base_fs1, "phase4_baseline", workdir, timeout):
+        elapsed = time.time() - t_start
+        print(f"no divergence — aborting Phase 4 ({elapsed:.1f}s)")
+        return 0, None, False, None, None, False, "baseline_does_not_diverge"
+    print("OK")
+
+    # Mirrors milesan reduce.py:911-916: verify leaker minimality before NOPization.
+    if DO_ASSERT and not fault_from_prev_bb and failing_instr > 0:
+        sb_fs0 = _build_phase4_baseline(fs0, failing_bb, failing_instr - 1, pillar_bb)
+        sb_fs1 = _build_phase4_baseline(fs1, failing_bb, failing_instr - 1, pillar_bb)
+        assert not _phase4_oracle(sb_fs0, sb_fs1, "assert_pre_stepback", workdir, timeout), \
+            f"DO_ASSERT: step-back by 1 instr should eliminate divergence (failing_instr={failing_instr})"
+
+    # Trimmed index mapping after _build_phase4_baseline:
+    #   index 0          = initial block (untouched)
+    #   index 1          = pillar BB
+    #   index 2..N-2     = intermediate BBs
+    #   index N-1 (last) = failing BB
+    trimmed_failing_idx = len(base_fs0.instr_objs_seq) - 1
+    trimmed_pillar_idx  = 1  # always 1; _build_phase4_baseline del[1:first_bb]
+
+    def oracle_fn(fs0, fs1, label):
+        return _phase4_oracle(fs0, fs1, label, workdir, timeout)
+
+    n_nops = 0
+    n_attempts = 0
+    total_span = sum(len(bb) for bb in base_fs0.instr_objs_seq[trimmed_pillar_idx:])
+    print(f"  Span: pillar(bb_t{trimmed_pillar_idx}) .. failing(bb_t{trimmed_failing_idx}), "
+          f"~{total_span} instrs across {trimmed_failing_idx} BBs")
+
+    # ----------------------------------------------------------------
+    # (A) Pillar BB — fine-grain
+    # Mirrors milesan reduce.py section (A)
+    # ----------------------------------------------------------------
+    pillar_bb_len = len(base_fs0.instr_objs_seq[trimmed_pillar_idx])
+    print(f"  (A) Pillar BB fine-grain: {pillar_bb_len - 1} candidates")
+    n_nops, n_attempts = _fine_grain_nopize_bb(
+        base_fs0, base_fs1, trimmed_pillar_idx,
+        range(pillar_bb_len - 1),   # skip last (CF exit)
+        leaker_paddr, oracle_fn, n_nops, n_attempts, "p4A",
+    )
+
+    # ----------------------------------------------------------------
+    # (B) Intermediate BBs — coarse-grain first, fine-grain fallback
+    # Mirrors milesan reduce.py section (B)
+    # ----------------------------------------------------------------
+    for bb_idx in range(trimmed_pillar_idx + 1, trimmed_failing_idx):
+        bb0 = base_fs0.instr_objs_seq[bb_idx]
+        bb1 = base_fs1.instr_objs_seq[bb_idx]
+        bb_len = len(bb0)
+        # Save instructions (all but last = CF exit of this BB)
+        saved0 = [bb0[i] for i in range(bb_len - 1)]
+        saved1 = [bb1[i] for i in range(bb_len - 1)]
+
+        # Coarse: replace all non-placeholder instructions with NOPs at once
+        coarse_noped = []
+        for i in range(bb_len - 1):
+            if _can_nopize(bb0[i]) and bb0[i].paddr != leaker_paddr:
+                base_fs0.instr_objs_seq[bb_idx][i] = _NopSubstitute(bb0[i])
+                base_fs1.instr_objs_seq[bb_idx][i] = _NopSubstitute(bb1[i])
+                coarse_noped.append(i)
+
+        if not coarse_noped:
+            continue
+
+        n_attempts += 1
+        t_a = time.time()
+        label = f"p4B_coarse_bb{bb_idx}_a{n_attempts}"
+        try:
+            diverges = oracle_fn(base_fs0, base_fs1, label)
+        except Exception as e:
+            diverges = False
+            print(f"  [{n_attempts:3d}]  bb{bb_idx:3d}  coarse spike/sim error: {e} → fine-grain")
+        dt = time.time() - t_a
+
+        if diverges:
+            n_nops += len(coarse_noped)
+            print(f"  [{n_attempts:3d}]  bb{bb_idx:3d}  COARSE-NOP "
+                  f"({len(coarse_noped)} instrs, {dt:.1f}s)")
+        else:
+            # Revert coarse; fall back to fine-grain per instruction
+            for i in range(len(saved0)):
+                base_fs0.instr_objs_seq[bb_idx][i] = saved0[i]
+                base_fs1.instr_objs_seq[bb_idx][i] = saved1[i]
+            print(f"  [{n_attempts:3d}]  bb{bb_idx:3d}  coarse fail ({dt:.1f}s) → fine-grain")
+            n_nops, n_attempts = _fine_grain_nopize_bb(
+                base_fs0, base_fs1, bb_idx,
+                range(bb_len - 1),
+                leaker_paddr, oracle_fn, n_nops, n_attempts, "p4B",
+            )
+
+    # ----------------------------------------------------------------
+    # (C) Failing BB — fine-grain: instructions before failing_instr
+    # Mirrors milesan reduce.py section (C)
+    # ----------------------------------------------------------------
+    fail_bb_len = len(base_fs0.instr_objs_seq[trimmed_failing_idx])
+    fail_instr_trimmed = failing_instr if not fault_from_prev_bb else fail_bb_len - 2
+    # Mirrors milesan reduce.py section (C): range(failing_instr_id - 1).
+    # The instruction directly before the leaker is by definition load-bearing
+    # (step-back pre-check asserts this), so skip it to save one guaranteed-fail call.
+    fail_c_range = range(max(0, fail_instr_trimmed - 1))
+    print(f"  (C) Failing BB fine-grain: {len(fail_c_range)} candidates before leaker")
+    n_nops, n_attempts = _fine_grain_nopize_bb(
+        base_fs0, base_fs1, trimmed_failing_idx,
+        fail_c_range,
+        leaker_paddr, oracle_fn, n_nops, n_attempts, "p4C",
+    )
+
+    # Emit final minimal ELFs
+    minimal_t0 = os.path.join(workdir, "minimal_t0.elf")
+    minimal_t1 = os.path.join(workdir, "minimal_t1.elf")
+    _gen_phase4_elf(base_fs0, "minimal_t0", minimal_t0)
+    _gen_phase4_elf(base_fs1, "minimal_t1", minimal_t1)
+
+    # Post-Phase-4 sanity check: oracle must still diverge on the final minimal ELFs
+    print(f"  Running post-Phase-4 sanity check on minimal ELFs...", end=" ", flush=True)
+    final_diverges = _phase4_oracle(base_fs0, base_fs1, "minimal", workdir, timeout)
+    sanity_ok = bool(final_diverges)
+    print("OK" if sanity_ok else "FAILED")
+
+    leaker_present = any(
+        instr.paddr == leaker_paddr
+        for bb in base_fs0.instr_objs_seq
+        for instr in bb
+    )
+    if not leaker_present:
+        sanity_ok = False
+        print(f"  Sanity check FAILED: leaker paddr {hex(leaker_paddr)} missing from minimal gadget")
+
+    gadget_size = sum(
+        1 for bb in base_fs0.instr_objs_seq
+        for instr in bb
+        if not isinstance(instr, _NopSubstitute) and not getattr(instr, "iscontext", False)
+    )
+
+    elapsed = time.time() - t_start
+    reason = "ok" if sanity_ok else "sanity_failed"
+    print(f"  Phase 4 done: n_nops={n_nops}, gadget_size={gadget_size}, "
+          f"sanity_ok={sanity_ok}  ({elapsed:.1f}s)")
+
+    return n_nops, gadget_size, False, minimal_t0, minimal_t1, sanity_ok, reason

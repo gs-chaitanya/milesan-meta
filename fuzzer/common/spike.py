@@ -271,11 +271,12 @@ def calibrate_spikespeed(numinstrs:int = 10000) -> list:
     from rv.rv32i import rv32i_jal
     from time import time_ns
 
-    # First, create the file that contains the commands, if it does not already exist
-    path_to_debug_file = __gen_spike_dbgcmd_file_for_trace_pcs('spikespeedcalibration', numinstrs, SPIKE_STARTADDR, True, 16)
+    # First, create the file that contains the commands, if it does not already exist.
+    # Use PID in the identifier to avoid races when multiple processes calibrate concurrently.
+    path_to_debug_file = __gen_spike_dbgcmd_file_for_trace_pcs(f'spikespeedcalibration_{os.getpid()}', numinstrs, SPIKE_STARTADDR, True, 16)
 
     # Second, generate a dummy ELF file containing an infinite loop
-    elfpath = os.path.join(PATH_TO_TMP, 'spikespeedcalibration.elf')
+    elfpath = os.path.join(PATH_TO_TMP, f'spikespeedcalibration_{os.getpid()}.elf')
     gen_elf(rv32i_jal(0, 0).to_bytes(4, 'little'), SPIKE_STARTADDR, SPIKE_STARTADDR, elfpath, False, add_tohost=False)
 
     # Run the Spike command

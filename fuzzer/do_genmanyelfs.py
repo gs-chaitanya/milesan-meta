@@ -33,7 +33,7 @@ if __name__ == '__main__':
         milesan.memview.FORCE_TAINT_VALUE = force_taint_value
         milesan.randomize.createcfinstr.FORCE_TAINT_VALUE = force_taint_value
 
-        gen_many_elfs(DESIGN_NAME, 10, 1000, os.path.join(PATH_TO_TMP, 'manyelfs'), force_taint_value=force_taint_value)
+        gen_many_elfs(DESIGN_NAME, 72, 50000, os.path.join(PATH_TO_TMP, 'manyelfs'), force_taint_value=force_taint_value)
 
 else:
     raise Exception("This module must be at the toplevel.")
