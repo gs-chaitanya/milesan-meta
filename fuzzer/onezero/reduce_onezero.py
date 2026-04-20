@@ -435,14 +435,19 @@ def is_mismatch_onezero(fs0, fs1, max_bb_id, timeout, workdir,
     # Mirrors milesan gen_reduced_elf:run_trace_regs_at_pc_locs which raises on a
     # broken truncated program. Raises RuntimeError → propagates to the caller,
     # terminating the binary search and recording the seed as FAILED.
-    if first_bb is None:
-        march = (get_design_march_flags(fs0.design_name) if USE_COMPRESSED
-                 else get_design_march_flags_nocompressed(fs0.design_name))
-        _spike_sanity_check(elf_0, march, bb_label + "_t0")
-        _spike_sanity_check(elf_1, march, bb_label + "_t1")
-
     # Run both simulations in parallel
     from concurrent.futures import ThreadPoolExecutor
+    if first_bb is None:
+        # Phase 1/2: run Spike pre-checks and BOOM sims all in parallel.
+        # Two Spike checks + two BOOM sims use 2 cores concurrently throughout,
+        # keeping each worker at full 2-CPU utilisation (same as the BOOM-only phase).
+        march = (get_design_march_flags(fs0.design_name) if USE_COMPRESSED
+                 else get_design_march_flags_nocompressed(fs0.design_name))
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            spike_fut_0 = pool.submit(_spike_sanity_check, elf_0, march, bb_label + "_t0")
+            spike_fut_1 = pool.submit(_spike_sanity_check, elf_1, march, bb_label + "_t1")
+            spike_fut_0.result()  # raises RuntimeError on broken ELF
+            spike_fut_1.result()
     with ThreadPoolExecutor(max_workers=2) as pool:
         fut_0 = pool.submit(run_vpc_sim, elf_0, vpc_0, log_0, timeout)
         fut_1 = pool.submit(run_vpc_sim, elf_1, vpc_1, log_1, timeout)
