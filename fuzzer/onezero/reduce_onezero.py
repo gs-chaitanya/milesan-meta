@@ -447,10 +447,11 @@ def is_mismatch_onezero(fs0, fs1, max_bb_id, timeout, workdir,
     # broken truncated program. Raises RuntimeError → propagates to the caller,
     # terminating the binary search and recording the seed as FAILED.
     # Run both simulations in parallel
-    if first_bb is None:
-        # Phase 1/2: run Spike pre-checks and BOOM sims all in parallel.
-        # Two Spike checks + two BOOM sims use 2 cores concurrently throughout,
-        # keeping each worker at full 2-CPU utilisation (same as the BOOM-only phase).
+    if first_bb is None and max_bb_id != FULL_PROGRAM_SENTINEL:
+        # Spike pre-check for Phase 1/2 truncated ELFs only.
+        # Skipped for the full-program sentinel: that ELF is complete and correct by
+        # construction; Spike can take >10s on large programs, triggering a false timeout.
+        # Truncated ELFs (binary search probes) are the ones that can have broken CF.
         march = (get_design_march_flags(fs0.design_name) if USE_COMPRESSED
                  else get_design_march_flags_nocompressed(fs0.design_name))
         with ThreadPoolExecutor(max_workers=2) as pool:
