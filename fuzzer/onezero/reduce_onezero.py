@@ -417,10 +417,21 @@ def is_mismatch_onezero(fs0, fs1, max_bb_id, timeout, workdir,
     log_0 = os.path.join(workdir, f"{bb_label}_t0_sim.log")
     log_1 = os.path.join(workdir, f"{bb_label}_t1_sim.log")
 
-    # Generate truncated ELFs from pre-resolved fuzzerstates
+    # Generate truncated ELFs from pre-resolved fuzzerstates.
+    # Phase 3 (first_bb > 1): run t0 and t1 in parallel — each call deepcopies the
+    # fuzzerstate immediately (line 620) so there is no shared Python state. The
+    # identifier_suffix "_t0"/"_t1" makes Spike dbgcmds file paths unique so the
+    # two threads don't collide on the filesystem (spike.py:62 names files after the
+    # identifier_str).
+    from concurrent.futures import ThreadPoolExecutor
     if first_bb is not None and first_bb > 1:
-        gen_truncated_elf_pillar(fs0, max_bb_id, max_instr_id, first_bb, elf_0)
-        gen_truncated_elf_pillar(fs1, max_bb_id, max_instr_id, first_bb, elf_1)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            fut_0 = pool.submit(gen_truncated_elf_pillar,
+                                fs0, max_bb_id, max_instr_id, first_bb, elf_0, "_t0")
+            fut_1 = pool.submit(gen_truncated_elf_pillar,
+                                fs1, max_bb_id, max_instr_id, first_bb, elf_1, "_t1")
+            fut_0.result()
+            fut_1.result()
     elif max_instr_id is None:
         total_bbs_0 = len(fs0.instr_objs_seq)
         total_bbs_1 = len(fs1.instr_objs_seq)
@@ -436,7 +447,6 @@ def is_mismatch_onezero(fs0, fs1, max_bb_id, timeout, workdir,
     # broken truncated program. Raises RuntimeError → propagates to the caller,
     # terminating the binary search and recording the seed as FAILED.
     # Run both simulations in parallel
-    from concurrent.futures import ThreadPoolExecutor
     if first_bb is None:
         # Phase 1/2: run Spike pre-checks and BOOM sims all in parallel.
         # Two Spike checks + two BOOM sims use 2 cores concurrently throughout,
@@ -463,12 +473,17 @@ def is_mismatch_onezero(fs0, fs1, max_bb_id, timeout, workdir,
     return vpc_logs_diverge(vpc_0, vpc_1)
 
 
-def _save_ctx_and_jump_to_pillar_specific_instr_oz(fuzzerstate, index_first_bb, index_first_instr):
+def _save_ctx_and_jump_to_pillar_specific_instr_oz(fuzzerstate, index_first_bb, index_first_instr,
+                                                    identifier_suffix=""):
     """Snapshot architectural state at the entry of BB index_first_bb via Spike,
     generate a context-setter BB that restores that state, and redirect the initial
     block's tail jump to the context setter.
 
     Modifies fuzzerstate in place. Returns (fuzzerstate, tgt_addr_layout, tgt_addr_priv).
+
+    identifier_suffix: appended to instance_to_str() when naming Spike temp files.
+    Pass "_t0" / "_t1" when calling concurrently for the two taint variants so their
+    Spike dbgcmds files don't collide (spike.py names them after the identifier_str).
 
     Inlined from _save_ctx_and_jump_to_pillar_specific_instr() in milesan/reduce.py:71-262.
     The TAINT_EN/DO_ASSERT assertion block is replaced with zero-initialized taint values
@@ -500,7 +515,7 @@ def _save_ctx_and_jump_to_pillar_specific_instr_oz(fuzzerstate, index_first_bb, 
         fuzzerstate, index_first_bb, index_first_instr, tgt_pc
     )
     dumpedvals = run_trace_regs_at_pc_locs(
-        fuzzerstate.instance_to_str(), spikereduce_elfpath, march_flags,
+        fuzzerstate.instance_to_str() + identifier_suffix, spikereduce_elfpath, march_flags,
         SPIKE_STARTADDR, ctx_regdump_reqs, False, final_addr,
         fuzzerstate.num_pickable_floating_regs if fuzzerstate.design_has_fpu else 0,
         fuzzerstate.design_has_fpud
@@ -608,7 +623,8 @@ def _save_ctx_and_jump_to_pillar_specific_instr_oz(fuzzerstate, index_first_bb, 
     return fuzzerstate, tgt_addr_layout, tgt_addr_priv
 
 
-def gen_truncated_elf_pillar(fuzzerstate, max_bb_id, max_instr_id, first_bb, elf_path):
+def gen_truncated_elf_pillar(fuzzerstate, max_bb_id, max_instr_id, first_bb, elf_path,
+                             identifier_suffix=""):
     """Generate a pillar-trimmed ELF: keep BBs [first_bb..max_bb_id] with a context
     setter that restores the architectural state those removed BBs would have produced,
     and truncate within max_bb_id at instruction max_instr_id (Phase 2 style).
@@ -642,7 +658,8 @@ def gen_truncated_elf_pillar(fuzzerstate, max_bb_id, max_instr_id, first_bb, elf
 
     # Context save (only when trimming from the front, i.e. first_bb > 1)
     if first_bb > 1:
-        fs, _, _ = _save_ctx_and_jump_to_pillar_specific_instr_oz(fs, first_bb, 0)
+        fs, _, _ = _save_ctx_and_jump_to_pillar_specific_instr_oz(
+            fs, first_bb, 0, identifier_suffix=identifier_suffix)
 
     # Front-trimming: delete BBs [1, first_bb) from instr_objs_seq and bb_start_addr_seq
     if first_bb > 1:
