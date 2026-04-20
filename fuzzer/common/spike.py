@@ -272,11 +272,14 @@ def calibrate_spikespeed(numinstrs:int = 10000) -> list:
     from time import time_ns
 
     # First, create the file that contains the commands, if it does not already exist.
-    # Use PID in the identifier to avoid races when multiple processes calibrate concurrently.
-    path_to_debug_file = __gen_spike_dbgcmd_file_for_trace_pcs(f'spikespeedcalibration_{os.getpid()}', numinstrs, SPIKE_STARTADDR, True, 16)
+    # Use PID + uuid to avoid races: container PID namespaces have small PID spaces and
+    # PIDs can be reused across concurrent do_reduce.py subprocesses within the same run.
+    import uuid as _uuid
+    _unique = f'{os.getpid()}_{_uuid.uuid4().hex[:8]}'
+    path_to_debug_file = __gen_spike_dbgcmd_file_for_trace_pcs(f'spikespeedcalibration_{_unique}', numinstrs, SPIKE_STARTADDR, True, 16)
 
     # Second, generate a dummy ELF file containing an infinite loop
-    elfpath = os.path.join(PATH_TO_TMP, f'spikespeedcalibration_{os.getpid()}.elf')
+    elfpath = os.path.join(PATH_TO_TMP, f'spikespeedcalibration_{_unique}.elf')
     gen_elf(rv32i_jal(0, 0).to_bytes(4, 'little'), SPIKE_STARTADDR, SPIKE_STARTADDR, elfpath, False, add_tohost=False)
 
     # Run the Spike command
