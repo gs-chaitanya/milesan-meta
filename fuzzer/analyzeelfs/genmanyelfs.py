@@ -27,8 +27,11 @@ def __gen_elf_worker(in_tuple):
     force_taint_str = str(force_taint_value) if force_taint_value is not None else "none"
     basename = f"{force_taint_str}_{design_name}_{randseed}"
 
-    # Move the RTL ELF from elfpath to outdir_path.
+    # Move the RTL ELF (and sibling .bin for XiangShan) from elfpath to outdir_path.
     shutil.move(elfpath, os.path.join(outdir_path, f"{basename}.elf"))
+    bin_src = elfpath + '.bin'
+    if os.path.isfile(bin_src):
+        shutil.move(bin_src, os.path.join(outdir_path, f"{basename}.elf.bin"))
 
     # Write the end address (where spike will fail), for further analysis.
     with open(os.path.join(outdir_path, f"{basename}_finaladdr.txt"), "w") as f:

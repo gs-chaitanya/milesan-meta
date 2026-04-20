@@ -20,6 +20,85 @@ OBJDUMP_FLAGS = ["-d", "--disassembler-options=numeric,no-aliases"]
 
 
 # ---------------------------------------------------------------------------
+# Objdump parsing for full disassembly in summary.txt
+# ---------------------------------------------------------------------------
+
+def _parse_objdump(dump_path):
+    """Return {paddr_int: stripped_line_str} for every disasm line in dump_path.
+
+    Keeps only lines whose first token is a hex address followed by ':'.
+    Skips section headers, symbol labels, blank lines.
+    """
+    out = {}
+    try:
+        with open(dump_path, "r") as f:
+            for raw in f:
+                stripped = raw.lstrip()
+                if not stripped:
+                    continue
+                colon_pos = stripped.find(":")
+                if colon_pos < 1 or colon_pos > 20:
+                    continue
+                try:
+                    pa = int(stripped[:colon_pos], 16)
+                except ValueError:
+                    continue
+                out[pa] = raw.rstrip("\n")
+    except OSError:
+        pass
+    return out
+
+
+def _render_disasm_bb(label, fs, bb_id, dump_map, leaker_paddr=None):
+    """Return list of strings: header + per-instruction lines from objdump.
+
+    Marks leaker_paddr with '>>' prefix and '<-- LEAKER' suffix.
+    Falls back to instr.get_str() when no objdump line is found for an address.
+    """
+    lines = []
+    try:
+        bb = fs.instr_objs_seq[bb_id]
+        start = fs.bb_start_addr_seq[bb_id]
+    except Exception as e:
+        lines.append(f"=== {label} (bb={bb_id}) ERROR: {e} ===")
+        return lines
+
+    try:
+        priv = bb[0].priv_level.name if bb[0].priv_level is not None else "?"
+    except Exception:
+        priv = "?"
+
+    lines.append(f"=== {label} (bb={bb_id}, start=0x{start:x}, n={len(bb)}, priv={priv}) ===")
+
+    for i, instr in enumerate(bb):
+        try:
+            paddr = instr.paddr if instr.paddr is not None else start + 4 * i
+        except Exception:
+            paddr = start + 4 * i
+
+        # Try exact paddr, then ±2 for compressed instructions
+        disasm_line = dump_map.get(paddr)
+        if disasm_line is None:
+            for delta in (2, -2, 4, -4):
+                disasm_line = dump_map.get(paddr + delta)
+                if disasm_line is not None:
+                    break
+        if disasm_line is None:
+            # Fallback to internal string representation
+            try:
+                disasm_line = f"  0x{paddr:x}:\t(no objdump line)\t{instr.get_str(False)}"
+            except Exception:
+                disasm_line = f"  0x{paddr:x}:\t(no objdump line)"
+
+        if leaker_paddr is not None and paddr == leaker_paddr:
+            lines.append(f">> {disasm_line}  <-- LEAKER")
+        else:
+            lines.append(f"   {disasm_line}")
+
+    return lines
+
+
+# ---------------------------------------------------------------------------
 # Instruction / BB serialization
 # ---------------------------------------------------------------------------
 
@@ -538,8 +617,14 @@ def assemble_context(fs0, memsize, nmax_bbs, authorize_privileges,
 # Human-readable summary
 # ---------------------------------------------------------------------------
 
-def render_summary(context, result):
-    """Produce a human-readable plaintext summary of the reduction."""
+def render_summary(context, result, fs0=None, disasm_dump_path=None):
+    """Produce a human-readable plaintext summary of the reduction.
+
+    When fs0 and disasm_dump_path are provided (and the dump file exists),
+    the leaker BB and pillar BB sections show real objdump disassembly with
+    the leaker instruction clearly marked.  Falls back to instr.get_str() when
+    the dump is unavailable.
+    """
     lines = []
     meta = context.get("meta", {})
     design = result.get("design", "?")
@@ -550,7 +635,7 @@ def render_summary(context, result):
                  f"MMU: {meta.get('use_mmu')}")
     lines.append("")
 
-    # Leaker instruction
+    # Leaker instruction — one-line callout for quick scan
     leaker = context.get("leaker", {})
     lines.append("--- Leaking instruction ---")
     lines.append(f"  {leaker.get('str', '?')}")
@@ -560,23 +645,47 @@ def render_summary(context, result):
                  f"fault_from_prev_bb={result.get('fault_from_prev_bb')}")
     lines.append("")
 
+    # Parse objdump once if available
+    dump_map = {}
+    if fs0 is not None and disasm_dump_path:
+        dump_map = _parse_objdump(disasm_dump_path)
+
+    # Resolve leaker paddr for marking in the disasm sections
+    leaker_paddr = None
+    try:
+        leaker_paddr_hex = leaker.get("paddr")
+        if leaker_paddr_hex:
+            leaker_paddr = int(leaker_paddr_hex, 16)
+    except Exception:
+        pass
+
     # Leaker BB
     lbb = context.get("leaker_bb", {})
-    leaker_local = lbb.get("leaker_local_idx", result.get("failing_instr_id"))
-    lines.append(f"--- Leaker BB (bb={lbb.get('bb_id')}, start={lbb.get('bb_start_paddr')}, "
-                 f"n={lbb.get('n_instrs')}, priv={lbb.get('priv_level')}) ---")
-    for instr_d in lbb.get("instructions", []):
-        marker = "  >>" if instr_d.get("idx") == leaker_local else "   "
-        lines.append(f"{marker} [{instr_d.get('idx'):3d}] {instr_d.get('str', '?')}")
+    actual_leak_bb = lbb.get("bb_id")
+    if fs0 is not None and dump_map and actual_leak_bb is not None:
+        lines.extend(_render_disasm_bb(
+            "LEAKER BB", fs0, actual_leak_bb, dump_map, leaker_paddr=leaker_paddr
+        ))
+    else:
+        leaker_local = lbb.get("leaker_local_idx", result.get("failing_instr_id"))
+        lines.append(f"--- Leaker BB (bb={lbb.get('bb_id')}, start={lbb.get('bb_start_paddr')}, "
+                     f"n={lbb.get('n_instrs')}, priv={lbb.get('priv_level')}) ---")
+        for instr_d in lbb.get("instructions", []):
+            marker = "  >>" if instr_d.get("idx") == leaker_local else "   "
+            lines.append(f"{marker} [{instr_d.get('idx'):3d}] {instr_d.get('str', '?')}")
     lines.append("")
 
     # Pillar BB
     pbb = context.get("pillar_bb")
-    if pbb:
+    pillar_bb_id = pbb.get("bb_id") if pbb else None
+    if fs0 is not None and dump_map and pillar_bb_id is not None:
+        lines.extend(_render_disasm_bb("PILLAR BB", fs0, pillar_bb_id, dump_map))
+    elif pbb:
         lines.append(f"--- Pillar BB (bb={pbb.get('bb_id')}, start={pbb.get('bb_start_paddr')}, "
                      f"n={pbb.get('n_instrs')}, priv={pbb.get('priv_level')}) ---")
         for instr_d in pbb.get("instructions", []):
             lines.append(f"    [{instr_d.get('idx'):3d}] {instr_d.get('str', '?')}")
+    if pbb:
         lines.append("")
 
     # Intermediate BBs summary

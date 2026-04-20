@@ -1639,6 +1639,24 @@ class SimpleIllegalInstruction(ExceptionInstruction):
             return f"{self.get_preamble()}: unimp (SimpleIllegalInstruction)"
 
 
+class XiangShanTrapInstruction(BaseInstruction):
+    # XiangShan / NEMU Trap — opcode 0x6B, rs1 = exit-code register, all other fields zero.
+    # A return value of 0 in rs1 signals HIT GOOD TRAP; 1 signals HIT BAD TRAP.
+    # Requires Difftest; acts as nop without it.
+    # Encoding: (rs1 << 15) | 0x6B  (matches docs example: rs1=10 → 0x5006B)
+    def __init__(self, fuzzerstate, rs1: int):
+        super().__init__(fuzzerstate, "xs_trap")
+        if DO_ASSERT:
+            assert 0 <= rs1 < 32
+        self.rs1 = rs1
+
+    def gen_bytecode_int(self, is_spike_resolution: bool):
+        return (self.rs1 << 15) | 0x6B
+
+    def get_str(self, is_spike_resolution: bool = USE_SPIKE_INTERM_ELF, color_taint: bool = False):
+        return f"{self.get_preamble()}: xs_trap rs1=x{self.rs1} (XiangShan Trap 0x{self.gen_bytecode_int(False):08X})"
+
+
 # Exception that encapsulates an instruction that causes an exception, such as a misaligned JAL.
 class SimpleExceptionEncapsulator(ExceptionInstruction):
     def __init__(self, fuzzerstate, is_mtvec, producer_id: int, instr, exception_op_type: ExceptionCauseVal):

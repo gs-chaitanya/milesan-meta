@@ -154,6 +154,7 @@ if __name__ == '__main__':
         result["pillar_bb_id"] = pillar_bb
         result["elapsed_pillar_s"] = round(elapsed_pillar, 1)
         print(f"Pillar BB: {pillar_bb}")
+        _flush_result()  # Phase 3 checkpoint
 
     # ---------------------------------------------------------------------------
     # Assemble diagnostic context (post-reduction, read-only, no simulation)
@@ -200,11 +201,14 @@ if __name__ == '__main__':
                 json.dump(context, f, indent=2)
             print(f"Context written to: {context_path}")
 
-            # Write summary.txt (human-readable digest)
+            # Write summary.txt (human-readable digest with full objdump disassembly)
             summary_path = os.path.join(workdir, "summary.txt")
+            dump_path = os.path.join(workdir, "reduced_t0.elf.dump")
             with open(summary_path, "w") as f:
-                f.write(render_summary(context, result))
+                f.write(render_summary(context, result, fs0=fs0,
+                                       disasm_dump_path=dump_path))
             print(f"Summary written to: {summary_path}")
+            _flush_result()  # Context checkpoint
 
         except Exception as e:
             print(f"WARNING: Context assembly failed: {e}")
@@ -285,9 +289,7 @@ if __name__ == '__main__':
             traceback.print_exc()
             result["forensic_error"] = str(e)
 
-    result_path = os.path.join(workdir, "result.json")
-    with open(result_path, "w") as f:
-        json.dump(result, f, indent=2)
+    _flush_result()  # Final save (atomic)
 
     elapsed_total = time.time() - t_start
     print(f"\nResult: failing BB = {failing_bb} (out of {total_bbs})")

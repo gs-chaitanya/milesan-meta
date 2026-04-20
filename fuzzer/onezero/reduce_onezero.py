@@ -38,6 +38,7 @@ SIM_BIN = f"{CHIPYARD_DIR}/sims/verilator/simulator-chipyard.harness-{CONFIG}"
 DRAMSIM_INI = f"{CHIPYARD_DIR}/generators/testchipip/src/main/resources/dramsim2_ini"
 SIM_MAX_CYCLES = 10_000_000
 FULL_PROGRAM_SENTINEL = 999999
+_POLL_INTERVAL = 0.5  # seconds between VPC divergence checks in early-kill oracle
 
 
 def _regen_final_block(priv_level, layout_id, fuzzerstate, bb_id, instr_id):
@@ -233,6 +234,21 @@ def _gen_full_elf(fuzzerstate, elf_path):
     return elf_path
 
 
+def _build_sim_cmd(elf_path, vpc_log_path):
+    """Build the VpcPrint BOOM simulator command for a given ELF and VPC log output."""
+    return [
+        SIM_BIN,
+        "+permissive",
+        "+dramsim",
+        f"+dramsim_ini_dir={DRAMSIM_INI}",
+        f"+max-cycles={SIM_MAX_CYCLES}",
+        f"+loadmem={elf_path}",
+        f"+vpcfile={vpc_log_path}",
+        "+permissive-off",
+        elf_path,
+    ]
+
+
 def run_vpc_sim(elf_path, vpc_log_path, sim_log_path, timeout):
     """Run one ELF on VpcPrint BOOM simulator.
 
@@ -244,17 +260,7 @@ def run_vpc_sim(elf_path, vpc_log_path, sim_log_path, timeout):
     clean_exit — a timed-out NOPized program has broken control flow and must
     be rejected, mirroring milesan's try/except revert on spike crash.
     """
-    cmd = [
-        SIM_BIN,
-        "+permissive",
-        "+dramsim",
-        f"+dramsim_ini_dir={DRAMSIM_INI}",
-        f"+max-cycles={SIM_MAX_CYCLES}",
-        f"+loadmem={elf_path}",
-        f"+vpcfile={vpc_log_path}",
-        "+permissive-off",
-        elf_path,
-    ]
+    cmd = _build_sim_cmd(elf_path, vpc_log_path)
 
     timed_out = False
     with open(sim_log_path, "w") as log_f:
@@ -290,6 +296,102 @@ def vpc_logs_diverge(vpc_log_0, vpc_log_1):
         # If either log is missing, we can't compare — treat as no divergence
         print(f"  WARNING: VPC log missing ({vpc_log_0} or {vpc_log_1})")
         return False
+
+
+def _vpc_files_diverge_partial(path0, path1, min_lines=2):
+    """Compare VPC log files as they're being written. Only compare complete lines.
+
+    Returns True on the first differing line. Requires at least min_lines complete
+    lines from each file before comparing, to avoid spurious matches during startup.
+    Handles partial final lines (incomplete stdio-buffered writes) by discarding them.
+    """
+    try:
+        with open(path0, "r") as f0, open(path1, "r") as f1:
+            lines0 = f0.readlines()
+            lines1 = f1.readlines()
+    except (FileNotFoundError, IOError):
+        return False
+    # Discard potentially incomplete last line (not yet flushed by stdio)
+    if lines0 and not lines0[-1].endswith("\n"):
+        lines0 = lines0[:-1]
+    if lines1 and not lines1[-1].endswith("\n"):
+        lines1 = lines1[:-1]
+    n = min(len(lines0), len(lines1))
+    if n < min_lines:
+        return False
+    for i in range(n):
+        if lines0[i] != lines1[i]:
+            return True
+    return False
+
+
+def _run_vpc_pair_early_kill(elf_0, vpc_0, log_0, elf_1, vpc_1, log_1, timeout):
+    """Run two VPC sims in parallel, killing both as soon as divergence is detected.
+
+    Polls VPC log files every _POLL_INTERVAL seconds. On early divergence both
+    processes are killed immediately, returning in ~1-3s instead of the full
+    ~57s completion time. Sims that do NOT diverge still run to completion (or
+    timeout), so rejected NOPs pay the same cost as before.
+
+    Returns (diverges, vpc_ok_0, vpc_ok_1, clean_0, clean_1) where:
+      diverges  — True if VPC logs differ (early or after natural completion)
+      clean_0/1 — True only when the sim reached $finish without timeout;
+                  always False for the early-kill case (processes were killed)
+    """
+    cmd_0 = _build_sim_cmd(elf_0, vpc_0)
+    cmd_1 = _build_sim_cmd(elf_1, vpc_1)
+
+    with open(log_0, "w") as lf0, open(log_1, "w") as lf1:
+        p0 = subprocess.Popen(cmd_0, stdin=subprocess.DEVNULL,
+                              stdout=lf0, stderr=subprocess.STDOUT)
+        p1 = subprocess.Popen(cmd_1, stdin=subprocess.DEVNULL,
+                              stdout=lf1, stderr=subprocess.STDOUT)
+
+        t_start = time.time()
+        early_diverge = False
+        timed_out = False
+
+        while p0.poll() is None or p1.poll() is None:
+            if time.time() - t_start >= timeout:
+                timed_out = True
+                break
+            if _vpc_files_diverge_partial(vpc_0, vpc_1):
+                early_diverge = True
+                break
+            time.sleep(_POLL_INTERVAL)
+
+        # Kill any still-running process (early-kill or timeout)
+        for p in (p0, p1):
+            if p.poll() is None:
+                p.kill()
+            try:
+                p.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                p.wait(timeout=5)
+
+    def _vpc_ok(path):
+        try:
+            return os.path.getsize(path) > 0
+        except OSError:
+            return False
+
+    if early_diverge:
+        # Processes were killed; clean_exit is meaningless — return diverges=True directly.
+        # Safe because _spike_sanity_check already validated architectural control flow.
+        return True, _vpc_ok(vpc_0), _vpc_ok(vpc_1), False, False
+
+    clean_0 = (p0.returncode == 0) and not timed_out
+    clean_1 = (p1.returncode == 0) and not timed_out
+    ok_0, ok_1 = _vpc_ok(vpc_0), _vpc_ok(vpc_1)
+
+    if timed_out:
+        return False, ok_0, ok_1, False, False
+
+    # Both finished naturally — do full log comparison
+    if not ok_0 or not ok_1:
+        return False, ok_0, ok_1, clean_0, clean_1
+    return vpc_logs_diverge(vpc_0, vpc_1), ok_0, ok_1, clean_0, clean_1
 
 
 def is_mismatch_onezero(fs0, fs1, max_bb_id, timeout, workdir,
@@ -328,6 +430,17 @@ def is_mismatch_onezero(fs0, fs1, max_bb_id, timeout, workdir,
         gen_truncated_elf_instr(fs0, max_bb_id, max_instr_id, elf_0)
         gen_truncated_elf_instr(fs1, max_bb_id, max_instr_id, elf_1)
 
+    # Spike pre-check for Phase 1/2 (Phase 3 path already runs Spike inside
+    # gen_truncated_elf_pillar → _save_ctx_and_jump_to_pillar_specific_instr_oz).
+    # Mirrors milesan gen_reduced_elf:run_trace_regs_at_pc_locs which raises on a
+    # broken truncated program. Raises RuntimeError → propagates to the caller,
+    # terminating the binary search and recording the seed as FAILED.
+    if first_bb is None:
+        march = (get_design_march_flags(fs0.design_name) if USE_COMPRESSED
+                 else get_design_march_flags_nocompressed(fs0.design_name))
+        _spike_sanity_check(elf_0, march, bb_label + "_t0")
+        _spike_sanity_check(elf_1, march, bb_label + "_t1")
+
     # Run both simulations in parallel
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -337,8 +450,10 @@ def is_mismatch_onezero(fs0, fs1, max_bb_id, timeout, workdir,
         ok_1, _ = fut_1.result()
 
     if not ok_0 or not ok_1:
-        print(f"  WARNING: Simulation failed for {bb_label} (ok_0={ok_0}, ok_1={ok_1})")
-        return False
+        raise RuntimeError(
+            f"BOOM simulation failed for {bb_label} (ok_0={ok_0}, ok_1={ok_1}); "
+            "VPC log empty — ELF or simulator error."
+        )
 
     return vpc_logs_diverge(vpc_0, vpc_1)
 
@@ -529,7 +644,16 @@ def gen_truncated_elf_pillar(fuzzerstate, max_bb_id, max_instr_id, first_bb, elf
         del fs.instr_objs_seq[1:first_bb]
         del fs.bb_start_addr_seq[1:first_bb]
 
-    fs.verify_program()
+    # verify_program() can raise AssertionError when the context-setter changes a
+    # register that a CSR instruction reads, causing spike vs Python sim to disagree.
+    # Propagate the error — a broken pillar ELF should fail the oracle call, not
+    # silently continue (mirrors reduce.py:426 which lets the exception propagate).
+    try:
+        fs.verify_program()
+    except AssertionError as e:
+        raise RuntimeError(
+            f"verify_program failed for pillar ELF (context-setter/CSR mismatch): {e}"
+        ) from e
     fs.reset_states()
 
     label = f"bb{max_bb_id}i{max_instr_id}_from{first_bb}"
@@ -605,7 +729,8 @@ def find_pillar_bb(fs0, fs1, failing_bb_id, failing_instr_id, timeout, workdir,
 
     Returns right_bound - 1 = the pillar BB index (= left_bound at convergence).
     """
-    assert failing_bb_id > 0, "Pillar search assumes failing_bb_id > 0"
+    assert 0 < failing_bb_id < len(fs0.instr_objs_seq), \
+        f"failing_bb_id={failing_bb_id} out of range [1, {len(fs0.instr_objs_seq)})"
     assert failing_instr_id is not None, "find_pillar_bb requires failing_instr_id"
 
     left_bound  = hint_left  if hint_left  is not None else 0
@@ -681,6 +806,7 @@ def find_failing_bb(design_name, seed, authorize_privileges, memsize, nmax_bbs,
     fs1 = generate_program(design_name, seed, authorize_privileges, memsize, nmax_bbs)
 
     total_bbs = len(fs0.instr_objs_seq)
+    assert total_bbs > 0, f"seed {seed}: program has 0 BBs"
     print(f"Program has {total_bbs} basic blocks (t0={len(fs0.instr_objs_seq)}, t1={len(fs1.instr_objs_seq)}).")
 
     # Set bounds
@@ -859,8 +985,11 @@ def _spike_sanity_check(elf_path, march, label):
 
 
 def _phase4_oracle(fs0_phase4, fs1_phase4, label, workdir, timeout):
-    """Run the VPC-divergence oracle on a Phase-4 fuzzerstate pair."""
-    from concurrent.futures import ThreadPoolExecutor
+    """Run the VPC-divergence oracle on a Phase-4 fuzzerstate pair.
+
+    Uses _run_vpc_pair_early_kill so accepted NOPs (diverge quickly) return in
+    ~1-3s rather than waiting for full BOOM completion (~57s).
+    """
     elf_0 = os.path.join(workdir, f"{label}_t0.elf")
     elf_1 = os.path.join(workdir, f"{label}_t1.elf")
     vpc_0 = os.path.join(workdir, f"{label}_t0_vpc.txt")
@@ -882,18 +1011,20 @@ def _phase4_oracle(fs0_phase4, fs1_phase4, label, workdir, timeout):
     except Exception:
         return False  # NOP broke architectural control flow — reject immediately
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        fut0 = pool.submit(run_vpc_sim, elf_0, vpc_0, log_0, timeout)
-        fut1 = pool.submit(run_vpc_sim, elf_1, vpc_1, log_1, timeout)
-        ok0, clean0 = fut0.result()
-        ok1, clean1 = fut1.result()
+    diverges, ok0, ok1, clean0, clean1 = _run_vpc_pair_early_kill(
+        elf_0, vpc_0, log_0, elf_1, vpc_1, log_1, timeout
+    )
 
     if not ok0 or not ok1:
         return False
+    if diverges:
+        # Early-kill or natural completion: any detected divergence is genuine
+        # (Spike pre-check already validated architectural control flow above).
+        return True
     if not clean0 or not clean1:
-        # Simulation timed out: microarch hang not caught by Spike — reject
+        # Both sims ran without divergence but timed out — microarch hang, reject.
         return False
-    return vpc_logs_diverge(vpc_0, vpc_1)
+    return False  # Clean exit, identical VPC logs — NOP removed needed code
 
 
 def _fine_grain_nopize_bb(base_fs0, base_fs1, bb_idx, instr_range,

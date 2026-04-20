@@ -14,7 +14,7 @@ import tempfile
 # @param inbytes the bytes to put into the ELF file. Be careful that they must be in little endian format already.
 # @param section_addr may be None
 # @return None
-def gen_elf(inbytes: bytes, start_addr: int, section_addr: int, destination_path: str, is_64bit: bool, add_tohost: bool = True) -> None:
+def gen_elf(inbytes: bytes, start_addr: int, section_addr: int, destination_path: str, is_64bit: bool, add_tohost: bool = True, design_name: str = None) -> None:
     if DO_ASSERT:
         assert destination_path
 
@@ -45,6 +45,14 @@ def gen_elf(inbytes: bytes, start_addr: int, section_addr: int, destination_path
     else:
         if is_64bit:
             subprocess.run([objcopy, '-I', 'elf32-littleriscv', '-O', 'elf64-littleriscv', destination_path], check=True)
+
+    # XiangShan emu loads flat binaries at 0x80000000 via `./build/emu -i workload.bin`.
+    # Produce a sibling .bin and suppress the .tohost section (it would inflate the
+    # flat binary to ≥2 MiB by placing data at offset 0x200000).
+    if bool(design_name) and "xiangshan" in design_name.lower() and add_tohost:
+        add_tohost = False
+        bin_path = destination_path + '.bin'
+        subprocess.run([objcopy, '-O', 'binary', destination_path, bin_path], check=True)
 
     # Add .tohost section with tohost/fromhost symbols for HTIF (fesvr) communication.
     # fesvr looks up "tohost" and "fromhost" ELF symbols by name (htif.cc:179-181).

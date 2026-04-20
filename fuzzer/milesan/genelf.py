@@ -151,7 +151,7 @@ def gen_elf_from_bbs(fuzzerstate, is_spike_resolution, prefixname: str, test_ide
     # Skip tohost symbols for ELFs that will run on spike (spike monitors tohost and exits early).
     # Default: add tohost unless for_spike is explicitly True or is_spike_resolution is True.
     _for_spike = for_spike if for_spike is not None else is_spike_resolution
-    gen_elf(curr_bytes, start_addr=fuzzerstate.bb_start_addr_seq[0], section_addr=start_addr, destination_path=elfpath, is_64bit=fuzzerstate.is_design_64bit, add_tohost=not _for_spike)
+    gen_elf(curr_bytes, start_addr=fuzzerstate.bb_start_addr_seq[0], section_addr=start_addr, destination_path=elfpath, is_64bit=fuzzerstate.is_design_64bit, add_tohost=not _for_spike, design_name=fuzzerstate.design_name)
     
     if PICKLE_FUZZERSTATE:
         fuzzerstate.rtl_elfpath = elfpath

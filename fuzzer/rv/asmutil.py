@@ -873,6 +873,7 @@ INSTR_FUNCS = {
     "GenericCSRWriterInstruction": None,
     "ExceptionInstruction": None,
     "SpeculativeInstructionEncapsulator": None,
+    "xs_trap": None,
     # mret and sret have no function
     "mret": None,
     "sret": None,
@@ -1012,6 +1013,7 @@ INSTR_FUNCS_T0 = {
     "GenericCSRWriterInstruction": None,
     "ExceptionInstruction": None,
     "SpeculativeInstructionEncapsulator": None,
+    "xs_trap": None,
     # mret and sret have no function
     "mret": None,
     "sret": None,

@@ -10,7 +10,7 @@ from common.designcfgs import get_design_stop_sig_addr
 from params.fuzzparams import RDEP_MASK_REGISTER_ID, MPP_BOTH_ENDIS_REGISTER_ID, RPROD_MASK_REGISTER_ID
 from milesan.privilegestate import PrivilegeStateEnum
 from rv.asmutil import li_into_reg
-from milesan.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, IntStoreInstruction, JALInstruction, SpecialInstruction, R12DInstruction
+from milesan.cfinstructionclasses import ImmRdInstruction, RegImmInstruction, IntStoreInstruction, JALInstruction, SpecialInstruction, R12DInstruction, XiangShanTrapInstruction
 
 def get_finalblock_max_size():
     # Keep original size to preserve PRNG sequence in alloc_final_basic_block (basicblock.py:428).
@@ -25,6 +25,18 @@ def finalblock(fuzzerstate, design_name: str):
         raise ValueError(f"Design `{design_name}` does not have the `stopsigaddr` attribute.")
 
     if DEBUG_PRINT: print(f"in final block, layout: {fuzzerstate.effective_curr_layout}, priv: ", fuzzerstate.privilegestate.privstate)
+
+    # XiangShan exit path: custom-opcode trap via Difftest. Does not touch memory,
+    # so the MMU/PTE/stopsigaddr machinery below is not needed.
+    if "xiangshan" in (design_name or "").lower():
+        ret = [
+            RegImmInstruction(fuzzerstate, "addi", RPROD_MASK_REGISTER_ID, 0, 0, is_rd_nonpickable_ok=True),
+            XiangShanTrapInstruction(fuzzerstate, rs1=RPROD_MASK_REGISTER_ID),
+            JALInstruction(fuzzerstate, "jal", 0, 0),
+        ]
+        if DO_ASSERT:
+            assert len(ret) * 4 <= get_finalblock_max_size(), f"XS final block too large: {len(ret) * 4} > {get_finalblock_max_size()}"
+        return ret
 
     ret = []
 
