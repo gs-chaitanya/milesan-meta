@@ -23,77 +23,69 @@ OBJDUMP_FLAGS = ["-d", "--disassembler-options=numeric,no-aliases"]
 # Objdump parsing for full disassembly in summary.txt
 # ---------------------------------------------------------------------------
 
-def _parse_objdump(dump_path):
-    """Return {paddr_int: stripped_line_str} for every disasm line in dump_path.
+def _parse_objdump_file(dump_path):
+    """Return {paddr_int: line_str} from an objdump output file.
 
-    Keeps only lines whose first token is a hex address followed by ':'.
-    Skips section headers, symbol labels, blank lines.
+    Skips headers, section labels, and blank lines — keeps only disasm lines
+    whose first token is a hex address followed by ':'.
     """
     out = {}
     try:
-        with open(dump_path, "r") as f:
+        with open(dump_path) as f:
             for raw in f:
                 stripped = raw.lstrip()
                 if not stripped:
                     continue
-                colon_pos = stripped.find(":")
-                if colon_pos < 1 or colon_pos > 20:
+                colon = stripped.find(":")
+                if colon < 1 or colon > 20:
                     continue
                 try:
-                    pa = int(stripped[:colon_pos], 16)
+                    pa = int(stripped[:colon], 16)
+                    out[pa] = raw.rstrip("\n")
                 except ValueError:
                     continue
-                out[pa] = raw.rstrip("\n")
     except OSError:
         pass
     return out
 
 
-def _render_disasm_bb(label, fs, bb_id, dump_map, leaker_paddr=None):
-    """Return list of strings: header + per-instruction lines from objdump.
+def _render_disasm_bb(label, bb_instrs, dump_map, leaker_paddr=None):
+    """Return list of strings: header + full per-instruction objdump disassembly.
 
-    Marks leaker_paddr with '>>' prefix and '<-- LEAKER' suffix.
-    Falls back to instr.get_str() when no objdump line is found for an address.
+    bb_instrs: list of instruction dicts from context.json (keys: paddr, str, ...).
+    dump_map:  {paddr_int: line_str} built from display_t0.elf.dump, which is
+               produced by gen_truncated_elf(fs0, failing_bb) — keeping the FULL
+               failing BB so every instruction in both pillar BB and leaker BB
+               has an entry.
+    leaker_paddr: if set, marks that instruction with '>>' and '<-- LEAKER'.
     """
-    lines = []
+    if not bb_instrs:
+        return []
     try:
-        bb = fs.instr_objs_seq[bb_id]
-        start = fs.bb_start_addr_seq[bb_id]
-    except Exception as e:
-        lines.append(f"=== {label} (bb={bb_id}) ERROR: {e} ===")
-        return lines
-
-    try:
-        priv = bb[0].priv_level.name if bb[0].priv_level is not None else "?"
+        start = int(bb_instrs[0]["paddr"], 16)
+        priv  = bb_instrs[0].get("priv_level", "?")
     except Exception:
-        priv = "?"
+        start, priv = 0, "?"
 
-    lines.append(f"=== {label} (bb={bb_id}, start=0x{start:x}, n={len(bb)}, priv={priv}) ===")
+    lines = ["=== {} (bb_start=0x{:x}, n={}, priv={}) ===".format(
+        label, start, len(bb_instrs), priv)]
 
-    for i, instr in enumerate(bb):
+    for instr_d in bb_instrs:
         try:
-            paddr = instr.paddr if instr.paddr is not None else start + 4 * i
+            paddr = int(instr_d["paddr"], 16)
         except Exception:
-            paddr = start + 4 * i
+            paddr = None
 
-        # Try exact paddr, then ±2 for compressed instructions
-        disasm_line = dump_map.get(paddr)
+        disasm_line = dump_map.get(paddr) if paddr is not None else None
         if disasm_line is None:
-            for delta in (2, -2, 4, -4):
-                disasm_line = dump_map.get(paddr + delta)
-                if disasm_line is not None:
-                    break
-        if disasm_line is None:
-            # Fallback to internal string representation
-            try:
-                disasm_line = f"  0x{paddr:x}:\t(no objdump line)\t{instr.get_str(False)}"
-            except Exception:
-                disasm_line = f"  0x{paddr:x}:\t(no objdump line)"
+            # Fallback: only expected for the injected JAL that replaces the CF
+            # terminator at the end of the leaker BB in display_t0.elf.
+            disasm_line = "  0x{:x}:  {}".format(paddr or 0, instr_d.get("str", "?"))
 
         if leaker_paddr is not None and paddr == leaker_paddr:
-            lines.append(f">> {disasm_line}  <-- LEAKER")
+            lines.append(">> {}  <-- LEAKER".format(disasm_line))
         else:
-            lines.append(f"   {disasm_line}")
+            lines.append("   {}".format(disasm_line))
 
     return lines
 
@@ -384,13 +376,29 @@ def cross_priv_flags(fs, failing_bb, failing_instr_id, pillar_bb, fault_from_pre
 # Artifact generation (Option A: regenerate canonical reduced ELFs)
 # ---------------------------------------------------------------------------
 
+def _objdump_elf(elf_path, dump_path):
+    """Run objdump on elf_path, writing stdout to dump_path. Returns dump_path or None."""
+    try:
+        with open(dump_path, "w") as dump_f:
+            subprocess.run(
+                [OBJDUMP] + OBJDUMP_FLAGS + [elf_path],
+                stdout=dump_f, stderr=subprocess.DEVNULL,
+                timeout=60,
+            )
+        return dump_path
+    except Exception:
+        return None
+
+
 def generate_reduced_artifacts(fs0, fs1, failing_bb, failing_instr_id, pillar_bb,
                                 fault_from_prev_bb, workdir):
-    """Generate reduced_t{0,1}.elf and their objdump .dump files.
+    """Generate reduced_t{0,1}.elf and display_t0.elf plus their objdump .dump files.
 
-    Uses gen_truncated_elf_pillar (or fallbacks) to produce one canonical ELF
-    per taint value representing the final (pillar, failing_bb, failing_instr)
-    reduction result.
+    reduced_t0.elf  — truncated at the failing instruction (for simulation).
+    display_t0.elf  — truncated at the END of the failing BB, keeping every
+                      instruction in it intact (only the CF terminator gets a JAL
+                      appended).  This ELF is used only for human-readable
+                      disassembly of the complete leaker BB and pillar BB.
 
     Returns a dict describing the generated artifacts (paths, sizes, errors).
     """
@@ -398,8 +406,7 @@ def generate_reduced_artifacts(fs0, fs1, failing_bb, failing_instr_id, pillar_bb
         gen_truncated_elf, gen_truncated_elf_instr, gen_truncated_elf_pillar,
     )
 
-    # Determine truncation parameters
-    # When fault_from_prev_bb, the pillar oracle used (failing_bb, 0)
+    # Determine truncation parameters for the simulation ELF
     if fault_from_prev_bb:
         trunc_bb    = failing_bb
         trunc_instr = 0
@@ -427,22 +434,26 @@ def generate_reduced_artifacts(fs0, fs1, failing_bb, failing_instr_id, pillar_bb
             except OSError:
                 entry["elf_size"] = None
 
-            # Run objdump
-            try:
-                with open(dump_path, "w") as dump_f:
-                    subprocess.run(
-                        [OBJDUMP] + OBJDUMP_FLAGS + [elf_path],
-                        stdout=dump_f, stderr=subprocess.DEVNULL,
-                        timeout=60,
-                    )
+            if _objdump_elf(elf_path, dump_path):
                 entry["dump_size"] = os.path.getsize(dump_path)
-            except Exception as e:
-                entry["dump_error"] = str(e)
 
         except Exception as e:
             entry["elf_error"] = str(e)
 
         artifacts[suffix] = entry
+
+    # display_t0.elf — gen_truncated_elf(fs0, failing_bb) keeps BBs [0..failing_bb]
+    # with only the CF terminator of the failing BB replaced by a JAL.  Every
+    # other instruction in the failing BB (including the leaker) stays untouched,
+    # so objdump of this ELF gives full disassembly of both pillar BB and leaker BB.
+    display_elf = os.path.join(workdir, "display_t0.elf")
+    display_dump = display_elf + ".dump"
+    try:
+        gen_truncated_elf(fs0, failing_bb, display_elf)
+        _objdump_elf(display_elf, display_dump)
+        artifacts["display_dump"] = display_dump
+    except Exception as e:
+        artifacts["display_dump_error"] = str(e)
 
     return artifacts
 
@@ -617,75 +628,62 @@ def assemble_context(fs0, memsize, nmax_bbs, authorize_privileges,
 # Human-readable summary
 # ---------------------------------------------------------------------------
 
-def render_summary(context, result, fs0=None, disasm_dump_path=None):
+def render_summary(context, result, display_dump_path=None):
     """Produce a human-readable plaintext summary of the reduction.
 
-    When fs0 and disasm_dump_path are provided (and the dump file exists),
-    the leaker BB and pillar BB sections show real objdump disassembly with
-    the leaker instruction clearly marked.  Falls back to instr.get_str() when
-    the dump is unavailable.
+    display_dump_path: path to display_t0.elf.dump — objdump of the ELF generated
+    by gen_truncated_elf(fs0, failing_bb), which keeps every instruction in the
+    failing BB intact (only the CF terminator is replaced by a JAL).  This gives
+    full disassembly of both the pillar BB and the complete leaker BB.
+    When absent, falls back to the milesan instruction string (str field).
     """
     lines = []
     meta = context.get("meta", {})
     design = result.get("design", "?")
     seed   = result.get("seed", "?")
 
-    lines.append(f"=== ONE-ZERO REDUCTION: {design} seed {seed} ===")
-    lines.append(f"Total BBs: {meta.get('total_bbs')}   Total instrs: {meta.get('total_instrs')}   "
-                 f"MMU: {meta.get('use_mmu')}")
+    lines.append("=== ONE-ZERO REDUCTION: {} seed {} ===".format(design, seed))
+    lines.append("Total BBs: {}   Total instrs: {}   MMU: {}".format(
+        meta.get("total_bbs"), meta.get("total_instrs"), meta.get("use_mmu")))
     lines.append("")
 
     # Leaker instruction — one-line callout for quick scan
     leaker = context.get("leaker", {})
     lines.append("--- Leaking instruction ---")
-    lines.append(f"  {leaker.get('str', '?')}")
-    lines.append(f"  bytecode: {leaker.get('bytecode_hex', '?')}   "
-                 f"class: {leaker.get('class', '?')}")
-    lines.append(f"  bb={result.get('failing_bb_id')}  instr_local={result.get('failing_instr_id')}  "
-                 f"fault_from_prev_bb={result.get('fault_from_prev_bb')}")
+    lines.append("  {}".format(leaker.get("str", "?")))
+    lines.append("  bytecode: {}   class: {}".format(
+        leaker.get("bytecode_hex", "?"), leaker.get("class", "?")))
+    lines.append("  bb={}  instr_local={}  fault_from_prev_bb={}".format(
+        result.get("failing_bb_id"), result.get("failing_instr_id"),
+        result.get("fault_from_prev_bb")))
     lines.append("")
 
-    # Parse objdump once if available
-    dump_map = {}
-    if fs0 is not None and disasm_dump_path:
-        dump_map = _parse_objdump(disasm_dump_path)
+    # Build paddr→line map from display_t0.elf.dump (covers both BBs fully)
+    dump_map = _parse_objdump_file(display_dump_path) if display_dump_path else {}
 
-    # Resolve leaker paddr for marking in the disasm sections
+    # Leaker paddr for marking
     leaker_paddr = None
     try:
-        leaker_paddr_hex = leaker.get("paddr")
-        if leaker_paddr_hex:
-            leaker_paddr = int(leaker_paddr_hex, 16)
+        lp = leaker.get("paddr")
+        if lp:
+            leaker_paddr = int(lp, 16)
     except Exception:
         pass
 
-    # Leaker BB
+    # Leaker BB — full disassembly using display dump
     lbb = context.get("leaker_bb", {})
-    actual_leak_bb = lbb.get("bb_id")
-    if fs0 is not None and dump_map and actual_leak_bb is not None:
-        lines.extend(_render_disasm_bb(
-            "LEAKER BB", fs0, actual_leak_bb, dump_map, leaker_paddr=leaker_paddr
-        ))
-    else:
-        leaker_local = lbb.get("leaker_local_idx", result.get("failing_instr_id"))
-        lines.append(f"--- Leaker BB (bb={lbb.get('bb_id')}, start={lbb.get('bb_start_paddr')}, "
-                     f"n={lbb.get('n_instrs')}, priv={lbb.get('priv_level')}) ---")
-        for instr_d in lbb.get("instructions", []):
-            marker = "  >>" if instr_d.get("idx") == leaker_local else "   "
-            lines.append(f"{marker} [{instr_d.get('idx'):3d}] {instr_d.get('str', '?')}")
+    lbb_instrs = lbb.get("instructions", [])
+    if lbb_instrs:
+        lines.extend(_render_disasm_bb("LEAKER BB", lbb_instrs, dump_map,
+                                       leaker_paddr=leaker_paddr))
     lines.append("")
 
-    # Pillar BB
+    # Pillar BB — full disassembly using display dump
     pbb = context.get("pillar_bb")
-    pillar_bb_id = pbb.get("bb_id") if pbb else None
-    if fs0 is not None and dump_map and pillar_bb_id is not None:
-        lines.extend(_render_disasm_bb("PILLAR BB", fs0, pillar_bb_id, dump_map))
-    elif pbb:
-        lines.append(f"--- Pillar BB (bb={pbb.get('bb_id')}, start={pbb.get('bb_start_paddr')}, "
-                     f"n={pbb.get('n_instrs')}, priv={pbb.get('priv_level')}) ---")
-        for instr_d in pbb.get("instructions", []):
-            lines.append(f"    [{instr_d.get('idx'):3d}] {instr_d.get('str', '?')}")
     if pbb:
+        pbb_instrs = pbb.get("instructions", [])
+        if pbb_instrs:
+            lines.extend(_render_disasm_bb("PILLAR BB", pbb_instrs, dump_map))
         lines.append("")
 
     # Intermediate BBs summary

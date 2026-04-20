@@ -201,12 +201,12 @@ if __name__ == '__main__':
                 json.dump(context, f, indent=2)
             print(f"Context written to: {context_path}")
 
-            # Write summary.txt (human-readable digest with full objdump disassembly)
+            # Write summary.txt using display_t0.elf.dump for full BB disassembly
             summary_path = os.path.join(workdir, "summary.txt")
-            dump_path = os.path.join(workdir, "reduced_t0.elf.dump")
+            display_dump = os.path.join(workdir, "display_t0.elf.dump")
             with open(summary_path, "w") as f:
-                f.write(render_summary(context, result, fs0=fs0,
-                                       disasm_dump_path=dump_path))
+                f.write(render_summary(context, result,
+                                       display_dump_path=display_dump))
             print(f"Summary written to: {summary_path}")
             _flush_result()  # Context checkpoint
 
